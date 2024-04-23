@@ -183,6 +183,41 @@ func (r *RemoteRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, 
 	return nil
 }
 
+func (r *RemoteRelay) SubmitBlockWithPreconfsProofs(msg *VersionedSubmitBlockRequestWithPreconfsProofs, _ ValidatorData) error {
+	log.Info("submitting block to remote relay", "endpoint", r.config.Endpoint)
+	endpoint := r.config.Endpoint + "/relay/v1/builder/blocks_with_preconfs"
+	if r.cancellationsEnabled {
+		endpoint = endpoint + "?cancellations=1"
+	}
+
+	var code int
+	var err error
+	if r.config.SszEnabled {
+		panic("ssz not supported for preconfs proofs yet")
+
+	} else {
+		switch msg.Inner.Version {
+		case spec.DataVersionBellatrix:
+			code, err = SendHTTPRequest(context.TODO(), *http.DefaultClient, http.MethodPost, endpoint, msg, nil)
+		case spec.DataVersionCapella:
+			code, err = SendHTTPRequest(context.TODO(), *http.DefaultClient, http.MethodPost, endpoint, msg, nil)
+		case spec.DataVersionDeneb:
+			code, err = SendHTTPRequest(context.TODO(), *http.DefaultClient, http.MethodPost, endpoint, msg, nil)
+		default:
+			return fmt.Errorf("unknown data version %d", msg.Inner.Version)
+		}
+	}
+
+	if err != nil {
+		return fmt.Errorf("error sending http request to relay %s. err: %w", r.config.Endpoint, err)
+	}
+	if code > 299 {
+		return fmt.Errorf("non-ok response code %d from relay %s", code, r.config.Endpoint)
+	}
+
+	return nil
+}
+
 func (r *RemoteRelay) getSlotValidatorMapFromRelay() (map[uint64]ValidatorData, error) {
 	var dst GetValidatorRelayResponse
 	code, err := SendHTTPRequest(context.TODO(), *http.DefaultClient, http.MethodGet, r.config.Endpoint+"/relay/v1/builder/validators", nil, &dst)
