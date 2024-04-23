@@ -103,7 +103,7 @@ func TestBuildBlock(t *testing.T) {
 		require.Equal(t, block.ParentHash(), parent.Hash())
 		require.Equal(t, block.Hash(), executableData.ExecutionPayload.BlockHash)
 		require.Equal(t, blockValue.Uint64(), uint64(0))
-	})
+	}, nil)
 
 	require.NoError(t, err)
 }
