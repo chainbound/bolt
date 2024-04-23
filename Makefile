@@ -49,10 +49,10 @@ push-images:
 	docker push ghcr.io/chainbound/bolt-mev-boost:0.1.0
 
 build-builder:
-	cd bolt-builder && docker build -t ghcr.io/chainbound/bolt-builder:0.1.0 .
+	cd builder && docker build -t ghcr.io/chainbound/bolt-builder:0.1.0 .
 
 build-relay:
-	cd bolt-relay && docker build -t ghcr.io/chainbound/bolt-relay:0.1.0 .
+	cd mev-boost-relay && docker build -t ghcr.io/chainbound/bolt-relay:0.1.0 .
 
 build-sidecar:
 	cd bolt-sidecar && docker build -t ghcr.io/chainbound/bolt-sidecar:0.1.0 .
