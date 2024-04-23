@@ -1,0 +1,41 @@
+network_params:
+  seconds_per_slot: 12 # 2 seconds are the minimum for testing
+
+additional_services:
+  - broadcaster
+  - tx_spammer
+  - blockscout
+  - dora
+  # - assertoor
+  # - blob_spammer
+  # - custom_flood
+  # - goomy_blob
+  # - el_forkmon
+  # - beacon_metrics_gazer
+  # - full_beaconchain_explorer
+  # - prometheus_grafana
+  # - blobscan
+
+mev_type: full
+
+mev_params:
+  mev_builder_cl_image: sigp/lighthouse:latest
+  # Bolt-specific images:
+  mev_relay_image: ghcr.io/chainbound/bolt-relay:0.1.0
+  mev_builder_image: ghcr.io/chainbound/bolt-builder:0.1.0
+  mev_boost_image: ghcr.io/chainbound/bolt-mev-boost:0.1.0
+  mev_sidecar_image: ghcr.io/chainbound/bolt-sidecar:0.1.0
+
+  mev_boost_args: []
+  mev_relay_api_extra_args: []
+  mev_relay_housekeeper_extra_args: []
+  mev_relay_website_extra_args: []
+  mev_builder_extra_args: []
+  mev_builder_prometheus_config:
+    scrape_interval: 15s
+    labels: {}
+  mev_flood_image: flashbots/mev-flood
+  mev_flood_extra_args: []
+  mev_flood_seconds_per_bundle: 15
+  custom_flood_params:
+    interval_between_transactions: 1
