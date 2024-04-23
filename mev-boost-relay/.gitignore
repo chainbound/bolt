@@ -1,0 +1,27 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# IDE directories
+.idea
+.vscode
+
+# Random stuff
+/tmp/
+/boost-relay
+/mev-boost-relay
+/dump.rdb
+/deploy.sh
+.DS_Store
+/website-index.html
+/README.internal.md
+/internal/_investigations/
