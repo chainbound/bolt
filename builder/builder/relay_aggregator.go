@@ -60,6 +60,26 @@ func (r *RemoteRelayAggregator) SubmitBlock(msg *builderSpec.VersionedSubmitBloc
 	return nil
 }
 
+func (r *RemoteRelayAggregator) SubmitBlockWithPreconfsProofs(msg *VersionedSubmitBlockRequestWithPreconfsProofs, registration ValidatorData) error {
+	r.registrationsCacheLock.RLock()
+	defer r.registrationsCacheLock.RUnlock()
+
+	relays, found := r.registrationsCache[registration]
+	if !found {
+		return fmt.Errorf("no relays for registration %s", registration.Pubkey)
+	}
+	for _, relay := range relays {
+		go func(relay IRelay) {
+			err := relay.SubmitBlockWithPreconfsProofs(msg, registration)
+			if err != nil {
+				log.Error("could not submit block", "err", err)
+			}
+		}(relay)
+	}
+
+	return nil
+}
+
 type RelayValidatorRegistration struct {
 	vd     ValidatorData
 	relayI int // index into relays array to preserve relative order
