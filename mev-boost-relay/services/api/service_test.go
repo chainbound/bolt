@@ -235,7 +235,7 @@ func TestGetHeader(t *testing.T) {
 		Version:        spec.DataVersionCapella,
 	}
 	payload, getPayloadResp, getHeaderResp := common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
-	_, err := backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	_, err := backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil, nil)
 	require.NoError(t, err)
 
 	// Check 1: regular capella request works and returns a bid
@@ -258,7 +258,7 @@ func TestGetHeader(t *testing.T) {
 		Version:        spec.DataVersionDeneb,
 	}
 	payload, getPayloadResp, getHeaderResp = common.CreateTestBlockSubmission(t, builderPubkey, bidValue, &opts)
-	_, err = backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil)
+	_, err = backend.redis.SaveBidAndUpdateTopBid(context.Background(), backend.redis.NewPipeline(), trace, payload, getPayloadResp, getHeaderResp, time.Now(), false, nil, nil)
 	require.NoError(t, err)
 
 	// Check 2: regular deneb request works and returns a bid
@@ -456,7 +456,7 @@ func TestBuilderSubmitBlock(t *testing.T) {
 				},
 			}
 			backend.relay.payloadAttributes = make(map[string]payloadAttributesHelper)
-			backend.relay.payloadAttributes[getPayloadAttributesKey(parentHash, submissionSlot)] = payloadAttributesHelper{
+			backend.relay.payloadAttributes[parentHash] = payloadAttributesHelper{
 				slot:       submissionSlot,
 				parentHash: parentHash,
 				payloadAttributes: beaconclient.PayloadAttributes{
@@ -627,110 +627,6 @@ func TestCheckSubmissionFeeRecipient(t *testing.T) {
 	}
 }
 
-func TestProcessPayloadAttrs(t *testing.T) {
-	withdrawalsRoot, err := utils.HexToHash(testWithdrawalsRoot)
-	require.NoError(t, err)
-	parentHash, err := utils.HexToHash(testParentHash)
-	require.NoError(t, err)
-
-	t.Run("Stores updated payload attribute with parent hash is the same", func(t *testing.T) {
-		_, _, backend := startTestBackend(t)
-		attrsEvent := beaconclient.PayloadAttributesEvent{
-			Version: common.ForkVersionStringDeneb,
-			Data: beaconclient.PayloadAttributesEventData{
-				ProposalSlot:    testSlot,
-				ParentBlockHash: testParentHash,
-				PayloadAttributes: beaconclient.PayloadAttributes{
-					PrevRandao: testPrevRandao,
-					Withdrawals: []*capella.Withdrawal{
-						{
-							Index: 989694,
-						},
-					},
-					ParentBeaconBlockRoot: testParentHash,
-				},
-			},
-		}
-		testParentBeaconRoot := phase0.Root(parentHash)
-		expectedAttrs := payloadAttributesHelper{
-			slot:             testSlot,
-			parentHash:       testParentHash,
-			withdrawalsRoot:  phase0.Root(withdrawalsRoot),
-			parentBeaconRoot: &testParentBeaconRoot,
-			payloadAttributes: beaconclient.PayloadAttributes{
-				PrevRandao: testPrevRandao,
-				Withdrawals: []*capella.Withdrawal{
-					{
-						Index: 989694,
-					},
-				},
-				ParentBeaconBlockRoot: testParentHash,
-			},
-		}
-		backend.relay.processPayloadAttributes(attrsEvent)
-		backend.relay.payloadAttributesLock.RLock()
-		attrs := backend.relay.payloadAttributes[getPayloadAttributesKey(testParentHash, testSlot)]
-		backend.relay.payloadAttributesLock.RUnlock()
-		require.Equal(t, expectedAttrs, attrs)
-
-		attrsEvent.Data.ProposalSlot = testSlot + 1
-		backend.relay.processPayloadAttributes(attrsEvent)
-		backend.relay.payloadAttributesLock.RLock()
-		attrs = backend.relay.payloadAttributes[getPayloadAttributesKey(testParentHash, testSlot+1)]
-		backend.relay.payloadAttributesLock.RUnlock()
-		expectedAttrs.slot = testSlot + 1
-		require.Equal(t, expectedAttrs, attrs)
-	})
-
-	t.Run("Skips payload attribute update with same parent hash and slot", func(t *testing.T) {
-		_, _, backend := startTestBackend(t)
-		attrsEvent := beaconclient.PayloadAttributesEvent{
-			Version: common.ForkVersionStringDeneb,
-			Data: beaconclient.PayloadAttributesEventData{
-				ProposalSlot:    testSlot,
-				ParentBlockHash: testParentHash,
-				PayloadAttributes: beaconclient.PayloadAttributes{
-					PrevRandao: testPrevRandao,
-					Withdrawals: []*capella.Withdrawal{
-						{
-							Index: 989694,
-						},
-					},
-					ParentBeaconBlockRoot: testParentHash,
-				},
-			},
-		}
-		testParentBeaconRoot := phase0.Root(parentHash)
-		expectedAttrs := payloadAttributesHelper{
-			slot:             testSlot,
-			parentHash:       testParentHash,
-			withdrawalsRoot:  phase0.Root(withdrawalsRoot),
-			parentBeaconRoot: &testParentBeaconRoot,
-			payloadAttributes: beaconclient.PayloadAttributes{
-				PrevRandao: testPrevRandao,
-				Withdrawals: []*capella.Withdrawal{
-					{
-						Index: 989694,
-					},
-				},
-				ParentBeaconBlockRoot: testParentHash,
-			},
-		}
-		backend.relay.processPayloadAttributes(attrsEvent)
-		backend.relay.payloadAttributesLock.RLock()
-		attrs := backend.relay.payloadAttributes[getPayloadAttributesKey(testParentHash, testSlot)]
-		backend.relay.payloadAttributesLock.RUnlock()
-		require.Equal(t, expectedAttrs, attrs)
-
-		attrsEvent.Data.PayloadAttributes.ParentBeaconBlockRoot = testWithdrawalsRoot
-		backend.relay.processPayloadAttributes(attrsEvent)
-		backend.relay.payloadAttributesLock.RLock()
-		attrs = backend.relay.payloadAttributes[getPayloadAttributesKey(testParentHash, testSlot)]
-		backend.relay.payloadAttributesLock.RUnlock()
-		require.Equal(t, expectedAttrs, attrs)
-	})
-}
-
 func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 	withdrawalsRoot, err := utils.HexToHash(testWithdrawalsRoot)
 	require.NoError(t, err)
@@ -879,7 +775,7 @@ func TestCheckSubmissionPayloadAttrs(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			_, _, backend := startTestBackend(t)
 			backend.relay.payloadAttributesLock.RLock()
-			backend.relay.payloadAttributes[getPayloadAttributesKey(testParentHash, testSlot)] = tc.attrs
+			backend.relay.payloadAttributes[testParentHash] = tc.attrs
 			backend.relay.payloadAttributesLock.RUnlock()
 
 			w := httptest.NewRecorder()
@@ -1240,7 +1136,7 @@ func TestUpdateRedis(t *testing.T) {
 				floorBidValue:        floorValue,
 				payload:              tc.payload,
 			}
-			updateResp, getPayloadResp, ok := backend.relay.updateRedisBid(rOpts)
+			updateResp, getPayloadResp, ok := backend.relay.updateRedisBid(rOpts, nil)
 			require.Equal(t, tc.expectOk, ok)
 			if ok {
 				require.NotNil(t, updateResp)

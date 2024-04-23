@@ -109,6 +109,9 @@ type ExecutionPayloadEntry struct {
 
 	Version string `db:"version"`
 	Payload string `db:"payload"`
+
+	// BOLT: merkle proofs of inclusion
+	Proofs string `db:"proofs"`
 }
 
 var ExecutionPayloadEntryCSVHeader = []string{"id", "inserted_at", "slot", "proposer_pubkey", "block_hash", "version", "payload"}
@@ -168,6 +171,8 @@ type BuilderBlockSubmissionEntry struct {
 	RedisUpdateDuration  uint64 `db:"redis_update_duration"`
 	TotalDuration        uint64 `db:"total_duration"`
 	OptimisticSubmission bool   `db:"optimistic_submission"`
+	// BOLT: merkle inclusion proofs
+	Preconfirmations string `db:"preconfirmations"`
 }
 
 type DeliveredPayloadEntry struct {
