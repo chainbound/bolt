@@ -3,6 +3,9 @@ package eth
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
@@ -54,6 +57,19 @@ func GetPreconfirmations(boltCCEndpoint string, nextSlot uint64) ([]*types.Trans
 		}
 
 		result[i] = decoded
+	}
+
+	// Log this event in the web demo backend
+	if len(*preconfirms) > 0 {
+		message := fmt.Sprintf("BOLT-BUILDER: %d preconfirmations received for slot %d", len(*preconfirms), nextSlot)
+		event := strings.NewReader(fmt.Sprintf("{ \"message\": \"%s\"}", message))
+		eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
+		if err != nil {
+			log.Error("Failed to log preconfirms event: ", err)
+		}
+		if eventRes != nil {
+			defer eventRes.Body.Close()
+		}
 	}
 
 	return result, nil

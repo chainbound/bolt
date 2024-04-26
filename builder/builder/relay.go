@@ -215,6 +215,20 @@ func (r *RemoteRelay) SubmitBlockWithPreconfsProofs(msg *VersionedSubmitBlockReq
 		return fmt.Errorf("non-ok response code %d from relay %s", code, r.config.Endpoint)
 	}
 
+	// BOLT: send event to web demo
+	if len(msg.Proofs) > 0 {
+		slot, _ := msg.Inner.Slot()
+		event := strings.NewReader(
+			fmt.Sprintf("{ \"message\": \"BOLT-BUILDER: sent bid to relay with %d preconfirmations for slot %d\"}", len(msg.Proofs), slot))
+		eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
+		if err != nil {
+			log.Error("Failed to log preconfirms event: ", err)
+		}
+		if eventRes != nil {
+			defer eventRes.Body.Close()
+		}
+	}
+
 	return nil
 }
 

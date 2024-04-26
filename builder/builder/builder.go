@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"net/http"
 	_ "os"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -310,6 +312,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, preconfs []*types.Transact
 	// BOLT: calculate merkle proofs for preconfirmed transactions
 	preconfirmationsProofs := make([]*PreconfirmationWithProof, 0, len(preconfs))
 
+	timeStart := time.Now()
 	for i, preconf := range preconfs {
 		// get the index of the preconfirmed transaction in the block
 		preconfIndex := slices.IndexFunc(payloadTransactions, func(tx *types.Transaction) bool { return tx.Hash() == preconf.Hash() })
@@ -343,6 +346,20 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, preconfs []*types.Transact
 		})
 
 		log.Info(fmt.Sprintf("[BOLT]: Added merkle proof for preconfirmed transaction %s", preconfirmationsProofs[i]))
+	}
+	timeForProofs := time.Since(timeStart)
+
+	if len(preconfs) > 0 {
+		event := strings.NewReader(
+			fmt.Sprintf("{ \"message\": \"BOLT-BUILDER: Created %d merkle proofs for block %d in %v\"}",
+				len(preconfs), opts.Block.Number(), timeForProofs))
+		eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
+		if err != nil {
+			log.Error("Failed to log preconfirms event: ", err)
+		}
+		if eventRes != nil {
+			defer eventRes.Body.Close()
+		}
 	}
 
 	versionedBlockRequest, err := b.getBlockRequest(executableData, dataVersion, &blockBidMsg)
@@ -491,6 +508,8 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 	b.slotAttrs = *attrs
 	b.slotCtx = slotCtx
 	b.slotCtxCancel = slotCtxCancel
+
+	log.Info("[BOLT]: Inside onPayloadAttribute", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp))
 
 	go b.runBuildingJob(b.slotCtx, proposerPubkey, vd, attrs)
 	return nil

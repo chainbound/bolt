@@ -20,7 +20,9 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -1431,6 +1433,16 @@ func (w *worker) fillTransactionsAlgoWorker(interrupt *atomic.Int32, env *enviro
 				BlobGas:   tx.BlobGas(),
 			})
 			log.Info(fmt.Sprintf("[BOLT]: Added preconfirmation to pending transactions %v", *pending[sender][0]))
+		}
+
+		event := strings.NewReader(
+			fmt.Sprintf("{ \"message\": \"BOLT-BUILDER: Added %d preconfirmations to block %d\"}", len(preconfirmations), env.header.Number))
+		eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
+		if err != nil {
+			log.Error("Failed to log preconfirms event: ", err)
+		}
+		if eventRes != nil {
+			defer eventRes.Body.Close()
 		}
 	}
 
