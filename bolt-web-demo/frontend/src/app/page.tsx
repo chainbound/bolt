@@ -167,7 +167,7 @@ export default function Home() {
             </small>
 
             <ScrollArea className="max-h-80">
-              <ul className="font-mono">
+              <ul className="font-mono text-sm">
                 {events.map((message, index) => (
                   <li key={index}>
                     <span>{parseDateToMs(message.timestamp)}</span>

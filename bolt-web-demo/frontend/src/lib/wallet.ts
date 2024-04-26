@@ -5,11 +5,7 @@ import { ethers } from "ethers";
 const PRIVATE_KEY =
   "bcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31";
 
-export async function createAndSignTransaction(
-  providerUrl: string,
-  toAddress?: string,
-  amount?: string
-): Promise<{
+export async function createAndSignTransaction(providerUrl: string): Promise<{
   signedTx: string;
   txHash: string;
 }> {
@@ -19,13 +15,24 @@ export async function createAndSignTransaction(
 
   // Define the transaction
   const tx: TransactionRequest = {
-    to: toAddress || wallet.address,
-    value: ethers.parseEther(amount || "1"),
-    gasLimit: 21000,
+    chainId: (await provider.getNetwork()).chainId,
+    nonce: await wallet.getNonce(),
+    from: await wallet.getAddress(),
+    to: "0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD",
+    value: ethers.parseEther("0.0069420"),
+    maxFeePerGas: ethers.parseUnits("20", "gwei"),
+    maxPriorityFeePerGas: ethers.parseUnits("3", "gwei"),
+    data: "0x",
   };
 
-  const signedTx = await wallet.signTransaction(tx);
+  const estimatedGas = await wallet.estimateGas(tx);
+  tx.gasLimit = estimatedGas;
+
+  const populated = await wallet.populateCall(tx);
+  const signedTx = await wallet.signTransaction(populated);
   const txHash = keccak256(signedTx);
+
+  console.log({ signedTx, txHash });
 
   return { signedTx, txHash };
 }
