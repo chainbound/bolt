@@ -487,15 +487,17 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 				}
 
 				if len(responsePayload.Proofs) > 0 {
-					message := fmt.Sprintf("BOLT-MEV-BOOST: received payload header with %d preconfirmations for slot %d", len(responsePayload.Proofs), _slot)
-					event := strings.NewReader(fmt.Sprintf("{ \"message\": \"%s\"}", message))
-					eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
-					if err != nil {
-						log.Error("Failed to log preconfirms event: ", err)
-					}
-					if eventRes != nil {
-						defer eventRes.Body.Close()
-					}
+					go func() {
+						message := fmt.Sprintf("BOLT-MEV-BOOST: received payload header with %d preconfirmations for slot %d", len(responsePayload.Proofs), _slot)
+						event := strings.NewReader(fmt.Sprintf("{ \"message\": \"%s\"}", message))
+						eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
+						if err != nil {
+							log.Error("Failed to log preconfirms event: ", err)
+						}
+						if eventRes != nil {
+							defer eventRes.Body.Close()
+						}
+					}()
 				}
 
 				if len(responsePayload.Proofs) != len(preconfirmationsFromSidecar) {
@@ -581,16 +583,18 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 					} else {
 						log.Info(fmt.Sprintf("[BOLT]: Preconfirmation proof verified for tx hash %s in %s", proof.TxHash.String(), elapsed))
 
-						// BOLT: Log this event in the web demo backend
-						message := fmt.Sprintf("BOLT-MEV-BOOST: preconfirmation proof verified for tx hash %s in %s", proof.TxHash.String(), elapsed)
-						event := strings.NewReader(fmt.Sprintf("{ \"message\": \"%s\"}", message))
-						eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
-						if err != nil {
-							log.Error("Failed to log preconfirms event: ", err)
-						}
-						if eventRes != nil {
-							defer eventRes.Body.Close()
-						}
+						go func(proof *PreconfirmationWithProof) {
+							// BOLT: Log this event in the web demo backend
+							message := fmt.Sprintf("BOLT-MEV-BOOST: preconfirmation proof verified for tx hash %s in %s", proof.TxHash.String(), elapsed)
+							event := strings.NewReader(fmt.Sprintf("{ \"message\": \"%s\"}", message))
+							eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
+							if err != nil {
+								log.Error("Failed to log preconfirms event: ", err)
+							}
+							if eventRes != nil {
+								defer eventRes.Body.Close()
+							}
+						}(proof)
 					}
 				}
 			}

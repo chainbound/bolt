@@ -1,5 +1,5 @@
 network_params:
-  seconds_per_slot: 2 # 2 seconds are the minimum for testing
+  seconds_per_slot: 6 # 2 seconds are the minimum for testing
 
 additional_services:
   - broadcaster
