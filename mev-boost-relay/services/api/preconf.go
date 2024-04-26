@@ -4,9 +4,11 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/flashbots/go-boost-utils/ssz"
@@ -93,6 +95,20 @@ func (api *RelayAPI) handleSubmitNewBlockWithPreconfs(w http.ResponseWriter, req
 			api.boltLog.WithError(err).Warn("Could not decode payload - JSON")
 			api.RespondError(w, http.StatusBadRequest, err.Error())
 			return
+		}
+	}
+
+	// BOLT: Send an event to the web demo
+	if len(payload.Proofs) > 0 {
+		slot, _ := payload.Inner.Slot()
+		message := fmt.Sprintf("BOLT-RELAY: received block bid with %d preconfirmations for slot %d", len(payload.Proofs), slot)
+		event := strings.NewReader(fmt.Sprintf("{ \"message\": \"%s\"}", message))
+		eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
+		if err != nil {
+			log.Error("Failed to log preconfirms event: ", err)
+		}
+		if eventRes != nil {
+			defer eventRes.Body.Close()
 		}
 	}
 
