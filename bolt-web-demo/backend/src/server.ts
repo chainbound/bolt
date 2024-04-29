@@ -31,12 +31,14 @@ app.post("/events", (req, res) => {
   if (!message) {
     res.status(400).send("No message provided");
   } else {
+    // Remove time measurements from the message
+    const messageWithoutMeasurements = message.replace(/ in .+$/g, "");
     // Deduplicate events
-    if (EVENTS_SET.has(message)) {
+    if (EVENTS_SET.has(messageWithoutMeasurements)) {
       res.status(200).send("OK");
       return;
     }
-    EVENTS_SET.add(message);
+    EVENTS_SET.add(messageWithoutMeasurements);
 
     // Broadcast the message to all connected WebSocket clients
     io.emit("new-event", { message, timestamp: new Date().toISOString() });
@@ -104,17 +106,17 @@ server.listen(SERVER_PORT, () => {
 async function sendDevnetEvents() {
   waitForPort(
     ["cl-1-lighthouse-geth", "http"],
-    EventType.BEACON_CLIENT_URL_FOUND
+    EventType.BEACON_CLIENT_URL_FOUND,
   );
 
   waitForPort(
     ["el-1-geth-lighthouse", "rpc"],
-    EventType.JSONRPC_PROVIDER_URL_FOUND
+    EventType.JSONRPC_PROVIDER_URL_FOUND,
   );
 
   waitForPort(["mev-sidecar-api", "api"], EventType.MEV_SIDECAR_URL_FOUND);
 
-  waitForPort(["blockscout", "http"], EventType.EXPLORER_URL_FOUND);
+  waitForPort(["dora", "http"], EventType.EXPLORER_URL_FOUND);
 }
 
 // Send devnet events after a delay to ensure that the frontend is ready to receive them
