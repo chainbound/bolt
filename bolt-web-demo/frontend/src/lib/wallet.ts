@@ -3,7 +3,7 @@ import { ethers } from "ethers";
 
 // Test private key, for which address[0] holds 1000 ETH in the Kurtosis devnet
 const PRIVATE_KEY =
-  "bcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31";
+  "39725efee3fb28614de3bacaffe4cc4bd8c436257e2c8bb887c4b5c4be45e76d";
 
 export async function createAndSignTransaction(providerUrl: string): Promise<{
   signedTx: string;

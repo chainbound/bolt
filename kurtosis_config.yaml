@@ -1,5 +1,7 @@
 network_params:
-  seconds_per_slot: 6 # 2 seconds are the minimum for testing
+  seconds_per_slot: 2 # 2 seconds are the minimum for testing
+tx_spammer_params:
+  tx_spammer_extra_args: ["--slot-time=1", "--accounts=10", "--txcount=1"]
 
 additional_services:
   - broadcaster
