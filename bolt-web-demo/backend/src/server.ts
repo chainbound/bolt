@@ -5,12 +5,13 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { json } from "body-parser";
 
-import { DEVNET_ENDPOINTS, waitForPort } from "./devnet";
+import { DEVNET_ENDPOINTS, getSlot, waitForPort } from "./devnet";
 import { EventType } from "./types";
 import { logger } from "./logger";
 
 const SERVER_PORT = 3001;
 const EVENTS_SET = new Set<string>();
+let LATEST_SLOT = 0;
 
 const app = express();
 const server = createServer(app);
@@ -51,6 +52,10 @@ app.get("/retry-port-events", (req, res) => {
   res.send("OK");
 });
 
+app.get("/latest-slot", (req, res) => {
+  res.send({ slot: LATEST_SLOT });
+});
+
 // Endpoint to send a signed preconfirmation transaction to the BOLT MEV sidecar
 app.post("/preconfirmation", async (req, res) => {
   const beaconClientUrl = DEVNET_ENDPOINTS[EventType.BEACON_CLIENT_URL_FOUND];
@@ -69,12 +74,7 @@ app.post("/preconfirmation", async (req, res) => {
     return;
   }
 
-  const slotResponse = await fetch(
-    `${beaconClientUrl}/eth/v1/beacon/headers/head`,
-    { mode: "no-cors" }
-  ).then((response) => response.json());
-
-  const slot = Number(slotResponse.data.header.message.slot);
+  const slot = await getSlot(beaconClientUrl);
 
   const preconfirmationResponse = await fetch(`http://${mevSidecarUrl}`, {
     method: "POST",
@@ -97,16 +97,6 @@ app.post("/preconfirmation", async (req, res) => {
   res.send({ result: preconfirmationResponse, slot });
 });
 
-// WebSocket connection handling
-io.on("connection", (socket) => {
-  logger.info("A user connected");
-
-  socket.on("disconnect", () => {
-    logger.info("User disconnected");
-  });
-});
-
-// Listen on the specified port
 server.listen(SERVER_PORT, () => {
   logger.info(`Server is running on http://localhost:${SERVER_PORT}`);
 });
@@ -127,7 +117,39 @@ async function sendDevnetEvents() {
   waitForPort(["blockscout", "http"], EventType.EXPLORER_URL_FOUND);
 }
 
+// Send devnet events after a delay to ensure that the frontend is ready to receive them
+// if we start the backend after the frontend.
 (async () => {
   await new Promise((resolve) => setTimeout(resolve, 2000));
   sendDevnetEvents();
+})();
+
+// Poll for the slot number until we reach slot 128
+(async () => {
+  let beaconClientUrl = DEVNET_ENDPOINTS?.[EventType.BEACON_CLIENT_URL_FOUND];
+
+  while (!beaconClientUrl) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    beaconClientUrl = DEVNET_ENDPOINTS?.[EventType.BEACON_CLIENT_URL_FOUND];
+  }
+
+  LATEST_SLOT = await getSlot(beaconClientUrl);
+  while (LATEST_SLOT <= 128) {
+    LATEST_SLOT = await getSlot(beaconClientUrl);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    io.emit("new-event", {
+      type: EventType.NEW_SLOT,
+      message: LATEST_SLOT,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  if (LATEST_SLOT > 128) {
+    io.emit("new-event", {
+      type: EventType.NEW_SLOT,
+      message: 128,
+      timestamp: new Date().toISOString(),
+    });
+  }
 })();

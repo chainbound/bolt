@@ -62,3 +62,12 @@ export async function waitForPort(
     await new Promise((resolve) => setTimeout(resolve, waitTimeMs));
   }
 }
+
+export async function getSlot(beaconClientUrl: string): Promise<number> {
+  const slotResponse = await fetch(
+    `${beaconClientUrl}/eth/v1/beacon/headers/head`,
+    { mode: "no-cors" }
+  ).then((response) => response.json());
+
+  return Number(slotResponse.data.header.message.slot);
+}
