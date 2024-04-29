@@ -1,7 +1,7 @@
 "use client";
 
 import io from "socket.io-client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { createAndSignTransaction } from "@/lib/wallet";
@@ -57,17 +57,25 @@ export default function Home() {
       }
 
       if (
-        event.message.includes("preconfirmation proof verified for tx hash")
+        event.message
+          .toLowerCase()
+          .includes("preconfirmation proof verified for tx hash")
       ) {
         const txHash = event.message.match(/0x[a-fA-F0-9]{64}/g);
+        const slot = event.message
+          .match(/slot \d+/g)
+          ?.toString()
+          .match(/\d+/g)
+          ?.toString();
+
         new Promise((_) =>
           setTimeout(() => {
             const event: Event = {
-              message: `Preconfirmation ${txHash} available here: ${explorerUrl}/tx/${txHash}`,
+              message: `Preconfirmation ${txHash} available here: ${explorerUrl}/slot/${slot}`,
               timestamp: new Date().toISOString(),
             };
             setEvents((prev) => [event, ...prev]);
-          }, 1000)
+          }, 1000),
         );
       }
 
@@ -93,36 +101,33 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [timerActive]);
 
-  async function sendPreconfirmation() {
-    setEvents([]);
-    setPreconfSent(true);
-    try {
-      const { signedTx, txHash } = await createAndSignTransaction(providerUrl);
-      console.log("signedTx", signedTx);
+  const sendPreconfirmation = useCallback(
+    async function () {
+      setEvents([]);
+      setPreconfSent(true);
+      try {
+        const { signedTx, txHash } =
+          await createAndSignTransaction(providerUrl);
 
-      // 1. POST preconfirmation.
-      // The preconfirmation is considered valid as soon as the server responds with a 200 status code.
-      setTime(0);
-      setTimerActive(true);
-      const res = await fetch("http://localhost:3001/preconfirmation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signedTx, txHash }),
-      });
-      if (res.status === 200) {
-        console.log("Preconfirmation successful");
-        setTimerActive(false);
+        // 1. POST preconfirmation.
+        // The preconfirmation is considered valid as soon as the server responds with a 200 status code.
+        setTime(0);
+        setTimerActive(true);
+        const res = await fetch("http://localhost:3001/preconfirmation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ signedTx, txHash }),
+        });
+        if (res.status === 200) {
+          console.log("Preconfirmation successful");
+          setTimerActive(false);
+        }
+      } catch (e) {
+        console.error(e);
       }
-
-      const json = await res.json();
-      const { result, slot } = json;
-
-      console.log("preconf result", result);
-      console.log("slot", slot);
-    } catch (e) {
-      console.error(e);
-    }
-  }
+    },
+    [providerUrl],
+  );
 
   return (
     <main className="flex min-h-screen flex-col items-center p-24">
