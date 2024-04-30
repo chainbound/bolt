@@ -4,8 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
+	"net/http"
 	_ "os"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +24,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	utilbellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -55,6 +60,7 @@ type ValidatorData struct {
 
 type IRelay interface {
 	SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, vd ValidatorData) error
+	SubmitBlockWithPreconfsProofs(msg *VersionedSubmitBlockRequestWithPreconfsProofs, vd ValidatorData) error
 	GetValidatorForSlot(nextSlot uint64) (ValidatorData, error)
 	Config() RelayConfig
 	Start() error
@@ -68,6 +74,7 @@ type IBuilder interface {
 }
 
 type Builder struct {
+	boltCCEndpoint              string
 	ds                          flashbotsextra.IDatabaseService
 	blockConsumer               flashbotsextra.BlockConsumer
 	relay                       IRelay
@@ -95,6 +102,7 @@ type Builder struct {
 
 // BuilderArgs is a struct that contains all the arguments needed to create a new Builder
 type BuilderArgs struct {
+	boltCCEndpoint                string
 	sk                            *bls.SecretKey
 	ds                            flashbotsextra.IDatabaseService
 	blockConsumer                 flashbotsextra.BlockConsumer
@@ -162,6 +170,7 @@ func NewBuilder(args BuilderArgs) (*Builder, error) {
 
 	slotCtx, slotCtxCancel := context.WithCancel(context.Background())
 	return &Builder{
+		boltCCEndpoint:                args.boltCCEndpoint,
 		ds:                            args.ds,
 		blockConsumer:                 args.blockConsumer,
 		relay:                         args.relay,
@@ -236,7 +245,8 @@ func (b *Builder) Stop() error {
 	return nil
 }
 
-func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
+// BOLT: modify to calculate merkle inclusion proofs for preconfirmed transactions
+func (b *Builder) onSealedBlock(opts SubmitBlockOpts, preconfs []*types.Transaction) error {
 	executableData := engine.BlockToExecutableData(opts.Block, opts.BlockValue, opts.BlobSidecars)
 	var dataVersion spec.DataVersion
 	if b.eth.Config().IsCancun(opts.Block.Number(), opts.Block.Time()) {
@@ -266,10 +276,101 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 		Value:                value,
 	}
 
+	payloadTransactions := opts.Block.Transactions()
+
+	// BOLT: sanity check: verify that the block actually contains the preconfirmed transactions
+	for _, preconf := range preconfs {
+		if !slices.Contains(payloadTransactions, preconf) {
+			log.Error(fmt.Sprintf("[BOLT]: Preconfirmed transaction %s not found in block %s", preconf.Hash(), opts.Block.Hash()))
+			continue
+		}
+	}
+
+	// BOLT: generate merkle tree from payload transactions (we need raw RLP bytes for this)
+	rawTxs := make([]bellatrix.Transaction, len(payloadTransactions))
+	for i, tx := range payloadTransactions {
+		raw, err := tx.MarshalBinary()
+		if err != nil {
+			log.Error("[BOLT]: could not marshal transaction", "txHash", tx.Hash(), "err", err)
+			continue
+		}
+		rawTxs[i] = bellatrix.Transaction(raw)
+	}
+
+	log.Info(fmt.Sprintf("[BOLT]: Generated %d raw transactions for merkle tree", len(rawTxs)))
+	bellatrixPayloadTxs := utilbellatrix.ExecutionPayloadTransactions{Transactions: rawTxs}
+
+	rootNode, err := bellatrixPayloadTxs.GetTree()
+	if err != nil {
+		log.Error("[BOLT]: could not get tree from transactions", "err", err)
+	}
+
+	// BOLT: Set the value of nodes. This is MANDATORY for the proof calculation
+	// to output the leaf correctly. This is also never documented in fastssz. -__-
+	rootNode.Hash()
+
+	// BOLT: calculate merkle proofs for preconfirmed transactions
+	preconfirmationsProofs := make([]*PreconfirmationWithProof, 0, len(preconfs))
+
+	timeStart := time.Now()
+	for i, preconf := range preconfs {
+		// get the index of the preconfirmed transaction in the block
+		preconfIndex := slices.IndexFunc(payloadTransactions, func(tx *types.Transaction) bool { return tx.Hash() == preconf.Hash() })
+		if preconfIndex == -1 {
+			log.Error(fmt.Sprintf("Preconfirmed transaction %s not found in block %s", preconf.Hash(), opts.Block.Hash()))
+			log.Error(fmt.Sprintf("block has %v transactions", len(payloadTransactions)))
+			continue
+		}
+
+		// using our gen index formula: 2 * 2^20 + preconfIndex
+		generalizedIndex := int(math.Pow(float64(2), float64(21))) + preconfIndex
+
+		log.Info(fmt.Sprintf("[BOLT]: Calculating merkle proof for preconfirmed transaction %s with index %d. Preconf index: %d",
+			preconf.Hash(), generalizedIndex, preconfIndex))
+
+		timeStart := time.Now()
+		proof, err := rootNode.Prove(generalizedIndex)
+		if err != nil {
+			log.Error("[BOLT]: could not calculate merkle proof for preconfirmed transaction", "txHash", preconf.Hash(), "err", err)
+			continue
+		}
+		log.Info(fmt.Sprintf("[BOLT]: Calculated merkle proof for preconf %s in %s", preconf.Hash(), time.Since(timeStart)))
+		log.Info(fmt.Sprintf("[BOLT]: LEAF: %x, Is leaf nil? %v", proof.Leaf, proof.Leaf == nil))
+
+		merkleProof := new(SerializedMerkleProof)
+		merkleProof.FromFastSszProof(proof)
+
+		preconfirmationsProofs = append(preconfirmationsProofs, &PreconfirmationWithProof{
+			TxHash:      phase0.Hash32(preconf.Hash()),
+			MerkleProof: merkleProof,
+		})
+
+		log.Info(fmt.Sprintf("[BOLT]: Added merkle proof for preconfirmed transaction %s", preconfirmationsProofs[i]))
+	}
+	timeForProofs := time.Since(timeStart)
+
+	if len(preconfs) > 0 {
+		event := strings.NewReader(
+			fmt.Sprintf("{ \"message\": \"BOLT-BUILDER: Created %d merkle proofs for block %d in %v\"}",
+				len(preconfs), opts.Block.Number(), timeForProofs))
+		eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
+		if err != nil {
+			log.Error("Failed to log preconfirms event: ", err)
+		}
+		if eventRes != nil {
+			defer eventRes.Body.Close()
+		}
+	}
+
 	versionedBlockRequest, err := b.getBlockRequest(executableData, dataVersion, &blockBidMsg)
 	if err != nil {
 		log.Error("could not get block request", "err", err)
 		return err
+	}
+
+	versionedBlockRequestWithPreconfsProofs := &VersionedSubmitBlockRequestWithPreconfsProofs{
+		Inner:  versionedBlockRequest,
+		Proofs: preconfirmationsProofs,
 	}
 
 	if b.dryRun {
@@ -285,16 +386,16 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 			log.Error("could not validate block", "version", dataVersion.String(), "err", err)
 		}
 	} else {
+		// NOTE: we can ignore preconfs for `processBuiltBlock`
 		go b.processBuiltBlock(opts.Block, opts.BlockValue, opts.OrdersClosedAt, opts.SealedAt, opts.CommitedBundles, opts.AllBundles, opts.UsedSbundles, &blockBidMsg)
-		err = b.relay.SubmitBlock(versionedBlockRequest, opts.ValidatorData)
+		err = b.relay.SubmitBlockWithPreconfsProofs(versionedBlockRequestWithPreconfsProofs, opts.ValidatorData)
 		if err != nil {
 			log.Error("could not submit block", "err", err, "verion", dataVersion, "#commitedBundles", len(opts.CommitedBundles))
 			return err
 		}
 	}
 
-	log.Info("submitted block", "version", dataVersion.String(), "slot", opts.PayloadAttributes.Slot, "value", opts.BlockValue.String(), "parent", opts.Block.ParentHash().String(),
-		"hash", opts.Block.Hash(), "#commitedBundles", len(opts.CommitedBundles))
+	log.Info(fmt.Sprintf("[BOLT]: Sending block to relay %s", versionedBlockRequestWithPreconfsProofs.String()))
 
 	return nil
 }
@@ -363,6 +464,7 @@ func (b *Builder) processBuiltBlock(block *types.Block, blockValue *big.Int, ord
 	}
 }
 
+// Called when a new payload event is received from the beacon client SSE
 func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) error {
 	if attrs == nil {
 		return nil
@@ -407,6 +509,8 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 	b.slotCtx = slotCtx
 	b.slotCtxCancel = slotCtxCancel
 
+	log.Info("[BOLT]: Inside onPayloadAttribute", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp))
+
 	go b.runBuildingJob(b.slotCtx, proposerPubkey, vd, attrs)
 	return nil
 }
@@ -422,6 +526,9 @@ type blockQueueEntry struct {
 	usedSbundles    []types.UsedSBundle
 }
 
+// Continuously makes a request to the miner module with the correct params and submits the best produced block.
+// on average 1 attempt per second is made.
+// - Submissions to the relay are rate limited to 2 req/s
 func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.BLSPubKey, vd ValidatorData, attrs *types.BuilderPayloadAttributes) {
 	ctx, cancel := context.WithTimeout(slotCtx, 12*time.Second)
 	defer cancel()
@@ -443,6 +550,13 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 
 	log.Debug("runBuildingJob", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp))
 
+	// fetch preconfs here
+	preconfs, err := b.eth.Preconfirmations(b.boltCCEndpoint, attrs.Slot)
+	log.Info("[BOLT]: Got preconfirmations", "preconfs", len(preconfs))
+	if err != nil {
+		log.Error("[BOLT]: could not get preconfirmations", "err", err)
+	}
+
 	submitBestBlock := func() {
 		queueMu.Lock()
 		if queueBestEntry.block.Hash() != queueLastSubmittedHash {
@@ -459,7 +573,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 				ValidatorData:     vd,
 				PayloadAttributes: attrs,
 			}
-			err := b.onSealedBlock(submitBlockOpts)
+			err := b.onSealedBlock(submitBlockOpts, preconfs)
 
 			if err != nil {
 				log.Error("could not run sealed block hook", "err", err)
@@ -515,7 +629,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 			"slot", attrs.Slot,
 			"parent", attrs.HeadHash,
 			"resubmit-interval", b.builderResubmitInterval.String())
-		err := b.eth.BuildBlock(attrs, blockHook)
+		err := b.eth.BuildBlock(attrs, blockHook, preconfs)
 		if err != nil {
 			log.Warn("Failed to build block", "err", err)
 		}

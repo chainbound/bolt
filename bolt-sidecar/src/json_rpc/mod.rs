@@ -1,32 +1,30 @@
 use std::convert::Infallible;
-use std::num::NonZeroUsize;
 use std::sync::Arc;
 
 use bytes::Bytes;
-use parking_lot::RwLock;
-use serde::{Deserialize, Serialize};
+use secp256k1::SecretKey;
 use tokio::sync::mpsc;
 use tracing::{error, info};
 use warp::{http::Method, reject::Rejection, Filter};
 
 mod api;
-use self::api::{JsonRpcApi, PreconfirmationError, PreconfirmationRpc};
+mod types;
 
-pub async fn start_server(port: u16) -> eyre::Result<mpsc::Sender<()>> {
+use self::{
+    api::{JsonRpcApi, PreconfirmationRpc},
+    types::{JsonRpcError, JsonRpcRequest, JsonRpcResponse},
+};
+
+pub async fn start_server(port: u16, pk: Option<SecretKey>) -> eyre::Result<mpsc::Sender<()>> {
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
     let cors = warp::cors().allow_any_origin().allow_method(Method::POST);
 
-    let rpc_api = Arc::new(api::JsonRpcApi {
-        cache: Arc::new(RwLock::new(lru::LruCache::new(
-            NonZeroUsize::new(100).unwrap(),
-        ))),
-    });
+    let rpc_api = Arc::new(api::JsonRpcApi::new(pk));
 
     let rpc = warp::post()
         .and(warp::path::end())
         .and(warp::body::bytes())
         .and(warp::header::exact("content-type", "application/json"))
-        // .and(warp::header::optional::<String>("x-api-key"))
         .and(warp::any().map(move || Arc::clone(&rpc_api)))
         .and_then(handle_rpc_request)
         .and_then(|reply| async move { Ok::<_, Rejection>(warp::reply::json(&reply)) })
@@ -96,59 +94,5 @@ async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, Infa
             code: -32000,
             message: "Internal error".to_string(),
         }))
-    }
-}
-
-#[derive(Debug, Default, Serialize, Deserialize)]
-struct JsonRpcError {
-    code: i64,
-    message: String,
-}
-
-impl warp::reject::Reject for JsonRpcError {}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct JsonRpcRequest {
-    jsonrpc: String,
-    id: String,
-    method: String,
-    params: serde_json::Value,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct JsonRpcResponse {
-    jsonrpc: String,
-    id: String,
-    result: serde_json::Value,
-}
-
-impl From<eyre::Report> for JsonRpcError {
-    fn from(err: eyre::Report) -> Self {
-        Self {
-            code: -32000,
-            message: err.to_string(),
-        }
-    }
-}
-
-impl From<JsonRpcError> for warp::reply::Json {
-    fn from(err: JsonRpcError) -> Self {
-        warp::reply::json(&err)
-    }
-}
-
-impl From<PreconfirmationError> for JsonRpcError {
-    fn from(err: PreconfirmationError) -> Self {
-        Self {
-            code: -32000,
-            message: err.to_string(),
-        }
-    }
-}
-
-impl From<PreconfirmationError> for warp::Rejection {
-    fn from(err: PreconfirmationError) -> Self {
-        error!(err = ?err, "failed to process RPC request");
-        warp::reject::custom(JsonRpcError::from(err))
     }
 }

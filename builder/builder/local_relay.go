@@ -114,6 +114,11 @@ func (r *LocalRelay) Stop() {
 func (r *LocalRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, _ ValidatorData) error {
 	log.Info("submitting block to local relay", "block", msg.Bellatrix.ExecutionPayload.BlockHash.String())
 	return r.submitBlock(msg.Bellatrix)
+
+}
+
+func (r *LocalRelay) SubmitBlockWithPreconfsProofs(msg *VersionedSubmitBlockRequestWithPreconfsProofs, _ ValidatorData) error {
+	panic("Not implemented!")
 }
 
 func (r *LocalRelay) Config() RelayConfig {

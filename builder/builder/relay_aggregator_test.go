@@ -22,9 +22,11 @@ type testRelay struct {
 	gvsVd   ValidatorData
 	gvsErr  error
 
-	requestedSlot  uint64
-	submittedMsg   *builderSpec.VersionedSubmitBlockRequest
-	submittedMsgCh chan *builderSpec.VersionedSubmitBlockRequest
+	requestedSlot             uint64
+	submittedMsg              *builderSpec.VersionedSubmitBlockRequest
+	submittedMsgWithPreconf   *VersionedSubmitBlockRequestWithPreconfsProofs
+	submittedMsgCh            chan *builderSpec.VersionedSubmitBlockRequest
+	submittedMsgWithPreconfCh chan *VersionedSubmitBlockRequestWithPreconfsProofs
 }
 
 type testRelayAggBackend struct {
@@ -53,6 +55,17 @@ func (r *testRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, re
 		}
 	}
 	r.submittedMsg = msg
+	return r.sbError
+}
+
+func (r *testRelay) SubmitBlockWithPreconfsProofs(msg *VersionedSubmitBlockRequestWithPreconfsProofs, vd ValidatorData) error {
+	if r.submittedMsgWithPreconfCh != nil {
+		select {
+		case r.submittedMsgWithPreconfCh <- msg:
+		default:
+		}
+	}
+	r.submittedMsgWithPreconf = msg
 	return r.sbError
 }
 

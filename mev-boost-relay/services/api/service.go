@@ -63,12 +63,15 @@ var (
 	// Proposer API (builder-specs)
 	pathStatus            = "/eth/v1/builder/status"
 	pathRegisterValidator = "/eth/v1/builder/validators"
-	pathGetHeader         = "/eth/v1/builder/header/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
-	pathGetPayload        = "/eth/v1/builder/blinded_blocks"
+	// BOLT: this endpoint will return also ship preconfirmation proofs
+	pathGetHeader  = "/eth/v1/builder/header/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
+	pathGetPayload = "/eth/v1/builder/blinded_blocks"
 
 	// Block builder API
 	pathBuilderGetValidators = "/relay/v1/builder/validators"
 	pathSubmitNewBlock       = "/relay/v1/builder/blocks"
+	// BOLT: allow builders to ship merkle proofs with their blocks
+	pathSubmitNewBlockWithPreconfs = "/relay/v1/builder/blocks_with_preconfs"
 
 	// Data API
 	pathDataProposerPayloadDelivered = "/relay/v1/data/bidtraces/proposer_payload_delivered"
@@ -167,8 +170,9 @@ type blockSimResult struct {
 
 // RelayAPI represents a single Relay instance
 type RelayAPI struct {
-	opts RelayAPIOpts
-	log  *logrus.Entry
+	opts    RelayAPIOpts
+	log     *logrus.Entry
+	boltLog *logrus.Entry
 
 	blsSk     *bls.SecretKey
 	publicKey *phase0.BLSPubKey
@@ -272,6 +276,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 	api = &RelayAPI{
 		opts:         opts,
 		log:          opts.Log,
+		boltLog:      common.NewBoltLogger("RELAY"),
 		blsSk:        opts.SecretKey,
 		publicKey:    &publicKey,
 		datastore:    opts.Datastore,
@@ -347,6 +352,8 @@ func (api *RelayAPI) getRouter() http.Handler {
 		api.log.Info("block builder API enabled")
 		r.HandleFunc(pathBuilderGetValidators, api.handleBuilderGetValidators).Methods(http.MethodGet)
 		r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodPost)
+		// BOLT
+		r.HandleFunc(pathSubmitNewBlockWithPreconfs, api.handleSubmitNewBlockWithPreconfs).Methods(http.MethodPost)
 	}
 
 	// Data API
@@ -679,7 +686,7 @@ func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.Pay
 
 	// discard payload attributes if already known
 	api.payloadAttributesLock.RLock()
-	_, ok := api.payloadAttributes[getPayloadAttributesKey(payloadAttributes.Data.ParentBlockHash, payloadAttrSlot)]
+	_, ok := api.payloadAttributes[payloadAttributes.Data.ParentBlockHash]
 	api.payloadAttributesLock.RUnlock()
 
 	if ok {
@@ -719,12 +726,12 @@ func (api *RelayAPI) processPayloadAttributes(payloadAttributes beaconclient.Pay
 	// Step 1: clean up old ones
 	for parentBlockHash, attr := range api.payloadAttributes {
 		if attr.slot < apiHeadSlot {
-			delete(api.payloadAttributes, getPayloadAttributesKey(parentBlockHash, attr.slot))
+			delete(api.payloadAttributes, parentBlockHash)
 		}
 	}
 
 	// Step 2: save new one
-	api.payloadAttributes[getPayloadAttributesKey(payloadAttributes.Data.ParentBlockHash, payloadAttrSlot)] = payloadAttributesHelper{
+	api.payloadAttributes[payloadAttributes.Data.ParentBlockHash] = payloadAttributesHelper{
 		slot:              payloadAttrSlot,
 		parentHash:        payloadAttributes.Data.ParentBlockHash,
 		withdrawalsRoot:   withdrawalsRoot,
@@ -1159,7 +1166,7 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	log.Debug("getHeader request received")
+	api.boltLog.Info("getHeader request received")
 
 	if slices.Contains(apiNoHeaderUserAgents, ua) {
 		log.Info("rejecting getHeader by user agent")
@@ -1187,7 +1194,24 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	bidBlockHash, err := bid.BlockHash()
+	if err != nil {
+		api.boltLog.WithError(err).Error("could not get bid block hash")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// BOLT: get preconfirmations proofs of the best bid if available
+	proofs, err := api.redis.GetPreconfirmationsProofs(slot, proposerPubkeyHex, bidBlockHash.String())
+	if err != nil {
+		api.boltLog.WithError(err).Error("failed getting preconfirmation proofs", proofs)
+		// We don't respond with an error and early return since proofs might be missing
+	}
+
+	api.boltLog.Infof("Got %d preconfirmations proofs from cache", len(proofs))
+
 	if bid == nil || bid.IsEmpty() {
+		api.boltLog.Info("Bid is nill or is empty")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -1205,15 +1229,24 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 
 	// Error on bid without value
 	if value.Cmp(uint256.NewInt(0)) == 0 {
+		api.boltLog.Info("Bid has 0 value")
 		w.WriteHeader(http.StatusNoContent)
 		return
+	}
+
+	// BOLT: Include the proofs in the final bid
+	bidWithProofs := &common.BidWithPreconfirmationsProofs{
+		Bid:    bid,
+		Proofs: proofs,
 	}
 
 	log.WithFields(logrus.Fields{
 		"value":     value.String(),
 		"blockHash": blockHash.String(),
+		"proofs":    len(proofs),
 	}).Info("bid delivered")
-	api.RespondOK(w, bid)
+
+	api.RespondOK(w, bidWithProofs)
 }
 
 func (api *RelayAPI) checkProposerSignature(block *common.VersionedSignedBlindedBeaconBlock, pubKey []byte) (bool, error) {
@@ -1617,7 +1650,7 @@ func (api *RelayAPI) checkSubmissionFeeRecipient(w http.ResponseWriter, log *log
 
 func (api *RelayAPI) checkSubmissionPayloadAttrs(w http.ResponseWriter, log *logrus.Entry, submission *common.BlockSubmissionInfo) (payloadAttributesHelper, bool) {
 	api.payloadAttributesLock.RLock()
-	attrs, ok := api.payloadAttributes[getPayloadAttributesKey(submission.BidTrace.ParentHash.String(), submission.BidTrace.Slot)]
+	attrs, ok := api.payloadAttributes[submission.BidTrace.ParentHash.String()]
 	api.payloadAttributesLock.RUnlock()
 	if !ok || submission.BidTrace.Slot != attrs.slot {
 		log.WithFields(logrus.Fields{
@@ -1780,7 +1813,14 @@ type redisUpdateBidOpts struct {
 	payload              *common.VersionedSubmitBlockRequest
 }
 
-func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBidAndUpdateTopBidResponse, *builderApi.VersionedSubmitBlindedBlockResponse, bool) {
+func (api *RelayAPI) updateRedisBid(
+	opts redisUpdateBidOpts,
+	proofs []*common.PreconfirmationWithProof) (
+	*datastore.SaveBidAndUpdateTopBidResponse,
+	*builderApi.VersionedSubmitBlindedBlockResponse, bool) {
+
+	api.boltLog.Infof("Updating Redis bid with proofs %v", proofs)
+
 	// Prepare the response data
 	getHeaderResponse, err := common.BuildGetHeaderResponse(opts.payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
 	if err != nil {
@@ -1815,7 +1855,17 @@ func (api *RelayAPI) updateRedisBid(opts redisUpdateBidOpts) (*datastore.SaveBid
 	//
 	// Save to Redis
 	//
-	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(context.Background(), opts.tx, &bidTrace, opts.payload, getPayloadResponse, getHeaderResponse, opts.receivedAt, opts.cancellationsEnabled, opts.floorBidValue)
+	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(
+		context.Background(),
+		opts.tx,
+		&bidTrace,
+		opts.payload,
+		getPayloadResponse,
+		getHeaderResponse,
+		opts.receivedAt,
+		opts.cancellationsEnabled,
+		opts.floorBidValue,
+		proofs)
 	if err != nil {
 		opts.log.WithError(err).Error("could not save bid and update top bids")
 		api.RespondError(opts.w, http.StatusInternalServerError, "failed saving and updating bid")
@@ -2040,7 +2090,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 			simResult = &blockSimResult{false, false, nil, nil}
 		}
 
-		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simResult.requestErr, simResult.validationErr, receivedAt, eligibleAt, simResult.wasSimulated, savePayloadToDatabase, pf, simResult.optimisticSubmission)
+		submissionEntry, err := api.db.SaveBuilderBlockSubmission(payload, simResult.requestErr, simResult.validationErr, receivedAt, eligibleAt, simResult.wasSimulated, savePayloadToDatabase, pf, simResult.optimisticSubmission, nil)
 		if err != nil {
 			log.WithError(err).WithField("payload", payload).Error("saving builder block submission to database failed")
 			return
@@ -2161,7 +2211,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		floorBidValue:        floorBidValue,
 		payload:              payload,
 	}
-	updateBidResult, getPayloadResponse, ok := api.updateRedisBid(redisOpts)
+	updateBidResult, getPayloadResponse, ok := api.updateRedisBid(redisOpts, nil)
 	if !ok {
 		return
 	}

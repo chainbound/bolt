@@ -1,3 +1,7 @@
+demo:
+	chmod +x ./start-demo.sh
+	./start-demo.sh
+
 up:
 	kurtosis run --enclave bolt-devnet github.com/chainbound/ethereum-package --args-file kurtosis_config.yaml
 
