@@ -1,4 +1,20 @@
-# BOLT-CC (Bolt Credible Commitments)
+# Bolt-CC (Credible Commitments)
+
+<!-- vim-markdown-toc Marked -->
+
+* [How it works](#how-it-works)
+* [Scope of the PoC](#scope-of-the-poc)
+* [Devnet and demo app](#devnet-and-demo-app)
+  * [Requirements](#requirements)
+  * [Running the devnet and demo](#running-the-devnet-and-demo)
+  * [Stopping the devnet and demo](#stopping-the-devnet-and-demo)
+* [Changelog](#changelog)
+  * [Bolt Sidecar](#bolt-sidecar)
+  * [Builder](#builder)
+  * [Relay](#relay)
+  * [MEV-Boost](#mev-boost)
+
+<!-- vim-markdown-toc -->
 
 Bolt-CC is a proof of concept for _permissionless proposer commitments through
 PBS_. In its essence, it consists in a light fork of the current MEV-Boost
@@ -24,6 +40,8 @@ The flow of Bolt-CC can be summarized in the following steps:
 7. If the block is valid, the proposer can propose it as usual. If not, the
    proposer can self-build it.
 
+A diagram of this flow is available [here](https://swimlanes.io/u/hwwDL7z1P)
+
 ## Scope of the PoC
 
 This proof of concept aims to provide a working example of the flow depicted
@@ -39,7 +57,8 @@ unnecessary complexity at this stage, such as:
 - the relay doesn't ensure to store bids with valid proofs of inclusion. In a
   production environment this should be done to forward only valid bids to the
   proposer and minimize the risk of falling back to a locally built block
-- the fallback logic to a locally built block is still TBD
+- the fallback logic to a locally built block needs to consider
+  preconfirmations as well and it is still TBD
 
 ## Devnet and demo app
 
@@ -108,7 +127,7 @@ user via JSON-RPC, and forward them to the relay.
 ### Builder
 
 The outlined changes refer to the implementation of the [builder made by
-Flashbots team](https://github.com/flashbots/builder/tree/v1.13.14-0.3.0). In order to
+the Flashbots team](https://github.com/flashbots/builder/tree/v1.13.14-0.3.0). In order to
 best comprehend the changes it is recommended to keep [Flashbots' builder flow
 diagram](https://github.com/flashbots/builder/blob/v1.13.14-0.3.0/docs/builder/builder-diagram.png)
 at hand.
@@ -145,7 +164,8 @@ The PR implementing the changes can be found
 **Added**
 
 - New endpoint `/relay/v1/builder/blocks_with_preconfs` to receive builder
-  bids with preconfirmed transactions and their Merkle proofs of inclusion
+  bids with preconfirmed transactions and their Merkle proofs of inclusion.
+  This endpoint doesn't accept SSZ encoded content, only JSON for now.
 - New Redis cache key `cache-preconfirmations-proofs` to store Merkle proofs
 
 ### MEV-Boost
