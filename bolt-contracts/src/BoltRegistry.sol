@@ -1,77 +1,86 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
 contract BoltRegistry {
-    // Struct to hold opted-in proposers as preconfirmers
-    struct Preconfirmer {
-        // The address of the proposer opted in 
+    uint256 public constant OPT_OUT_COOLDOWN = 1 days;
+
+    // Struct to hold opted-in proposers
+    struct BasedProposer {
+        // The address of the proposer opted in
         address addr;
-        // The status of the preconfirmer
-        PreconfirmerStatus status;
+        // The status of the proposer in the protocol
+        BoltStatus status;
+        // The timestamp of the last time the proposer opted in.
+        // This is used to enforce the opt-out cooldown period
+        uint256 lastOptedInTimestamp;
     }
 
-    // Enum to hold the status of the preconfirmer
-    enum PreconfirmerStatus {
+    // Enum to hold the status of the based proposers
+    enum BoltStatus {
         Active,
         Inactive
     }
 
-    // Mapping to hold the preconfirmers
-    mapping(address => Preconfirmer) public preconfirmers;
+    // Mapping to hold the based proposers
+    mapping(address => BasedProposer) public basedProposers;
 
     // Error messages
-    error PreconfirmerAlreadyExists();
-    error PreconfirmerDoesNotExist();
+    error BasedProposerAlreadyExists();
+    error BasedProposerDoesNotExist();
+    error InvalidStatusChange();
+    error CooldownNotElapsed();
     error Unauthorized();
+    error NotFound();
 
-    // Event to log the status change of a preconfirmer
-    event PreconfirmerStatusChanged(address indexed preconfirmer, PreconfirmerStatus status);
-
-    // Modifier to check if the caller is a preconfirmer (no matter its status)
-    modifier onlyPreconfirmer() {
-        if (preconfirmers[msg.sender].addr == address(0)) {
-            revert Unauthorized();
-        }
-        _;
-    }
+    // Event to log the status change of a based proposer
+    event BasedProposerStatusChanged(address indexed basedProposer, BoltStatus status);
 
     /// @notice Constructor
-    constructor() {
-    }
+    constructor() {}
 
-    /// @notice Add a preconfirmer
-    /// @param _preconfirmer The address of the preconfirmer
-    function addPreconfirmer(address _preconfirmer) external {
-        if (preconfirmers[_preconfirmer].addr != address(0)) {
-            revert PreconfirmerAlreadyExists();
+    /// @notice Allows a based proposer to opt-in to the protocol
+    function optIn() external {
+        if (basedProposers[msg.sender].addr != address(0)) {
+            revert BasedProposerAlreadyExists();
         }
 
-        preconfirmers[_preconfirmer] = Preconfirmer(_preconfirmer, PreconfirmerStatus.Active);
-        emit PreconfirmerStatusChanged(_preconfirmer, PreconfirmerStatus.Active);
+        basedProposers[msg.sender] = BasedProposer(msg.sender, BoltStatus.Active, block.timestamp);
+        emit BasedProposerStatusChanged(msg.sender, BoltStatus.Active);
     }
 
-    /// @notice Remove a preconfirmer
-    /// @param _preconfirmer The address of the preconfirmer to remove
-    function removePreconfirmer(address _preconfirmer) external {
-        if (preconfirmers[_preconfirmer].addr == address(0)) {
-            revert PreconfirmerDoesNotExist();
+    /// @notice Allows a based proposer to opt-out of the protocol
+    function optOut() external {
+        BasedProposer memory basedProposer = basedProposers[msg.sender];
+
+        if (basedProposer.addr != msg.sender) {
+            revert BasedProposerDoesNotExist();
+        }
+        if (basedProposer.status == BoltStatus.Inactive) {
+            revert InvalidStatusChange();
+        }
+        if (block.timestamp - basedProposer.lastOptedInTimestamp < OPT_OUT_COOLDOWN) {
+            revert CooldownNotElapsed();
         }
 
-        preconfirmers[_preconfirmer].status = PreconfirmerStatus.Inactive;
-        emit PreconfirmerStatusChanged(_preconfirmer, PreconfirmerStatus.Inactive);
+        basedProposer.status = BoltStatus.Inactive;
+        emit BasedProposerStatusChanged(msg.sender, BoltStatus.Inactive);
     }
 
-    /// @notice Check if an address is a preconfirmer
-    /// @param _preconfirmer The address to check
-    /// @return True if the address is a preconfirmer, false otherwise
-    function isPreconfirmer(address _preconfirmer) external view returns (bool) {
-        return preconfirmers[_preconfirmer].addr != address(0);
+    /// @notice Check if an address is a based proposer
+    /// @param _basedProposer The address to check
+    /// @return True if the address is a based proposer, false otherwise
+    function isBasedProposer(address _basedProposer) external view returns (bool) {
+        return basedProposers[_basedProposer].addr != address(0);
     }
 
-    /// @notice Get the status of a preconfirmer
-    /// @param _preconfirmer The address of the preconfirmer
-    /// @return The status of the preconfirmer
-    function getPreconfirmerStatus(address _preconfirmer) external view returns (PreconfirmerStatus) {
-        return preconfirmers[_preconfirmer].status;
+    /// @notice Get the status of a based proposer
+    /// @param _basedProposers The address of the based proposer
+    /// @return The status of the based proposer
+    function getBasedProposerStatus(address _basedProposers) external view returns (BoltStatus) {
+        if (basedProposers[_basedProposers].addr == address(0)) {
+            revert BasedProposerDoesNotExist();
+        }
+
+        return basedProposers[_basedProposers].status;
     }
 }

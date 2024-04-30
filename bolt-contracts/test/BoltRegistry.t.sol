@@ -14,9 +14,10 @@ contract BoltRegistryTest is Test {
         registry = new BoltRegistry();
     }
 
-    function testAddPreconfirmer() public {
-        registry.addPreconfirmer(alice);
-        
-        assertEq(uint8(registry.getPreconfirmerStatus(alice)), uint8(BoltRegistry.PreconfirmerStatus.Active));
+    function testAddBasedProposerToRegistry() public {
+        vm.prank(alice);
+        registry.optIn();
+
+        assertEq(uint8(registry.getBasedProposerStatus(alice)), uint8(BoltRegistry.BoltStatus.Active));
     }
 }
