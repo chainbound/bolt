@@ -36,6 +36,10 @@ unnecessary complexity at this stage, such as:
   not ideal in a production environment.
 - the builder will place the preconfirmed transactions on the top of the block
   to ensure their validity
+- the relay doesn't ensure to store bids with valid proofs of inclusion. In a
+  production environment this should be done to forward only valid bids to the
+  proposer and minimize the risk of falling back to a locally built block
+- the fallback logic to a locally built block is still TBD
 
 ## Devnet and demo app
 
@@ -83,3 +87,79 @@ make down
 # if you want to remove all the data and stop the Kurtosis engine
 make clean
 ```
+
+## Changelog
+
+All notable changes to the components of this project needed for the PoC will
+be documented here.
+
+### Bolt Sidecar
+
+The sidecar is responsible for handling the preconfirmation requests from the
+user via JSON-RPC, and forward them to the relay.
+
+**Added**
+
+- `eth_requestPreconfirmation` whose params are a RLP-encoded `rawTx` and the `slot`
+  for which the preconfirmation is requested.
+- `eth_getPreconfirmation` which returns the preconfirmation accepted by the
+  proposer for the given `slot`.
+
+### Builder
+
+The outlined changes refer to the implementation of the [builder made by
+Flashbots team](https://github.com/flashbots/builder/tree/v1.13.14-0.3.0). In order to
+best comprehend the changes it is recommended to keep [Flashbots' builder flow
+diagram](https://github.com/flashbots/builder/blob/v1.13.14-0.3.0/docs/builder/builder-diagram.png)
+at hand.
+
+The PR implementing the changes can be found [here](https://github.com/chainbound/bolt-v0/pull/9).
+
+**Added**
+
+- Utility to pull preconfirmed transactions from the relay
+- Utility to generate the SSZ hash tree root of a transaction
+- Utility to generate a Merkle proof of inclusion of at a certain index
+  in the SSZ list of transactions
+
+**Changed**
+
+- Fetch preconfirmed transactions when running building job
+  (`runBuildingJob`) using the sidecar/relay endpoint `eth_getPreconfirmation`
+- Preconfirmed transactions are propagated downstream in the building pipeline,
+  and injected as part of the mempool when the block filling process begins
+  (`fillTrasanctionsAlgoWorker`)
+- Generate Merkle proofs of inclusions for the preconfirmed transactions when the block is sealed
+  (`onSealedBlock`) and the bid is ready to be sent to the relay
+- Builder bid is sent to a new relay endpoint `/relay/v1/builder/blocks_with_preconfs`
+  along with the proofs
+
+### Relay
+
+The outlined changes refer to the implementation of the [relay made by the
+Flashbots team](https://github.com/flashbots/mev-boost-relay/tree/v0.29.1).
+
+The PR implementing the changes can be found
+[here](https://github.com/chainbound/bolt-v0/pull/10).
+
+**Added**
+
+- New endpoint `/relay/v1/builder/blocks_with_preconfs` to receive builder
+  bids with preconfirmed transactions and their Merkle proofs of inclusion
+- New Redis cache key `cache-preconfirmations-proofs` to store Merkle proofs
+
+### MEV-Boost
+
+The outlined changes refer to the implementation of the [MEV-Boost made by the
+Flashbots team](https://github.com/flashbots/mev-boost/tree/v1.7).
+
+The PR implementing the changes can be found [here](https://github.com/chainbound/bolt-v0/pull/11)
+
+**Added**
+
+- Utility to generate the SSZ hash tree root of a transaction and to verify a
+  Merkle proof of inclusion
+
+**Changed**
+
+- The `getHeader` endpoint verifies the Merkle proofs if expected, and rejects the bid if not valid
