@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,6 +33,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Standard errors
 var (
 	errNoRelays                  = errors.New("no relays")
 	errInvalidSlot               = errors.New("invalid slot")
@@ -41,6 +41,13 @@ var (
 	errInvalidPubkey             = errors.New("invalid pubkey")
 	errNoSuccessfulRelayResponse = errors.New("no successful relay response")
 	errServerAlreadyRunning      = errors.New("server already running")
+)
+
+// Bolt errors
+var (
+	errNilProof      = errors.New("nil proof")
+	errInvalidProofs = errors.New("proof verification failed")
+	errInvalidRoot   = errors.New("failed getting tx root from bid")
 )
 
 var (
@@ -106,6 +113,8 @@ type BoostService struct {
 
 	// BOLT: sidecar connection
 	sidecar *boltSidecar
+
+	constraints *ConstraintCache
 }
 
 // NewBoostService created a new BoostService
@@ -149,6 +158,8 @@ func NewBoostService(opts BoostServiceOpts) (*BoostService, error) {
 		requestMaxRetries: opts.RequestMaxRetries,
 
 		sidecar: boltSidecar,
+		// Initialize the constraint cache
+		constraints: NewConstraintCache(),
 	}, nil
 }
 
@@ -318,6 +329,82 @@ func (m *BoostService) handleRegisterValidator(w http.ResponseWriter, req *http.
 	m.respondError(w, http.StatusBadGateway, errNoSuccessfulRelayResponse.Error())
 }
 
+// verifyConstraintProofs verifies the proofs against the constraints, and returns an error if the proofs are invalid.
+func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithPreconfirmationsProofs, constraints Constraints) error {
+	log := m.log.WithFields(logrus.Fields{})
+	// BOLT: verify preconfirmation inclusion proofs. If they don't match, we don't consider the bid to be valid.
+	if responsePayload.Proofs != nil {
+		// BOLT: remove unnecessary fields while logging
+		log.WithFields(logrus.Fields{})
+
+		log.Info("[BOLT]: Verifying preconfirmation proofs", len(responsePayload.Proofs))
+
+		transactionsRoot, err := responsePayload.Bid.TransactionsRoot()
+		if err != nil {
+			log.WithError(err).Error("[BOLT]: error getting tx root from bid")
+			return errInvalidRoot
+		}
+
+		for _, proof := range responsePayload.Proofs {
+			if proof == nil {
+				log.Warn("[BOLT]: Nil proof!")
+				return errNilProof
+			}
+
+			// Find the raw tx with the hash specified
+			constraint, ok := constraints[proof.TxHash]
+			if !ok {
+				log.Warnf("[BOLT]: Tx hash %s not found in constraints", proof.TxHash.String())
+				// We don't actually have to return an error here, the relay just provided a proof that was unnecessary
+				continue
+			}
+
+			rawTx := constraint.RawTx
+
+			log.Infof("[BOLT]: Raw tx: %x", rawTx)
+
+			// Compute the hash tree root for the raw preconfirmed transaction
+			// and use it as "Leaf" in the proof to be verified against
+			txHashTreeRoot, err := rawTx.HashTreeRoot()
+			if err != nil {
+				log.WithError(err).Error("[BOLT]: error getting tx hash tree root")
+				return errInvalidRoot
+			}
+
+			log.Infof("[BOLT]: Tx hash tree root: %x", txHashTreeRoot)
+
+			// Verify the proof
+			sszProof := proof.MerkleProof.ToFastSszProof(txHashTreeRoot[:])
+
+			log.Infof("[BOLT]: Fast sszProof index: %d", sszProof.Index)
+			log.Infof("[BOLT]: Fast sszProof hashes: %x", sszProof.Hashes)
+			log.Infof("[BOLT]: Fast sszProof leaf: %x. Raw tx: %x", sszProof.Leaf, rawTx)
+
+			currentTime := time.Now()
+			ok, err = fastSsz.VerifyProof(transactionsRoot[:], sszProof)
+			elapsed := time.Since(currentTime)
+
+			if err != nil {
+				log.WithError(err).Error("error verifying merkle proof")
+				// BOLT: we need to skip the bid in this case!
+				// for now we just return and complain loudly
+				return err
+			}
+
+			if !ok {
+				log.Error("[BOLT]: proof verification failed: 'not ok' for tx hash: ", proof.TxHash.String())
+				// BOLT: we need to skip the bid in this case!
+				// for now we just return and complain loudly
+				return errInvalidProofs
+			} else {
+				log.Info(fmt.Sprintf("[BOLT]: Preconfirmation proof verified for tx hash %s in %s", proof.TxHash.String(), elapsed))
+			}
+		}
+	}
+
+	return nil
+}
+
 // handleGetHeader requests bids from the relays
 // BOLT: receiving preconfirmation proofs from relays along with bids, and
 // verify them. If not valid, the bid is discarded
@@ -337,7 +424,7 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 	})
 	log.Debug("getHeader")
 
-	_slot, err := strconv.ParseUint(slot, 10, 64)
+	slotUint, err := strconv.ParseUint(slot, 10, 64)
 	if err != nil {
 		m.respondError(w, http.StatusBadRequest, errInvalidSlot.Error())
 		return
@@ -355,8 +442,8 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 
 	// Make sure we have a uid for this slot
 	m.slotUIDLock.Lock()
-	if m.slotUID.slot < _slot {
-		m.slotUID.slot = _slot
+	if m.slotUID.slot < slotUint {
+		m.slotUID.slot = slotUint
 		m.slotUID.uid = uuid.New()
 	}
 	slotUID := m.slotUID.uid
@@ -364,13 +451,13 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 	log = log.WithField("slotUID", slotUID)
 
 	// Log how late into the slot the request starts
-	slotStartTimestamp := m.genesisTime + _slot*config.SlotTimeSec
+	slotStartTimestamp := m.genesisTime + slotUint*config.SlotTimeSec
 	msIntoSlot := uint64(time.Now().UTC().UnixMilli()) - slotStartTimestamp*1000
 	log.WithFields(logrus.Fields{
 		"genesisTime": m.genesisTime,
 		"slotTimeSec": config.SlotTimeSec,
 		"msIntoSlot":  msIntoSlot,
-	}).Infof("getHeader request start - %d milliseconds into slot %d", msIntoSlot, _slot)
+	}).Infof("getHeader request start - %d milliseconds into slot %d", msIntoSlot, slotUint)
 
 	// Add request headers
 	headers := map[string]string{
@@ -471,127 +558,22 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 				return
 			}
 
-			// BOLT: verify preconfirmation inclusion proofs
+			// BOLT: Get the inclusion constraints for this slot
+			inclusionConstraints := m.constraints.Get(slotUint)
+
+			// BOLT: verify matching proofs & constraints
+			if len(responsePayload.Proofs) != len(inclusionConstraints) {
+				log.Warnf("[BOLT]: Proof verification failed - number of preconfirmations mismatch: proofs %d != preconfs %d",
+					len(responsePayload.Proofs), len(inclusionConstraints))
+				return
+			}
+
+			// BOLT: verify preconfirmation inclusion proofs. If they don't match, we don't consider the bid to be valid.
 			if responsePayload.Proofs != nil {
-				// BOLT: remove unnecessary fields while logging
-				log.WithFields(logrus.Fields{})
-
-				log.Info("[BOLT]: Verifying preconfirmation proofs", len(responsePayload.Proofs))
-
-				// BOLT: we should check these against the preconfirmation requests accepted by
-				// bolt-sidecar, but for now it's ok that the provided proofs are valid
-				preconfirmationsFromSidecar, err := m.sidecar.GetPreconfirmations(_slot)
-				if err != nil {
-					log.WithError(err).Error("[BOLT]: error fetching preconfirmed transactions from sidecar")
+				// BOLT: verify the proofs against the constraints. If they don't match, we don't consider the bid to be valid.
+				if err := m.verifyConstraintProofs(responsePayload, inclusionConstraints); err != nil {
+					log.Warnf("[BOLT]: Proof verification failed for relay %s: %s", relay.URL, err)
 					return
-				}
-
-				if len(responsePayload.Proofs) > 0 {
-					message := fmt.Sprintf("BOLT-MEV-BOOST: received payload header with %d preconfirmations for slot %d", len(responsePayload.Proofs), _slot)
-					event := strings.NewReader(fmt.Sprintf("{ \"message\": \"%s\"}", message))
-					eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
-					if err != nil {
-						log.Error("Failed to log preconfirms event: ", err)
-					}
-					if eventRes != nil {
-						defer eventRes.Body.Close()
-					}
-				}
-
-				if len(responsePayload.Proofs) != len(preconfirmationsFromSidecar) {
-					log.Warnf("[BOLT]: Proof verification failed - number of preconfirmations mismatch: proofs %d != preconfs %d",
-						len(responsePayload.Proofs), len(preconfirmationsFromSidecar))
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-
-				transactionsRoot, err := responsePayload.Bid.TransactionsRoot()
-				if err != nil {
-					log.WithError(err).Error("[BOLT]: error getting tx root from bid")
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-
-				for _, proof := range responsePayload.Proofs {
-					if proof == nil {
-						log.Warn("[BOLT]: Nil proof!")
-						// BOLT: we should probably skip the bid as well here
-						continue
-					}
-
-					// Find the raw tx with the hash specified i
-					rawTxs := filter(preconfirmationsFromSidecar, func(preconfs *rawPreconfirmation) bool {
-						return preconfs.TxHash == proof.TxHash.String()
-					})
-
-					if len(rawTxs) == 0 {
-						log.Warn("[BOLT]: proof verification failed - tx hash not found")
-						w.WriteHeader(http.StatusBadRequest)
-						return
-					}
-
-					// BOLT: We assume only 1 preconf, for now this is fine
-					rawTxStringWithout0x := strings.TrimPrefix(rawTxs[0].RawTx, "0x")
-					rawTxBytes, err := hex.DecodeString(rawTxStringWithout0x)
-					if err != nil {
-						log.WithError(err).Error("[BOLT]: error decoding raw tx from sidecar")
-						w.WriteHeader(http.StatusInternalServerError)
-						return
-					}
-
-					rawTx := Transaction(rawTxBytes)
-					log.Infof("[BOLT]: Raw tx: %x", rawTx)
-
-					// Compute the hash tree root for the raw preconfirmed transaction
-					// and use it as "Leaf" in the proof to be verified against
-					txHashTreeRoot, err := rawTx.HashTreeRoot()
-					if err != nil {
-						log.WithError(err).Error("[BOLT]: error getting tx hash tree root")
-						w.WriteHeader(http.StatusInternalServerError)
-						return
-					}
-
-					log.Infof("[BOLT]: Tx hash tree root: %x", txHashTreeRoot)
-
-					// Verify the proof
-					sszProof := proof.MerkleProof.ToFastSszProof(txHashTreeRoot[:])
-
-					log.Infof("[BOLT]: Fast sszProof index: %d", sszProof.Index)
-					log.Infof("[BOLT]: Fast sszProof hashes: %x", sszProof.Hashes)
-					log.Infof("[BOLT]: Fast sszProof leaf: %x. Raw tx: %x", sszProof.Leaf, rawTx)
-
-					currentTime := time.Now()
-					ok, err := fastSsz.VerifyProof(transactionsRoot[:], sszProof)
-					elapsed := time.Since(currentTime)
-
-					if err != nil {
-						log.WithError(err).Error("error verifying merkle proof")
-						// BOLT: we need to skip the bid in this case!
-						// for now we just return and complain loudly
-						w.WriteHeader(http.StatusNoContent)
-						return
-					}
-
-					if !ok {
-						log.Error("[BOLT]: proof verification failed: 'not ok' for tx hash: ", proof.TxHash.String())
-						// BOLT: we need to skip the bid in this case!
-						// for now we just return and complain loudly
-						w.WriteHeader(http.StatusBadRequest)
-						return
-					} else {
-						message := fmt.Sprintf("BOLT-MEV-BOOST: Preconfirmation proof verified for tx hash %s in slot %d in %s", proof.TxHash.String(), _slot, elapsed)
-						log.Info(message)
-
-						// BOLT: Log this event in the web demo backend
-						event := strings.NewReader(fmt.Sprintf("{ \"message\": \"%s\"}", message))
-						eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
-						if err != nil {
-							log.Error("Failed to log preconfirms event: ", err)
-						}
-						if eventRes != nil {
-							defer eventRes.Body.Close()
-						}
-					}
 				}
 			}
 
@@ -643,7 +625,7 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 	}).Info("best bid")
 
 	// Remember the bid, for future logging in case of withholding
-	bidKey := bidRespKey{slot: _slot, blockHash: result.bidInfo.blockHash.String()}
+	bidKey := bidRespKey{slot: slotUint, blockHash: result.bidInfo.blockHash.String()}
 	m.bidsLock.Lock()
 	m.bids[bidKey] = result
 	m.bidsLock.Unlock()
