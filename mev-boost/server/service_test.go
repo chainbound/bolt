@@ -311,10 +311,11 @@ func TestRegisterValidator(t *testing.T) {
 
 func TestSubmitConstraint(t *testing.T) {
 	path := pathSubmitConstraint
+	slot := uint64(12345)
 
 	constraint := SignedConstraintSubmission{
 		Message: &ConstraintSubmission{
-			Slot:   12345,
+			Slot:   slot,
 			TxHash: _HexToHash("0xba40436abdc8adc037e2c92ea1099a5849053510c3911037ff663085ce44bc49"),
 			RawTx:  _HexToBytes("0x02f871018304a5758085025ff11caf82565f94388c818ca8b9251b393131c08a736a67ccb1929787a41bb7ee22b41380c001a0c8630f734aba7acb4275a8f3b0ce831cf0c7c487fd49ee7bcca26ac622a28939a04c3745096fa0130a188fa249289fd9e60f9d6360854820dba22ae779ea6f573f"),
 		},
@@ -329,6 +330,7 @@ func TestSubmitConstraint(t *testing.T) {
 		rr := backend.request(t, http.MethodPost, path, payload)
 		require.Equal(t, http.StatusOK, rr.Code)
 		require.Equal(t, 1, backend.relays[0].GetRequestCount(path))
+		require.Equal(t, len(backend.boost.constraints.Get(slot)), 1)
 	})
 }
 
