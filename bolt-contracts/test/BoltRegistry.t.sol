@@ -2,7 +2,8 @@
 pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
-import {BoltRegistry} from "../src/BoltRegistry.sol";
+import {BoltRegistry} from "../src/contracts/BoltRegistry.sol";
+import {IBoltRegistry} from "../src/interfaces/IBoltRegistry.sol";
 
 contract BoltRegistryTest is Test {
     BoltRegistry public registry;
@@ -18,7 +19,7 @@ contract BoltRegistryTest is Test {
         vm.prank(alice);
         registry.optIn();
 
-        assertEq(uint8(registry.getBasedProposerStatus(alice)), uint8(BoltRegistry.BoltStatus.Active));
+        assertEq(uint8(registry.getBasedProposerStatus(alice)), uint8(IBoltRegistry.BoltStatus.Active));
         assertEq(registry.isActivrBasedProposer(alice), true);
     }
 }
