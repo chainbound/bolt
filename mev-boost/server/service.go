@@ -111,9 +111,7 @@ type BoostService struct {
 	slotUID     *slotUID
 	slotUIDLock sync.Mutex
 
-	// BOLT: sidecar connection
-	sidecar *boltSidecar
-
+	// BOLT: constraint cache
 	constraints *ConstraintCache
 }
 
@@ -127,9 +125,6 @@ func NewBoostService(opts BoostServiceOpts) (*BoostService, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// TODO: pass these from config options
-	boltSidecar := newBoltSidecar("http://mev-sidecar-api:9061")
 
 	return &BoostService{
 		listenAddr:    opts.ListenAddr,
@@ -157,8 +152,7 @@ func NewBoostService(opts BoostServiceOpts) (*BoostService, error) {
 		},
 		requestMaxRetries: opts.RequestMaxRetries,
 
-		sidecar: boltSidecar,
-		// Initialize the constraint cache
+		// BOLT: Initialize the constraint cache
 		constraints: NewConstraintCache(),
 	}, nil
 }
