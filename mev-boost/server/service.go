@@ -411,19 +411,23 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 		"ua":     ua,
 	})
 
-	log.Debug("submitConstraint")
+	log.Info("submitConstraint")
 
-	payload := new(SignedConstraintSubmission)
-	if err := DecodeJSON(req.Body, payload); err != nil {
+	payload := []SignedConstraintSubmission{}
+	if err := DecodeJSON(req.Body, &payload); err != nil {
+		log.Error("error decoding payload: ", err)
 		m.respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	constraint := payload.Message
+	// Add all constraints to the cache
+	for _, signedConstraint := range payload {
+		constraint := signedConstraint.Message
 
-	// Add the constraint to the cache. They will be cleared when we receive a payload for the slot
-	// in `handleGetPayload`
-	m.constraints.AddInclusionConstraint(constraint.Slot, constraint.TxHash, constraint.RawTx)
+		// Add the constraint to the cache. They will be cleared when we receive a payload for the slot
+		// in `handleGetPayload`
+		m.constraints.AddInclusionConstraint(constraint.Slot, constraint.TxHash, constraint.RawTx)
+	}
 
 	relayRespCh := make(chan error, len(m.relays))
 

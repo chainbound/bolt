@@ -55,6 +55,7 @@ type mockRelay struct {
 
 	// Overriders
 	handlerOverrideRegisterValidator func(w http.ResponseWriter, req *http.Request)
+	handlerOverrideSubmitConstraint  func(w http.ResponseWriter, req *http.Request)
 	handlerOverrideGetHeader         func(w http.ResponseWriter, req *http.Request)
 	handlerOverrideGetPayload        func(w http.ResponseWriter, req *http.Request)
 
@@ -115,6 +116,7 @@ func (m *mockRelay) getRouter() http.Handler {
 	r.HandleFunc(pathStatus, m.handleStatus).Methods(http.MethodGet)
 	r.HandleFunc(pathRegisterValidator, m.handleRegisterValidator).Methods(http.MethodPost)
 	r.HandleFunc(pathGetHeader, m.handleGetHeader).Methods(http.MethodGet)
+	r.HandleFunc(pathSubmitConstraint, m.handleSubmitConstraint).Methods(http.MethodPost)
 	r.HandleFunc(pathGetPayload, m.handleGetPayload).Methods(http.MethodPost)
 
 	return m.newTestMiddleware(r)
@@ -155,6 +157,29 @@ func (m *mockRelay) handleRegisterValidator(w http.ResponseWriter, req *http.Req
 // defaultHandleRegisterValidator returns the default handler for handleRegisterValidator
 func (m *mockRelay) defaultHandleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	payload := []builderApiV1.SignedValidatorRegistration{}
+	if err := DecodeJSON(req.Body, &payload); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (m *mockRelay) handleSubmitConstraint(w http.ResponseWriter, req *http.Request) {
+	fmt.Println("handleSubmitConstraint")
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.handlerOverrideSubmitConstraint != nil {
+		m.handlerOverrideSubmitConstraint(w, req)
+		return
+	}
+	m.defaultHandleSubmitConstraint(w, req)
+}
+
+func (m *mockRelay) defaultHandleSubmitConstraint(w http.ResponseWriter, req *http.Request) {
+	fmt.Println("defaultHandleSubmitConstraint")
+	payload := []SignedConstraintSubmission{}
 	if err := DecodeJSON(req.Body, &payload); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
