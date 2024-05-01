@@ -82,10 +82,11 @@ type BoostServiceOpts struct {
 	RelayCheck            bool
 	RelayMinBid           types.U256Str
 
-	RequestTimeoutGetHeader  time.Duration
-	RequestTimeoutGetPayload time.Duration
-	RequestTimeoutRegVal     time.Duration
-	RequestMaxRetries        int
+	RequestTimeoutGetHeader        time.Duration
+	RequestTimeoutGetPayload       time.Duration
+	RequestTimeoutRegVal           time.Duration
+	RequestTimeoutSubmitConstraint time.Duration
+	RequestMaxRetries              int
 }
 
 // BoostService - the mev-boost service
@@ -99,11 +100,12 @@ type BoostService struct {
 	relayMinBid   types.U256Str
 	genesisTime   uint64
 
-	builderSigningDomain phase0.Domain
-	httpClientGetHeader  http.Client
-	httpClientGetPayload http.Client
-	httpClientRegVal     http.Client
-	requestMaxRetries    int
+	builderSigningDomain       phase0.Domain
+	httpClientGetHeader        http.Client
+	httpClientGetPayload       http.Client
+	httpClientRegVal           http.Client
+	httpClientSubmitConstraint http.Client
+	requestMaxRetries          int
 
 	bids     map[bidRespKey]bidResp // keeping track of bids, to log the originating relay on withholding
 	bidsLock sync.Mutex
@@ -150,6 +152,10 @@ func NewBoostService(opts BoostServiceOpts) (*BoostService, error) {
 			Timeout:       opts.RequestTimeoutRegVal,
 			CheckRedirect: httpClientDisallowRedirects,
 		},
+		httpClientSubmitConstraint: http.Client{
+			Timeout:       opts.RequestTimeoutSubmitConstraint,
+			CheckRedirect: httpClientDisallowRedirects,
+		},
 		requestMaxRetries: opts.RequestMaxRetries,
 
 		// BOLT: Initialize the constraint cache
@@ -182,6 +188,7 @@ func (m *BoostService) getRouter() http.Handler {
 
 	r.HandleFunc(pathStatus, m.handleStatus).Methods(http.MethodGet)
 	r.HandleFunc(pathRegisterValidator, m.handleRegisterValidator).Methods(http.MethodPost)
+	r.HandleFunc(pathSubmitConstraint, m.handleSubmitConstraint).Methods(http.MethodPost)
 	r.HandleFunc(pathGetHeader, m.handleGetHeader).Methods(http.MethodGet)
 	r.HandleFunc(pathGetPayload, m.handleGetPayload).Methods(http.MethodPost)
 
@@ -380,15 +387,11 @@ func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithInclusionP
 
 			if err != nil {
 				log.WithError(err).Error("error verifying merkle proof")
-				// BOLT: we need to skip the bid in this case!
-				// for now we just return and complain loudly
 				return err
 			}
 
 			if !ok {
 				log.Error("[BOLT]: proof verification failed: 'not ok' for tx hash: ", proof.TxHash.String())
-				// BOLT: we need to skip the bid in this case!
-				// for now we just return and complain loudly
 				return errInvalidProofs
 			} else {
 				log.Info(fmt.Sprintf("[BOLT]: Preconfirmation proof verified for tx hash %s in %s", proof.TxHash.String(), elapsed))
@@ -397,6 +400,56 @@ func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithInclusionP
 	}
 
 	return nil
+}
+
+// handleSubmitConstraint forwards a constraint to the relays, and registers them in the local cache.
+// They will later be used to verify the proofs sent by the relays.
+func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.Request) {
+	ua := UserAgent(req.Header.Get("User-Agent"))
+	log := m.log.WithFields(logrus.Fields{
+		"method": "submitConstraint",
+		"ua":     ua,
+	})
+
+	log.Debug("submitConstraint")
+
+	payload := new(SignedConstraintSubmission)
+	if err := DecodeJSON(req.Body, payload); err != nil {
+		m.respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	constraint := payload.Message
+
+	// Add the constraint to the cache. They will be cleared when we receive a payload for the slot
+	// in `handleGetPayload`
+	m.constraints.AddInclusionConstraint(constraint.Slot, constraint.TxHash, constraint.RawTx)
+
+	relayRespCh := make(chan error, len(m.relays))
+
+	for _, relay := range m.relays {
+		go func(relay RelayEntry) {
+			url := relay.GetURI(pathSubmitConstraint)
+			log := log.WithField("url", url)
+
+			_, err := SendHTTPRequest(context.Background(), m.httpClientSubmitConstraint, http.MethodPost, url, ua, nil, payload, nil)
+			relayRespCh <- err
+			if err != nil {
+				log.WithError(err).Warn("error calling submitConstraint on relay")
+				return
+			}
+		}(relay)
+	}
+
+	for i := 0; i < len(m.relays); i++ {
+		respErr := <-relayRespCh
+		if respErr == nil {
+			m.respondOK(w, nilResponse)
+			return
+		}
+	}
+
+	m.respondError(w, http.StatusBadGateway, errNoSuccessfulRelayResponse.Error())
 }
 
 // handleGetHeader requests bids from the relays
@@ -569,6 +622,7 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 					log.Warnf("[BOLT]: Proof verification failed for relay %s: %s", relay.URL, err)
 					return
 				}
+
 			}
 
 			mu.Lock()
@@ -905,6 +959,8 @@ func (m *BoostService) processDenebPayload(w http.ResponseWriter, req *http.Requ
 	m.respondOK(w, result)
 }
 
+// handleGetPayload submits a signed blinded header to receive the payload body from the relays.
+// BOLT: when receiving the payload, we also remove the associated constraints for this slot.
 func (m *BoostService) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 	log := m.log.WithField("method", "getPayload")
 	log.Debug("getPayload request starts")
@@ -917,6 +973,14 @@ func (m *BoostService) handleGetPayload(w http.ResponseWriter, req *http.Request
 		return
 	}
 
+	slot := uint64(0)
+
+	// BOLT: Make sure we remove the constraints for this slot after we've received the payload.
+	defer func() {
+		// This will use the value of `slot` at execution time
+		m.constraints.Delete(slot)
+	}()
+
 	// Decode the body now
 	payload := new(eth2ApiV1Deneb.SignedBlindedBeaconBlock)
 	if err := DecodeJSON(bytes.NewReader(body), payload); err != nil {
@@ -927,9 +991,13 @@ func (m *BoostService) handleGetPayload(w http.ResponseWriter, req *http.Request
 			m.respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+
+		slot = uint64(payload.Message.Slot)
 		m.processCapellaPayload(w, req, log, payload, body)
 		return
 	}
+
+	slot = uint64(payload.Message.Slot)
 	m.processDenebPayload(w, req, log, payload)
 }
 
