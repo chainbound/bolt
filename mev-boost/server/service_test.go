@@ -53,16 +53,17 @@ func newTestBackend(t *testing.T, numRelays int, relayTimeout time.Duration) *te
 	}
 
 	opts := BoostServiceOpts{
-		Log:                      testLog,
-		ListenAddr:               "localhost:12345",
-		Relays:                   relayEntries,
-		GenesisForkVersionHex:    "0x00000000",
-		RelayCheck:               true,
-		RelayMinBid:              types.IntToU256(12345),
-		RequestTimeoutGetHeader:  relayTimeout,
-		RequestTimeoutGetPayload: relayTimeout,
-		RequestTimeoutRegVal:     relayTimeout,
-		RequestMaxRetries:        5,
+		Log:                            testLog,
+		ListenAddr:                     "localhost:12345",
+		Relays:                         relayEntries,
+		GenesisForkVersionHex:          "0x00000000",
+		RelayCheck:                     true,
+		RelayMinBid:                    types.IntToU256(12345),
+		RequestTimeoutGetHeader:        relayTimeout,
+		RequestTimeoutGetPayload:       relayTimeout,
+		RequestTimeoutRegVal:           relayTimeout,
+		RequestTimeoutSubmitConstraint: relayTimeout,
+		RequestMaxRetries:              5,
 	}
 	service, err := NewBoostService(opts)
 	require.NoError(t, err)
@@ -305,6 +306,29 @@ func TestRegisterValidator(t *testing.T) {
 		require.Equal(t, `{"code":502,"message":"no successful relay response"}`+"\n", rr.Body.String())
 		require.Equal(t, http.StatusBadGateway, rr.Code)
 		require.Equal(t, 2, backend.relays[0].GetRequestCount(path))
+	})
+}
+
+func TestSubmitConstraint(t *testing.T) {
+	path := pathSubmitConstraint
+
+	constraint := SignedConstraintSubmission{
+		Message: &ConstraintSubmission{
+			Slot:   12345,
+			TxHash: _HexToHash("0xba40436abdc8adc037e2c92ea1099a5849053510c3911037ff663085ce44bc49"),
+			RawTx:  _HexToBytes("0x02f871018304a5758085025ff11caf82565f94388c818ca8b9251b393131c08a736a67ccb1929787a41bb7ee22b41380c001a0c8630f734aba7acb4275a8f3b0ce831cf0c7c487fd49ee7bcca26ac622a28939a04c3745096fa0130a188fa249289fd9e60f9d6360854820dba22ae779ea6f573f"),
+		},
+		Signature: _HexToSignature(
+			"0x81510b571e22f89d1697545aac01c9ad0c1e7a3e778b3078bef524efae14990e58a6e960a152abd49de2e18d7fd3081c15d5c25867ccfad3d47beef6b39ac24b6b9fbf2cfa91c88f67aff750438a6841ec9e4a06a94ae41410c4f97b75ab284c"),
+	}
+
+	payload := []SignedConstraintSubmission{constraint}
+
+	t.Run("Normal function", func(t *testing.T) {
+		backend := newTestBackend(t, 1, time.Second)
+		rr := backend.request(t, http.MethodPost, path, payload)
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Equal(t, 1, backend.relays[0].GetRequestCount(path))
 	})
 }
 
