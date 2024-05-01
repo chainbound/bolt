@@ -14,14 +14,14 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
-type BidWithPreconfirmationsProofs struct {
+type BidWithInclusionProofs struct {
 	// The block bid
 	Bid *builderSpec.VersionedSignedBuilderBid `json:"bid"`
-	// The preconfirmations with proofs
-	Proofs []*PreconfirmationWithProof `json:"proofs"`
+	// The inclusion proofs
+	Proofs []*InclusionProof `json:"proofs"`
 }
 
-func (b *BidWithPreconfirmationsProofs) String() string {
+func (b *BidWithInclusionProofs) String() string {
 	out, err := json.Marshal(b)
 	if err != nil {
 		return err.Error()
@@ -29,7 +29,7 @@ func (b *BidWithPreconfirmationsProofs) String() string {
 	return string(out)
 }
 
-func (p *PreconfirmationWithProof) String() string {
+func (p *InclusionProof) String() string {
 	proofs, err := json.Marshal(p)
 	if err != nil {
 		return err.Error()
@@ -100,9 +100,8 @@ func (s *SerializedMerkleProof) ToFastSszProof(leaf []byte) *fastSsz.Proof {
 	return p
 }
 
-// PreconfirmationWithProof is a preconfirmed transaction in the block with
-// proof of inclusion, using Merkle Trees.
-type PreconfirmationWithProof struct {
+// InclusionProof is a Merkle inclusion proof for a transaction hash.
+type InclusionProof struct {
 	// The transaction hash of the preconfirmation
 	TxHash phase0.Hash32 `ssz-size:"32" json:"txHash"`
 	// The Merkle proof of the preconfirmation

@@ -330,7 +330,7 @@ func (m *BoostService) handleRegisterValidator(w http.ResponseWriter, req *http.
 }
 
 // verifyConstraintProofs verifies the proofs against the constraints, and returns an error if the proofs are invalid.
-func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithPreconfirmationsProofs, constraints Constraints) error {
+func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithInclusionProofs, constraints Constraints) error {
 	log := m.log.WithFields(logrus.Fields{})
 	// BOLT: verify preconfirmation inclusion proofs. If they don't match, we don't consider the bid to be valid.
 	if responsePayload.Proofs != nil {
@@ -478,7 +478,7 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 			path := fmt.Sprintf("/eth/v1/builder/header/%s/%s/%s", slot, parentHashHex, pubkey)
 			url := relay.GetURI(path)
 			log := log.WithField("url", url)
-			responsePayload := new(BidWithPreconfirmationsProofs)
+			responsePayload := new(BidWithInclusionProofs)
 			code, err := SendHTTPRequest(context.Background(), m.httpClientGetHeader, http.MethodGet, url, ua, headers, nil, responsePayload)
 			if err != nil {
 				log.WithError(err).Warn("error making request to relay")
