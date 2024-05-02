@@ -60,7 +60,7 @@ type mockRelay struct {
 	handlerOverrideGetPayload        func(w http.ResponseWriter, req *http.Request)
 
 	// Default responses placeholders, used if overrider does not exist
-	GetHeaderResponse  *builderSpec.VersionedSignedBuilderBid
+	GetHeaderResponse  *BidWithInclusionProofs
 	GetPayloadResponse *builderApi.VersionedSubmitBlindedBlockResponse
 
 	// Server section
@@ -191,7 +191,7 @@ func (m *mockRelay) defaultHandleSubmitConstraint(w http.ResponseWriter, req *ht
 
 // MakeGetHeaderResponse is used to create the default or can be used to create a custom response to the getHeader
 // method
-func (m *mockRelay) MakeGetHeaderResponse(value uint64, blockHash, parentHash, publicKey string, version spec.DataVersion) *builderSpec.VersionedSignedBuilderBid {
+func (m *mockRelay) MakeGetHeaderResponse(value uint64, blockHash, parentHash, publicKey string, version spec.DataVersion) *BidWithInclusionProofs {
 	switch version {
 	case spec.DataVersionCapella:
 		// Fill the payload with custom values.
@@ -209,14 +209,17 @@ func (m *mockRelay) MakeGetHeaderResponse(value uint64, blockHash, parentHash, p
 		signature, err := ssz.SignMessage(message, ssz.DomainBuilder, m.secretKey)
 		require.NoError(m.t, err)
 
-		return &builderSpec.VersionedSignedBuilderBid{
-			Version: spec.DataVersionCapella,
-			Capella: &builderApiCapella.SignedBuilderBid{
-				Message:   message,
-				Signature: signature,
+		return &BidWithInclusionProofs{
+			Bid: &builderSpec.VersionedSignedBuilderBid{
+				Version: spec.DataVersionCapella,
+				Capella: &builderApiCapella.SignedBuilderBid{
+					Message:   message,
+					Signature: signature,
+				},
 			},
 		}
 	case spec.DataVersionDeneb:
+
 		message := &builderApiDeneb.BuilderBid{
 			Header: &deneb.ExecutionPayloadHeader{
 				BlockHash:       _HexToHash(blockHash),
@@ -233,11 +236,13 @@ func (m *mockRelay) MakeGetHeaderResponse(value uint64, blockHash, parentHash, p
 		signature, err := ssz.SignMessage(message, ssz.DomainBuilder, m.secretKey)
 		require.NoError(m.t, err)
 
-		return &builderSpec.VersionedSignedBuilderBid{
-			Version: spec.DataVersionDeneb,
-			Deneb: &builderApiDeneb.SignedBuilderBid{
-				Message:   message,
-				Signature: signature,
+		return &BidWithInclusionProofs{
+			Bid: &builderSpec.VersionedSignedBuilderBid{
+				Version: spec.DataVersionDeneb,
+				Deneb: &builderApiDeneb.SignedBuilderBid{
+					Message:   message,
+					Signature: signature,
+				},
 			},
 		}
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
@@ -272,6 +277,7 @@ func (m *mockRelay) defaultHandleGetHeader(w http.ResponseWriter) {
 		"0x8a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249",
 		spec.DataVersionCapella,
 	)
+
 	if m.GetHeaderResponse != nil {
 		response = m.GetHeaderResponse
 	}
