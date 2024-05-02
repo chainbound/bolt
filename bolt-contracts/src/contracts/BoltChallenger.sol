@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {IProver} from "@relicprotocol/contracts/interfaces/IProver.sol";
-import {IReliquary} from "@relicprotocol/contracts/interfaces/IReliquary.sol";
-import {Facts} from "@relicprotocol/contracts/lib/Facts.sol";
-import {FactSigs} from "@relicprotocol/contracts/lib/FactSigs.sol";
-import {CoreTypes} from "@relicprotocol/contracts/lib/CoreTypes.sol";
+import {IProver} from "relic-sdk/packages/contracts/interfaces/IProver.sol";
+import {IReliquary} from "relic-sdk/packages/contracts/interfaces/IReliquary.sol";
+import {Facts} from "relic-sdk/packages/contracts/lib/Facts.sol";
+import {FactSigs} from "relic-sdk/packages/contracts/lib/FactSigs.sol";
+import {CoreTypes} from "relic-sdk/packages/contracts/lib/CoreTypes.sol";
 
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {IBoltRegistry} from "../interfaces/IBoltRegistry.sol";
@@ -52,7 +52,7 @@ contract BoltChallenger is IBoltChallenger {
         SignedCommitment signedCommitment;
         // The address of the challenger
         address challenger;
-        // The beacon root object of the target slot's block header. 
+        // The beacon root object of the target slot's block header.
         // This is directly fetched from the on-chain BEACON_ROOTS oracle.
         bytes32 targetSlotBeaconRoot;
         // The status of the challenge
@@ -155,7 +155,12 @@ contract BoltChallenger is IBoltChallenger {
     /// @dev anyone can call this function on a pending challenge, but only the challenged based proposer
     /// @dev will be able to provide a valid proof to counter it. If the challenge expires or the proof is invalid,
     /// @dev the challenger will be rewarded with the bond + a portion of the slashed amount.
-    function resolveChallenge(bytes32 _challengeID, bytes calldata _blockHeaderProof, uint256 _transactionIndex, bytes32[] calldata _inclusionProof) public {
+    function resolveChallenge(
+        bytes32 _challengeID,
+        bytes calldata _blockHeaderProof,
+        uint256 _transactionIndex,
+        bytes32[] calldata _inclusionProof
+    ) public {
         Challenge storage challenge = challenges[_challengeID];
 
         // Check if the challenge exists
@@ -191,16 +196,26 @@ contract BoltChallenger is IBoltChallenger {
         // Derive the transactions root of the target block from the block header proof
         (bytes32 transactionsRoot, uint256 blockTimestamp) = _deriveBlockHeaderInfo(_blockHeaderProof);
 
+        // TODO: prove that the nonce of the sender that was preconfirmed was valid (aka not too low)
+        // at the time of the based proposer's slot. This is to prevent an attack to make the preconfirmation
+        // invalid by nonce.
+
+        // TODO: we could use the beacon root oracle to check that the based proposer proposed a block
+        // at the target slot or if it was reorged. This could be useful to differentiate between a
+        // safety vs liveness fault.
+
         // Check if the block header timestamp matches the target slot
+        // TODO: handle the case where the transaction was included in a previous block
+        // before the preconfirmer's slot.
         if (blockTimestamp != challenge.signedCommitment.slot * SLOT_TIME + ETH2_GENESIS_TIMESTAMP) {
             revert WrongBlockHeader();
         }
 
         // Check if the transactions root matches the signed commitment
         uint256 generalizedIndex = 1_048_576 + _transactionIndex;
-        bytes32 leaf = SSZ._hashTreeRoot() // TODO: complete hash tree root of the transaction (by chunks)
+        bytes32 leaf = SSZ._hashTreeRoot(); // TODO: complete hash tree root of the transaction (by chunks)
         bool isValid = SSZ._verifyProof(_inclusionProof, transactionsRoot, leaf, generalizedIndex);
-        
+
         if (!isValid) {
             // The challenge was successful: the proposer failed to honor the preconfirmation
             // TODO: slash
@@ -221,10 +236,7 @@ contract BoltChallenger is IBoltChallenger {
         // TODO: handle fee for proving. make payable?
 
         Fact memory fact = blockHeaderProver.prove(_proof, false);
-        CoreTypes.BlockHeaderData memory blockHeader = abi.decode(
-            fact.data,
-            (CoreTypes.BlockHeaderData)
-        );
+        CoreTypes.BlockHeaderData memory blockHeader = abi.decode(fact.data, (CoreTypes.BlockHeaderData));
 
         if (FactSignature.unwrap(fact.sig) != FactSigs.blockHeaderSig(blockHeader.number)) {
             revert UnexpectedFactSignature();
