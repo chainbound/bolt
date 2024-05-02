@@ -376,7 +376,7 @@ func TestGetHeader(t *testing.T) {
 			"0x8a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249",
 			spec.DataVersionCapella,
 		)
-		resp.Capella.Message.Header.BlockHash = nilHash
+		resp.Bid.Capella.Message.Header.BlockHash = nilHash
 
 		// 1/2 failing responses are okay
 		backend.relays[0].GetHeaderResponse = resp
@@ -427,7 +427,7 @@ func TestGetHeader(t *testing.T) {
 		)
 
 		// Scramble the signature
-		backend.relays[0].GetHeaderResponse.Capella.Signature = phase0.BLSSignature{}
+		backend.relays[0].GetHeaderResponse.Bid.Capella.Signature = phase0.BLSSignature{}
 
 		rr := backend.request(t, http.MethodGet, path, nil)
 		require.Equal(t, 1, backend.relays[0].GetRequestCount(path))
