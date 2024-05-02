@@ -338,7 +338,7 @@ func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithInclusionP
 		// BOLT: remove unnecessary fields while logging
 		log.WithFields(logrus.Fields{})
 
-		log.Info("[BOLT]: Verifying preconfirmation proofs", len(responsePayload.Proofs))
+		log.WithField("len", len(responsePayload.Proofs)).Info("[BOLT]: Verifying constraint proofs")
 
 		transactionsRoot, err := responsePayload.Bid.TransactionsRoot()
 		if err != nil {
@@ -363,6 +363,11 @@ func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithInclusionP
 			rawTx := constraint.RawTx
 
 			log.Infof("[BOLT]: Raw tx: %x", rawTx)
+
+			if len(rawTx) == 0 {
+				log.Warnf("[BOLT]: Raw tx is empty for tx hash %s", proof.TxHash.String())
+				continue
+			}
 
 			// Compute the hash tree root for the raw preconfirmed transaction
 			// and use it as "Leaf" in the proof to be verified against
@@ -423,6 +428,12 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 	// Add all constraints to the cache
 	for _, signedConstraint := range payload {
 		constraint := signedConstraint.Message
+
+		log.WithFields(logrus.Fields{
+			"slot":   constraint.Slot,
+			"txHash": constraint.TxHash.String(),
+			"rawTx":  fmt.Sprintf("%#x", constraint.RawTx),
+		}).Info("[BOLT]: adding inclusion constraint to cache")
 
 		// Add the constraint to the cache. They will be cleared when we receive a payload for the slot
 		// in `handleGetPayload`
@@ -619,7 +630,7 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 
 			// BOLT: verify matching proofs & constraints
 			if len(responsePayload.Proofs) != len(inclusionConstraints) {
-				log.Warnf("[BOLT]: Proof verification failed - number of preconfirmations mismatch: proofs %d != preconfs %d",
+				log.Warnf("[BOLT]: Proof verification failed - number of preconfirmations mismatch: proofs %d != constraints %d",
 					len(responsePayload.Proofs), len(inclusionConstraints))
 				return
 			}
