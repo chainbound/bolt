@@ -543,6 +543,11 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 				return
 			}
 
+			if responsePayload.Bid == nil {
+				log.Warn("Bid in response is nil")
+				return
+			}
+
 			// Skip if payload is empty
 			if responsePayload.Bid.IsEmpty() {
 				return
