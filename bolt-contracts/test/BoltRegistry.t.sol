@@ -20,6 +20,6 @@ contract BoltRegistryTest is Test {
         registry.optIn();
 
         assertEq(uint8(registry.getBasedProposerStatus(alice)), uint8(IBoltRegistry.BoltStatus.Active));
-        assertEq(registry.isActivrBasedProposer(alice), true);
+        assertEq(registry.isActiveBasedProposer(alice), true);
     }
 }

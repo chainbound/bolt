@@ -43,7 +43,7 @@ contract BoltRegistry is IBoltRegistry {
     /// @notice Check if an address is a based proposer opted into the protocol
     /// @param _basedProposer The address to check
     /// @return True if the address is an active based proposer, false otherwise
-    function isActivrBasedProposer(address _basedProposer) external view returns (bool) {
+    function isActiveBasedProposer(address _basedProposer) external view returns (bool) {
         if (basedProposers[_basedProposer].addr == address(0)) return false;
         return basedProposers[_basedProposer].status == BoltStatus.Active;
     }
