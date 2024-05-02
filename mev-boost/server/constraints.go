@@ -81,6 +81,7 @@ func (c *ConstraintSubmission) UnmarshalJSON(input []byte) error {
 	if err := json.Unmarshal(input, &data); err != nil {
 		return err
 	}
+
 	c.Slot = data.Slot
 
 	txHash, err := hex.DecodeString((strings.TrimPrefix(data.TxHash, "0x")))
@@ -95,7 +96,7 @@ func (c *ConstraintSubmission) UnmarshalJSON(input []byte) error {
 		return errors.Wrap(err, "invalid raw tx")
 	}
 
-	copy(c.RawTx[:], rawTx)
+	c.RawTx = rawTx
 
 	return nil
 }

@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -16,9 +17,11 @@ import (
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	utilbellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
@@ -189,6 +192,51 @@ func (m *mockRelay) defaultHandleSubmitConstraint(w http.ResponseWriter, req *ht
 	w.WriteHeader(http.StatusOK)
 }
 
+// TODO:
+func (m *mockRelay) MakeGetHeaderResponseWithConstraints(value uint64, blockHash, parentHash, publicKey string, version spec.DataVersion, constraints []struct {
+	tx   Transaction
+	hash phase0.Hash32
+}) *BidWithInclusionProofs {
+
+	transactions := new(utilbellatrix.ExecutionPayloadTransactions)
+
+	for _, con := range constraints {
+		transactions.Transactions = append(transactions.Transactions, bellatrix.Transaction(con.tx))
+	}
+
+	rootNode, err := transactions.GetTree()
+	if err != nil {
+		panic(err)
+	}
+
+	// BOLT: Set the value of nodes. This is MANDATORY for the proof calculation
+	// to output the leaf correctly. This is also never documented in fastssz. -__-
+	// Also calculates the transactions_root
+	txsRoot := rootNode.Hash()
+
+	bidWithProofs := m.MakeGetHeaderResponseWithTxsRoot(value, blockHash, parentHash, publicKey, version, phase0.Root(txsRoot))
+	bidWithProofs.Proofs = make([]*InclusionProof, len(constraints))
+
+	for i, con := range constraints {
+		generalizedIndex := int(math.Pow(float64(2), float64(21))) + i
+
+		proof, err := rootNode.Prove(generalizedIndex)
+		if err != nil {
+			panic(err)
+		}
+
+		merkleProof := new(SerializedMerkleProof)
+		merkleProof.FromFastSszProof(proof)
+
+		bidWithProofs.Proofs[i] = &InclusionProof{
+			TxHash:      con.hash,
+			MerkleProof: merkleProof,
+		}
+	}
+
+	return bidWithProofs
+}
+
 // MakeGetHeaderResponse is used to create the default or can be used to create a custom response to the getHeader
 // method
 func (m *mockRelay) MakeGetHeaderResponse(value uint64, blockHash, parentHash, publicKey string, version spec.DataVersion) *BidWithInclusionProofs {
@@ -226,6 +274,70 @@ func (m *mockRelay) MakeGetHeaderResponse(value uint64, blockHash, parentHash, p
 				ParentHash:      _HexToHash(parentHash),
 				WithdrawalsRoot: phase0.Root{},
 				BaseFeePerGas:   uint256.NewInt(0),
+			},
+			BlobKZGCommitments: make([]deneb.KZGCommitment, 0),
+			Value:              uint256.NewInt(value),
+			Pubkey:             _HexToPubkey(publicKey),
+		}
+
+		// Sign the message.
+		signature, err := ssz.SignMessage(message, ssz.DomainBuilder, m.secretKey)
+		require.NoError(m.t, err)
+
+		return &BidWithInclusionProofs{
+			Bid: &builderSpec.VersionedSignedBuilderBid{
+				Version: spec.DataVersionDeneb,
+				Deneb: &builderApiDeneb.SignedBuilderBid{
+					Message:   message,
+					Signature: signature,
+				},
+			},
+		}
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
+		return nil
+	}
+	return nil
+}
+
+// MakeGetHeaderResponse is used to create the default or can be used to create a custom response to the getHeader
+// method
+func (m *mockRelay) MakeGetHeaderResponseWithTxsRoot(value uint64, blockHash, parentHash, publicKey string, version spec.DataVersion, txsRoot phase0.Root) *BidWithInclusionProofs {
+	switch version {
+	case spec.DataVersionCapella:
+		// Fill the payload with custom values.
+		message := &builderApiCapella.BuilderBid{
+			Header: &capella.ExecutionPayloadHeader{
+				BlockHash:        _HexToHash(blockHash),
+				ParentHash:       _HexToHash(parentHash),
+				WithdrawalsRoot:  phase0.Root{},
+				TransactionsRoot: txsRoot,
+			},
+			Value:  uint256.NewInt(value),
+			Pubkey: _HexToPubkey(publicKey),
+		}
+
+		// Sign the message.
+		signature, err := ssz.SignMessage(message, ssz.DomainBuilder, m.secretKey)
+		require.NoError(m.t, err)
+
+		return &BidWithInclusionProofs{
+			Bid: &builderSpec.VersionedSignedBuilderBid{
+				Version: spec.DataVersionCapella,
+				Capella: &builderApiCapella.SignedBuilderBid{
+					Message:   message,
+					Signature: signature,
+				},
+			},
+		}
+	case spec.DataVersionDeneb:
+
+		message := &builderApiDeneb.BuilderBid{
+			Header: &deneb.ExecutionPayloadHeader{
+				BlockHash:        _HexToHash(blockHash),
+				ParentHash:       _HexToHash(parentHash),
+				WithdrawalsRoot:  phase0.Root{},
+				BaseFeePerGas:    uint256.NewInt(0),
+				TransactionsRoot: txsRoot,
 			},
 			BlobKZGCommitments: make([]deneb.KZGCommitment, 0),
 			Value:              uint256.NewInt(value),
