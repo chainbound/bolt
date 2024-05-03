@@ -25,6 +25,8 @@ interface IBoltChallenger {
     error ChallengeAlreadyResolved();
     error BeaconRootNotFound();
     error TargetSlotTooFarInThePast();
+    error PreconfirmedNonceExpired();
+    error PreconfirmedBalanceTooLow();
 
     // Relic related errors
     error UnexpectedFactSignature();

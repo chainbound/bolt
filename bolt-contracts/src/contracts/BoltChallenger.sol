@@ -44,6 +44,9 @@ contract BoltChallenger is IBoltChallenger {
     /// @notice The address of the block header prover contract
     IProver public immutable blockHeaderProver;
 
+    /// @notice The address of the account info prover contract
+    IProver public immutable accountInfoProver;
+
     // Struct to hold all challenge details in stoage
     struct Challenge {
         // The address of the based proposer being challenged
@@ -65,6 +68,8 @@ contract BoltChallenger is IBoltChallenger {
     /// @dev there can be different kinds of commitments, this is just an example
     struct SignedCommitment {
         uint256 slot;
+        uint256 nonce;
+        uint256 gasUsed;
         bytes signedRawTransaction;
         bytes signature;
     }
@@ -76,13 +81,16 @@ contract BoltChallenger is IBoltChallenger {
     /// @param _boltRegistry The address of the BoltRegistry contract
     /// @param _reliquary The address of the Relic Reliquary contract
     /// @param _blockHeaderProver The address of the Relic block header prover contract
-    constructor(address _boltRegistry, address _reliquary, address _blockHeaderProver) {
+    constructor(address _boltRegistry, address _reliquary, address _blockHeaderProver, address _accountInfoProver) {
         boltRegistry = IBoltRegistry(_boltRegistry);
         reliquary = IReliquary(_reliquary);
 
-        // Check if the provided prover is a valid prover
+        // Check if the provided provers are valid
         reliquary.checkProver(reliquary.provers(_blockHeaderProver));
+        reliquary.checkProver(reliquary.provers(_accountInfoProver));
+
         blockHeaderProver = IProver(_blockHeaderProver);
+        accountInfoProver = IProver(_accountInfoProver);
     }
 
     /// @notice Challenge a proposer if it hasn't honored a preconfirmation.
@@ -104,9 +112,10 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         // Check if the target slot is not too far in the past
-        if (_getCurrentSlot() - _signedCommitment.slot > CHALLENGE_RETROACTIVE_TARGET_SLOT_WINDOW) {
+        if (_getSlotFromTimestamp(block.timestamp) - _signedCommitment.slot > CHALLENGE_RETROACTIVE_TARGET_SLOT_WINDOW)
+        {
             // Challenges cannot be opened for slots that are too far in the past, because we rely
-            // on the BEACON_ROOTS contract to fetch the beacon block root for the target slot.
+            // on the BEACON_ROOTS ring buffer to be available for the challenge to be resolved.
             revert TargetSlotTooFarInThePast();
         }
 
@@ -152,12 +161,17 @@ contract BoltChallenger is IBoltChallenger {
 
     /// @notice Resolve a challenge by providing a valid proof for the preconfirmation.
     /// @param _challengeID The unique ID of the challenge to resolve
+    /// @param _blockHeaderProof The proof of the block header of the target slot
+    /// @param _accountDataProof The proof of the account data of the preconfirmed sender
+    /// @param _transactionIndex The index of the transaction in the block
+    /// @param _inclusionProof The Merkle proof of the transaction's inclusion in the block
     /// @dev anyone can call this function on a pending challenge, but only the challenged based proposer
     /// @dev will be able to provide a valid proof to counter it. If the challenge expires or the proof is invalid,
     /// @dev the challenger will be rewarded with the bond + a portion of the slashed amount.
     function resolveChallenge(
         bytes32 _challengeID,
         bytes calldata _blockHeaderProof,
+        bytes calldata _accountDataProof,
         uint256 _transactionIndex,
         bytes32[] calldata _inclusionProof
     ) public {
@@ -179,10 +193,11 @@ contract BoltChallenger is IBoltChallenger {
         if (block.timestamp - challenge.openTimestamp > CHALLENGE_DURATION) {
             challenge.status = ChallengeStatus.Resolved;
 
-            // TODO: slash the based proposer and return the full bond to the challenger.
+            // TODO: slash the based proposer.
             // Part of the slashed amount will also be returned to the challenger as a reward.
             // This is the reason we don't have access control in this function.
 
+            payable(challenge.challenger).transfer(CHALLENGE_BOND);
             emit ChallengeResolved(_challengeID, ChallengeResult.Success);
 
             return;
@@ -194,55 +209,109 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         // Derive the transactions root of the target block from the block header proof
-        (bytes32 transactionsRoot, uint256 blockTimestamp) = _deriveBlockHeaderInfo(_blockHeaderProof);
+        CoreTypes.BlockHeaderData verifiedHeader = _deriveBlockHeaderInfo(_blockHeaderProof);
 
-        // TODO: prove that the nonce of the sender that was preconfirmed was valid (aka not too low)
-        // at the time of the based proposer's slot. This is to prevent an attack to make the preconfirmation
-        // invalid by nonce.
+        // Derive the preconfirmed sender's account data from the account data proof
+        CoreTypes.AccountData verifiedAccount = _deriveAccountData(_accountDataProof, verifiedHeader.number);
+
+        // Check that the nonce of the preconfirmed sender is valid (not too low)
+        // at the time of the based proposer's slot.
+        if (verifiedAccount.Nonce > challenge.signedCommitment.nonce) {
+            revert PreconfirmedNonceExpired();
+        }
+
+        // Check that the balance of the preconfirmed sender is enough to cover the base fee
+        // of the block.
+        if (verifiedAccount.Balance < challenge.signedCommitment.gasUsed * verifiedHeader.BaseFee) {
+            revert PreconfirmedBalanceTooLow();
+        }
 
         // TODO: we could use the beacon root oracle to check that the based proposer proposed a block
         // at the target slot or if it was reorged. This could be useful to differentiate between a
         // safety vs liveness fault.
 
-        // Check if the block header timestamp matches the target slot
-        // TODO: handle the case where the transaction was included in a previous block
-        // before the preconfirmer's slot.
-        if (blockTimestamp != challenge.signedCommitment.slot * SLOT_TIME + ETH2_GENESIS_TIMESTAMP) {
+        // Check if the block header timestamp is UP TO the challenge's target slot.
+        // It can be earlier, in case the transaction was included before the based proposer's slot.
+        if (verifiedHeader.Time > _getTimestampFromSlot(challenge.signedCommitment.slot)) {
             revert WrongBlockHeader();
         }
 
-        // Check if the transactions root matches the signed commitment
-        uint256 generalizedIndex = 1_048_576 + _transactionIndex;
-        bytes32 leaf = SSZ._hashTreeRoot(); // TODO: complete hash tree root of the transaction (by chunks)
-        bool isValid = SSZ._verifyProof(_inclusionProof, transactionsRoot, leaf, generalizedIndex);
+        bool isValid = _verifyInclusionProof(
+            verifiedHeader.TxHash, _transactionIndex, _inclusionProof, challenge.signedCommitment.signedRawTransaction
+        );
 
         if (!isValid) {
             // The challenge was successful: the proposer failed to honor the preconfirmation
             // TODO: slash
             challenge.status = ChallengeStatus.Resolved;
+            payable(challenge.challenger).transfer(CHALLENGE_BOND);
             emit ChallengeResolved(_challengeID, ChallengeResult.Failure);
         } else {
             // The challenge was unsuccessful: the proposer honored the preconfirmation
             // TODO: return the bond to the proposer
             challenge.status = ChallengeStatus.Resolved;
+            payable(challenge.basedProposer).transfer(CHALLENGE_BOND);
             emit ChallengeResolved(_challengeID, ChallengeResult.Success);
         }
     }
 
     /// @notice Fetch trustlessly valid block header data
-    /// @param _proof The proof of the block header
-    /// @return The transactions root and the timestamp of the block
-    function _deriveBlockHeaderInfo(bytes calldata _proof) internal pure returns (bytes32, uint256) {
+    /// @param _proof The ABI-encoded proof of the block header
+    /// @return The block header data
+    function _deriveBlockHeaderInfo(bytes calldata _proof)
+        internal
+        pure
+        returns (CoreTypes.BlockHeaderData memory header)
+    {
         // TODO: handle fee for proving. make payable?
 
         Fact memory fact = blockHeaderProver.prove(_proof, false);
-        CoreTypes.BlockHeaderData memory blockHeader = abi.decode(fact.data, (CoreTypes.BlockHeaderData));
+        header = abi.decode(fact.data, (CoreTypes.BlockHeaderData));
 
-        if (FactSignature.unwrap(fact.sig) != FactSigs.blockHeaderSig(blockHeader.number)) {
+        if (FactSignature.unwrap(fact.sig) != FactSigs.blockHeaderSig(header.number)) {
             revert UnexpectedFactSignature();
         }
+    }
 
-        return (blockHeader.TxHash, blockHeader.Time);
+    /// @notice Fetch trustlessly valid account data at a given block number
+    /// @param _proof The ABI-encoded proof of the account data
+    /// @param _blockNumber The block number for which the account data is being proven
+    /// @return The account data
+    function _deriveAccountData(bytes calldata _proof, uint256 _blockNumber)
+        internal
+        pure
+        returns (CoreTypes.AccountData memory account)
+    {
+        // TODO: handle fee for proving. make payable?
+
+        Fact memory fact = accountInfoProver.prove(_proof, false);
+        account = abi.decode(fact.data, (CoreTypes.AccountData));
+
+        // verify that the account data proof was provided for the correct block
+        if (FactSignature.unwrap(fact.sig) != FactSigs.accountFactSig(_blockNumber)) {
+            revert UnexpectedFactSignature();
+        }
+    }
+
+    /// @notice Verify the inclusion proof of a transaction in a block
+    /// @param _transactionsRoot The transactions root of the block
+    /// @param _transactionIndex The index of the transaction in the block
+    /// @param _inclusionProof The Merkle proof of the transaction's inclusion in the block
+    /// @param _signedRawTransaction The signed raw transaction being proven
+    /// @return isValid: true if the proof is valid, false otherwise
+    function _verifyInclusionProof(
+        bytes32 _transactionsRoot,
+        uint256 _transactionIndex,
+        bytes32[] calldata _inclusionProof,
+        bytes calldata _signedRawTransaction
+    ) internal pure returns (bool isValid) {
+        // Check if the transactions root matches the signed commitment
+        // TODO: explain gen index
+        uint256 generalizedIndex = 1_048_576 + _transactionIndex;
+        // TODO: derive hash tree root of the transaction
+        bytes32 leaf = SSZ._hashTreeRoot();
+
+        isValid = SSZ._verifyProof(_inclusionProof, transactionsRoot, leaf, generalizedIndex);
     }
 
     /// @notice Recover the signer of a commitment
@@ -267,10 +336,18 @@ contract BoltChallenger is IBoltChallenger {
             keccak256(abi.encodePacked(_commitment.slot, _commitment.transactionHash, _commitment.signedRawTransaction));
     }
 
-    /// @notice Get the current slot number
-    /// @return The current slot number
-    function _getCurrentSlot() internal view returns (uint256) {
-        return (block.timestamp - ETH2_GENESIS_TIMESTAMP) / SLOT_TIME;
+    /// @notice Get the slot number from a given timestamp
+    /// @param _timestamp The timestamp
+    /// @return The slot number
+    function _getSlotFromTimestamp(uint256 _timestamp) internal pure returns (uint256) {
+        return (_timestamp - ETH2_GENESIS_TIMESTAMP) / SLOT_TIME;
+    }
+
+    /// @notice Get the timestamp from a given slot
+    /// @param _slot The slot number
+    /// @return The timestamp
+    function _getTimestampFromSlot(uint256 _slot) internal pure returns (uint256) {
+        return ETH2_GENESIS_TIMESTAMP + _slot * SLOT_TIME;
     }
 
     /// @notice Get the beacon block root for a given slot
