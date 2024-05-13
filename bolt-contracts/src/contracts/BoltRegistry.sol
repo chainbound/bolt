@@ -18,7 +18,11 @@ contract BoltRegistry is IBoltRegistry {
             revert BasedProposerAlreadyExists();
         }
 
-        basedProposers[msg.sender] = BasedProposer(msg.sender, BoltStatus.Active, block.timestamp);
+        basedProposers[msg.sender] = BasedProposer(
+            msg.sender,
+            BoltStatus.Active,
+            block.timestamp
+        );
         emit BasedProposerStatusChanged(msg.sender, BoltStatus.Active);
     }
 
@@ -32,7 +36,10 @@ contract BoltRegistry is IBoltRegistry {
         if (basedProposer.status == BoltStatus.Inactive) {
             revert InvalidStatusChange();
         }
-        if (block.timestamp - basedProposer.lastOptedInTimestamp < OPT_OUT_COOLDOWN) {
+        if (
+            block.timestamp - basedProposer.lastOptedInTimestamp <
+            OPT_OUT_COOLDOWN
+        ) {
             revert CooldownNotElapsed();
         }
 
@@ -43,7 +50,9 @@ contract BoltRegistry is IBoltRegistry {
     /// @notice Check if an address is a based proposer opted into the protocol
     /// @param _basedProposer The address to check
     /// @return True if the address is an active based proposer, false otherwise
-    function isActiveBasedProposer(address _basedProposer) external view returns (bool) {
+    function isActiveBasedProposer(
+        address _basedProposer
+    ) external view returns (bool) {
         if (basedProposers[_basedProposer].addr == address(0)) return false;
         return basedProposers[_basedProposer].status == BoltStatus.Active;
     }
@@ -51,7 +60,9 @@ contract BoltRegistry is IBoltRegistry {
     /// @notice Get the status of a based proposer
     /// @param _basedProposers The address of the based proposer
     /// @return The status of the based proposer
-    function getBasedProposerStatus(address _basedProposers) external view returns (BoltStatus) {
+    function getBasedProposerStatus(
+        address _basedProposers
+    ) external view returns (BoltStatus) {
         if (basedProposers[_basedProposers].addr == address(0)) {
             revert BasedProposerDoesNotExist();
         }
