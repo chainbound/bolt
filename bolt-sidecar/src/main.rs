@@ -11,15 +11,13 @@ mod template;
 mod types;
 use json_rpc::start_server;
 
-use crate::config::Config;
-
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     tracing_subscriber::fmt::init();
 
     info!("Starting sidecar");
 
-    let opts = config::Opts::parse();
+    let opts = opts::Opts::parse();
 
     let config = Config::from(opts);
 
