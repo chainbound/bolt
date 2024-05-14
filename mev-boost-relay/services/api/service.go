@@ -66,6 +66,8 @@ var (
 	// BOLT: this endpoint will return also ship preconfirmation proofs
 	pathGetHeader  = "/eth/v1/builder/header/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
 	pathGetPayload = "/eth/v1/builder/blinded_blocks"
+	// BOLT: allow relay to receive constraints from the proposer
+	pathSubmitContraints = "/eth/v1/builder/constraints"
 
 	// Block builder API
 	pathBuilderGetValidators = "/relay/v1/builder/validators"
@@ -186,6 +188,7 @@ type RelayAPI struct {
 	redis        *datastore.RedisCache
 	memcached    *datastore.Memcached
 	db           database.IDatabaseService
+	constraints  *ConstraintCache
 
 	headSlot     uberatomic.Uint64
 	genesisInfo  *beaconclient.GetGenesisResponse
@@ -274,16 +277,18 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 	}
 
 	api = &RelayAPI{
-		opts:         opts,
-		log:          opts.Log,
-		boltLog:      common.NewBoltLogger("RELAY"),
-		blsSk:        opts.SecretKey,
-		publicKey:    &publicKey,
+		opts:      opts,
+		log:       opts.Log,
+		boltLog:   common.NewBoltLogger("RELAY"),
+		blsSk:     opts.SecretKey,
+		publicKey: &publicKey,
+
 		datastore:    opts.Datastore,
 		beaconClient: opts.BeaconClient,
 		redis:        opts.Redis,
 		memcached:    opts.Memcached,
 		db:           opts.DB,
+		constraints:  NewConstraintCache(),
 
 		payloadAttributes: make(map[string]payloadAttributesHelper),
 
@@ -345,6 +350,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 		r.HandleFunc(pathRegisterValidator, api.handleRegisterValidator).Methods(http.MethodPost)
 		r.HandleFunc(pathGetHeader, api.handleGetHeader).Methods(http.MethodGet)
 		r.HandleFunc(pathGetPayload, api.handleGetPayload).Methods(http.MethodPost)
+		r.HandleFunc(pathSubmitContraints, api.handleSubmitConstraints).Methods(http.MethodPost)
 	}
 
 	// Builder API
@@ -1614,6 +1620,76 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	log.Info("execution payload delivered")
 }
 
+func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Request) {
+	ua := req.UserAgent()
+	headSlot := api.headSlot.Load()
+	receivedAt := time.Now().UTC()
+	log := api.log.WithFields(logrus.Fields{
+		"method":                "getPayload",
+		"ua":                    ua,
+		"mevBoostV":             common.GetMevBoostVersionFromUserAgent(ua),
+		"contentLength":         req.ContentLength,
+		"headSlot":              headSlot,
+		"headSlotEpochPos":      (headSlot % common.SlotsPerEpoch) + 1,
+		"idArg":                 req.URL.Query().Get("id"),
+		"timestampRequestStart": receivedAt.UnixMilli(),
+	})
+	defer func() {
+		log.WithFields(logrus.Fields{
+			"timestampRequestFin": time.Now().UTC().UnixMilli(),
+			"requestDurationMs":   time.Since(receivedAt).Milliseconds(),
+		}).Info("request finished")
+	}()
+
+	// Log at start and end of request
+	log.Info("request initiated")
+
+	// Read the body first, so we can decode it later
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		if strings.Contains(err.Error(), "i/o timeout") {
+			log.WithError(err).Error("getPayload request failed to decode (i/o timeout)")
+			api.RespondError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		log.WithError(err).Error("could not read body of request from the beacon node")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Decode payload
+	payload := new([]*SignedConstraintSubmission)
+	if err := json.NewDecoder(bytes.NewReader(body)).Decode(payload); err != nil {
+		log.WithError(err).Warn("failed to decode submit contraints body")
+		api.RespondError(w, http.StatusBadRequest, "failed to decode payload")
+		return
+	}
+
+	if len(*payload) == 0 {
+		api.RespondError(w, http.StatusBadRequest, "No constraints submitted")
+		return
+	}
+
+	// Add all constraints to the cache
+	for _, signedConstraint := range *payload {
+		constraint := signedConstraint.Message
+
+		log.WithFields(logrus.Fields{
+			"slot":   constraint.Slot,
+			"txHash": constraint.TxHash.String(),
+			"rawTx":  fmt.Sprintf("%#x", constraint.RawTx),
+		}).Info("[BOLT]: adding inclusion constraint to cache")
+
+		// Add the constraint to the cache. They will be cleared when we receive a payload for the slot
+		// in `handleGetPayload`
+		api.constraints.AddInclusionConstraint(constraint.Slot, constraint.TxHash, constraint.RawTx)
+	}
+
+	// respond to the HTTP request
+	api.RespondOK(w, nil)
+}
+
 // --------------------
 //
 //	BLOCK BUILDER APIS
@@ -1817,8 +1893,8 @@ func (api *RelayAPI) updateRedisBid(
 	opts redisUpdateBidOpts,
 	proofs []*common.PreconfirmationWithProof) (
 	*datastore.SaveBidAndUpdateTopBidResponse,
-	*builderApi.VersionedSubmitBlindedBlockResponse, bool) {
-
+	*builderApi.VersionedSubmitBlindedBlockResponse, bool,
+) {
 	api.boltLog.Infof("Updating Redis bid with proofs %v", proofs)
 
 	// Prepare the response data
