@@ -295,7 +295,7 @@ func (m *mockRelay) MakeGetHeaderResponse(value uint64, blockHash, parentHash, p
 	return nil
 }
 
-// MakeGetHeaderResponse is used to create the default or can be used to create a custom response to the getHeader
+// MakeGetHeaderWithProofsResponseWithTxsRoot is used to create the default or can be used to create a custom response to the getHeaderWithProofs
 // method
 func (m *mockRelay) MakeGetHeaderWithProofsResponseWithTxsRoot(value uint64, blockHash, parentHash, publicKey string, version spec.DataVersion, txsRoot phase0.Root) *BidWithInclusionProofs {
 	switch version {
