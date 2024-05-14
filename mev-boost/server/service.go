@@ -3,7 +3,6 @@ package server
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,6 +33,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Standard errors
 var (
 	errNoRelays                  = errors.New("no relays")
 	errInvalidSlot               = errors.New("invalid slot")
@@ -41,6 +41,13 @@ var (
 	errInvalidPubkey             = errors.New("invalid pubkey")
 	errNoSuccessfulRelayResponse = errors.New("no successful relay response")
 	errServerAlreadyRunning      = errors.New("server already running")
+)
+
+// Bolt errors
+var (
+	errNilProof      = errors.New("nil proof")
+	errInvalidProofs = errors.New("proof verification failed")
+	errInvalidRoot   = errors.New("failed getting tx root from bid")
 )
 
 var (
@@ -75,10 +82,11 @@ type BoostServiceOpts struct {
 	RelayCheck            bool
 	RelayMinBid           types.U256Str
 
-	RequestTimeoutGetHeader  time.Duration
-	RequestTimeoutGetPayload time.Duration
-	RequestTimeoutRegVal     time.Duration
-	RequestMaxRetries        int
+	RequestTimeoutGetHeader        time.Duration
+	RequestTimeoutGetPayload       time.Duration
+	RequestTimeoutRegVal           time.Duration
+	RequestTimeoutSubmitConstraint time.Duration
+	RequestMaxRetries              int
 }
 
 // BoostService - the mev-boost service
@@ -92,11 +100,12 @@ type BoostService struct {
 	relayMinBid   types.U256Str
 	genesisTime   uint64
 
-	builderSigningDomain phase0.Domain
-	httpClientGetHeader  http.Client
-	httpClientGetPayload http.Client
-	httpClientRegVal     http.Client
-	requestMaxRetries    int
+	builderSigningDomain       phase0.Domain
+	httpClientGetHeader        http.Client
+	httpClientGetPayload       http.Client
+	httpClientRegVal           http.Client
+	httpClientSubmitConstraint http.Client
+	requestMaxRetries          int
 
 	bids     map[bidRespKey]bidResp // keeping track of bids, to log the originating relay on withholding
 	bidsLock sync.Mutex
@@ -104,8 +113,8 @@ type BoostService struct {
 	slotUID     *slotUID
 	slotUIDLock sync.Mutex
 
-	// BOLT: sidecar connection
-	sidecar *boltSidecar
+	// BOLT: constraint cache
+	constraints *ConstraintCache
 }
 
 // NewBoostService created a new BoostService
@@ -118,9 +127,6 @@ func NewBoostService(opts BoostServiceOpts) (*BoostService, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// TODO: pass these from config options
-	boltSidecar := newBoltSidecar("http://mev-sidecar-api:9061")
 
 	return &BoostService{
 		listenAddr:    opts.ListenAddr,
@@ -146,9 +152,14 @@ func NewBoostService(opts BoostServiceOpts) (*BoostService, error) {
 			Timeout:       opts.RequestTimeoutRegVal,
 			CheckRedirect: httpClientDisallowRedirects,
 		},
+		httpClientSubmitConstraint: http.Client{
+			Timeout:       opts.RequestTimeoutSubmitConstraint,
+			CheckRedirect: httpClientDisallowRedirects,
+		},
 		requestMaxRetries: opts.RequestMaxRetries,
 
-		sidecar: boltSidecar,
+		// BOLT: Initialize the constraint cache
+		constraints: NewConstraintCache(),
 	}, nil
 }
 
@@ -177,7 +188,9 @@ func (m *BoostService) getRouter() http.Handler {
 
 	r.HandleFunc(pathStatus, m.handleStatus).Methods(http.MethodGet)
 	r.HandleFunc(pathRegisterValidator, m.handleRegisterValidator).Methods(http.MethodPost)
+	r.HandleFunc(pathSubmitConstraint, m.handleSubmitConstraint).Methods(http.MethodPost)
 	r.HandleFunc(pathGetHeader, m.handleGetHeader).Methods(http.MethodGet)
+	r.HandleFunc(pathGetHeaderWithProofs, m.handleGetHeaderWithProofs).Methods(http.MethodGet)
 	r.HandleFunc(pathGetPayload, m.handleGetPayload).Methods(http.MethodPost)
 
 	r.Use(mux.CORSMethodMiddleware(r))
@@ -318,9 +331,144 @@ func (m *BoostService) handleRegisterValidator(w http.ResponseWriter, req *http.
 	m.respondError(w, http.StatusBadGateway, errNoSuccessfulRelayResponse.Error())
 }
 
+// verifyConstraintProofs verifies the proofs against the constraints, and returns an error if the proofs are invalid.
+func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithInclusionProofs, constraints Constraints) error {
+	log := m.log.WithFields(logrus.Fields{})
+	// BOLT: verify preconfirmation inclusion proofs. If they don't match, we don't consider the bid to be valid.
+	if responsePayload.Proofs != nil {
+		// BOLT: remove unnecessary fields while logging
+		log.WithFields(logrus.Fields{})
+
+		log.WithField("len", len(responsePayload.Proofs)).Info("[BOLT]: Verifying constraint proofs")
+
+		transactionsRoot, err := responsePayload.Bid.TransactionsRoot()
+		if err != nil {
+			log.WithError(err).Error("[BOLT]: error getting tx root from bid")
+			return errInvalidRoot
+		}
+
+		for _, proof := range responsePayload.Proofs {
+			if proof == nil {
+				log.Warn("[BOLT]: Nil proof!")
+				return errNilProof
+			}
+
+			// Find the raw tx with the hash specified
+			constraint, ok := constraints[proof.TxHash]
+			if !ok {
+				log.Warnf("[BOLT]: Tx hash %s not found in constraints", proof.TxHash.String())
+				// We don't actually have to return an error here, the relay just provided a proof that was unnecessary
+				continue
+			}
+
+			rawTx := constraint.RawTx
+
+			log.Infof("[BOLT]: Raw tx: %x", rawTx)
+
+			if len(rawTx) == 0 {
+				log.Warnf("[BOLT]: Raw tx is empty for tx hash %s", proof.TxHash.String())
+				continue
+			}
+
+			// Compute the hash tree root for the raw preconfirmed transaction
+			// and use it as "Leaf" in the proof to be verified against
+			txHashTreeRoot, err := rawTx.HashTreeRoot()
+			if err != nil {
+				log.WithError(err).Error("[BOLT]: error getting tx hash tree root")
+				return errInvalidRoot
+			}
+
+			log.Infof("[BOLT]: Tx hash tree root: %x", txHashTreeRoot)
+
+			// Verify the proof
+			sszProof := proof.MerkleProof.ToFastSszProof(txHashTreeRoot[:])
+
+			log.Infof("[BOLT]: Fast sszProof index: %d", sszProof.Index)
+			log.Infof("[BOLT]: Fast sszProof hashes: %x", sszProof.Hashes)
+			log.Infof("[BOLT]: Fast sszProof leaf: %x. Raw tx: %x", sszProof.Leaf, rawTx)
+
+			currentTime := time.Now()
+			ok, err = fastSsz.VerifyProof(transactionsRoot[:], sszProof)
+			elapsed := time.Since(currentTime)
+
+			if err != nil {
+				log.WithError(err).Error("error verifying merkle proof")
+				return err
+			}
+
+			if !ok {
+				log.Error("[BOLT]: proof verification failed: 'not ok' for tx hash: ", proof.TxHash.String())
+				return errInvalidProofs
+			} else {
+				log.Info(fmt.Sprintf("[BOLT]: Preconfirmation proof verified for tx hash %s in %s", proof.TxHash.String(), elapsed))
+			}
+		}
+	}
+
+	return nil
+}
+
+// handleSubmitConstraint forwards a constraint to the relays, and registers them in the local cache.
+// They will later be used to verify the proofs sent by the relays.
+func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.Request) {
+	ua := UserAgent(req.Header.Get("User-Agent"))
+	log := m.log.WithFields(logrus.Fields{
+		"method": "submitConstraint",
+		"ua":     ua,
+	})
+
+	log.Info("submitConstraint")
+
+	payload := []SignedConstraintSubmission{}
+	if err := DecodeJSON(req.Body, &payload); err != nil {
+		log.Error("error decoding payload: ", err)
+		m.respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Add all constraints to the cache
+	for _, signedConstraint := range payload {
+		constraint := signedConstraint.Message
+
+		log.WithFields(logrus.Fields{
+			"slot":   constraint.Slot,
+			"txHash": constraint.TxHash.String(),
+			"rawTx":  fmt.Sprintf("%#x", constraint.RawTx),
+		}).Info("[BOLT]: adding inclusion constraint to cache")
+
+		// Add the constraint to the cache. They will be cleared when we receive a payload for the slot
+		// in `handleGetPayload`
+		m.constraints.AddInclusionConstraint(constraint.Slot, constraint.TxHash, constraint.RawTx)
+	}
+
+	relayRespCh := make(chan error, len(m.relays))
+
+	for _, relay := range m.relays {
+		go func(relay RelayEntry) {
+			url := relay.GetURI(pathSubmitConstraint)
+			log := log.WithField("url", url)
+
+			_, err := SendHTTPRequest(context.Background(), m.httpClientSubmitConstraint, http.MethodPost, url, ua, nil, payload, nil)
+			relayRespCh <- err
+			if err != nil {
+				log.WithError(err).Warn("error calling submitConstraint on relay")
+				return
+			}
+		}(relay)
+	}
+
+	for i := 0; i < len(m.relays); i++ {
+		respErr := <-relayRespCh
+		if respErr == nil {
+			m.respondOK(w, nilResponse)
+			return
+		}
+	}
+
+	m.respondError(w, http.StatusBadGateway, errNoSuccessfulRelayResponse.Error())
+}
+
 // handleGetHeader requests bids from the relays
-// BOLT: receiving preconfirmation proofs from relays along with bids, and
-// verify them. If not valid, the bid is discarded
 func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	slot := vars["slot"]
@@ -391,7 +539,215 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 			path := fmt.Sprintf("/eth/v1/builder/header/%s/%s/%s", slot, parentHashHex, pubkey)
 			url := relay.GetURI(path)
 			log := log.WithField("url", url)
-			responsePayload := new(BidWithPreconfirmationsProofs)
+			responsePayload := new(builderSpec.VersionedSignedBuilderBid)
+			code, err := SendHTTPRequest(context.Background(), m.httpClientGetHeader, http.MethodGet, url, ua, headers, nil, responsePayload)
+			if err != nil {
+				log.WithError(err).Warn("error making request to relay")
+				return
+			}
+
+			if code == http.StatusNoContent {
+				log.Debug("no-content response")
+				return
+			}
+
+			// Skip if payload is empty
+			if responsePayload.IsEmpty() {
+				return
+			}
+
+			// Getting the bid info will check if there are missing fields in the response
+			bidInfo, err := parseBidInfo(responsePayload)
+			if err != nil {
+				log.WithError(err).Warn("error parsing bid info")
+				return
+			}
+
+			if bidInfo.blockHash == nilHash {
+				log.Warn("relay responded with empty block hash")
+				return
+			}
+
+			valueEth := weiBigIntToEthBigFloat(bidInfo.value.ToBig())
+			log = log.WithFields(logrus.Fields{
+				"blockNumber": bidInfo.blockNumber,
+				"blockHash":   bidInfo.blockHash.String(),
+				"txRoot":      bidInfo.txRoot.String(),
+				"value":       valueEth.Text('f', 18),
+			})
+
+			if relay.PublicKey.String() != bidInfo.pubkey.String() {
+				log.Errorf("bid pubkey mismatch. expected: %s - got: %s", relay.PublicKey.String(), bidInfo.pubkey.String())
+				return
+			}
+
+			// Verify the relay signature in the relay response
+			if !config.SkipRelaySignatureCheck {
+				ok, err := checkRelaySignature(responsePayload, m.builderSigningDomain, relay.PublicKey)
+				if err != nil {
+					log.WithError(err).Error("error verifying relay signature")
+					return
+				}
+				if !ok {
+					log.Error("failed to verify relay signature")
+					return
+				}
+			}
+
+			// Verify response coherence with proposer's input data
+			if bidInfo.parentHash.String() != parentHashHex {
+				log.WithFields(logrus.Fields{
+					"originalParentHash": parentHashHex,
+					"responseParentHash": bidInfo.parentHash.String(),
+				}).Error("proposer and relay parent hashes are not the same")
+				return
+			}
+
+			isZeroValue := bidInfo.value.IsZero()
+			isEmptyListTxRoot := bidInfo.txRoot.String() == "0x7ffe241ea60187fdb0187bfa22de35d1f9bed7ab061d9401fd47e34a54fbede1"
+			if isZeroValue || isEmptyListTxRoot {
+				log.Warn("ignoring bid with 0 value")
+				return
+			}
+			log.Debug("bid received")
+
+			// Skip if value (fee) is lower than the minimum bid
+			if bidInfo.value.CmpBig(m.relayMinBid.BigInt()) == -1 {
+				log.Debug("ignoring bid below min-bid value")
+				return
+			}
+
+			mu.Lock()
+			defer mu.Unlock()
+
+			// Remember which relays delivered which bids (multiple relays might deliver the top bid)
+			relays[BlockHashHex(bidInfo.blockHash.String())] = append(relays[BlockHashHex(bidInfo.blockHash.String())], relay)
+
+			// Compare the bid with already known top bid (if any)
+			if !result.response.IsEmpty() {
+				valueDiff := bidInfo.value.Cmp(result.bidInfo.value)
+				if valueDiff == -1 { // current bid is less profitable than already known one
+					return
+				} else if valueDiff == 0 { // current bid is equally profitable as already known one. Use hash as tiebreaker
+					previousBidBlockHash := result.bidInfo.blockHash
+					if bidInfo.blockHash.String() >= previousBidBlockHash.String() {
+						return
+					}
+				}
+			}
+
+			// Use this relay's response as mev-boost response because it's most profitable
+			log.Debug("new best bid")
+			result.response = *responsePayload
+			result.bidInfo = bidInfo
+			result.t = time.Now()
+		}(relay)
+	}
+
+	// Wait for all requests to complete...
+	wg.Wait()
+
+	if result.response.IsEmpty() {
+		log.Info("no bid received")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// Log result
+	valueEth := weiBigIntToEthBigFloat(result.bidInfo.value.ToBig())
+	result.relays = relays[BlockHashHex(result.bidInfo.blockHash.String())]
+	log.WithFields(logrus.Fields{
+		"blockHash":   result.bidInfo.blockHash.String(),
+		"blockNumber": result.bidInfo.blockNumber,
+		"txRoot":      result.bidInfo.txRoot.String(),
+		"value":       valueEth.Text('f', 18),
+		"relays":      strings.Join(RelayEntriesToStrings(result.relays), ", "),
+	}).Info("best bid")
+
+	// Remember the bid, for future logging in case of withholding
+	bidKey := bidRespKey{slot: _slot, blockHash: result.bidInfo.blockHash.String()}
+	m.bidsLock.Lock()
+	m.bids[bidKey] = result
+	m.bidsLock.Unlock()
+
+	// Return the bid
+	m.respondOK(w, &result.response)
+}
+
+// handleGetHeader requests bids from the relays
+// BOLT: receiving preconfirmation proofs from relays along with bids, and
+// verify them. If not valid, the bid is discarded
+func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	slot := vars["slot"]
+	parentHashHex := vars["parent_hash"]
+	pubkey := vars["pubkey"]
+
+	ua := UserAgent(req.Header.Get("User-Agent"))
+	log := m.log.WithFields(logrus.Fields{
+		"method":     "getHeaderWithProofs",
+		"slot":       slot,
+		"parentHash": parentHashHex,
+		"pubkey":     pubkey,
+		"ua":         ua,
+	})
+	log.Debug("getHeader")
+
+	slotUint, err := strconv.ParseUint(slot, 10, 64)
+	if err != nil {
+		m.respondError(w, http.StatusBadRequest, errInvalidSlot.Error())
+		return
+	}
+
+	if len(pubkey) != 98 {
+		m.respondError(w, http.StatusBadRequest, errInvalidPubkey.Error())
+		return
+	}
+
+	if len(parentHashHex) != 66 {
+		m.respondError(w, http.StatusBadRequest, errInvalidHash.Error())
+		return
+	}
+
+	// Make sure we have a uid for this slot
+	m.slotUIDLock.Lock()
+	if m.slotUID.slot < slotUint {
+		m.slotUID.slot = slotUint
+		m.slotUID.uid = uuid.New()
+	}
+	slotUID := m.slotUID.uid
+	m.slotUIDLock.Unlock()
+	log = log.WithField("slotUID", slotUID)
+
+	// Log how late into the slot the request starts
+	slotStartTimestamp := m.genesisTime + slotUint*config.SlotTimeSec
+	msIntoSlot := uint64(time.Now().UTC().UnixMilli()) - slotStartTimestamp*1000
+	log.WithFields(logrus.Fields{
+		"genesisTime": m.genesisTime,
+		"slotTimeSec": config.SlotTimeSec,
+		"msIntoSlot":  msIntoSlot,
+	}).Infof("getHeader request start - %d milliseconds into slot %d", msIntoSlot, slotUint)
+
+	// Add request headers
+	headers := map[string]string{
+		HeaderKeySlotUID: slotUID.String(),
+	}
+
+	// Prepare relay responses
+	result := bidResp{}                           // the final response, containing the highest bid (if any)
+	relays := make(map[BlockHashHex][]RelayEntry) // relays that sent the bid for a specific blockHash
+
+	// Call the relays
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for _, relay := range m.relays {
+		wg.Add(1)
+		go func(relay RelayEntry) {
+			defer wg.Done()
+			path := fmt.Sprintf("/eth/v1/builder/header_with_proofs/%s/%s/%s", slot, parentHashHex, pubkey)
+			url := relay.GetURI(path)
+			log := log.WithField("url", url)
+			responsePayload := new(BidWithInclusionProofs)
 			code, err := SendHTTPRequest(context.Background(), m.httpClientGetHeader, http.MethodGet, url, ua, headers, nil, responsePayload)
 			if err != nil {
 				log.WithError(err).Warn("error making request to relay")
@@ -402,6 +758,11 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 
 			if code == http.StatusNoContent {
 				log.Warn("no-content response")
+				return
+			}
+
+			if responsePayload.Bid == nil {
+				log.Warn("Bid in response is nil")
 				return
 			}
 
@@ -471,106 +832,24 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 				return
 			}
 
-			// BOLT: verify preconfirmation inclusion proofs
+			// BOLT: Get the inclusion constraints for this slot
+			inclusionConstraints := m.constraints.Get(slotUint)
+
+			// BOLT: verify matching proofs & constraints
+			if len(responsePayload.Proofs) != len(inclusionConstraints) {
+				log.Warnf("[BOLT]: Proof verification failed - number of preconfirmations mismatch: proofs %d != constraints %d",
+					len(responsePayload.Proofs), len(inclusionConstraints))
+				return
+			}
+
+			// BOLT: verify preconfirmation inclusion proofs. If they don't match, we don't consider the bid to be valid.
 			if responsePayload.Proofs != nil {
-				// BOLT: remove unnecessary fields while logging
-				log.WithFields(logrus.Fields{})
-
-				log.Info("[BOLT]: Verifying preconfirmation proofs", len(responsePayload.Proofs))
-
-				// BOLT: we should check these against the preconfirmation requests accepted by
-				// bolt-sidecar, but for now it's ok that the provided proofs are valid
-				slot, _ := responsePayload.Bid.BlockNumber() // TODO: use slot instead of bn
-				preconfirmationsFromSidecar, err := m.sidecar.GetPreconfirmations(slot)
-				if err != nil {
-					log.WithError(err).Error("[BOLT]: error fetching preconfirmed transactions from sidecar")
+				// BOLT: verify the proofs against the constraints. If they don't match, we don't consider the bid to be valid.
+				if err := m.verifyConstraintProofs(responsePayload, inclusionConstraints); err != nil {
+					log.Warnf("[BOLT]: Proof verification failed for relay %s: %s", relay.URL, err)
 					return
 				}
 
-				if len(responsePayload.Proofs) != len(preconfirmationsFromSidecar) {
-					log.Warnf("[BOLT]: Proof verification failed - number of preconfirmations mismatch: proofs %d != preconfs %d",
-						len(responsePayload.Proofs), len(preconfirmationsFromSidecar))
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-
-				transactionsRoot, err := responsePayload.Bid.TransactionsRoot()
-				if err != nil {
-					log.WithError(err).Error("[BOLT]: error getting tx root from bid")
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-
-				for _, proof := range responsePayload.Proofs {
-					if proof == nil {
-						log.Warn("[BOLT]: Nil proof!")
-						// BOLT: we should probably skip the bid as well here
-						continue
-					}
-
-					// Find the raw tx with the hash specified i
-					rawTxs := filter(preconfirmationsFromSidecar, func(preconfs *rawPreconfirmation) bool {
-						return preconfs.TxHash == proof.TxHash.String()
-					})
-
-					if len(rawTxs) == 0 {
-						log.Warn("[BOLT]: proof verification failed - tx hash not found")
-						w.WriteHeader(http.StatusBadRequest)
-						return
-					}
-
-					// BOLT: We assume only 1 preconf, for now this is fine
-					rawTxStringWithout0x := strings.TrimPrefix(rawTxs[0].RawTx, "0x")
-					rawTxBytes, err := hex.DecodeString(rawTxStringWithout0x)
-					if err != nil {
-						log.WithError(err).Error("[BOLT]: error decoding raw tx from sidecar")
-						w.WriteHeader(http.StatusInternalServerError)
-						return
-					}
-
-					rawTx := Transaction(rawTxBytes)
-					log.Infof("[BOLT]: Raw tx: %x", rawTx)
-
-					// Compute the hash tree root for the raw preconfirmed transaction
-					// and use it as "Leaf" in the proof to be verified against
-					txHashTreeRoot, err := rawTx.HashTreeRoot()
-					if err != nil {
-						log.WithError(err).Error("[BOLT]: error getting tx hash tree root")
-						w.WriteHeader(http.StatusInternalServerError)
-						return
-					}
-
-					log.Infof("[BOLT]: Tx hash tree root: %x", txHashTreeRoot)
-
-					// Verify the proof
-					sszProof := proof.MerkleProof.ToFastSszProof(txHashTreeRoot[:])
-
-					log.Infof("[BOLT]: Fast sszProof index: %d", sszProof.Index)
-					log.Infof("[BOLT]: Fast sszProof hashes: %x", sszProof.Hashes)
-					log.Infof("[BOLT]: Fast sszProof leaf: %x. Raw tx: %x", sszProof.Leaf, rawTx)
-
-					currentTime := time.Now()
-					ok, err := fastSsz.VerifyProof(transactionsRoot[:], sszProof)
-					elapsed := time.Since(currentTime)
-
-					if err != nil {
-						log.WithError(err).Error("error verifying merkle proof")
-						// BOLT: we need to skip the bid in this case!
-						// for now we just return and complain loudly
-						w.WriteHeader(http.StatusNoContent)
-						return
-					}
-
-					if !ok {
-						log.Error("[BOLT]: proof verification failed: 'not ok' for tx hash: ", proof.TxHash.String())
-						// BOLT: we need to skip the bid in this case!
-						// for now we just return and complain loudly
-						w.WriteHeader(http.StatusBadRequest)
-						return
-					} else {
-						log.Info(fmt.Sprintf("[BOLT]: Preconfirmation proof verified for tx hash %s in %s", proof.TxHash.String(), elapsed))
-					}
-				}
 			}
 
 			mu.Lock()
@@ -621,7 +900,7 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 	}).Info("best bid")
 
 	// Remember the bid, for future logging in case of withholding
-	bidKey := bidRespKey{slot: _slot, blockHash: result.bidInfo.blockHash.String()}
+	bidKey := bidRespKey{slot: slotUint, blockHash: result.bidInfo.blockHash.String()}
 	m.bidsLock.Lock()
 	m.bids[bidKey] = result
 	m.bidsLock.Unlock()
@@ -907,6 +1186,8 @@ func (m *BoostService) processDenebPayload(w http.ResponseWriter, req *http.Requ
 	m.respondOK(w, result)
 }
 
+// handleGetPayload submits a signed blinded header to receive the payload body from the relays.
+// BOLT: when receiving the payload, we also remove the associated constraints for this slot.
 func (m *BoostService) handleGetPayload(w http.ResponseWriter, req *http.Request) {
 	log := m.log.WithField("method", "getPayload")
 	log.Debug("getPayload request starts")
@@ -919,6 +1200,14 @@ func (m *BoostService) handleGetPayload(w http.ResponseWriter, req *http.Request
 		return
 	}
 
+	slot := uint64(0)
+
+	// BOLT: Make sure we remove the constraints for this slot after we've received the payload.
+	defer func() {
+		// This will use the value of `slot` at execution time
+		m.constraints.Delete(slot)
+	}()
+
 	// Decode the body now
 	payload := new(eth2ApiV1Deneb.SignedBlindedBeaconBlock)
 	if err := DecodeJSON(bytes.NewReader(body), payload); err != nil {
@@ -929,9 +1218,13 @@ func (m *BoostService) handleGetPayload(w http.ResponseWriter, req *http.Request
 			m.respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+
+		slot = uint64(payload.Message.Slot)
 		m.processCapellaPayload(w, req, log, payload, body)
 		return
 	}
+
+	slot = uint64(payload.Message.Slot)
 	m.processDenebPayload(w, req, log, payload)
 }
 
