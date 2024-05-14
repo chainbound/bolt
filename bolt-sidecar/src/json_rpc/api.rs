@@ -8,7 +8,7 @@ use secp256k1::{
 use thiserror::Error;
 use tracing::info;
 
-use super::types::{GetPreconfirmationsAtSlotParams, PreconfirmationRequestParams, Slot};
+use super::types::{PreconfirmationRequestParams, Slot};
 
 /// Default size of the preconfirmation cache (implemented as a LRU).
 const DEFAULT_PRECONFIRMATION_CACHE_SIZE: usize = 1000;
@@ -43,11 +43,6 @@ impl JsonRpcApi {
 #[async_trait::async_trait]
 pub trait PreconfirmationRpc {
     async fn request_preconfirmation(
-        &self,
-        params: serde_json::Value,
-    ) -> Result<serde_json::Value, PreconfirmationError>;
-
-    async fn get_preconfirmation_requests(
         &self,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, PreconfirmationError>;
@@ -108,31 +103,5 @@ impl PreconfirmationRpc for JsonRpcApi {
             "status": "ok",
             "signature": signature,
         }))
-    }
-
-    async fn get_preconfirmation_requests(
-        &self,
-        params: serde_json::Value,
-    ) -> Result<serde_json::Value, PreconfirmationError> {
-        let Some(params) = params.as_array().and_then(|a| a.first()).cloned() else {
-            return Err(PreconfirmationError::Custom(
-                "request params must be an array with a single object".to_string(),
-            ));
-        };
-
-        let params = serde_json::from_value::<GetPreconfirmationsAtSlotParams>(params)?;
-        info!(?params, "received get preconfirmation requests");
-
-        let mut slot_requests = Vec::new();
-
-        {
-            if let Some(preconfs) = self.cache.write().get(&params.slot) {
-                for preconf in preconfs {
-                    slot_requests.push(serde_json::to_value(preconf)?);
-                }
-            }
-        } // Drop the lock
-
-        Ok(serde_json::json!(slot_requests))
     }
 }

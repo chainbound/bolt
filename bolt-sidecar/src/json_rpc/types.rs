@@ -23,12 +23,6 @@ impl PreconfirmationRequestParams {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct GetPreconfirmationsAtSlotParams {
-    pub slot: Slot,
-}
-
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct JsonRpcError {
     pub code: i64,

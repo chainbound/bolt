@@ -5,17 +5,8 @@ use eyre::Context;
 use tracing::{info, warn};
 
 mod json_rpc;
+mod opts;
 use json_rpc::start_server;
-
-#[derive(Parser)]
-struct Opts {
-    /// Port to listen on for incoming JSON-RPC requests.
-    #[clap(short = 'p', long, default_value = "8000")]
-    port: u16,
-    /// Private key to use for signing preconfirmation requests.
-    #[clap(short = 'k', long)]
-    private_key: Option<String>,
-}
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -23,7 +14,7 @@ async fn main() -> eyre::Result<()> {
 
     info!("Starting sidecar");
 
-    let opts = Opts::parse();
+    let opts = opts::Opts::parse();
 
     let pk = if let Some(pk) = opts.private_key {
         Some(secp256k1::SecretKey::from_str(&pk).context("Invalid private key")?)
