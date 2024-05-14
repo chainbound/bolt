@@ -334,7 +334,7 @@ func TestConstraintsAndProofs(t *testing.T) {
 	hash := _HexToHash("0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7")
 	pubkey := _HexToPubkey(
 		"0x8a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")
-	getHeaderPath := getHeaderPath(slot, hash, pubkey)
+	getHeaderPath := getHeaderWithProofsPath(slot, hash, pubkey)
 
 	t.Run("Normal function", func(t *testing.T) {
 		backend := newTestBackend(t, 1, time.Second)
@@ -351,7 +351,7 @@ func TestConstraintsAndProofs(t *testing.T) {
 		// Submit constraint
 		backend.request(t, http.MethodPost, path, payload)
 
-		resp := backend.relays[0].MakeGetHeaderResponseWithConstraints(
+		resp := backend.relays[0].MakeGetHeaderWithConstraintsResponse(
 			slot,
 			"0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7",
 			"0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7",
@@ -362,7 +362,7 @@ func TestConstraintsAndProofs(t *testing.T) {
 				hash phase0.Hash32
 			}{{rawTx, txHash}},
 		)
-		backend.relays[0].GetHeaderResponse = resp
+		backend.relays[0].GetHeaderWithProofsResponse = resp
 
 		rr := backend.request(t, http.MethodGet, getHeaderPath, nil)
 		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
@@ -394,6 +394,10 @@ func TestConstraintsAndProofs(t *testing.T) {
 
 func getHeaderPath(slot uint64, parentHash phase0.Hash32, pubkey phase0.BLSPubKey) string {
 	return fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash.String(), pubkey.String())
+}
+
+func getHeaderWithProofsPath(slot uint64, parentHash phase0.Hash32, pubkey phase0.BLSPubKey) string {
+	return fmt.Sprintf("/eth/v1/builder/header_with_proofs/%d/%s/%s", slot, parentHash.String(), pubkey.String())
 }
 
 func TestGetHeader(t *testing.T) {
@@ -434,7 +438,7 @@ func TestGetHeader(t *testing.T) {
 			"0x8a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249",
 			spec.DataVersionCapella,
 		)
-		resp.Bid.Capella.Message.Header.BlockHash = nilHash
+		resp.Capella.Message.Header.BlockHash = nilHash
 
 		// 1/2 failing responses are okay
 		backend.relays[0].GetHeaderResponse = resp
@@ -485,7 +489,7 @@ func TestGetHeader(t *testing.T) {
 		)
 
 		// Scramble the signature
-		backend.relays[0].GetHeaderResponse.Bid.Capella.Signature = phase0.BLSSignature{}
+		backend.relays[0].GetHeaderResponse.Capella.Signature = phase0.BLSSignature{}
 
 		rr := backend.request(t, http.MethodGet, path, nil)
 		require.Equal(t, 1, backend.relays[0].GetRequestCount(path))
