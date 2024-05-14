@@ -58,7 +58,6 @@ async fn handle_rpc_request(
 
     let res = match req.method.as_str() {
         "eth_requestPreconfirmation" => rpc_api.request_preconfirmation(req.params).await?,
-        "eth_getPreconfirmations" => rpc_api.get_preconfirmation_requests(req.params).await?,
         _ => {
             error!(method = ?req.method, "RPC method not found");
             return Err(warp::reject::custom(JsonRpcError {
