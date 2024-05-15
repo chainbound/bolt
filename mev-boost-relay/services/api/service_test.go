@@ -348,6 +348,9 @@ func TestSubmitConstraints(t *testing.T) {
 	})
 }
 
+func TestSubscribeToConstraints(t *testing.T) {
+}
+
 func TestBuilderApiGetValidators(t *testing.T) {
 	path := "/relay/v1/builder/validators"
 

@@ -150,3 +150,9 @@ func verifyBlockSignature(block *common.VersionedSignedBlindedBeaconBlock, domai
 func getPayloadAttributesKey(parentHash string, slot uint64) string {
 	return fmt.Sprintf("%s-%d", parentHash, slot)
 }
+
+func broadcastToChannels[T any](constraintsConsumers []chan *T, constraint *T) {
+	for _, consumer := range constraintsConsumers {
+		consumer <- constraint
+	}
+}
