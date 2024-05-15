@@ -1673,6 +1673,55 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 
 	// Add all constraints to the cache
 	for _, signedConstraint := range *payload {
+		// Retrieve proposer information
+		proposerIndex := signedConstraint.ProposerIndex
+		proposerPubKeyStr, found := api.datastore.GetKnownValidatorPubkeyByIndex(proposerIndex)
+		if !found {
+			log.Errorf("could not find proposer pubkey for index %d", proposerIndex)
+			api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
+			return
+		}
+		proposerPubKey, err := utils.HexToPubkey(proposerPubKeyStr.String())
+		if err != nil {
+			log.WithError(err).Warn("could not convert pubkey to phase0.BLSPubKey")
+			api.RespondError(w, http.StatusBadRequest, "could not convert pubkey to phase0.BLSPubKey")
+			return
+		}
+		blsPublicKey, err := bls.PublicKeyFromBytes(proposerPubKey[:])
+		if err != nil {
+			log.Errorf("could not convert proposer pubkey to bls.PublicKey: %v", err)
+			api.RespondError(w, http.StatusInternalServerError, "could not convert proposer pubkey to bls.PublicKey")
+			return
+		}
+
+		// Verify signature
+		signatureBytes := []byte(signedConstraint.Signature[:])
+		signature, err := bls.SignatureFromBytes(signatureBytes)
+		if err != nil {
+			log.Errorf("could not convert signature to bls.Signature: %v", err)
+			api.RespondError(w, http.StatusBadRequest, "Invalid raw BLS signature")
+			return
+		}
+
+		// NOTE: Assuming this is what actually the proposer is signing
+		messageSigned, err := signedConstraint.Message.MarshalJSON()
+		if err != nil {
+			log.Errorf("could not marshal constraint message to json: %v", err)
+			api.RespondError(w, http.StatusInternalServerError, "could not marshal constraint message to json")
+			return
+		}
+		ok, err := bls.VerifySignature(signature, blsPublicKey, messageSigned)
+		if err != nil {
+			log.Errorf("error while veryfing signature: %v", err)
+			api.RespondError(w, http.StatusInternalServerError, "error while veryfing signature")
+			return
+		}
+		if !ok {
+			log.Error("Invalid BLS signature over constraint message")
+			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("Invalid BLS signature over constraint message %s", messageSigned))
+			return
+		}
+
 		constraint := signedConstraint.Message
 
 		log.WithFields(logrus.Fields{

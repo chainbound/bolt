@@ -11,19 +11,22 @@ import (
 )
 
 type SignedConstraintSubmission struct {
-	Message   *ConstraintSubmission
-	Signature phase0.BLSSignature `ssz-size:"96"`
+	Message       *ConstraintSubmission
+	Signature     phase0.BLSSignature `ssz-size:"96"`
+	ProposerIndex uint64
 }
 
 type signedConstraintSubmissionJSON struct {
-	Message   *ConstraintSubmission `json:"message"`
-	Signature string                `json:"signature"`
+	Message       *ConstraintSubmission `json:"message"`
+	Signature     string                `json:"signature"`
+	ProposerIndex uint64                `json:"proposerIndex"`
 }
 
 func (s *SignedConstraintSubmission) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&signedConstraintSubmissionJSON{
-		Message:   s.Message,
-		Signature: fmt.Sprintf("%#x", s.Signature),
+		Message:       s.Message,
+		Signature:     fmt.Sprintf("%#x", s.Signature),
+		ProposerIndex: s.ProposerIndex,
 	})
 }
 
@@ -38,6 +41,7 @@ func (s *SignedConstraintSubmission) UnmarshalJSON(input []byte) error {
 	}
 
 	s.Message = data.Message
+	s.ProposerIndex = data.ProposerIndex
 
 	if data.Signature == "" {
 		return errors.New("signature missing")
@@ -57,15 +61,15 @@ func (s *SignedConstraintSubmission) UnmarshalJSON(input []byte) error {
 }
 
 type ConstraintSubmission struct {
-	RawTx  Transaction `ssz-max:"1073741824"`
 	Slot   uint64
 	TxHash phase0.Hash32 `ssz-size:"32"`
+	RawTx  Transaction   `ssz-max:"1073741824"`
 }
 
 type constraintSubmissionJSON struct {
+	Slot   uint64 `json:"slot"`
 	TxHash string `json:"txHash"`
 	RawTx  string `json:"rawTx"`
-	Slot   uint64 `json:"slot"`
 }
 
 func (c *ConstraintSubmission) MarshalJSON() ([]byte, error) {
@@ -99,6 +103,14 @@ func (c *ConstraintSubmission) UnmarshalJSON(input []byte) error {
 	c.RawTx = rawTx
 
 	return nil
+}
+
+func (c *ConstraintSubmission) String() string {
+	data, err := json.Marshal(c)
+	if err != nil {
+		return fmt.Sprintf("ERR: %v", err)
+	}
+	return string(data)
 }
 
 // Constraints is a map of constraints for a block.
