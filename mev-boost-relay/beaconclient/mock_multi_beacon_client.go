@@ -3,12 +3,22 @@ package beaconclient
 import (
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/flashbots/mev-boost-relay/common"
+	"github.com/sirupsen/logrus"
+	uberatomic "go.uber.org/atomic"
 )
 
-type MockMultiBeaconClient struct{}
+type MockMultiBeaconClient struct {
+	log             *logrus.Entry
+	bestBeaconIndex uberatomic.Int64
+	beaconInstances []IBeaconInstance
+}
 
-func NewMockMultiBeaconClient() *MockMultiBeaconClient {
-	return &MockMultiBeaconClient{}
+func NewMockMultiBeaconClient(log *logrus.Entry, beaconInstances []IBeaconInstance) *MockMultiBeaconClient {
+	return &MockMultiBeaconClient{
+		log:             log.WithField("component", "mockMultiBeaconClient"),
+		bestBeaconIndex: uberatomic.Int64{},
+		beaconInstances: beaconInstances,
+	}
 }
 
 func (*MockMultiBeaconClient) BestSyncStatus() (*SyncStatusPayloadData, error) {
@@ -20,8 +30,24 @@ func (*MockMultiBeaconClient) SubscribeToHeadEvents(slotC chan HeadEventData) {}
 func (*MockMultiBeaconClient) SubscribeToPayloadAttributesEvents(payloadAttrC chan PayloadAttributesEvent) {
 }
 
-func (*MockMultiBeaconClient) GetStateValidators(stateID string) (*GetStateValidatorsResponse, error) {
-	return nil, nil
+func (c *MockMultiBeaconClient) GetStateValidators(stateID string) (*GetStateValidatorsResponse, error) {
+	for i, client := range c.beaconInstances {
+		log := c.log.WithField("uri", client.GetURI())
+		log.Debug("fetching validators")
+
+		validators, err := client.GetStateValidators(stateID)
+		if err != nil {
+			log.WithError(err).Error("failed to fetch validators")
+			continue
+		}
+
+		c.bestBeaconIndex.Store(int64(i))
+
+		// Received successful response. Set this index as last successful beacon node
+		return validators, nil
+	}
+
+	return nil, ErrBeaconNodesUnavailable
 }
 
 func (*MockMultiBeaconClient) GetProposerDuties(epoch uint64) (*ProposerDutiesResponse, error) {
