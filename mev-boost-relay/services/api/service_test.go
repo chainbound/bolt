@@ -287,8 +287,30 @@ func TestSubmitConstraints(t *testing.T) {
 	}
 
 	// request params
-	slot := uint64(2)
+	slot := uint64(128)
 	backend.relay.headSlot.Store(slot)
+
+	// Setup mocked beacon client for proposer
+	beaconClient := beaconclient.NewMockBeaconInstance()
+
+	// Proposer data
+	proposerSecretKeyEC, proposerPublicKeyEC, err := bls.GenerateNewKeypair()
+	require.NoError(t, err)
+	proposerPublicKey, err := utils.BlsPublicKeyToPublicKey(proposerPublicKeyEC)
+	require.NoError(t, err)
+	proposerIndex := uint64(1)
+	mockValidatorEntry := beaconclient.ValidatorResponseEntry{
+		Index: proposerIndex, Balance: "1000000", Validator: beaconclient.ValidatorResponseValidatorData{Pubkey: proposerPublicKey.String()},
+	}
+
+	// Update beacon client, create MultiBeaconClient and refresh validators in the datastore
+	beaconClient.AddValidator(mockValidatorEntry)
+	logger := logrus.New()
+	loggerEntry := logrus.NewEntry(logger)
+
+	mockMultiBeaconClient := beaconclient.NewMockMultiBeaconClient(loggerEntry, []beaconclient.IBeaconInstance{beaconClient})
+
+	backend.relay.datastore.RefreshKnownValidators(backend.relay.log, mockMultiBeaconClient, slot)
 
 	// request path
 	path := "/eth/v1/builder/constraints"
@@ -297,17 +319,17 @@ func TestSubmitConstraints(t *testing.T) {
 	rawTx := _HexToBytes("0x02f871018304a5758085025ff11caf82565f94388c818ca8b9251b393131c08a736a67ccb1929787a41bb7ee22b41380c001a0c8630f734aba7acb4275a8f3b0ce831cf0c7c487fd49ee7bcca26ac622a28939a04c3745096fa0130a188fa249289fd9e60f9d6360854820dba22ae779ea6f573f")
 
 	// Build the constraint
-	constraint := SignedConstraintSubmission{
-		Message: &ConstraintSubmission{
-			Slot:   slot,
-			TxHash: txHash,
-			RawTx:  rawTx,
-		},
-		Signature: _HexToSignature(
-			"0x81510b571e22f89d1697545aac01c9ad0c1e7a3e778b3078bef524efae14990e58a6e960a152abd49de2e18d7fd3081c15d5c25867ccfad3d47beef6b39ac24b6b9fbf2cfa91c88f67aff750438a6841ec9e4a06a94ae41410c4f97b75ab284c"),
+	constraintSubmission := ConstraintSubmission{
+		Slot:   slot,
+		TxHash: txHash,
+		RawTx:  rawTx,
 	}
-
-	payload := []SignedConstraintSubmission{constraint}
+	constraintSubmissionJSON, err := constraintSubmission.MarshalJSON()
+	require.NoError(t, err)
+	signatureEC := bls.Sign(proposerSecretKeyEC, constraintSubmissionJSON)
+	constraintSignature := phase0.BLSSignature(bls.SignatureToBytes(signatureEC)[:])
+	signedConstraintSubmission := SignedConstraintSubmission{Message: &constraintSubmission, Signature: constraintSignature, ProposerIndex: proposerIndex}
+	payload := []*SignedConstraintSubmission{&signedConstraintSubmission}
 
 	t.Run("Constraints sent", func(t *testing.T) {
 		rr := backend.request(http.MethodPost, path, payload)
@@ -315,7 +337,7 @@ func TestSubmitConstraints(t *testing.T) {
 
 		constraintCache := backend.relay.constraints
 		expected := constraintCache.Get(slot)[txHash]
-		actual := Constraint{RawTx: constraint.Message.RawTx}
+		actual := Constraint{RawTx: constraintSubmission.RawTx}
 
 		require.Equal(t, expected, &actual)
 	})

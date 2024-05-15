@@ -90,7 +90,7 @@ func startTestBackend(t *testing.T) (*phase0.BLSPubKey, *bls.SecretKey, *testBac
 		},
 	}
 	backend.relay.opts.BlockBuilderAPI = true
-	backend.relay.beaconClient = beaconclient.NewMockMultiBeaconClient()
+	backend.relay.beaconClient = &beaconclient.MockMultiBeaconClient{}
 	backend.relay.blockSimRateLimiter = &MockBlockSimulationRateLimiter{}
 	backend.relay.blockBuildersCache = map[string]*blockBuilderCacheEntry{
 		pkStr: {
