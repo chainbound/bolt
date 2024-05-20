@@ -348,7 +348,13 @@ func TestSubmitConstraints(t *testing.T) {
 	})
 }
 
+// TODO: finish this
 func TestSubscribeToConstraints(t *testing.T) {
+	backend := newTestBackend(t, 1)
+
+	path := "/relay/v1/builder/constraints/subscribe"
+	rr := backend.request(http.MethodPost, path, nil)
+	require.Equal(t, http.StatusOK, rr.Code)
 }
 
 func TestBuilderApiGetValidators(t *testing.T) {
