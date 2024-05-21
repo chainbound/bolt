@@ -211,15 +211,12 @@ contract BoltChallenger is IBoltChallenger {
         // Note: we consider the challenge successful if it expires without being resolved.
         // This means that the validator failed to honor the commitment and will get slashed.
         if (block.timestamp - challenge.openTimestamp > CHALLENGE_DURATION) {
-            challenge.status = ChallengeStatus.Resolved;
-
             // TODO: slash the based proposer.
             // Part of the slashed amount will also be returned to the challenger as a reward.
             // This is the reason we don't have access control in this function.
-
+            challenge.status = ChallengeStatus.Resolved;
             payable(challenge.challenger).transfer(CHALLENGE_BOND);
             emit ChallengeResolved(_challengeID, ChallengeResult.Success);
-
             return;
         }
 
@@ -241,16 +238,23 @@ contract BoltChallenger is IBoltChallenger {
         // Check that the nonce of the preconfirmed sender is valid (not too low)
         // at the time of the based proposer's slot.
         if (verifiedAccount.Nonce > challenge.signedCommitment.nonce) {
-            revert PreconfirmedNonceExpired();
+            // consider the challenge unsuccessful: the user sent a transaction after the preconfirmation
+            // thus invalidating it: the proposer is not at fault.
+            challenge.status = ChallengeStatus.Resolved;
+            payable(challenge.basedProposer).transfer(CHALLENGE_BOND);
+            emit ChallengeResolved(_challengeID, ChallengeResult.Failure);
+            return;
         }
 
         // Check that the balance of the preconfirmed sender is enough to cover the base fee
         // of the block.
-        if (
-            verifiedAccount.Balance <
-            challenge.signedCommitment.gasUsed * verifiedHeader.BaseFee
-        ) {
-            revert PreconfirmedBalanceTooLow();
+        if (verifiedAccount.Balance < challenge.signedCommitment.gasUsed * verifiedHeader.BaseFee) {
+            // consider the challenge unsuccessful: the user doesn't have enough balance to cover the gas
+            // thus invalidating the preconfirmation: the proposer is not at fault.
+            challenge.status = ChallengeStatus.Resolved;
+            payable(challenge.basedProposer).transfer(CHALLENGE_BOND);
+            emit ChallengeResolved(_challengeID, ChallengeResult.Failure);
+            return;
         }
 
         // TODO: we could use the beacon root oracle to check that the based proposer proposed a block
@@ -259,11 +263,14 @@ contract BoltChallenger is IBoltChallenger {
 
         // Check if the block header timestamp is UP TO the challenge's target slot.
         // It can be earlier, in case the transaction was included before the based proposer's slot.
-        if (
-            verifiedHeader.Time >
-            _getTimestampFromSlot(challenge.signedCommitment.slot)
-        ) {
-            revert WrongBlockHeader();
+        if (verifiedHeader.Time > _getTimestampFromSlot(challenge.signedCommitment.slot)) {
+            // The block header timestamp is after the target slot, so the proposer didn't
+            // honor the preconfirmation and the challenge is successful.
+            // TODO: slash the based proposer
+            challenge.status = ChallengeStatus.Resolved;
+            payable(challenge.challenger).transfer(CHALLENGE_BOND);
+            emit ChallengeResolved(_challengeID, ChallengeResult.Success);
+            return;
         }
 
         bool isValid = _verifyInclusionProof(
@@ -275,16 +282,15 @@ contract BoltChallenger is IBoltChallenger {
 
         if (!isValid) {
             // The challenge was successful: the proposer failed to honor the preconfirmation
-            // TODO: slash
+            // TODO: slash the based proposer
             challenge.status = ChallengeStatus.Resolved;
             payable(challenge.challenger).transfer(CHALLENGE_BOND);
-            emit ChallengeResolved(_challengeID, ChallengeResult.Failure);
+            emit ChallengeResolved(_challengeID, ChallengeResult.Success);
         } else {
             // The challenge was unsuccessful: the proposer honored the preconfirmation
-            // TODO: return the bond to the proposer
             challenge.status = ChallengeStatus.Resolved;
             payable(challenge.basedProposer).transfer(CHALLENGE_BOND);
-            emit ChallengeResolved(_challengeID, ChallengeResult.Success);
+            emit ChallengeResolved(_challengeID, ChallengeResult.Failure);
         }
     }
 
