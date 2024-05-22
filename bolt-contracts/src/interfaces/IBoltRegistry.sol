@@ -8,9 +8,8 @@ interface IBoltRegistry {
         address addr;
         // The status of the proposer in the protocol
         BoltStatus status;
-        // The timestamp of the last time the proposer opted in.
-        // This is used to enforce the opt-out cooldown period
-        uint256 lastOptedInTimestamp;
+        // A flag to indicate if the proposer is opting out
+        bool isOptingOut;
     }
 
     /// @notice Enum to hold the status of the based proposers
@@ -36,5 +35,7 @@ interface IBoltRegistry {
 
     function optIn() external;
 
-    function optOut() external;
+    function beginOptOut() external;
+
+    function confirmOptOut() external;
 }

@@ -9,6 +9,8 @@ contract BoltRegistry is IBoltRegistry {
     // Mapping to hold the based proposers
     mapping(address => BasedProposer) public basedProposers;
 
+    mapping(address => uint256) private optOutTimestamps;
+
     /// @notice Constructor
     constructor() {}
 
@@ -18,13 +20,14 @@ contract BoltRegistry is IBoltRegistry {
             revert BasedProposerAlreadyExists();
         }
 
-        basedProposers[msg.sender] = BasedProposer(msg.sender, BoltStatus.Active, block.timestamp);
+        basedProposers[msg.sender] = BasedProposer(msg.sender, BoltStatus.Active, false);
         emit BasedProposerStatusChanged(msg.sender, BoltStatus.Active);
     }
 
-    /// @notice Allows a based proposer to opt-out of the protocol
-    function optOut() external {
-        BasedProposer memory basedProposer = basedProposers[msg.sender];
+    /// @notice Allows a based proposer to opt-out of the protocol.
+    /// @dev Requires a second transaction after the cooldown period to complete the opt-out process.
+    function beginOptOut() external {
+        BasedProposer storage basedProposer = basedProposers[msg.sender];
 
         if (basedProposer.addr != msg.sender) {
             revert BasedProposerDoesNotExist();
@@ -32,10 +35,26 @@ contract BoltRegistry is IBoltRegistry {
         if (basedProposer.status == BoltStatus.Inactive) {
             revert InvalidStatusChange();
         }
-        if (block.timestamp - basedProposer.lastOptedInTimestamp < OPT_OUT_COOLDOWN) {
+        
+        basedProposer.isOptingOut = true;
+        optOutTimestamps[msg.sender] = block.timestamp;
+    }
+
+    /// @notice Completes the opt-out process for a based proposer
+    function confirmOptOut() external {
+        BasedProposer storage basedProposer = basedProposers[msg.sender];
+
+        if (basedProposer.addr != msg.sender) {
+            revert BasedProposerDoesNotExist();
+        }
+        if (!basedProposer.isOptingOut) {
+            revert InvalidStatusChange();
+        }
+        if (block.timestamp < optOutTimestamps[msg.sender] + OPT_OUT_COOLDOWN) {
             revert CooldownNotElapsed();
         }
 
+        basedProposer.isOptingOut = false;
         basedProposer.status = BoltStatus.Inactive;
         emit BasedProposerStatusChanged(msg.sender, BoltStatus.Inactive);
     }
@@ -49,13 +68,13 @@ contract BoltRegistry is IBoltRegistry {
     }
 
     /// @notice Get the status of a based proposer
-    /// @param _basedProposers The address of the based proposer
+    /// @param _basedProposer The address of the based proposer
     /// @return The status of the based proposer
-    function getBasedProposerStatus(address _basedProposers) external view returns (BoltStatus) {
-        if (basedProposers[_basedProposers].addr == address(0)) {
+    function getBasedProposerStatus(address _basedProposer) external view returns (BoltStatus) {
+        if (basedProposers[_basedProposer].addr == address(0)) {
             revert BasedProposerDoesNotExist();
         }
 
-        return basedProposers[_basedProposers].status;
+        return basedProposers[_basedProposer].status;
     }
 }
