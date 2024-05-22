@@ -1,9 +1,9 @@
 demo:
-	chmod +x ./start-demo.sh
-	./start-demo.sh
+	chmod +x ./scripts/start-demo.sh
+	./scripts/start-demo.sh
 
 up:
-	kurtosis run --enclave bolt-devnet github.com/chainbound/ethereum-package --args-file kurtosis_config.yaml
+	kurtosis run --enclave bolt-devnet github.com/chainbound/ethereum-package --args-file scripts/kurtosis_config.yaml
 
 down:
 	kurtosis enclave rm -f bolt-devnet
