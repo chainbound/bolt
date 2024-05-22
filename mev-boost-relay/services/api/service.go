@@ -592,6 +592,16 @@ func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 	}
 }
 
+// removeConstraintsConsumer is an helper function to remove the consumer from the list
+func (api *RelayAPI) removeConstraintsConsumer(ch chan *ConstraintSubmission) {
+	for i, c := range api.constraintsConsumers {
+		if c == ch {
+			api.constraintsConsumers = append(api.constraintsConsumers[:i], api.constraintsConsumers[i+1:]...)
+			break
+		}
+	}
+}
+
 // simulateBlock sends a request for a block simulation to blockSimRateLimiter.
 func (api *RelayAPI) simulateBlock(ctx context.Context, opts blockSimOptions) (requestErr, validationErr error) {
 	t := time.Now()
@@ -2810,15 +2820,31 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
 		return
 	}
+	// Remove the consumer and close the channel when the client disconnects
+	defer func() {
+		api.removeConstraintsConsumer(constraintsCh)
+		close(constraintsCh)
+	}()
 
-	for constraint := range constraintsCh {
-		constraintJSON, err := constraint.MarshalJSON()
-		if err != nil {
-			api.log.WithError(err).Error("failed to marshal constraint to json")
-			continue
+	// Monitor client disconnect
+	notify := req.Context().Done()
+
+	for {
+		select {
+		case <-notify:
+			// Client disconnected
+			return
+		case constraint := <-constraintsCh:
+			constraintJSON, err := constraint.MarshalJSON()
+			api.log.Infof("New constraint received: %s", constraint)
+
+			if err != nil {
+				api.log.Printf("failed to marshal constraint to json: %v", err)
+				continue
+			}
+			fmt.Fprint(w, string(constraintJSON))
+			flusher.Flush()
 		}
-		fmt.Fprint(w, string(constraintJSON))
-		flusher.Flush()
 	}
 }
 

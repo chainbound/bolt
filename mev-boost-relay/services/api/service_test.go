@@ -353,6 +353,9 @@ func TestSubscribeToConstraints(t *testing.T) {
 	backend := newTestBackend(t, 1)
 
 	path := "/relay/v1/builder/constraints"
+
+	// Run the request in a goroutine so that it doesn't block the test,
+	// but it finishes as soon as the message is sent over the channel
 	go func() {
 		rr := backend.request(http.MethodGet, path, nil)
 		require.Equal(t, http.StatusOK, rr.Code)
