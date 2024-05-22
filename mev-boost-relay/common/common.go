@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flashbots/go-utils/cli"
+	"github.com/thedevbirb/flashbots-go-utils/cli"
 )
 
 var (

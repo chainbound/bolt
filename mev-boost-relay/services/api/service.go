@@ -28,8 +28,6 @@ import (
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/utils"
-	"github.com/flashbots/go-utils/cli"
-	"github.com/flashbots/go-utils/httplogger"
 	"github.com/flashbots/mev-boost-relay/beaconclient"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
@@ -39,6 +37,8 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/thedevbirb/flashbots-go-utils/cli"
+	"github.com/thedevbirb/flashbots-go-utils/httplogger"
 	uberatomic "go.uber.org/atomic"
 	"golang.org/x/exp/slices"
 )
@@ -75,7 +75,7 @@ var (
 	// BOLT: allow builders to ship merkle proofs with their blocks
 	pathSubmitNewBlockWithPreconfs = "/relay/v1/builder/blocks_with_preconfs"
 	// BOLT: allow builders to subscribe to constraints
-	pathSubscribeConstraints = "/relay/v1/builder/constraints/subscribe"
+	pathSubscribeConstraints = "/relay/v1/builder/constraints"
 
 	// Data API
 	pathDataProposerPayloadDelivered = "/relay/v1/data/bidtraces/proposer_payload_delivered"
@@ -296,7 +296,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		memcached:            opts.Memcached,
 		db:                   opts.DB,
 		constraints:          NewConstraintCache(),
-		constraintsConsumers: make([]chan *ConstraintSubmission, 5),
+		constraintsConsumers: make([]chan *ConstraintSubmission, 0, 10),
 
 		payloadAttributes: make(map[string]payloadAttributesHelper),
 
@@ -368,7 +368,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 		r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodPost)
 		// BOLT
 		r.HandleFunc(pathSubmitNewBlockWithPreconfs, api.handleSubmitNewBlockWithPreconfs).Methods(http.MethodPost)
-		r.HandleFunc(pathSubscribeConstraints, api.handleSubscribeConstraints).Methods(http.MethodPost)
+		r.HandleFunc(pathSubscribeConstraints, api.handleSubscribeConstraints).Methods(http.MethodGet)
 	}
 
 	// Data API
@@ -1639,6 +1639,7 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 	ua := req.UserAgent()
 	headSlot := api.headSlot.Load()
 	receivedAt := time.Now().UTC()
+
 	log := api.log.WithFields(logrus.Fields{
 		"method":                "getPayload",
 		"ua":                    ua,
@@ -2801,7 +2802,7 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 
 	// TODO: authenticate this call properly to avoid spamming/dos
 
-	constraintsCh := make(chan *ConstraintSubmission)
+	constraintsCh := make(chan *ConstraintSubmission, 1000)
 	api.constraintsConsumers = append(api.constraintsConsumers, constraintsCh)
 
 	flusher, ok := w.(http.Flusher)

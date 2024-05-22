@@ -352,9 +352,16 @@ func TestSubmitConstraints(t *testing.T) {
 func TestSubscribeToConstraints(t *testing.T) {
 	backend := newTestBackend(t, 1)
 
-	path := "/relay/v1/builder/constraints/subscribe"
-	rr := backend.request(http.MethodPost, path, nil)
-	require.Equal(t, http.StatusOK, rr.Code)
+	path := "/relay/v1/builder/constraints"
+	go func() {
+		rr := backend.request(http.MethodGet, path, nil)
+		require.Equal(t, http.StatusOK, rr.Code)
+	}()
+
+	// Wait 1 sec for the goroutine to start and add the consumer
+	time.Sleep(1 * time.Second)
+
+	backend.relay.constraintsConsumers[0] <- &ConstraintSubmission{}
 }
 
 func TestBuilderApiGetValidators(t *testing.T) {
