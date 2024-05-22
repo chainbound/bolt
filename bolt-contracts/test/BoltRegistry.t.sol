@@ -22,4 +22,6 @@ contract BoltRegistryTest is Test {
         assertEq(uint8(registry.getBasedProposerStatus(alice)), uint8(IBoltRegistry.BoltStatus.Active));
         assertEq(registry.isActiveBasedProposer(alice), true);
     }
+
+    // TODO: test opt out flow
 }
