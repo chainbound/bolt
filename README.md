@@ -143,7 +143,7 @@ best comprehend the changes it is recommended to keep [Flashbots' builder flow
 diagram](https://github.com/flashbots/builder/blob/v1.13.14-0.3.0/docs/builder/builder-diagram.png)
 at hand.
 
-The PR implementing the changes can be found [here](https://github.com/chainbound/bolt-v0/pull/9).
+The PR implementing the changes can be found [here](https://github.com/chainbound/bolt/pull/9).
 
 **Added**
 
@@ -170,7 +170,7 @@ The outlined changes refer to the implementation of the [relay made by the
 Flashbots team](https://github.com/flashbots/mev-boost-relay/tree/v0.29.1).
 
 The PR implementing the changes can be found
-[here](https://github.com/chainbound/bolt-v0/pull/10).
+[here](https://github.com/chainbound/bolt/pull/10).
 
 **Added**
 
@@ -184,7 +184,7 @@ The PR implementing the changes can be found
 The outlined changes refer to the implementation of the [MEV-Boost made by the
 Flashbots team](https://github.com/flashbots/mev-boost/tree/v1.7).
 
-The PR implementing the changes can be found [here](https://github.com/chainbound/bolt-v0/pull/11)
+The PR implementing the changes can be found [here](https://github.com/chainbound/bolt/pull/11)
 
 **Added**
 
