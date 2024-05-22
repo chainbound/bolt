@@ -35,7 +35,7 @@ contract BoltRegistry is IBoltRegistry {
         if (basedProposer.status == BoltStatus.Inactive) {
             revert InvalidStatusChange();
         }
-        
+
         basedProposer.isOptingOut = true;
         optOutTimestamps[msg.sender] = block.timestamp;
     }
