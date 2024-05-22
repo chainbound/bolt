@@ -1,30 +1,31 @@
-# Bolt-CC (Credible Commitments)
+# BOLT
 
 <!-- vim-markdown-toc Marked -->
 
-* [How it works](#how-it-works)
-* [Scope of the PoC](#scope-of-the-poc)
-* [Devnet and demo app](#devnet-and-demo-app)
-  * [Requirements](#requirements)
-  * [Running the devnet and demo](#running-the-devnet-and-demo)
-  * [Stopping the devnet and demo](#stopping-the-devnet-and-demo)
-* [Changelog](#changelog)
-  * [Bolt Sidecar](#bolt-sidecar)
-  * [Builder](#builder)
-  * [Relay](#relay)
-  * [MEV-Boost](#mev-boost)
+- [How it works](#how-it-works)
+- [Scope of this repository](#scope-of-this-repository)
+- [Devnet and demo app](#devnet-and-demo-app)
+  - [Requirements](#requirements)
+  - [Running the devnet and demo](#running-the-devnet-and-demo)
+  - [Stopping the devnet and demo](#stopping-the-devnet-and-demo)
+- [Changelog](#changelog)
+  - [Bolt Sidecar](#bolt-sidecar)
+  - [Builder](#builder)
+  - [Relay](#relay)
+  - [MEV-Boost](#mev-boost)
 
 <!-- vim-markdown-toc -->
 
-Bolt-CC is a proof of concept for _permissionless proposer commitments through
-PBS_. In its essence, it consists in a light fork of the current MEV-Boost
-stack that allows users to request **preconfirmations** from proposers, and
-then adds a way for proposers to commit to transaction inclusion in a way that
-is easily verifiable.
+> [!IMPORTANT]
+> Bolt is an implementation of _permissionless proposer commitments through
+> PBS_. In its essence, it consists in a light fork of the current MEV-Boost
+> stack that allows users to request **preconfirmations** from proposers, and
+> then adds a way for proposers to commit to transaction inclusion in a way that
+> is easily verifiable.
 
 ## How it works
 
-The flow of Bolt-CC can be summarized in the following steps:
+The flow of Bolt can be summarized in the following steps:
 
 1. Users submit transactions to the proposer next in line
 2. The proposer can accept this transaction, and after that it will send a
@@ -42,37 +43,43 @@ The flow of Bolt-CC can be summarized in the following steps:
 
 A diagram of this flow is available [here](https://swimlanes.io/u/hwwDL7z1P)
 
-## Scope of the PoC
+## Scope of this repository
 
 This proof of concept aims to provide a working example of the flow depicted
 above, proof generation and verification included, but it simplifies some parts
 of the process to make it easier to implement in a devnet and to avoid
 unnecessary complexity at this stage, such as:
 
-- the preconfirmation request is made through a simple HTTP POST request
-  directly to the proposer, as such it is exposed for direct traffic, which is
-  not ideal in a production environment.
 - the builder will place the preconfirmed transactions on the top of the block
-  to ensure their validity
+  to ensure their validity. In a real scenario, builders would adapt their bundle
+  merging algorithms to place the preconfirmed transactions where they fit best.
 - the relay doesn't ensure to store bids with valid proofs of inclusion. In a
   production environment this should be done to forward only valid bids to the
-  proposer and minimize the risk of falling back to a locally built block
-- the fallback logic to a locally built block needs to consider
-  preconfirmations as well and it is still TBD
+  proposer and minimize the risk of falling back to a locally built block.
+- the fallback logic to a locally built block is simplified.
 
 ## Devnet and demo app
 
-For this proof of concept, we are using a full
-[Kurtosis](https://www.kurtosis.com/) devnet stack, with custom PBS docker images.
-Additionally, this repo contains a simple web demo that allows to test the
-whole preconfirmation flow.
+We are using a full [Kurtosis](https://www.kurtosis.com/) devnet stack, with
+custom PBS docker images. Additionally, this repo contains a simple web demo
+that allows us to test the whole preconfirmation flow.
+
+End-to-end test scenarios are also available as playgrounds to showcase
+different fault scenarios and how the system behaves.
 
 ### Requirements
 
-Make sure you have the following:
+Make sure you have the following requirements on your machine:
 
 - [Docker engine](https://docs.docker.com/engine/install/) installed and running
 - [Kurtosis CLI](https://docs.kurtosis.com/install/) installed
+- [Foundry](https://book.getfoundry.sh/getting-started/installation) installed
+
+Then, clone this repository and navigate to the root directory of the project:
+
+```shell
+git clone git@github.com:chainbound/bolt.git && cd bolt
+```
 
 ### Running the devnet and demo
 
@@ -80,7 +87,7 @@ Running the devnet and demo is straightforward once you have the requirements
 installed. Just run the following commands in your terminal:
 
 ```shell
-# build all docker images locally first
+# build all necessary docker images locally first
 make build-images
 
 # spin up the kurtosis devnet on your machine
@@ -90,7 +97,8 @@ make up
 make demo
 ```
 
-The web demo will be available at [`http://localhost:3000`](http://localhost:3000).
+The web demo will be available on your browser at
+[`http://localhost:3000`](http://localhost:3000).
 
 ### Stopping the devnet and demo
 
@@ -107,10 +115,13 @@ make down
 make clean
 ```
 
+> [!WARNING]
+> Remember to shut down the devnet environment when you are done with it, as it
+> consumes significant resources on your machine :)
+
 ## Changelog
 
-All notable changes to the components of this project needed for the PoC will
-be documented here.
+All notable changes to the components of this project will be documented here.
 
 ### Bolt Sidecar
 
