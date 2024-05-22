@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.25;
+pragma solidity ^0.8.13;
 
 import {IProver} from "relic-sdk/packages/contracts/interfaces/IProver.sol";
 import {IReliquary} from "relic-sdk/packages/contracts/interfaces/IReliquary.sol";
@@ -13,31 +13,22 @@ import {IBoltRegistry} from "../interfaces/IBoltRegistry.sol";
 import {IBoltChallenger} from "../interfaces/IBoltChallenger.sol";
 
 import {SSZ} from "../lib/SSZ.sol";
+import {BeaconChainUtils} from "../lib/BeaconChainUtils.sol";
 
 contract BoltChallenger is IBoltChallenger {
     /// @notice The max duration of a challenge, after which it is considered resolved
     /// even if no one has provided a valid proof for it.
-    uint256 public constant CHALLENGE_DURATION = 7 days;
+    uint256 public constant MAX_CHALLENGE_DURATION = 7 days;
 
     /// @notice The bond required to open a challenge. This is to avoid spamming
     /// and DOS attacks on proposers. If a challenge is successful, the bond is
     /// returned to the challenger, otherwise it is sent to the based proposer.
     uint256 public constant CHALLENGE_BOND = 1 ether;
 
-    /// @notice The address of the BeaconRoots contract
-    /// @dev See EIP-4788 for more info
-    address internal constant BEACON_ROOTS_CONTRACT = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
-
     /// @notice The max number of slots that can pass after which a challenge cannot
     /// be opened anymore. This corresponds to about 1 day.
     /// @dev This is a limiatation of the `BEACON_ROOTS` contract (see EIP-4788 for more info).
     uint256 internal constant CHALLENGE_RETROACTIVE_TARGET_SLOT_WINDOW = 8190;
-
-    /// @notice The duration of a slot in seconds
-    uint256 internal constant SLOT_TIME = 12;
-
-    /// @notice The timestamp of the genesis of the eth2 chain
-    uint256 internal constant ETH2_GENESIS_TIMESTAMP = 1606824023;
 
     /// @notice The address of the BoltRegistry contract
     IBoltRegistry public immutable boltRegistry;
@@ -117,8 +108,10 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         // Check if the target slot is not too far in the past
-        if (_getSlotFromTimestamp(block.timestamp) - _signedCommitment.slot > CHALLENGE_RETROACTIVE_TARGET_SLOT_WINDOW)
-        {
+        if (
+            BeaconChainUtils._getSlotFromTimestamp(block.timestamp) - _signedCommitment.slot
+                > CHALLENGE_RETROACTIVE_TARGET_SLOT_WINDOW
+        ) {
             // Challenges cannot be opened for slots that are too far in the past, because we rely
             // on the BEACON_ROOTS ring buffer to be available for the challenge to be resolved.
             revert TargetSlotTooFarInThePast();
@@ -139,7 +132,7 @@ contract BoltChallenger is IBoltChallenger {
 
         // Check if the signed commitment was made by the challenged based proposer
         if (_recoverCommitmentSigner(commitmentID, _signedCommitment.signature) != _basedProposer) {
-            revert Unauthorized();
+            revert InvalidCommitmentSignature();
         }
 
         // Note: we don't check if the based proposer was actually scheduled for proposal at their
@@ -148,7 +141,8 @@ contract BoltChallenger is IBoltChallenger {
 
         // Get the beacon block root for the target slot. We store it in the Challenge so that
         // it can be used even after 8192 slots have passed (the limit of the BEACON_ROOTS contract)
-        bytes32 beaconBlockRoot = _getBeaconBlockRoot(_signedCommitment.slot);
+        bytes32 beaconBlockRoot = BeaconChainUtils._getBeaconBlockRoot(_signedCommitment.slot);
+
         // ==== Create a new challenge ====
 
         challenges[commitmentID] = Challenge({
@@ -192,9 +186,8 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         // Check if the challenge has expired.
-        // Note: we consider the challenge successful if it expires without being resolved.
         // This means that the validator failed to honor the commitment and will get slashed.
-        if (block.timestamp - challenge.openTimestamp > CHALLENGE_DURATION) {
+        if (block.timestamp - challenge.openTimestamp > MAX_CHALLENGE_DURATION) {
             // Part of the slashed amount will also be returned to the challenger as a reward.
             // This is the reason we don't have access control in this function.
             // TODO: slash the based proposer.
@@ -243,7 +236,7 @@ contract BoltChallenger is IBoltChallenger {
 
         // Check if the block header timestamp is UP TO the challenge's target slot.
         // It can be earlier, in case the transaction was included before the based proposer's slot.
-        if (verifiedHeader.Time > _getTimestampFromSlot(challenge.signedCommitment.slot)) {
+        if (verifiedHeader.Time > BeaconChainUtils._getTimestampFromSlot(challenge.signedCommitment.slot)) {
             // The block header timestamp is after the target slot, so the proposer didn't
             // honor the preconfirmation and the challenge is successful.
             // TODO: slash the based proposer
@@ -325,10 +318,13 @@ contract BoltChallenger is IBoltChallenger {
 
         // The genelized index is the index of the merkle tree generated by the merkleization
         // process of a SSZ list of transactions. Since this list is dynamic and can be of maximum
-        // length of 1_048_576, the merkleization process fills the tree with empty hashes until we have
-        // a tree of 2^21 leaves. Therefore this number is an offset from where transactions hash tree root starts.
+        // length of 2^20 = 1_048_576, the merkleization process fills the tree with empty hashes,
+        // therefore this number is an offset from where transactions hash tree root starts.
         // To read more, check out https://github.com/ethereum/consensus-specs/blob/dev/ssz/simple-serialize.md#merkleization
         uint256 generalizedIndex = 1_048_576 + _transactionIndex;
+
+        // bytes32 leaf = SSZContainers._transactionHashTreeRoot();
+
         // TODO: derive hash tree root of the transaction
         bytes32 leaf = SSZ._hashTreeRoot();
 
@@ -355,34 +351,5 @@ contract BoltChallenger is IBoltChallenger {
     function _getCommitmentID(SignedCommitment memory _commitment) internal pure returns (bytes32) {
         return
             keccak256(abi.encodePacked(_commitment.slot, _commitment.transactionHash, _commitment.signedRawTransaction));
-    }
-
-    /// @notice Get the slot number from a given timestamp
-    /// @param _timestamp The timestamp
-    /// @return The slot number
-    function _getSlotFromTimestamp(uint256 _timestamp) internal pure returns (uint256) {
-        return (_timestamp - ETH2_GENESIS_TIMESTAMP) / SLOT_TIME;
-    }
-
-    /// @notice Get the timestamp from a given slot
-    /// @param _slot The slot number
-    /// @return The timestamp
-    function _getTimestampFromSlot(uint256 _slot) internal pure returns (uint256) {
-        return ETH2_GENESIS_TIMESTAMP + _slot * SLOT_TIME;
-    }
-
-    /// @notice Get the beacon block root for a given slot
-    /// @param _slot The slot number
-    /// @return The beacon block root
-    function _getBeaconBlockRoot(uint256 _slot) internal view returns (bytes32) {
-        uint256 slotTimestamp = ETH2_GENESIS_TIMESTAMP + _slot * SLOT_TIME;
-
-        (bool success, bytes memory data) = BEACON_ROOTS_CONTRACT.staticcall(abi.encode(slotTimestamp));
-
-        if (!success || data.length == 0) {
-            revert BeaconRootNotFound();
-        }
-
-        return abi.decode(data, (bytes32));
     }
 }

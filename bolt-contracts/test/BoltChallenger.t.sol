@@ -12,12 +12,14 @@ contract BoltChallengerTest is Test {
     // Relic protocol contracts
     address relicReliquary = 0x5E4DE6Bb8c6824f29c44Bd3473d44da120387d08;
     address relicBlockHeaderProver = 0x9f9A1eb0CF9340538297c853915DCc06Eb6D72c4;
+    address relicAccountInfoProver = 0xf74105AE736Ca0C4B171a2EC4F1D4B0b6EBB99ae;
 
     address alice = address(0x1);
     address bob = address(0x2);
 
     function setUp() public {
         registry = new BoltRegistry();
-        challenger = new BoltChallenger(address(registry), relicReliquary);
+        challenger =
+            new BoltChallenger(address(registry), relicReliquary, relicBlockHeaderProver, relicAccountInfoProver);
     }
 }

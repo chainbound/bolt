@@ -4,7 +4,8 @@ pragma solidity ^0.8.13;
 import {SSZ} from "./SSZ.sol";
 
 library SSZContainers {
-    // As defined in phase0/beacon-chain.md:356
+    /// @notice a Validator SSZ container
+    /// @dev As defined in https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#validator
     struct Validator {
         bytes pubkey;
         bytes32 withdrawalCredentials;
@@ -16,7 +17,8 @@ library SSZContainers {
         uint64 withdrawableEpoch;
     }
 
-    // As defined in phase0/beacon-chain.md:436
+    /// @notice a Beacon block header SSZ container
+    /// @dev As defined in https://github.com/ethereum/consensus-specs/blob/dev/specs/phase0/beacon-chain.md#beaconblockheader
     struct BeaconBlockHeader {
         uint64 slot;
         uint64 proposerIndex;

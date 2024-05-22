@@ -23,8 +23,8 @@ interface IBoltChallenger {
     error InvalidChallenge();
     error ChallengeNotFound();
     error ChallengeAlreadyResolved();
-    error BeaconRootNotFound();
     error TargetSlotTooFarInThePast();
+    error InvalidCommitmentSignature();
 
     // Relic related errors
     error UnexpectedFactSignature();
