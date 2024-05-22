@@ -26,8 +26,7 @@ contract BoltChallenger is IBoltChallenger {
 
     /// @notice The address of the BeaconRoots contract
     /// @dev See EIP-4788 for more info
-    address internal constant BEACON_ROOTS_CONTRACT =
-        0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
+    address internal constant BEACON_ROOTS_CONTRACT = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
 
     /// @notice The max number of slots that can pass after which a challenge cannot
     /// be opened anymore. This corresponds to about 1 day.
@@ -87,12 +86,7 @@ contract BoltChallenger is IBoltChallenger {
     /// @param _boltRegistry The address of the BoltRegistry contract
     /// @param _reliquary The address of the Relic Reliquary contract
     /// @param _blockHeaderProver The address of the Relic block header prover contract
-    constructor(
-        address _boltRegistry,
-        address _reliquary,
-        address _blockHeaderProver,
-        address _accountInfoProver
-    ) {
+    constructor(address _boltRegistry, address _reliquary, address _blockHeaderProver, address _accountInfoProver) {
         boltRegistry = IBoltRegistry(_boltRegistry);
         reliquary = IReliquary(_reliquary);
 
@@ -108,10 +102,7 @@ contract BoltChallenger is IBoltChallenger {
     /// @notice A challenge requires a bond to be transferred to this contract to avoid spamming.
     /// @param _basedProposer The address of the proposer to challenge
     /// @param _signedCommitment The signed commitment that the proposer is getting challenged for
-    function challengeProposer(
-        address _basedProposer,
-        SignedCommitment calldata _signedCommitment
-    ) public payable {
+    function challengeProposer(address _basedProposer, SignedCommitment calldata _signedCommitment) public payable {
         // First sanity checks
         if (_basedProposer == address(0) || _signedCommitment.slot == 0) {
             revert InvalidChallenge();
@@ -126,10 +117,8 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         // Check if the target slot is not too far in the past
-        if (
-            _getSlotFromTimestamp(block.timestamp) - _signedCommitment.slot >
-            CHALLENGE_RETROACTIVE_TARGET_SLOT_WINDOW
-        ) {
+        if (_getSlotFromTimestamp(block.timestamp) - _signedCommitment.slot > CHALLENGE_RETROACTIVE_TARGET_SLOT_WINDOW)
+        {
             // Challenges cannot be opened for slots that are too far in the past, because we rely
             // on the BEACON_ROOTS ring buffer to be available for the challenge to be resolved.
             revert TargetSlotTooFarInThePast();
@@ -149,12 +138,7 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         // Check if the signed commitment was made by the challenged based proposer
-        if (
-            _recoverCommitmentSigner(
-                commitmentID,
-                _signedCommitment.signature
-            ) != _basedProposer
-        ) {
+        if (_recoverCommitmentSigner(commitmentID, _signedCommitment.signature) != _basedProposer) {
             revert Unauthorized();
         }
 
@@ -226,14 +210,10 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         // Derive the transactions root of the target block from the block header proof
-        CoreTypes.BlockHeaderData
-            memory verifiedHeader = _deriveBlockHeaderInfo(_blockHeaderProof);
+        CoreTypes.BlockHeaderData memory verifiedHeader = _deriveBlockHeaderInfo(_blockHeaderProof);
 
         // Derive the preconfirmed sender's account data from the account data proof
-        CoreTypes.AccountData memory verifiedAccount = _deriveAccountData(
-            _accountDataProof,
-            verifiedHeader.Number
-        );
+        CoreTypes.AccountData memory verifiedAccount = _deriveAccountData(_accountDataProof, verifiedHeader.Number);
 
         // Check that the nonce of the preconfirmed sender is valid (not too low)
         // at the time of the based proposer's slot.
@@ -274,10 +254,7 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         bool isValid = _verifyInclusionProof(
-            verifiedHeader.TxHash,
-            _transactionIndex,
-            _inclusionProof,
-            challenge.signedCommitment.signedRawTransaction
+            verifiedHeader.TxHash, _transactionIndex, _inclusionProof, challenge.signedCommitment.signedRawTransaction
         );
 
         if (!isValid) {
@@ -297,18 +274,17 @@ contract BoltChallenger is IBoltChallenger {
     /// @notice Fetch trustlessly valid block header data
     /// @param _proof The ABI-encoded proof of the block header
     /// @return header The block header data
-    function _deriveBlockHeaderInfo(
-        bytes calldata _proof
-    ) internal pure returns (CoreTypes.BlockHeaderData memory header) {
+    function _deriveBlockHeaderInfo(bytes calldata _proof)
+        internal
+        pure
+        returns (CoreTypes.BlockHeaderData memory header)
+    {
         // TODO: handle fee for proving. make payable?
 
         Fact memory fact = blockHeaderProver.prove(_proof, false);
         header = abi.decode(fact.data, (CoreTypes.BlockHeaderData));
 
-        if (
-            FactSignature.unwrap(fact.sig) !=
-            FactSignature.unwrap(FactSigs.blockHeaderSig(header.Number))
-        ) {
+        if (FactSignature.unwrap(fact.sig) != FactSignature.unwrap(FactSigs.blockHeaderSig(header.Number))) {
             revert UnexpectedFactSignature();
         }
     }
@@ -317,20 +293,18 @@ contract BoltChallenger is IBoltChallenger {
     /// @param _proof The ABI-encoded proof of the account data
     /// @param _blockNumber The block number for which the account data is being proven
     /// @return account The account data
-    function _deriveAccountData(
-        bytes calldata _proof,
-        uint256 _blockNumber
-    ) internal pure returns (CoreTypes.AccountData memory account) {
+    function _deriveAccountData(bytes calldata _proof, uint256 _blockNumber)
+        internal
+        pure
+        returns (CoreTypes.AccountData memory account)
+    {
         // TODO: handle fee for proving. make payable?
 
         Fact memory fact = accountInfoProver.prove(_proof, false);
         account = abi.decode(fact.data, (CoreTypes.AccountData));
 
         // verify that the account data proof was provided for the correct block
-        if (
-            FactSignature.unwrap(fact.sig) !=
-            FactSignature.unwrap(FactSigs.accountFactSig(_blockNumber))
-        ) {
+        if (FactSignature.unwrap(fact.sig) != FactSignature.unwrap(FactSigs.accountFactSig(_blockNumber))) {
             revert UnexpectedFactSignature();
         }
     }
@@ -358,25 +332,18 @@ contract BoltChallenger is IBoltChallenger {
         // TODO: derive hash tree root of the transaction
         bytes32 leaf = SSZ._hashTreeRoot();
 
-        isValid = SSZ._verifyProof(
-            _inclusionProof,
-            _transactionsRoot,
-            leaf,
-            generalizedIndex
-        );
+        isValid = SSZ._verifyProof(_inclusionProof, _transactionsRoot, leaf, generalizedIndex);
     }
 
     /// @notice Recover the signer of a commitment
     /// @param _commitmentSignature The signature of the commitment
     /// @param _commitmentHash The keccak hash of an unsigned message
-    function _recoverCommitmentSigner(
-        bytes32 _commitmentHash,
-        bytes calldata _commitmentSignature
-    ) internal pure returns (address) {
-        (address signer, ECDSA.RecoverError err, ) = ECDSA.tryRecover(
-            _commitmentHash,
-            _commitmentSignature
-        );
+    function _recoverCommitmentSigner(bytes32 _commitmentHash, bytes calldata _commitmentSignature)
+        internal
+        pure
+        returns (address)
+    {
+        (address signer, ECDSA.RecoverError err,) = ECDSA.tryRecover(_commitmentHash, _commitmentSignature);
         if (err != ECDSA.RecoverError.NoError || signer == address(0)) {
             revert Unauthorized();
         }
@@ -385,48 +352,32 @@ contract BoltChallenger is IBoltChallenger {
     }
 
     /// @notice Hashes the inclusion commitment to a unique ID to index the challenge
-    function _getCommitmentID(
-        SignedCommitment memory _commitment
-    ) internal pure returns (bytes32) {
+    function _getCommitmentID(SignedCommitment memory _commitment) internal pure returns (bytes32) {
         return
-            keccak256(
-                abi.encodePacked(
-                    _commitment.slot,
-                    _commitment.transactionHash,
-                    _commitment.signedRawTransaction
-                )
-            );
+            keccak256(abi.encodePacked(_commitment.slot, _commitment.transactionHash, _commitment.signedRawTransaction));
     }
 
     /// @notice Get the slot number from a given timestamp
     /// @param _timestamp The timestamp
     /// @return The slot number
-    function _getSlotFromTimestamp(
-        uint256 _timestamp
-    ) internal pure returns (uint256) {
+    function _getSlotFromTimestamp(uint256 _timestamp) internal pure returns (uint256) {
         return (_timestamp - ETH2_GENESIS_TIMESTAMP) / SLOT_TIME;
     }
 
     /// @notice Get the timestamp from a given slot
     /// @param _slot The slot number
     /// @return The timestamp
-    function _getTimestampFromSlot(
-        uint256 _slot
-    ) internal pure returns (uint256) {
+    function _getTimestampFromSlot(uint256 _slot) internal pure returns (uint256) {
         return ETH2_GENESIS_TIMESTAMP + _slot * SLOT_TIME;
     }
 
     /// @notice Get the beacon block root for a given slot
     /// @param _slot The slot number
     /// @return The beacon block root
-    function _getBeaconBlockRoot(
-        uint256 _slot
-    ) internal view returns (bytes32) {
+    function _getBeaconBlockRoot(uint256 _slot) internal view returns (bytes32) {
         uint256 slotTimestamp = ETH2_GENESIS_TIMESTAMP + _slot * SLOT_TIME;
 
-        (bool success, bytes memory data) = BEACON_ROOTS_CONTRACT.staticcall(
-            abi.encode(slotTimestamp)
-        );
+        (bool success, bytes memory data) = BEACON_ROOTS_CONTRACT.staticcall(abi.encode(slotTimestamp));
 
         if (!success || data.length == 0) {
             revert BeaconRootNotFound();

@@ -28,18 +28,11 @@ interface IBoltRegistry {
     error NotFound();
 
     /// @notice Event to log the status change of a based proposer
-    event BasedProposerStatusChanged(
-        address indexed basedProposer,
-        BoltStatus status
-    );
+    event BasedProposerStatusChanged(address indexed basedProposer, BoltStatus status);
 
-    function isActiveBasedProposer(
-        address _basedProposer
-    ) external view returns (bool);
+    function isActiveBasedProposer(address _basedProposer) external view returns (bool);
 
-    function getBasedProposerStatus(
-        address _basedProposers
-    ) external view returns (BoltStatus);
+    function getBasedProposerStatus(address _basedProposers) external view returns (BoltStatus);
 
     function optIn() external;
 
