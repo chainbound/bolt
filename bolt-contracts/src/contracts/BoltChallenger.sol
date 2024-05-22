@@ -195,9 +195,9 @@ contract BoltChallenger is IBoltChallenger {
         // Note: we consider the challenge successful if it expires without being resolved.
         // This means that the validator failed to honor the commitment and will get slashed.
         if (block.timestamp - challenge.openTimestamp > CHALLENGE_DURATION) {
-            // TODO: slash the based proposer.
             // Part of the slashed amount will also be returned to the challenger as a reward.
             // This is the reason we don't have access control in this function.
+            // TODO: slash the based proposer.
             challenge.status = ChallengeStatus.Resolved;
             payable(challenge.challenger).transfer(CHALLENGE_BOND);
             emit ChallengeResolved(_challengeID, ChallengeResult.Success);
@@ -209,7 +209,7 @@ contract BoltChallenger is IBoltChallenger {
             revert Unauthorized();
         }
 
-        // Derive the transactions root of the target block from the block header proof
+        // Derive the block header data of the target block from the block header proof
         CoreTypes.BlockHeaderData memory verifiedHeader = _deriveBlockHeaderInfo(_blockHeaderProof);
 
         // Derive the preconfirmed sender's account data from the account data proof
