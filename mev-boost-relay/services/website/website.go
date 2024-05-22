@@ -14,7 +14,7 @@ import (
 
 	"github.com/NYTimes/gziphandler"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/flashbots/go-utils/httplogger"
+	"github.com/thedevbirb/flashbots-go-utils/httplogger"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
