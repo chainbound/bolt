@@ -131,8 +131,6 @@ github.com/ferranbt/fastssz v0.1.3 h1:ZI+z3JH05h4kgmFXdHuR1aWYsgrg7o+Fw7/NCzM16M
 github.com/ferranbt/fastssz v0.1.3/go.mod h1:0Y9TEd/9XuFlh7mskMPfXiI2Dkw4Ddg9EyXt1W7MRvE=
 github.com/flashbots/go-boost-utils v1.8.0 h1:z3K1hw+Fbl9AGMNQKnK7Bvf0M/rKgjfruAEvra+Z8Mg=
 github.com/flashbots/go-boost-utils v1.8.0/go.mod h1:Ry1Rw8Lx5v1rpAR0+IvR4sV10jYAeQaGVM3vRD8mYdM=
-github.com/flashbots/go-utils v0.5.0 h1:ldjWta9B9//DJU2QcwRbErez3+1aKhSn6EoFc6d5kPY=
-github.com/flashbots/go-utils v0.5.0/go.mod h1:LauDwifaRdSK0mS5X34GR59pJtUu1T/lOFNdff1BqtI=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
 github.com/fsnotify/fsnotify v1.4.9/go.mod h1:znqG4EE+3YCdAaPaxE2ZRY/06pZUdp0tY4IgpuI1SZQ=
 github.com/fsnotify/fsnotify v1.6.0 h1:n+5WquG0fcWoWp6xPWfHdbskMCQaFnG6PfBrh1Ky4HY=
@@ -429,8 +427,8 @@ github.com/tdewolff/parse v2.3.4+incompatible h1:x05/cnGwIMf4ceLuDMBOdQ1qGniMoxp
 github.com/tdewolff/parse v2.3.4+incompatible/go.mod h1:8oBwCsVmUkgHO8M5iCzSIDtpzXOT0WXX9cWhz+bIzJQ=
 github.com/tdewolff/test v1.0.7 h1:8Vs0142DmPFW/bQeHRP3MV19m1gvndjUb1sn8yy74LM=
 github.com/tdewolff/test v1.0.7/go.mod h1:6DAvZliBAAnD7rhVgwaM7DE5/d9NMOAJ09SqYqeK4QE=
-github.com/thedevbirb/flashbots-go-utils v0.0.0-20240522133809-7f0a4449ea2a h1:KluRm3uBBAp8c3c3mcIj6VOA55I8FyipixzhcMPuEcQ=
-github.com/thedevbirb/flashbots-go-utils v0.0.0-20240522133809-7f0a4449ea2a/go.mod h1:Xcc4QMCD1U+HqHayd9nqVMcJVV4eAzNyAQVWY1AqhEE=
+github.com/thedevbirb/flashbots-go-utils v0.0.0-20240522160613-f4f36d8f39af h1:VwsEpQJqCFCT+oZXfJj8alj3FkIpKLvn0wV7GO/cEQY=
+github.com/thedevbirb/flashbots-go-utils v0.0.0-20240522160613-f4f36d8f39af/go.mod h1:Xcc4QMCD1U+HqHayd9nqVMcJVV4eAzNyAQVWY1AqhEE=
 github.com/tklauser/go-sysconf v0.3.12 h1:0QaGUFOdQaIVdPgfITYzaTegZvdCjmYO52cSFAEVmqU=
 github.com/tklauser/go-sysconf v0.3.12/go.mod h1:Ho14jnntGE1fpdOqQEEaiKRpvIavV0hSfmBq8nJbHYI=
 github.com/tklauser/numcpus v0.6.1 h1:ng9scYS7az0Bk4OZLvrNXNSAO2Pxr1XXRAPyjhIx+Fk=

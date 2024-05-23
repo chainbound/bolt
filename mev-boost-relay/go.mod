@@ -1,6 +1,6 @@
 module github.com/flashbots/mev-boost-relay
 
-go 1.21
+go 1.22.2
 
 require (
 	github.com/NYTimes/gziphandler v1.1.1
@@ -23,7 +23,7 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.8.4
 	github.com/tdewolff/minify v2.3.6+incompatible
-	github.com/thedevbirb/flashbots-go-utils v0.0.0-20240522133809-7f0a4449ea2a
+	github.com/thedevbirb/flashbots-go-utils v0.0.0-20240522160613-f4f36d8f39af
 	go.uber.org/atomic v1.11.0
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
 	golang.org/x/text v0.14.0
@@ -45,7 +45,6 @@ require (
 	github.com/crate-crypto/go-kzg-4844 v0.7.0 // indirect
 	github.com/ethereum/c-kzg-4844 v0.4.0 // indirect
 	github.com/fatih/color v1.16.0 // indirect
-	github.com/flashbots/go-utils v0.5.0 // indirect
 	github.com/gballet/go-verkle v0.1.1-0.20231031103413-a67434b50f46 // indirect
 	github.com/getsentry/sentry-go v0.18.0 // indirect
 	github.com/go-gorp/gorp/v3 v3.1.0 // indirect
