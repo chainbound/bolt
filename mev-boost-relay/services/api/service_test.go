@@ -36,6 +36,7 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	"gotest.tools/assert"
 )
 
 const (
@@ -382,18 +383,36 @@ func TestSubscribeToConstraints(t *testing.T) {
 	// Wait for the server to start
 	time.Sleep(500 * time.Millisecond)
 
+	// Setup information of the builder making the request
+	builderPrivateKey, builderPublicKey, err := bls.GenerateNewKeypair()
+	require.NoError(t, err)
+	var phase0BuilderPublicKey phase0.BLSPubKey = builderPublicKey.Bytes()
+
+	headSlot := backend.relay.headSlot.Load()
+	message, err := json.Marshal(ConstraintSubscriptionAuth{PublicKey: phase0BuilderPublicKey, Slot: headSlot})
+	require.NoError(t, err)
+	signatureEC := bls.Sign(builderPrivateKey, message)
+	subscriptionSignatureJSON := `"` + phase0.BLSSignature(bls.SignatureToBytes(signatureEC)[:]).String() + `"`
+
 	// Run the request in a goroutine so that it doesn't block the test,
 	// but it finishes as soon as the message is sent over the channel
 	go func() {
 		url := "http://" + backend.relay.opts.ListenAddr + path
-		// NOTE: this response arrives after the first data is flushed
-		resp, err := http.Get(url)
+		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
-			log.Fatalf("Failed to connect to SSE server: %v", err)
+			log.Fatalf("Failed to create request: %v", err)
 		}
-		if resp.StatusCode != http.StatusOK {
-			log.Fatalf("Non-OK HTTP status: %s", resp.Status)
-		}
+
+		// Add authentication
+		authHeader := "BOLT " + subscriptionSignatureJSON + "," + string(message)
+		req.Header.Set("Authorization", authHeader)
+
+		// Send the request
+		client := &http.Client{}
+		// NOTE: this response arrives after the first data is flushed
+		resp, err := client.Do(req)
+		assert.Equal(t, err, nil)
+		assert.Equal(t, resp.StatusCode, http.StatusOK)
 		defer resp.Body.Close()
 
 		bufReader := bufio.NewReader(resp.Body)

@@ -2800,13 +2800,28 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	// NOTE: Apparently, we need gzip for SSE flushing to work properly
+	// NOTE: This http.ResponseWriter uses gzip and we need this otherwise we're not able
+	// to flush data properly
 	w.Header().Set("Content-Encoding", "gzip")
 
-	// TODO: authenticate this call properly to avoid spamming/dos
+	// TODO: Docs regarding this autorization schema
+	// NOTE: This authorization schema is not final, but works for now.
+	auth := req.Header.Get("Authorization")
+
+	builderPublicKey, err := validateConstraintSubscriptionAuth(auth, api.headSlot.Load())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	_, ok := api.checkBuilderEntry(w, api.log, builderPublicKey)
+	if !ok {
+		http.Error(w, "Builder rejected", http.StatusUnauthorized)
+		return
+	}
 
 	// Add the new consumer
-	constraintsCh := make(chan *ConstraintSubmission, 1000)
+	constraintsCh := make(chan *ConstraintSubmission)
 	api.constraintsConsumers = append(api.constraintsConsumers, constraintsCh)
 
 	// Remove the consumer and close the channel when the client disconnects
