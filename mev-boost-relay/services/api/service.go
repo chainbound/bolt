@@ -2404,7 +2404,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	w.WriteHeader(http.StatusOK)
 }
 
-// TODO(bolt): We should check the preconfirmation proofs in this function to discard bids that are not valid.
+// TODO: We should check the preconfirmation proofs in this function to discard bids that are not valid.
 // This is necessary to avoid the relay accept a high bid with invalid proofs, resulting in a missed opportunity
 // for the proposer, who will refuse to sign the associated block header.
 func (api *RelayAPI) handleSubmitNewBlockWithPreconfs(w http.ResponseWriter, req *http.Request) {
