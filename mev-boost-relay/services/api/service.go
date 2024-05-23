@@ -1748,6 +1748,7 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 		}).Info("[BOLT]: adding inclusion constraint to cache")
 
 		broadcastToChannels(api.constraintsConsumers, constraint)
+		fmt.Println("after broadcast to channels")
 
 		// Add the constraint to the cache. They will be cleared when we receive a payload for the slot
 		// in `handleGetPayload`
@@ -2821,7 +2822,7 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 	}
 
 	// Add the new consumer
-	constraintsCh := make(chan *ConstraintSubmission)
+	constraintsCh := make(chan *ConstraintSubmission, 256)
 	api.constraintsConsumers = append(api.constraintsConsumers, constraintsCh)
 
 	// Remove the consumer and close the channel when the client disconnects

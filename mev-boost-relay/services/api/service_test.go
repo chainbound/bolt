@@ -338,14 +338,18 @@ func TestSubmitConstraints(t *testing.T) {
 	payload := []*SignedConstraintSubmission{&signedConstraintSubmission}
 
 	t.Run("Constraints sent", func(t *testing.T) {
+		ch := make(chan *ConstraintSubmission, 256)
+		backend.relay.constraintsConsumers = []chan *ConstraintSubmission{ch}
 		rr := backend.request(http.MethodPost, path, payload)
 		require.Equal(t, http.StatusOK, rr.Code)
 
 		constraintCache := backend.relay.constraints
 		expected := constraintCache.Get(slot)[txHash]
 		actual := Constraint{RawTx: constraintSubmission.RawTx}
+		actualFromCh := <-backend.relay.constraintsConsumers[0]
+		actualConstraintFromCh := Constraint{RawTx: actualFromCh.RawTx}
 
-		require.Equal(t, expected, &actual)
+		require.Equal(t, expected, &actual, actualConstraintFromCh)
 	})
 
 	t.Run("Empty constraint list", func(t *testing.T) {
