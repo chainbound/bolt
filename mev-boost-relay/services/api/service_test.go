@@ -1,14 +1,19 @@
 package api
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"log"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -348,23 +353,78 @@ func TestSubmitConstraints(t *testing.T) {
 	})
 }
 
-// TODO: finish this
 func TestSubscribeToConstraints(t *testing.T) {
 	backend := newTestBackend(t, 1)
-
 	path := "/relay/v1/builder/constraints"
+
+	// Create and start HTTP server.
+	// This will server the endpoint to subscribe to constraints via SSE
+	go func() {
+		backend.relay.srv = &http.Server{
+			Addr:    backend.relay.opts.ListenAddr,
+			Handler: backend.relay.getRouter(),
+
+			ReadTimeout:       time.Duration(apiReadTimeoutMs) * time.Millisecond,
+			ReadHeaderTimeout: time.Duration(apiReadHeaderTimeoutMs) * time.Millisecond,
+			WriteTimeout:      time.Duration(apiWriteTimeoutMs) * time.Millisecond,
+			IdleTimeout:       time.Duration(apiIdleTimeoutMs) * time.Millisecond,
+			MaxHeaderBytes:    apiMaxHeaderBytes,
+		}
+
+		t.Logf("Server starting on %s", backend.relay.opts.ListenAddr)
+		err := backend.relay.srv.ListenAndServe()
+		if errors.Is(err, http.ErrServerClosed) {
+			t.Log("Server closed")
+			return
+		}
+	}()
+
+	// Wait for the server to start
+	time.Sleep(500 * time.Millisecond)
 
 	// Run the request in a goroutine so that it doesn't block the test,
 	// but it finishes as soon as the message is sent over the channel
 	go func() {
-		rr := backend.request(http.MethodGet, path, nil)
-		require.Equal(t, http.StatusOK, rr.Code)
+		url := "http://" + backend.relay.opts.ListenAddr + path
+		// NOTE: this response arrives after the first data is flushed
+		resp, err := http.Get(url)
+		if err != nil {
+			log.Fatalf("Failed to connect to SSE server: %v", err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			log.Fatalf("Non-OK HTTP status: %s", resp.Status)
+		}
+		defer resp.Body.Close()
+
+		bufReader := bufio.NewReader(resp.Body)
+		for {
+			line, err := bufReader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					fmt.Println("End of stream")
+					break
+				}
+				log.Fatalf("Error reading from response body: %v", err)
+			}
+
+			if strings.HasPrefix(line, "data: ") {
+				data := strings.TrimPrefix(line, "data: ")
+				fmt.Printf("Received event: %s\n", data)
+			}
+		}
 	}()
 
-	// Wait 1 sec for the goroutine to start and add the consumer
+	// Wait for the HTTP request goroutine to start and add the consumer
 	time.Sleep(1 * time.Second)
 
+	// Now we can safely send the constraints, and we should get a response
+	// in the HTTP request defined in the goroutine above
 	backend.relay.constraintsConsumers[0] <- &ConstraintSubmission{}
+	time.Sleep(500 * time.Millisecond)
+	backend.relay.constraintsConsumers[0] <- &ConstraintSubmission{}
+
+	// Wait for the HTTP request goroutine to process the constraints
+	time.Sleep(2 * time.Second)
 }
 
 func TestBuilderApiGetValidators(t *testing.T) {

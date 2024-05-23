@@ -185,10 +185,6 @@ type RelayAPI struct {
 	srvStarted  uberatomic.Bool
 	srvShutdown uberatomic.Bool
 
-	constraintsSse         *http.Server
-	constraintsSseStarted  uberatomic.Bool
-	constraintsSseShutdown uberatomic.Bool
-
 	beaconClient         beaconclient.IMultiBeaconClient
 	datastore            *datastore.Datastore
 	redis                *datastore.RedisCache
@@ -512,11 +508,6 @@ func (api *RelayAPI) StartServer() (err error) {
 		MaxHeaderBytes:    apiMaxHeaderBytes,
 	}
 	err = api.srv.ListenAndServe()
-	if errors.Is(err, http.ErrServerClosed) {
-		return nil
-	}
-
-	err = api.constraintsSse.ListenAndServe()
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
@@ -2809,22 +2800,29 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	// NOTE: Apparently, we need gzip for SSE flushing to work properly
+	w.Header().Set("Content-Encoding", "gzip")
 
 	// TODO: authenticate this call properly to avoid spamming/dos
 
+	// Add the new consumer
 	constraintsCh := make(chan *ConstraintSubmission, 1000)
 	api.constraintsConsumers = append(api.constraintsConsumers, constraintsCh)
+
+	// Remove the consumer and close the channel when the client disconnects
+	defer func() {
+		api.removeConstraintsConsumer(constraintsCh)
+		close(constraintsCh)
+	}()
+
+	gzipWriter := gzip.NewWriter(w)
+	defer gzipWriter.Close()
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
 		return
 	}
-	// Remove the consumer and close the channel when the client disconnects
-	defer func() {
-		api.removeConstraintsConsumer(constraintsCh)
-		close(constraintsCh)
-	}()
 
 	// Monitor client disconnect
 	notify := req.Context().Done()
@@ -2842,7 +2840,13 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 				api.log.Printf("failed to marshal constraint to json: %v", err)
 				continue
 			}
-			fmt.Fprint(w, string(constraintJSON))
+			fmt.Fprintf(gzipWriter, "data: %s\n\n", string(constraintJSON))
+
+			// NOTE: Flushing the gzip.Writer ensures that any compressed data in the buffer is
+			// written out to the underlying http.ResponseWriter. The http.ResponseWriter
+			// itself may also buffer data. Calling Flush on the http.ResponseWriter ensures
+			// that any data buffered by the HTTP server is sent to the client immediately.
+			gzipWriter.Flush()
 			flusher.Flush()
 		}
 	}
