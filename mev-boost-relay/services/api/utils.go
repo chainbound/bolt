@@ -1,7 +1,9 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
 	"github.com/attestantio/go-eth2-client/spec"
@@ -155,4 +157,49 @@ func broadcastToChannels[T any](constraintsConsumers []chan *T, constraint *T) {
 	for _, consumer := range constraintsConsumers {
 		consumer <- constraint
 	}
+}
+
+// validateConstraintSubscriptionAuth checks the authentication string data from the Builder,
+// and returns its BLS public key if the authentication is valid.
+func validateConstraintSubscriptionAuth(auth string, headSlot uint64) (phase0.BLSPubKey, error) {
+	zeroKey := phase0.BLSPubKey{}
+	if auth == "" {
+		return zeroKey, errors.Errorf("Authorization header missing")
+	}
+	// Authorization: <auth-scheme> <authorization-parameters>
+	parts := strings.Split(auth, " ")
+	if len(parts) != 2 {
+		return zeroKey, errors.Errorf("Ill-formed authorization header")
+	}
+	if parts[0] != "BOLT" {
+		return zeroKey, errors.Errorf("Not BOLT authentication scheme")
+	}
+	// <signatureJSON>,<authDataJSON>
+	parts = strings.SplitN(parts[1], ",", 2)
+	if len(parts) != 2 {
+		return zeroKey, errors.Errorf("Ill-formed authorization header")
+	}
+
+	signature := new(phase0.BLSSignature)
+	if err := signature.UnmarshalJSON([]byte(parts[0])); err != nil {
+		fmt.Println("Failed to unmarshal authData: ", err)
+		return zeroKey, errors.Errorf("Ill-formed authorization header")
+	}
+
+	authDataRaw := []byte(parts[1])
+	authData := new(ConstraintSubscriptionAuth)
+	if err := json.Unmarshal(authDataRaw, authData); err != nil {
+		fmt.Println("Failed to unmarshal authData: ", err)
+		return zeroKey, errors.Errorf("Ill-formed authorization header")
+	}
+
+	if headSlot != authData.Slot {
+		return zeroKey, errors.Errorf("Invalid head slot")
+	}
+
+	ok, err := bls.VerifySignatureBytes(authDataRaw, signature[:], authData.PublicKey[:])
+	if err != nil || !ok {
+		return zeroKey, errors.Errorf("Invalid signature")
+	}
+	return authData.PublicKey, nil
 }
