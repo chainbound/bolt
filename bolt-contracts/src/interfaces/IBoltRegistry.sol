@@ -19,7 +19,7 @@ interface IBoltRegistry {
     }
 
     // Error messages
-    error BasedProposerAlreadyExists();
+    error AlreadyOptedIn();
     error BasedProposerDoesNotExist();
     error InvalidStatusChange();
     error CooldownNotElapsed();

@@ -19,12 +19,14 @@ interface IBoltChallenger {
     // Bolt challenge errors
     error ChallengeAlreadyExists();
     error InsufficientBond();
+    error InvalidProposerAddress();
     error Unauthorized();
     error InvalidChallenge();
     error ChallengeNotFound();
     error ChallengeAlreadyResolved();
     error TargetSlotTooFarInThePast();
     error InvalidCommitmentSignature();
+    error InvalidCommitmentSigner();
 
     // Relic related errors
     error UnexpectedFactSignature();

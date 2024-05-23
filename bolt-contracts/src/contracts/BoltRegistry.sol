@@ -17,7 +17,7 @@ contract BoltRegistry is IBoltRegistry {
     /// @notice Allows a based proposer to opt-in to the protocol
     function optIn() external {
         if (basedProposers[msg.sender].addr != address(0)) {
-            revert BasedProposerAlreadyExists();
+            revert AlreadyOptedIn();
         }
 
         basedProposers[msg.sender] = BasedProposer(msg.sender, BoltStatus.Active, false);

@@ -66,7 +66,7 @@ contract BoltChallenger is IBoltChallenger {
         uint256 slot;
         uint256 nonce;
         uint256 gasUsed;
-        bytes transactionHash;
+        bytes32 transactionHash;
         bytes signedRawTransaction;
         bytes signature;
     }
@@ -120,7 +120,7 @@ contract BoltChallenger is IBoltChallenger {
 
         // Check if the proposer is an active based proposer
         if (!boltRegistry.isActiveBasedProposer(_basedProposer)) {
-            revert Unauthorized();
+            revert InvalidProposerAddress();
         }
 
         bytes32 commitmentID = _getCommitmentID(_signedCommitment);
@@ -133,7 +133,7 @@ contract BoltChallenger is IBoltChallenger {
 
         // Check if the signed commitment was made by the challenged based proposer
         if (_recoverCommitmentSigner(commitmentID, _signedCommitment.signature) != _basedProposer) {
-            revert InvalidCommitmentSignature();
+            revert InvalidCommitmentSigner();
         }
 
         // Note: we don't check if the based proposer was actually scheduled for proposal at their
@@ -268,10 +268,7 @@ contract BoltChallenger is IBoltChallenger {
     /// @notice Fetch trustlessly valid block header data
     /// @param _proof The ABI-encoded proof of the block header
     /// @return header The block header data
-    function _deriveBlockHeaderInfo(bytes calldata _proof)
-        internal
-        returns (CoreTypes.BlockHeaderData memory header)
-    {
+    function _deriveBlockHeaderInfo(bytes calldata _proof) internal returns (CoreTypes.BlockHeaderData memory header) {
         // TODO: handle fee for proving. make payable?
 
         Fact memory fact = blockHeaderProver.prove(_proof, false);
@@ -337,7 +334,7 @@ contract BoltChallenger is IBoltChallenger {
     {
         (address signer, ECDSA.RecoverError err,) = ECDSA.tryRecover(_commitmentHash, _commitmentSignature);
         if (err != ECDSA.RecoverError.NoError || signer == address(0)) {
-            revert Unauthorized();
+            revert InvalidCommitmentSignature();
         }
 
         return signer;
