@@ -25,6 +25,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
+	"github.com/chainbound/shardmap"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/utils"
@@ -190,7 +191,7 @@ type RelayAPI struct {
 	redis                *datastore.RedisCache
 	memcached            *datastore.Memcached
 	db                   database.IDatabaseService
-	constraints          *ConstraintCache
+	constraints          *shardmap.FIFOMap[uint64, *Constraints]
 	constraintsConsumers []chan *ConstraintSubmission
 
 	headSlot     uberatomic.Uint64
@@ -291,7 +292,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		redis:                opts.Redis,
 		memcached:            opts.Memcached,
 		db:                   opts.DB,
-		constraints:          NewConstraintCache(),
+		constraints:          shardmap.NewFIFOMap[uint64, *Constraints](64, 8, shardmap.HashUint64), // 2 epochs cache
 		constraintsConsumers: make([]chan *ConstraintSubmission, 0, 10),
 
 		payloadAttributes: make(map[string]payloadAttributesHelper),
@@ -1748,12 +1749,16 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 		}).Info("[BOLT]: adding inclusion constraint to cache")
 
 		broadcastToChannels(api.constraintsConsumers, constraint)
-		fmt.Println("after broadcast to channels")
 
-		// Add the constraint to the cache. They will be cleared when we receive a payload for the slot
-		// in `handleGetPayload`
-		// TODO: actually do that. Alternative could be use a timer + go routine instead of modifying the getPayload call
-		api.constraints.AddInclusionConstraint(constraint.Slot, constraint.TxHash, constraint.RawTx)
+		// Add the constraint to the cache.
+		slotConstraints, _ := api.constraints.Get(constraint.Slot)
+		if slotConstraints == nil {
+			constraints := make(Constraints)
+			constraints[constraint.TxHash] = &Constraint{RawTx: constraint.RawTx}
+			api.constraints.Put(constraint.Slot, &constraints)
+		} else {
+			(*slotConstraints)[constraint.TxHash] = &Constraint{RawTx: constraint.RawTx}
+		}
 	}
 
 	// respond to the HTTP request
@@ -2474,7 +2479,7 @@ func (api *RelayAPI) handleSubmitNewBlockWithPreconfs(w http.ResponseWriter, req
 	// Check for SSZ encoding
 	contentType := req.Header.Get("Content-Type")
 	if contentType == "application/octet-stream" {
-		// TODO-BOLT: implement SSZ decoding
+		// TODO: (BOLT) implement SSZ decoding
 		panic("SSZ decoding not implemented for preconfs yet")
 	} else {
 		log = log.WithField("reqContentType", "json")

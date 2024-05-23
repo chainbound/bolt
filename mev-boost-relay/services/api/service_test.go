@@ -344,7 +344,9 @@ func TestSubmitConstraints(t *testing.T) {
 		require.Equal(t, http.StatusOK, rr.Code)
 
 		constraintCache := backend.relay.constraints
-		expected := constraintCache.Get(slot)[txHash]
+		slotConstraints, _ := constraintCache.Get(slot)
+		require.NotNil(t, slotConstraints)
+		expected := (*slotConstraints)[txHash]
 		actual := Constraint{RawTx: constraintSubmission.RawTx}
 		actualFromCh := <-backend.relay.constraintsConsumers[0]
 		actualConstraintFromCh := Constraint{RawTx: actualFromCh.RawTx}
