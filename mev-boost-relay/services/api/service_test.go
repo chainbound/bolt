@@ -705,6 +705,166 @@ func TestBuilderSubmitBlock(t *testing.T) {
 	}
 }
 
+func TestBuilderSubmitBlockWithProofs(t *testing.T) {
+	type testHelper struct {
+		headSlot            uint64
+		submissionTimestamp int
+		parentHash          string
+		feeRecipient        string
+		withdrawalRoot      string
+		prevRandao          string
+		jsonReqSize         int
+		sszReqSize          int
+		jsonGzipReqSize     int
+		sszGzipReqSize      int
+	}
+
+	testCases := []struct {
+		name     string
+		filepath string
+		data     testHelper
+	}{
+		{
+			name:     "Capella",
+			filepath: "../../testdata/submitBlockPayloadCapella_Goerli.json.gz",
+			data: testHelper{
+				headSlot:            32,
+				submissionTimestamp: 1606824419,
+				parentHash:          "0xbd3291854dc822b7ec585925cda0e18f06af28fa2886e15f52d52dd4b6f94ed6",
+				feeRecipient:        "0x5cc0dde14e7256340cc820415a6022a7d1c93a35",
+				withdrawalRoot:      "0xb15ed76298ff84a586b1d875df08b6676c98dfe9c7cd73fab88450348d8e70c8",
+				prevRandao:          "0x9962816e9d0a39fd4c80935338a741dc916d1545694e41eb5a505e1a3098f9e4",
+				jsonReqSize:         704810,
+				sszReqSize:          352239,
+				jsonGzipReqSize:     207788,
+				sszGzipReqSize:      195923,
+			},
+		},
+		{
+			name:     "Deneb",
+			filepath: "../../testdata/submitBlockPayloadDeneb_Goerli.json.gz",
+			data: testHelper{
+				headSlot:            86,
+				submissionTimestamp: 1606825067,
+				parentHash:          "0xb1bd772f909db1b6cbad8cf31745d3f2d692294998161369a5709c17a71f630f",
+				feeRecipient:        "0x455E5AA18469bC6ccEF49594645666C587A3a71B",
+				withdrawalRoot:      "0x3cb816ccf6bb079b4f462e81db1262064f321a4afa4ff32c1f7e0a1c603836af",
+				prevRandao:          "0x6d414d3ffba7ba51155c3528739102c2889005940913b5d4c8031eed30764d4d",
+				jsonReqSize:         1744002,
+				sszReqSize:          872081,
+				jsonGzipReqSize:     385043,
+				sszGzipReqSize:      363271,
+			},
+		},
+	}
+	path := "/relay/v1/builder/blocks_with_preconfs"
+	backend := newTestBackend(t, 1)
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			headSlot := testCase.data.headSlot
+			submissionSlot := headSlot + 1
+			submissionTimestamp := testCase.data.submissionTimestamp
+
+			// Payload attributes
+			payloadJSONFilename := testCase.filepath
+			parentHash := testCase.data.parentHash
+			feeRec, err := utils.HexToAddress(testCase.data.feeRecipient)
+			require.NoError(t, err)
+			withdrawalsRoot, err := utils.HexToHash(testCase.data.withdrawalRoot)
+			require.NoError(t, err)
+			prevRandao := testCase.data.prevRandao
+
+			// Setup the test relay backend
+			backend.relay.headSlot.Store(headSlot)
+			backend.relay.capellaEpoch = 0
+			backend.relay.denebEpoch = 2
+			backend.relay.proposerDutiesMap = make(map[uint64]*common.BuilderGetValidatorsResponseEntry)
+			backend.relay.proposerDutiesMap[headSlot+1] = &common.BuilderGetValidatorsResponseEntry{
+				Slot: headSlot,
+				Entry: &builderApiV1.SignedValidatorRegistration{
+					Message: &builderApiV1.ValidatorRegistration{
+						FeeRecipient: feeRec,
+					},
+				},
+			}
+			backend.relay.payloadAttributes = make(map[string]payloadAttributesHelper)
+			backend.relay.payloadAttributes[parentHash] = payloadAttributesHelper{
+				slot:       submissionSlot,
+				parentHash: parentHash,
+				payloadAttributes: beaconclient.PayloadAttributes{
+					PrevRandao: prevRandao,
+				},
+				withdrawalsRoot: phase0.Root(withdrawalsRoot),
+			}
+
+			// Prepare the request payload
+			req := new(common.VersionedSubmitBlockRequest)
+			requestPayloadJSONBytes := common.LoadGzippedBytes(t, payloadJSONFilename)
+			require.NoError(t, err)
+			err = json.Unmarshal(requestPayloadJSONBytes, req)
+			fmt.Println("json", string(requestPayloadJSONBytes))
+			t.Fail()
+			require.NoError(t, err)
+
+			// Update
+			switch req.Version { //nolint:exhaustive
+			case spec.DataVersionCapella:
+				req.Capella.Message.Slot = submissionSlot
+				req.Capella.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
+			case spec.DataVersionDeneb:
+				req.Deneb.Message.Slot = submissionSlot
+				req.Deneb.ExecutionPayload.Timestamp = uint64(submissionTimestamp)
+			default:
+				require.Fail(t, "unknown data version")
+			}
+
+			// Send JSON encoded request
+			reqJSONBytes, err := json.Marshal(req)
+			require.NoError(t, err)
+			require.Len(t, reqJSONBytes, testCase.data.jsonReqSize)
+			reqJSONBytes2, err := json.Marshal(req)
+			require.NoError(t, err)
+			require.Equal(t, reqJSONBytes, reqJSONBytes2)
+			rr := backend.requestBytes(http.MethodPost, path, reqJSONBytes, nil)
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+
+			// Send SSZ encoded request
+			reqSSZBytes, err := req.MarshalSSZ()
+			require.NoError(t, err)
+			require.Len(t, reqSSZBytes, testCase.data.sszReqSize)
+			rr = backend.requestBytes(http.MethodPost, path, reqSSZBytes, map[string]string{
+				"Content-Type": "application/octet-stream",
+			})
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+
+			// Send JSON+GZIP encoded request
+			headers := map[string]string{
+				"Content-Encoding": "gzip",
+			}
+			jsonGzip := gzipBytes(t, reqJSONBytes)
+			require.Len(t, jsonGzip, testCase.data.jsonGzipReqSize)
+			rr = backend.requestBytes(http.MethodPost, path, jsonGzip, headers)
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+
+			// Send SSZ+GZIP encoded request
+			headers = map[string]string{
+				"Content-Type":     "application/octet-stream",
+				"Content-Encoding": "gzip",
+			}
+
+			sszGzip := gzipBytes(t, reqSSZBytes)
+			require.Len(t, sszGzip, testCase.data.sszGzipReqSize)
+			rr = backend.requestBytes(http.MethodPost, path, sszGzip, headers)
+			require.Contains(t, rr.Body.String(), "invalid signature")
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+		})
+	}
+}
+
 func TestCheckSubmissionFeeRecipient(t *testing.T) {
 	cases := []struct {
 		description    string

@@ -9,11 +9,50 @@ import (
 	"strings"
 
 	fastSsz "github.com/ferranbt/fastssz"
+	"github.com/sirupsen/logrus"
 
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/sirupsen/logrus"
 )
+
+// VersionedSubmitBlockRequestWithPreconfsProofs is a wrapper struct
+// over `builderSpec.VersionedSubmitBlockRequest`
+// to include preconfirmation proofs
+type VersionedSubmitBlockRequestWithPreconfsProofs struct {
+	Inner  *VersionedSubmitBlockRequest `json:"inner"`
+	Proofs []*PreconfirmationWithProof  `json:"proofs"`
+}
+
+func (v *VersionedSubmitBlockRequestWithPreconfsProofs) String() string {
+	out, err := json.Marshal(v)
+	if err != nil {
+		return err.Error()
+	}
+	return string(out)
+}
+
+type BidWithPreconfirmationsProofs struct {
+	// The block bid
+	Bid *builderSpec.VersionedSignedBuilderBid `json:"bid"`
+	// The preconfirmations with proofs
+	Proofs []*PreconfirmationWithProof `json:"proofs"`
+}
+
+func (b *BidWithPreconfirmationsProofs) String() string {
+	out, err := json.Marshal(b)
+	if err != nil {
+		return err.Error()
+	}
+	return string(out)
+}
+
+func (p *PreconfirmationWithProof) String() string {
+	proofs, err := json.Marshal(p)
+	if err != nil {
+		return err.Error()
+	}
+	return string(proofs)
+}
 
 type HexBytes []byte
 
@@ -65,9 +104,11 @@ func (s *SerializedMerkleProof) FromFastSszProof(p *fastSsz.Proof) {
 	}
 }
 
-func (s *SerializedMerkleProof) ToFastSszProof() *fastSsz.Proof {
+// ToFastSszProof converts a SerializedMerkleProof to a fastssz.Proof.
+func (s *SerializedMerkleProof) ToFastSszProof(leaf []byte) *fastSsz.Proof {
 	p := &fastSsz.Proof{
 		Index:  s.Index,
+		Leaf:   leaf,
 		Hashes: make([][]byte, len(s.Hashes)),
 	}
 	for i, h := range s.Hashes {
@@ -83,37 +124,6 @@ type PreconfirmationWithProof struct {
 	TxHash phase0.Hash32 `ssz-size:"32" json:"txHash"`
 	// The Merkle proof of the preconfirmation
 	MerkleProof *SerializedMerkleProof `json:"merkleProof"`
-}
-
-func (p PreconfirmationWithProof) String() string {
-	out, err := json.Marshal(p)
-	if err != nil {
-		return err.Error()
-	}
-	return string(out)
-}
-
-// VersionedSubmitBlockRequestWithPreconfsProofs is a wrapper struct
-// over `builderSpec.VersionedSubmitBlockRequest`
-// to include preconfirmation proofs
-type VersionedSubmitBlockRequestWithPreconfsProofs struct {
-	Inner  *VersionedSubmitBlockRequest `json:"inner"`
-	Proofs []*PreconfirmationWithProof  `json:"proofs"`
-}
-
-func (v *VersionedSubmitBlockRequestWithPreconfsProofs) String() string {
-	out, err := json.Marshal(v)
-	if err != nil {
-		return err.Error()
-	}
-	return string(out)
-}
-
-type BidWithPreconfirmationsProofs struct {
-	// The block bid
-	Bid *builderSpec.VersionedSignedBuilderBid `json:"bid"`
-	// The preconfirmations with proofs
-	Proofs []*PreconfirmationWithProof `json:"proofs"`
 }
 
 func NewBoltLogger(service string) *logrus.Entry {
