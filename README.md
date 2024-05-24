@@ -72,6 +72,7 @@ different fault scenarios and how the system behaves.
 Make sure you have the following requirements on your machine:
 
 - [Docker engine](https://docs.docker.com/engine/install/) installed and running
+- [Just](https://github.com/casey/just) installed
 - [Kurtosis CLI](https://docs.kurtosis.com/install/) installed
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) installed
 
@@ -88,13 +89,13 @@ installed. Just run the following commands in your terminal:
 
 ```shell
 # build all necessary docker images locally first
-make build-images
+just build-images
 
 # spin up the kurtosis devnet on your machine
-make up
+just up
 
 # run the web demo servers.
-make demo
+just demo
 ```
 
 The web demo will be available on your browser at
@@ -103,16 +104,16 @@ The web demo will be available on your browser at
 ### Stopping the devnet and demo
 
 The demo app will remain open until you press `Ctrl+C` in the terminal where
-you ran the `make demo` command.
+you ran the `just demo` command.
 
 To stop the devnet, run the following command:
 
 ```shell
 # if you want to simply stop all running containers
-make down
+just down
 
 # if you want to remove all the data and stop the Kurtosis engine
-make clean
+just clean
 ```
 
 > [!WARNING]
