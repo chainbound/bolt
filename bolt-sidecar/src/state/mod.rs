@@ -1,7 +1,6 @@
 //! The `state` module is responsible for keeping a local copy of relevant state that is needed
 //! to simulate commitments against. It is updated on every block.
 use alloy_primitives::{Address, U256};
-use alloy_rpc_types::{Block, Transaction};
 use alloy_transport::TransportError;
 use futures::{stream::FuturesOrdered, StreamExt};
 use std::{collections::HashMap, time::Duration};
@@ -9,7 +8,7 @@ use thiserror::Error;
 
 use crate::{
     client::RpcClient,
-    common::{calculate_max_basefee, max_transaction_cost, validate_transaction},
+    common::{calculate_max_basefee, max_transaction_cost},
     template::BlockTemplate,
     types::{commitment::CommitmentRequest, AccountState},
 };
@@ -35,8 +34,6 @@ pub enum ValidationError {
     FeeTooLow(u128),
     #[error("Transaction nonce too low")]
     NonceTooLow,
-    #[error("Transaction nonce too high")]
-    NonceTooHigh,
     #[error("Not enough balance to pay for value + maximum fee")]
     InsufficientBalance,
     /// NOTE: this should not be exposed to the user.
@@ -93,9 +90,7 @@ impl<C: StateFetcher> State<C> {
 
         let CommitmentRequest::Inclusion(req) = request;
 
-        let sender = req.transaction.from;
-
-        // TODO: for now, we don't accept same-slot inclusion requests.
+        // NOTE: for now, we don't accept same-slot inclusion requests.
         // In the future, we can do this (up to a certain deadline like 6s-8s)
         if req.slot <= self.head {
             return Err(ValidationError::SlotTooLow(req.slot));
@@ -104,9 +99,11 @@ impl<C: StateFetcher> State<C> {
         // Check if the max_fee_per_gas would cover the maximum possible basefee.
         let slot_diff = req.slot - self.head;
 
-        // Calculate the max possible basefee given the slot diff
-        let max_basefee = calculate_max_basefee(self.basefee, slot_diff)
-            .ok_or(reject_internal("Overflow calculating max basefee"))?;
+        // TODO: guard against overflows etc?
+        // max_base_fee = current_base_fee * 1.125^block_diff
+        // let max_basefee = self.basefee as f64 * 1.125f64.powi(slot_diff as i32);
+
+        let max_basefee = calculate_max_basefee(self.basefee, slot_diff).expect("No overflow");
 
         // Validate the base fee
         if !req.validate_basefee(max_basefee) {
@@ -114,24 +111,35 @@ impl<C: StateFetcher> State<C> {
         }
 
         // If we have the account state, use it here
-        if let Some(account_state) = self.account_state(&sender) {
-            // Validate the transaction against the account state
-            validate_transaction(&account_state, &req.transaction)?;
+        if let Some(account_state) = self.account_state(&req.transaction.from) {
+            // If the transaction nonce is not higher than the current nonce, reject it
+            if req.transaction.nonce <= account_state.nonce {
+                return Err(ValidationError::NonceTooLow);
+            }
+
+            // Check if the balance is enough
+            if max_transaction_cost(&req.transaction) > account_state.balance {
+                return Err(ValidationError::InsufficientBalance);
+            }
         } else {
             // If we don't have the account state, we need to fetch it
             let account_state = self
                 .client
-                .get_account_state(&sender)
+                .get_account_state(&req.transaction.from)
                 .await
-                .map_err(|e| reject_internal(&e.to_string()))?;
-
-            self.account_states.insert(sender, account_state);
-
-            // Validate the transaction against the account state
-            validate_transaction(&account_state, &req.transaction)?;
+                .map_err(|e| ValidationError::Internal(e.to_string()));
         }
 
-        // self.block_template.Ok(())
+        // - Check if we're violating any of the address state
+        // - If not, insert the address state into the state
+
+        // // Get state update for the address at the current head block
+        // let update = self
+        //     .client
+        //     .get_state_update(Some(self.head), vec![address])
+        //     .await?;
+
+        // self.apply_state_update(self.head, update);
         Ok(())
     }
 
@@ -149,18 +157,6 @@ impl<C: StateFetcher> State<C> {
         self.apply_state_update(block_number, update);
 
         Ok(())
-    }
-
-    /// Commits the transaction to the current block template. Initializes a new block template
-    /// if one does not exist.
-    fn commit_transaction_to_block(&mut self, transaction: Transaction) {
-        if let Some(ref mut template) = self.block_template {
-            template.add_transaction(transaction);
-        } else {
-            let mut template = BlockTemplate::new();
-            template.add_transaction(transaction);
-            self.block_template = Some(template);
-        }
     }
 
     fn apply_state_update(&mut self, block_number: u64, update: StateUpdate) {
@@ -329,10 +325,6 @@ impl StateFetcher for StateClient {
 struct StateUpdate {
     account_states: HashMap<Address, AccountState>,
     min_basefee: u128,
-}
-
-fn reject_internal(reason: &str) -> ValidationError {
-    ValidationError::Internal(reason.to_string())
 }
 
 #[cfg(test)]

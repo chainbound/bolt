@@ -1,8 +1,6 @@
 use alloy_primitives::U256;
 use alloy_rpc_types::Transaction;
 
-use crate::{state::ValidationError, types::AccountState};
-
 /// Calculates the max_basefee `slot_diff` blocks in the future given a current basefee (in gwei).
 /// Returns None if an overflow would occur.
 /// Cfr. https://github.com/flashbots/ethers-provider-flashbots-bundle/blob/7ddaf2c9d7662bef400151e0bfc89f5b13e72b4c/src/index.ts#L308
@@ -37,30 +35,6 @@ pub fn max_transaction_cost(transaction: &Transaction) -> U256 {
     let fee_cap = fee_cap + transaction.max_priority_fee_per_gas.unwrap_or(0);
 
     U256::from(gas_limit * fee_cap) + transaction.value
-}
-
-/// This function validates a transaction against an account state. It checks 2 things:
-/// 1. The nonce of the transaction must be higher than the account's nonce, but not higher than current + 1.
-/// 2. The balance of the account must be higher than the transaction's max cost.
-pub fn validate_transaction(
-    account_state: &AccountState,
-    transaction: &Transaction,
-) -> Result<(), ValidationError> {
-    // Check if the nonce is correct
-    if transaction.nonce <= account_state.nonce {
-        return Err(ValidationError::NonceTooLow);
-    }
-
-    if transaction.nonce > account_state.nonce + 1 {
-        return Err(ValidationError::NonceTooHigh);
-    }
-
-    // Check if the balance is enough
-    if max_transaction_cost(transaction) > account_state.balance {
-        return Err(ValidationError::InsufficientBalance);
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]

@@ -7,9 +7,8 @@
 use std::collections::HashMap;
 
 use alloy_primitives::{Address, U256};
-use alloy_rpc_types::Transaction;
 
-use crate::common::max_transaction_cost;
+use crate::types::commitment::Commitment;
 
 /// A block template that serves as a fallback block, but is also used
 /// to keep intermediary state for new commitment requests.
@@ -23,7 +22,7 @@ use crate::common::max_transaction_cost;
 pub struct BlockTemplate {
     /// The state diffs per address given the list of commitments.
     state_diff: StateDiff,
-    transactions: Vec<Transaction>,
+    transactions: Vec<Commitment>,
 }
 
 impl BlockTemplate {
@@ -37,23 +36,6 @@ impl BlockTemplate {
     pub fn state_diff(&self) -> &StateDiff {
         &self.state_diff
     }
-
-    /// Adds a transaction to the block template and updates the state diff.
-    pub fn add_transaction(&mut self, transaction: Transaction) {
-        let max_cost = max_transaction_cost(&transaction);
-
-        // Update intermediate state
-        self.state_diff
-            .diffs
-            .entry(transaction.from)
-            .and_modify(|(nonce, balance)| {
-                *nonce += 1;
-                *balance += max_cost;
-            })
-            .or_insert((transaction.nonce, max_cost));
-
-        self.transactions.push(transaction);
-    }
 }
 
 /// StateDiff tracks the intermediate changes to the state according to the block template.
@@ -63,9 +45,6 @@ pub struct StateDiff {
 }
 
 impl StateDiff {
-    /// Returns a tuple of the nonce and balance diff for the given address.
-    /// The nonce diff should be added to the current nonce, the balance diff should be subtracted from
-    /// the current balance.
     pub fn get_diff(&self, address: &Address) -> Option<(u64, U256)> {
         self.diffs.get(address).copied()
     }
