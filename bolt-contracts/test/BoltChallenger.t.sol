@@ -104,7 +104,7 @@ contract BoltChallengerTest is Test {
         bytes32 timestampIdx = bytes32(uint256(block.timestamp % 8191));
         vm.store(beaconRootsContract, timestampIdx, bytes32(block.timestamp));
         vm.store(beaconRootsContract, bytes32(uint256(timestampIdx) + 8191), bytes32(uint256(123)));
-        
+
         // TEST: challenge opened successfully
         // Ignore beacon root verification for now as EIP-4788 is out of scope for this test
         vm.expectRevert(BeaconChainUtils.BeaconRootNotFound.selector);
