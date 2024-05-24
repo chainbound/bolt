@@ -1,4 +1,3 @@
-// This code is taken from https://github.com/chainbound/bolt/pull/11/files#diff-0fa8405accc1cdc5b108ba0210a8f1d99e25e1a5173e45e1516d73c294b061c4
 package api
 
 import (
@@ -10,6 +9,8 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/pkg/errors"
 )
+
+// These types are taken from https://github.com/chainbound/bolt/pull/11/files#diff-0fa8405accc1cdc5b108ba0210a8f1d99e25e1a5173e45e1516d73c294b061c4
 
 type SignedConstraintSubmission struct {
 	Message       *ConstraintSubmission
