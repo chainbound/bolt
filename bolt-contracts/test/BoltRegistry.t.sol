@@ -15,7 +15,7 @@ contract BoltRegistryTest is Test {
         registry = new BoltRegistry();
     }
 
-    function testAddBasedProposerToRegistry() public {
+    function testOptIn() public {
         vm.prank(alice);
         registry.optIn();
 
@@ -23,5 +23,42 @@ contract BoltRegistryTest is Test {
         assertEq(registry.isActiveBasedProposer(alice), true);
     }
 
-    // TODO: test opt out flow
+    function testOptOut() public {
+        assertEq(registry.isActiveBasedProposer(alice), false);
+        vm.expectRevert(IBoltRegistry.BasedProposerDoesNotExist.selector);
+        registry.getBasedProposerStatus(alice);
+
+        vm.prank(alice);
+        registry.optIn();
+        assertEq(registry.isActiveBasedProposer(alice), true);
+        assertEq(uint8(registry.getBasedProposerStatus(alice)), uint8(IBoltRegistry.BoltStatus.Active));
+
+        vm.prank(alice);
+        registry.beginOptOut();
+
+        assertEq(registry.isActiveBasedProposer(alice), true);
+        assertEq(uint8(registry.getBasedProposerStatus(alice)), uint8(IBoltRegistry.BoltStatus.Active));
+
+        // check that confirmation can't be done immediately
+        vm.expectRevert(IBoltRegistry.CooldownNotElapsed.selector);
+        vm.prank(alice);
+        registry.confirmOptOut();
+
+        // wait 1 day
+        vm.warp(block.timestamp + 1 days);
+
+        // check that opt out can be confirmed
+        vm.prank(alice);
+        vm.expectEmit(address(registry));
+        emit IBoltRegistry.BasedProposerStatusChanged(alice, IBoltRegistry.BoltStatus.Inactive);
+        registry.confirmOptOut();
+
+        assertEq(registry.isActiveBasedProposer(alice), false);
+        assertEq(uint8(registry.getBasedProposerStatus(alice)), uint8(IBoltRegistry.BoltStatus.Inactive));
+
+        // check that opt out can't be confirmed again
+        vm.expectRevert(IBoltRegistry.InvalidStatusChange.selector);
+        vm.prank(alice);
+        registry.confirmOptOut();
+    }
 }

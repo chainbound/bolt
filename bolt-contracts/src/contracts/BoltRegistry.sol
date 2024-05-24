@@ -50,6 +50,9 @@ contract BoltRegistry is IBoltRegistry {
         if (!basedProposer.isOptingOut) {
             revert InvalidStatusChange();
         }
+        if (basedProposer.status == BoltStatus.Inactive) {
+            revert InvalidStatusChange();
+        }
         if (block.timestamp < optOutTimestamps[msg.sender] + OPT_OUT_COOLDOWN) {
             revert CooldownNotElapsed();
         }
