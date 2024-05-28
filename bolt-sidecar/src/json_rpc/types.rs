@@ -2,31 +2,41 @@ use serde::{Deserialize, Serialize};
 use tracing::error;
 
 use super::api::PreconfirmationError;
+use crate::traits::Signable;
 
-pub type Slot = u64;
+/// Slot number type alias
+pub(crate) type Slot = u64;
 
+/// Parameters for a preconfirmation request.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct PreconfirmationRequestParams {
-    pub slot: Slot,
-    pub tx_hash: String,
-    pub raw_tx: String,
+pub(crate) struct PreconfirmationRequestParams {
+    pub(crate) tx: String,
+    pub(crate) slot: Slot,
+    pub(crate) signature: String,
 }
 
-impl PreconfirmationRequestParams {
-    pub fn as_bytes(&self) -> Vec<u8> {
+impl Signable for PreconfirmationRequestParams {
+    fn as_signable(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
+        bytes.extend_from_slice(&hex::decode(&self.tx[2..]).unwrap());
         bytes.extend_from_slice(&self.slot.to_be_bytes());
-        bytes.extend_from_slice(&hex::decode(&self.tx_hash[2..]).unwrap());
-        bytes.extend_from_slice(&hex::decode(&self.raw_tx[2..]).unwrap());
         bytes
     }
 }
 
+/// Response to a preconfirmation request.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct GetPreconfirmationsAtSlotParams {
-    pub slot: Slot,
+pub(crate) struct PreconfirmationResponse {
+    pub(crate) request: PreconfirmationRequestParams,
+    pub(crate) proposer_signature: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GetPreconfirmationsAtSlotParams {
+    pub(crate) slot: Slot,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -38,18 +48,18 @@ pub struct JsonRpcError {
 impl warp::reject::Reject for JsonRpcError {}
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct JsonRpcRequest {
-    pub jsonrpc: String,
-    pub id: String,
-    pub method: String,
-    pub params: serde_json::Value,
+pub(crate) struct JsonRpcRequest {
+    pub(crate) jsonrpc: String,
+    pub(crate) id: String,
+    pub(crate) method: String,
+    pub(crate) params: serde_json::Value,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct JsonRpcResponse {
-    pub jsonrpc: String,
-    pub id: String,
-    pub result: serde_json::Value,
+pub(crate) struct JsonRpcResponse {
+    pub(crate) jsonrpc: String,
+    pub(crate) id: String,
+    pub(crate) result: serde_json::Value,
 }
 
 impl From<eyre::Report> for JsonRpcError {

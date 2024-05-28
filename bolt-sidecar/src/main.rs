@@ -1,3 +1,13 @@
+#![doc = include_str!("../README.md")]
+#![warn(
+    missing_debug_implementations,
+    missing_docs,
+    unreachable_pub,
+    rustdoc::all
+)]
+#![deny(unused_must_use, rust_2018_idioms)]
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+
 use std::str::FromStr;
 
 use clap::Parser;
@@ -5,7 +15,7 @@ use eyre::Context;
 use tracing::{info, warn};
 
 mod json_rpc;
-use json_rpc::start_server;
+mod traits;
 
 #[derive(Parser)]
 struct Opts {
@@ -14,25 +24,21 @@ struct Opts {
     port: u16,
     /// Private key to use for signing preconfirmation requests.
     #[clap(short = 'k', long)]
-    private_key: Option<String>,
+    private_key: String,
 }
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     tracing_subscriber::fmt::init();
 
-    info!("Starting sidecar");
+    info!("Starting BOLT sidecar");
 
     let opts = Opts::parse();
 
-    let pk = if let Some(pk) = opts.private_key {
-        Some(secp256k1::SecretKey::from_str(&pk).context("Invalid private key")?)
-    } else {
-        warn!("No private key provided, preconfirmation requests will not be signed");
-        None
-    };
+    let pk = secp256k1::SecretKey::from_str(&opts.private_key)
+        .wrap_err("failed to parse private key")?;
 
-    let shutdown_tx = start_server(opts.port, pk).await?;
+    let shutdown_tx = json_rpc::start_server(opts.port, pk).await?;
 
     tokio::signal::ctrl_c().await?;
     shutdown_tx.send(()).await.ok();

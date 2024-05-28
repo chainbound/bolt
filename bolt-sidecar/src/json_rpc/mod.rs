@@ -15,7 +15,8 @@ use self::{
     types::{JsonRpcError, JsonRpcRequest, JsonRpcResponse},
 };
 
-pub async fn start_server(port: u16, pk: Option<SecretKey>) -> eyre::Result<mpsc::Sender<()>> {
+/// Entrypoint for the JSON-RPC server to start listening on the given port.
+pub(crate) async fn start_server(port: u16, pk: SecretKey) -> eyre::Result<mpsc::Sender<()>> {
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
     let cors = warp::cors().allow_any_origin().allow_method(Method::POST);
 
@@ -57,13 +58,14 @@ async fn handle_rpc_request(
     tracing::debug!(?req, "received rpc request");
 
     let res = match req.method.as_str() {
-        "eth_requestPreconfirmation" => rpc_api.request_preconfirmation(req.params).await?,
-        "eth_getPreconfirmations" => rpc_api.get_preconfirmation_requests(req.params).await?,
+        "bolt_inclusionPreconfirmation" => rpc_api.request_preconfirmation(req.params).await?,
+        "bolt_getPreconfirmations" => rpc_api.get_preconfirmation_requests(req.params).await?,
+
         _ => {
             error!(method = ?req.method, "RPC method not found");
             return Err(warp::reject::custom(JsonRpcError {
-                code: -32601,
                 message: format!("Method not found: {}", req.method),
+                code: -32601,
             }));
         }
     };
@@ -80,19 +82,19 @@ async fn handle_rejection(err: warp::Rejection) -> Result<impl warp::Reply, Infa
         Ok(warp::reply::json(e))
     } else if err.is_not_found() {
         Ok(warp::reply::json(&JsonRpcError {
-            code: -32601,
             message: "Resource not found".to_string(),
+            code: -32601,
         }))
     } else if let Some(e) = err.find::<warp::reject::MissingHeader>() {
         Ok(warp::reply::json(&JsonRpcError {
-            code: -32600,
             message: format!("Missing header: {}", e.name()),
+            code: -32600,
         }))
     } else {
         error!(?err, "unhandled rejection");
         Ok(warp::reply::json(&JsonRpcError {
-            code: -32000,
             message: "Internal error".to_string(),
+            code: -32000,
         }))
     }
 }

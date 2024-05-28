@@ -1,14 +1,13 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
+use alloy_primitives::keccak256;
 use parking_lot::RwLock;
-use secp256k1::{
-    hashes::{sha256, Hash},
-    Message, Secp256k1, SecretKey,
-};
+use secp256k1::SecretKey;
 use thiserror::Error;
-use tracing::info;
+use tracing::{debug, info};
 
 use super::types::{GetPreconfirmationsAtSlotParams, PreconfirmationRequestParams, Slot};
+use crate::{json_rpc::types::PreconfirmationResponse, traits::Signable};
 
 /// Default size of the preconfirmation cache (implemented as a LRU).
 const DEFAULT_PRECONFIRMATION_CACHE_SIZE: usize = 1000;
@@ -19,18 +18,22 @@ pub enum PreconfirmationError {
     Parse(#[from] serde_json::Error),
     #[error("failed to decode hex string: {0}")]
     DecodeHex(#[from] hex::FromHexError),
+    #[error("preconfirmation request already exists")]
+    Duplicate,
     #[error("failed while processing preconfirmation: {0}")]
     Custom(String),
 }
 
-pub struct JsonRpcApi {
+/// JSON-RPC API for handling preconfirmation requests.
+pub(crate) struct JsonRpcApi {
+    /// PERF: use a non-locking sharded cache for max performance
     cache: Arc<RwLock<lru::LruCache<Slot, Vec<PreconfirmationRequestParams>>>>,
-    private_key: Option<SecretKey>,
+    private_key: SecretKey,
 }
 
 impl JsonRpcApi {
     /// Create a new instance of the JSON-RPC API.
-    pub fn new(private_key: Option<SecretKey>) -> Self {
+    pub(crate) fn new(private_key: SecretKey) -> Self {
         let cap = NonZeroUsize::new(DEFAULT_PRECONFIRMATION_CACHE_SIZE).unwrap();
 
         Self {
@@ -41,7 +44,7 @@ impl JsonRpcApi {
 }
 
 #[async_trait::async_trait]
-pub trait PreconfirmationRpc {
+pub(crate) trait PreconfirmationRpc {
     async fn request_preconfirmation(
         &self,
         params: serde_json::Value,
@@ -66,48 +69,47 @@ impl PreconfirmationRpc for JsonRpcApi {
         };
 
         let params = serde_json::from_value::<PreconfirmationRequestParams>(params)?;
-        info!(?params, "received preconfirmation request");
+        debug!(?params, "received preconfirmation request");
 
-        // sanity checks: tx hash and raw tx must be valid hex strings
-        hex::decode(params.tx_hash.trim_start_matches("0x"))
+        let tx_bytes = hex::decode(params.tx.trim_start_matches("0x"))
             .map_err(PreconfirmationError::DecodeHex)?;
-        hex::decode(params.raw_tx.trim_start_matches("0x"))
-            .map_err(PreconfirmationError::DecodeHex)?;
-        if params.tx_hash.len() != 66 || params.raw_tx.len() % 2 != 0 {
+        let tx_hash = keccak256(tx_bytes);
+
+        if params.signature.len() != 130 {
             return Err(PreconfirmationError::Custom(
-                "tx hash and raw tx must be valid hex strings".to_string(),
+                "signature must be a valid hex string".to_string(),
+            ));
+        }
+
+        if params.tx.len() % 2 != 0 {
+            return Err(PreconfirmationError::Custom(
+                "tx must be a valid hex string".to_string(),
             ));
         }
 
         // sign the preconfirmation request object
-        let signature = if let Some(pk) = self.private_key {
-            let secp = Secp256k1::new();
-            let digest = sha256::Hash::hash(&params.as_bytes());
-            let message = Message::from_digest(digest.to_byte_array());
-            Some(secp.sign_ecdsa(&message, &pk).to_string())
-        } else {
-            None
-        };
+        let proposer_signature = params.sign_ecdsa(self.private_key);
 
         {
             let mut cache = self.cache.write();
-            if let Some(preconfs) = cache.get_mut(&params.slot) {
-                if preconfs.iter().any(|p| p.tx_hash == params.tx_hash) {
-                    return Err(PreconfirmationError::Custom(
-                        "this preconfirmation request already exists".to_string(),
-                    ));
+            if let Some(commitments) = cache.get_mut(&params.slot) {
+                if commitments.iter().any(|p| {
+                    let phash = keccak256(hex::decode(p.tx.trim_start_matches("0x")).unwrap());
+                    phash == tx_hash
+                }) {
+                    return Err(PreconfirmationError::Duplicate);
                 }
 
-                preconfs.push(params);
+                commitments.push(params.clone());
             } else {
-                cache.put(params.slot, vec![params]);
+                cache.put(params.slot, vec![params.clone()]);
             }
         } // Drop the lock
 
-        Ok(serde_json::json!({
-            "status": "ok",
-            "signature": signature,
-        }))
+        Ok(serde_json::to_value(PreconfirmationResponse {
+            request: params,
+            proposer_signature,
+        })?)
     }
 
     async fn get_preconfirmation_requests(
