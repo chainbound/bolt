@@ -3,6 +3,7 @@ package builder
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -26,6 +27,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	utilbellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
+	"github.com/chainbound/shardmap"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -49,6 +51,10 @@ const (
 	BlockResubmitIntervalDefault = 500 * time.Millisecond
 
 	SubmissionOffsetFromEndOfSlotSecondsDefault = 3 * time.Second
+)
+
+const (
+	SubscribeConstraintsPath = "/eth/v1/builder/constraints"
 )
 
 type PubkeyHex string
@@ -89,6 +95,8 @@ type Builder struct {
 	builderSigningDomain        phase0.Domain
 	builderResubmitInterval     time.Duration
 	discardRevertibleTxOnErr    bool
+
+	constraintsCache *shardmap.FIFOMap[uint64, Constraints]
 
 	limiter                       *rate.Limiter
 	submissionOffsetFromEndOfSlot time.Duration
@@ -187,6 +195,8 @@ func NewBuilder(args BuilderArgs) (*Builder, error) {
 		discardRevertibleTxOnErr:      args.discardRevertibleTxOnErr,
 		submissionOffsetFromEndOfSlot: args.submissionOffsetFromEndOfSlot,
 
+		constraintsCache: shardmap.NewFIFOMap[uint64, Constraints](64, 16, shardmap.HashUint64),
+
 		limiter:       args.limiter,
 		slotCtx:       slotCtx,
 		slotCtxCancel: slotCtxCancel,
@@ -242,18 +252,29 @@ func (b *Builder) Start() error {
 		return err
 	}
 
-	return b.SubscribeProposerConstraints()
+	b.SubscribeProposerConstraints()
+	return nil
 }
 
 // SubscribeProposerConstraints subscribes to the constraints made by Bolt proposers
-// which the builder pulls from relay using SSE.
-func (b *Builder) SubscribeProposerConstraints() error {
+// which the builder pulls from relay(s) using SSE.
+func (b *Builder) SubscribeProposerConstraints() {
 	// Check if `b.relay` is a RemoteRelayAggregator, if so we need to subscribe to
-	// the constraints made avaiable by all the relays
-	// relayAggregator, ok := b.relay.(*RemoteRelayAggregator)
+	// the constraints made available by all the relays
+	relayAggregator, ok := b.relay.(*RemoteRelayAggregator)
+	if ok {
+		for _, relay := range relayAggregator.relays {
+			go b.subscribeToRelayForConstraints(relay.Config().Endpoint)
+		}
+	} else {
+		go b.subscribeToRelayForConstraints(b.relay.Config().Endpoint)
+	}
+}
 
+// TODO: add builder authorization + gzip decompression
+func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error {
 	// Subscribe to constraints
-	resp, err := http.Get(b.relay.Config().Endpoint)
+	resp, err := http.Get(relayBaseEndpoint + SubscribeConstraintsPath)
 	if err != nil {
 		log.Error(fmt.Sprintf("Failed to connect to SSE server: %v", err))
 		return err
@@ -270,8 +291,37 @@ func (b *Builder) SubscribeProposerConstraints() error {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "data: ") {
 			data := strings.TrimPrefix(line, "data: ")
+
 			// We assume the data is the JSON representation of the constraints
 			fmt.Printf("Received: %s\n", data)
+			constraints := make(Constraints, 0, 8)
+			if err := json.Unmarshal([]byte(data), &constraints); err != nil {
+				log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))
+				continue
+			}
+			if len(constraints) == 0 {
+				log.Warn("Received 0 length list of constraints")
+				continue
+			}
+
+		OUTER:
+			for _, constraint := range constraints {
+				// For every constraint, we need to check if it has already been seen for the associated slot
+				slotConstraints, _ := b.constraintsCache.Get(constraint.Message.Slot)
+				if len(slotConstraints) == 0 {
+					// New constraint for this slot, add it in the map and continue with the next constraint
+					b.constraintsCache.Put(constraint.Message.Slot, Constraints{constraint})
+					continue
+				}
+				for _, slotConstraint := range slotConstraints {
+					if slotConstraint.Signature == constraint.Signature {
+						// The constraint has already been seen, we can continue with the next one
+						continue OUTER
+					}
+				}
+				// The constraint is new, we need to append it to the current list
+				b.constraintsCache.Put(constraint.Message.Slot, append(slotConstraints, constraint))
+			}
 		}
 	}
 
