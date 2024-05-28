@@ -28,7 +28,7 @@ contract BoltChallenger is IBoltChallenger {
 
     /// @notice The max number of slots that can pass after which a challenge cannot
     /// be opened anymore. This corresponds to about 1 day.
-    /// @dev This is a limiatation of the `BEACON_ROOTS` contract (see EIP-4788 for more info).
+    /// @dev This is a limitation of the `BEACON_ROOTS` contract (see EIP-4788 for more info).
     uint256 internal constant CHALLENGE_RETROACTIVE_TARGET_SLOT_WINDOW = 8190;
 
     /// @notice The address of the BoltRegistry contract
@@ -192,9 +192,7 @@ contract BoltChallenger is IBoltChallenger {
             // Part of the slashed amount will also be returned to the challenger as a reward.
             // This is the reason we don't have access control in this function.
             // TODO: slash the based proposer.
-            challenge.status = ChallengeStatus.Resolved;
-            payable(challenge.challenger).transfer(CHALLENGE_BOND);
-            emit ChallengeResolved(_challengeID, ChallengeResult.Success);
+            _onChallengeSuccess(_challengeID);
             return;
         }
 
@@ -212,11 +210,9 @@ contract BoltChallenger is IBoltChallenger {
         // Check that the nonce of the preconfirmed sender is valid (not too low)
         // at the time of the based proposer's slot.
         if (verifiedAccount.Nonce > challenge.signedCommitment.nonce) {
-            // consider the challenge unsuccessful: the user sent a transaction after the preconfirmation
-            // thus invalidating it: the proposer is not at fault.
-            challenge.status = ChallengeStatus.Resolved;
-            payable(challenge.basedProposer).transfer(CHALLENGE_BOND);
-            emit ChallengeResolved(_challengeID, ChallengeResult.Failure);
+            // consider the challenge unsuccessful: the user sent a transaction before
+            // the proposer could include it, as such it is not at fault.
+            _onChallengeFailure(_challengeID);
             return;
         }
 
@@ -225,9 +221,7 @@ contract BoltChallenger is IBoltChallenger {
         if (verifiedAccount.Balance < challenge.signedCommitment.gasUsed * verifiedHeader.BaseFee) {
             // consider the challenge unsuccessful: the user doesn't have enough balance to cover the gas
             // thus invalidating the preconfirmation: the proposer is not at fault.
-            challenge.status = ChallengeStatus.Resolved;
-            payable(challenge.basedProposer).transfer(CHALLENGE_BOND);
-            emit ChallengeResolved(_challengeID, ChallengeResult.Failure);
+            _onChallengeFailure(_challengeID);
             return;
         }
 
@@ -241,9 +235,7 @@ contract BoltChallenger is IBoltChallenger {
             // The block header timestamp is after the target slot, so the proposer didn't
             // honor the preconfirmation and the challenge is successful.
             // TODO: slash the based proposer
-            challenge.status = ChallengeStatus.Resolved;
-            payable(challenge.challenger).transfer(CHALLENGE_BOND);
-            emit ChallengeResolved(_challengeID, ChallengeResult.Success);
+            _onChallengeSuccess(_challengeID);
             return;
         }
 
@@ -254,15 +246,29 @@ contract BoltChallenger is IBoltChallenger {
         if (!isValid) {
             // The challenge was successful: the proposer failed to honor the preconfirmation
             // TODO: slash the based proposer
-            challenge.status = ChallengeStatus.Resolved;
-            payable(challenge.challenger).transfer(CHALLENGE_BOND);
-            emit ChallengeResolved(_challengeID, ChallengeResult.Success);
+            _onChallengeSuccess(_challengeID);
         } else {
             // The challenge was unsuccessful: the proposer honored the preconfirmation
-            challenge.status = ChallengeStatus.Resolved;
-            payable(challenge.basedProposer).transfer(CHALLENGE_BOND);
-            emit ChallengeResolved(_challengeID, ChallengeResult.Failure);
+            _onChallengeFailure(_challengeID);
         }
+    }
+
+    /// @notice Handle the success of a challenge
+    /// @param _challengeID The unique ID of the challenge
+    function _onChallengeSuccess(bytes32 _challengeID) internal {
+        Challenge storage challenge = challenges[_challengeID];
+        challenge.status = ChallengeStatus.Resolved;
+        payable(challenge.challenger).transfer(CHALLENGE_BOND);
+        emit ChallengeResolved(_challengeID, ChallengeResult.Success);
+    }
+
+    /// @notice Handle the failure of a challenge
+    /// @param _challengeID The unique ID of the challenge
+    function _onChallengeFailure(bytes32 _challengeID) internal {
+        Challenge storage challenge = challenges[_challengeID];
+        challenge.status = ChallengeStatus.Resolved;
+        payable(challenge.basedProposer).transfer(CHALLENGE_BOND);
+        emit ChallengeResolved(_challengeID, ChallengeResult.Failure);
     }
 
     /// @notice Fetch trustlessly valid block header data
@@ -314,10 +320,10 @@ contract BoltChallenger is IBoltChallenger {
 
         // The genelized index is the index of the merkle tree generated by the merkleization
         // process of a SSZ list of transactions. Since this list is dynamic and can be of maximum
-        // length of 2^20 = 1_048_576, the merkleization process fills the tree with empty hashes,
+        // length of 2^21 = 2_097_152, the merkleization process fills the tree with empty hashes,
         // therefore this number is an offset from where transactions hash tree root starts.
         // To read more, check out https://github.com/ethereum/consensus-specs/blob/dev/ssz/simple-serialize.md#merkleization
-        uint256 generalizedIndex = 1_048_576 + _transactionIndex;
+        uint256 generalizedIndex = 2_097_152 + _transactionIndex;
 
         bytes32 leaf = SSZContainers._transactionHashTreeRoot(_signedRawTransaction);
 
