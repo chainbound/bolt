@@ -139,3 +139,27 @@ func (v *VersionedSubmitBlockRequestWithPreconfsProofs) String() string {
 	}
 	return string(out)
 }
+
+// Constraints are a list of proposer constraints that a builder must satisfy
+// in order to produce a valid bid.
+// Reference: https://chainbound.github.io/bolt-docs/api/builder-api
+type Constraints = []*ConstraintSigned
+
+// Reference: https://chainbound.github.io/bolt-docs/api/builder-api
+type ConstraintSigned struct {
+	message   ConstraintMessage   `json:"message"`
+	signature phase0.BLSSignature `json:"signature"`
+}
+
+// Reference: https://chainbound.github.io/bolt-docs/api/builder-api
+type ConstraintMessage struct {
+	constraints    []*Constraint `json:"constraints"`
+	validatorIndex uint64        `json:"validator_index"`
+	slot           uint64        `json:"slot"`
+}
+
+// Reference: https://chainbound.github.io/bolt-docs/api/builder-api
+type Constraint struct {
+	index *uint64     `json:"index"`
+	tx    []*HexBytes `json:"tx"`
+}
