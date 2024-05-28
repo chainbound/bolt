@@ -147,19 +147,19 @@ type Constraints = []*ConstraintSigned
 
 // Reference: https://chainbound.github.io/bolt-docs/api/builder-api
 type ConstraintSigned struct {
-	message   ConstraintMessage   `json:"message"`
-	signature phase0.BLSSignature `json:"signature"`
+	Message   ConstraintMessage   `json:"message"`
+	Signature phase0.BLSSignature `json:"signature"`
 }
 
 // Reference: https://chainbound.github.io/bolt-docs/api/builder-api
 type ConstraintMessage struct {
-	constraints    []*Constraint `json:"constraints"`
-	validatorIndex uint64        `json:"validator_index"`
-	slot           uint64        `json:"slot"`
+	Constraints    []*Constraint `json:"constraints"`
+	ValidatorIndex uint64        `json:"validator_index"`
+	Slot           uint64        `json:"slot"`
 }
 
 // Reference: https://chainbound.github.io/bolt-docs/api/builder-api
 type Constraint struct {
-	index *uint64     `json:"index"`
-	tx    []*HexBytes `json:"tx"`
+	Index *uint64     `json:"index"`
+	Tx    []*HexBytes `json:"tx"`
 }

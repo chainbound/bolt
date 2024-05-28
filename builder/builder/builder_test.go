@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"net/http"
 	"slices"
 	"testing"
 	"time"
@@ -362,7 +363,7 @@ func TestBlockWithPreconfs(t *testing.T) {
 func TestGenerateSSZProofs(t *testing.T) {
 	raw := `["0x02f872833018240385e8d4a5100085e8d4a5100082520894deaddeaddeaddeaddeaddeaddeaddeaddeaddead8306942080c001a042696cf1ef039cf23f51b8348c7fcda961727dd6350992b06c6139cf2b66ed18a012252715233c0cb9803bf827942f619b4a6857a9bfb214ef2feba983d1b5ed0e","0x02f90176833018242585012a05f2008512a05f2000830249f0946c6340ba1dc72c59197825cd94eccc1f9c67416e80b901040cc7326300000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000008ffb6787e8ad80000000000000000000000000000b77d61ea79c7ea8bfa03d3604ce5eabfb95c2ab20000000000000000000000002c57d1cfc6d5f8e4182a56b4cf75421472ebaea4000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000001cd4af4a9bf33474c802d31790a195335f7a9ab8000000000000000000000000d676af79742bcaeb4a71cf62b85d5ba2d1deaf86c001a08d03bdca0c1647263ef73d916e949ccc53284c6fa208c3fa4f9ddfe67d9c45dfa055be5793b42f1818716276033eb36420fa4fb4e3efabd0bbb01c489f7d9cd43c","0x02f86c8330182404801b825208948943545177806ed17b9f23f0a21ee5948ecaa7768701e71eeda00c3080c001a05918a7b26059059e3fc130bfeb42707bcdab9efaabad518f02f062a5d79e0ae7a06c3f27be896c38ed49a6a943050680b8bb1544b77a4df75c62ef75b357b27c7b"]`
 
-	var transactionsRaw = new([]string)
+	transactionsRaw := new([]string)
 	if err := json.Unmarshal([]byte(raw), transactionsRaw); err != nil {
 		t.Fatal("failed decoding json txs", err)
 	}
@@ -446,7 +447,7 @@ func TestGenerateSSZProofs2(t *testing.T) {
 	require.NotNil(t, preconf)
 	preconfs := []*types.Transaction{preconf}
 
-	var transactionsRaw = new([]string)
+	transactionsRaw := new([]string)
 	err = json.Unmarshal([]byte(raw), transactionsRaw)
 	require.NoError(t, err)
 
@@ -524,4 +525,135 @@ func TestGenerateSSZProofs2(t *testing.T) {
 	}
 
 	t.Logf("[BOLT]: Generated %d merkle proofs for preconfirmed transactions", len(preconfirmationsProofs))
+}
+
+func TestSubscribeProposerConstraints(t *testing.T) {
+	// ------------ Start Builder setup ------------- //
+	const (
+		validatorDesiredGasLimit = 30_000_000
+		payloadAttributeGasLimit = 0
+		parentBlockGasLimit      = 29_000_000
+	)
+	expectedGasLimit := core.CalcGasLimit(parentBlockGasLimit, validatorDesiredGasLimit)
+
+	vsk, err := bls.SecretKeyFromBytes(hexutil.MustDecode("0x370bb8c1a6e62b2882f6ec76762a67b39609002076b95aae5b023997cf9b2dc9"))
+	require.NoError(t, err)
+	validator := &ValidatorPrivateData{
+		sk: vsk,
+		Pk: hexutil.MustDecode("0xb67d2c11bcab8c4394fc2faa9601d0b99c7f4b37e14911101da7d97077917862eed4563203d34b91b5cf0aa44d6cfa05"),
+	}
+
+	testBeacon := testBeaconClient{
+		validator: validator,
+		slot:      56,
+	}
+
+	feeRecipient, _ := utils.HexToAddress("0xabcf8e0d4e9587369b2301d0790347320302cc00")
+
+	relayPort := "31245"
+	relay := NewRemoteRelay(RelayConfig{Endpoint: "http://localhost:" + relayPort}, nil, true)
+
+	sk, err := bls.SecretKeyFromBytes(hexutil.MustDecode("0x31ee185dad1220a8c88ca5275e64cf5a5cb09cb621cb30df52c9bee8fbaaf8d7"))
+	require.NoError(t, err)
+
+	bDomain := ssz.ComputeDomain(ssz.DomainTypeAppBuilder, [4]byte{0x02, 0x0, 0x0, 0x0}, phase0.Root{})
+
+	testExecutableData := &engine.ExecutableData{
+		ParentHash:   common.Hash{0x02, 0x03},
+		FeeRecipient: common.Address(feeRecipient),
+		StateRoot:    common.Hash{0x07, 0x16},
+		ReceiptsRoot: common.Hash{0x08, 0x20},
+		LogsBloom:    types.Bloom{}.Bytes(),
+		Number:       uint64(10),
+		GasLimit:     expectedGasLimit,
+		GasUsed:      uint64(100),
+		Timestamp:    uint64(105),
+		ExtraData:    hexutil.MustDecode("0x0042fafc"),
+
+		BaseFeePerGas: big.NewInt(16),
+
+		BlockHash:    common.HexToHash("0x68e516c8827b589fcb749a9e672aa16b9643437459508c467f66a9ed1de66a6c"),
+		Transactions: [][]byte{},
+	}
+
+	testBlock, err := engine.ExecutableDataToBlock(*testExecutableData, nil, nil)
+	require.NoError(t, err)
+
+	testEthService := &testEthereumService{synced: true, testExecutableData: testExecutableData, testBlock: testBlock, testBlockValue: big.NewInt(10)}
+
+	builderArgs := BuilderArgs{
+		sk:                          sk,
+		ds:                          flashbotsextra.NilDbService{},
+		relay:                       relay,
+		builderSigningDomain:        bDomain,
+		eth:                         testEthService,
+		dryRun:                      false,
+		ignoreLatePayloadAttributes: false,
+		validator:                   nil,
+		beaconClient:                &testBeacon,
+		limiter:                     nil,
+		blockConsumer:               flashbotsextra.NilDbService{},
+	}
+
+	builder, err := NewBuilder(builderArgs)
+	require.NoError(t, err)
+
+	// ------------ End Builder setup ------------- //
+
+	// Attach the sseHandler to the relay port
+	constraintsPath := SubscribeConstraintsPath
+	http.HandleFunc(constraintsPath, sseConstraintsHandler)
+	go http.ListenAndServe(":"+relayPort, nil)
+
+	go builder.subscribeToRelayForConstraints(builder.relay.Config().Endpoint)
+	// Wait 2 seconds to save all constraints in cache
+	time.Sleep(2 * time.Second)
+
+	slots := []uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	for slot := range slots {
+		slot := uint64(slot)
+		constraints, ok := builder.constraintsCache.Get(slot)
+		if slot < 5 {
+			require.Equal(t, generateMockConstraintsForSlot(slot)[0], constraints[0])
+			require.Equal(t, true, ok)
+		} else {
+			require.Equal(t, false, ok)
+		}
+	}
+}
+
+func sseConstraintsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
+
+	for i := 0; i < 10; i++ {
+		fmt.Println("inside loop, flushing")
+		// Generate some duplicated constraints
+		slot := uint64(i) % 5
+		constraints := generateMockConstraintsForSlot(slot)
+		bytes, err := json.Marshal(constraints)
+		if err != nil {
+			log.Error(fmt.Sprintf("Error while marshaling constraints: %v", err))
+			return
+		}
+		fmt.Fprintf(w, "data: %s\n\n", string(bytes))
+		flusher.Flush()
+	}
+}
+
+func generateMockConstraintsForSlot(slot uint64) Constraints {
+	return Constraints{
+		&ConstraintSigned{
+			Message: ConstraintMessage{
+				Constraints: []*Constraint{}, ValidatorIndex: 0, Slot: slot,
+			}, Signature: phase0.BLSSignature{},
+		},
+	}
 }
