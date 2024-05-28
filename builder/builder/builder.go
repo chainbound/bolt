@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -237,7 +238,49 @@ func (b *Builder) Start() error {
 		}
 	}()
 
-	return b.relay.Start()
+	if err := b.relay.Start(); err != nil {
+		return err
+	}
+
+	return b.SubscribeProposerConstraints()
+}
+
+// SubscribeProposerConstraints subscribes to the constraints made by Bolt proposers
+// which the builder pulls from relay using SSE.
+func (b *Builder) SubscribeProposerConstraints() error {
+	// Check if `b.relay` is a RemoteRelayAggregator, if so we need to subscribe to
+	// the constraints made avaiable by all the relays
+	// relayAggregator, ok := b.relay.(*RemoteRelayAggregator)
+
+	// Subscribe to constraints
+	resp, err := http.Get(b.relay.Config().Endpoint)
+	if err != nil {
+		log.Error(fmt.Sprintf("Failed to connect to SSE server: %v", err))
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Error(fmt.Sprintf("Non-OK HTTP status: %s", resp.Status))
+		return err
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "data: ") {
+			data := strings.TrimPrefix(line, "data: ")
+			// We assume the data is the JSON representation of the constraints
+			fmt.Printf("Received: %s\n", data)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		log.Error(fmt.Sprintf("Error reading from server: %v", err))
+		return err
+	}
+
+	return nil
 }
 
 func (b *Builder) Stop() error {
