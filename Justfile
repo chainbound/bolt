@@ -4,12 +4,12 @@ default:
 
 # run the web demo locally
 demo:
-	chmod +x ./start-demo.sh
-	./start-demo.sh
+	chmod +x ./scripts/start-demo.sh
+	./scripts/start-demo.sh
 
 # spin up the bolt devnet
 up:
-	kurtosis run --enclave bolt-devnet github.com/chainbound/ethereum-package --args-file kurtosis_config.yaml
+	kurtosis run --enclave bolt-devnet github.com/chainbound/ethereum-package --args-file ./scripts/kurtosis_config.yaml
 
 # turn down the bolt devnet and remove the enclave
 down:
