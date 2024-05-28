@@ -1980,7 +1980,6 @@ func (api *RelayAPI) updateRedisBid(
 		return nil, nil, false
 	}
 
-	// TODO: verify proofs here
 	slotConstraints, _ := api.constraints.Get(api.headSlot.Load())
 	if slotConstraints != nil {
 		transactionsRoot, err := getHeaderResponse.TransactionsRoot()

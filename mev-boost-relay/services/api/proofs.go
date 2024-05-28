@@ -43,8 +43,6 @@ func (api *RelayAPI) verifyConstraintProofs(transactionsRoot phase0.Root, proofs
 
 			rawTx := constraint.RawTx
 
-			log.Infof("[BOLT]: Raw tx: %x", rawTx)
-
 			if len(rawTx) == 0 {
 				log.Warnf("[BOLT]: Raw tx is empty for tx hash %s", proof.TxHash.String())
 				continue
@@ -57,8 +55,6 @@ func (api *RelayAPI) verifyConstraintProofs(transactionsRoot phase0.Root, proofs
 				log.WithError(err).Error("[BOLT]: error getting tx hash tree root")
 				return ErrInvalidRoot
 			}
-
-			log.Infof("[BOLT]: Tx hash tree root: %x", txHashTreeRoot)
 
 			// Verify the proof
 			sszProof := proof.MerkleProof.ToFastSszProof(txHashTreeRoot[:])
