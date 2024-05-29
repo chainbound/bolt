@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/flashbots/go-boost-utils/utils"
 	"github.com/gorilla/handlers"
 	"github.com/holiman/uint256"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -613,7 +615,10 @@ func TestSubscribeProposerConstraints(t *testing.T) {
 	http.HandleFunc(SubscribeConstraintsPath, sseConstraintsHandler)
 	go http.ListenAndServe(":"+relayPort, gzipMux)
 
-	builder.subscribeToRelayForConstraints(builder.relay.Config().Endpoint)
+	// Create authentication signed message
+	authHeader, err := builder.GenerateAuthenticationHeader()
+	require.NoError(t, err)
+	builder.subscribeToRelayForConstraints(builder.relay.Config().Endpoint, authHeader)
 	// Wait 2 seconds to save all constraints in cache
 	time.Sleep(2 * time.Second)
 
@@ -630,7 +635,6 @@ func TestSubscribeProposerConstraints(t *testing.T) {
 	}
 }
 
-// TODO: add authorization checks
 func sseConstraintsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
@@ -640,6 +644,13 @@ func sseConstraintsHandler(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
+
+	auth := r.Header.Get("Authorization")
+	_, err := validateConstraintSubscriptionAuth(auth, 0)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
@@ -665,4 +676,49 @@ func generateMockConstraintsForSlot(slot uint64) Constraints {
 			}, Signature: phase0.BLSSignature{},
 		},
 	}
+}
+
+// validateConstraintSubscriptionAuth checks the authentication string data from the Builder,
+// and returns its BLS public key if the authentication is valid.
+func validateConstraintSubscriptionAuth(auth string, headSlot uint64) (phase0.BLSPubKey, error) {
+	zeroKey := phase0.BLSPubKey{}
+	if auth == "" {
+		return zeroKey, errors.New("authorization header missing")
+	}
+	// Authorization: <auth-scheme> <authorization-parameters>
+	parts := strings.Split(auth, " ")
+	if len(parts) != 2 {
+		return zeroKey, errors.New("ill-formed authorization header")
+	}
+	if parts[0] != "BOLT" {
+		return zeroKey, errors.New("not BOLT authentication scheme")
+	}
+	// <signatureJSON>,<authDataJSON>
+	parts = strings.SplitN(parts[1], ",", 2)
+	if len(parts) != 2 {
+		return zeroKey, errors.New("ill-formed authorization header")
+	}
+
+	signature := new(phase0.BLSSignature)
+	if err := signature.UnmarshalJSON([]byte(parts[0])); err != nil {
+		fmt.Println("Failed to unmarshal authData: ", err)
+		return zeroKey, errors.New("ill-formed authorization header")
+	}
+
+	authDataRaw := []byte(parts[1])
+	authData := new(ConstraintSubscriptionAuth)
+	if err := json.Unmarshal(authDataRaw, authData); err != nil {
+		fmt.Println("Failed to unmarshal authData: ", err)
+		return zeroKey, errors.New("ill-formed authorization header")
+	}
+
+	if headSlot != authData.Slot {
+		return zeroKey, errors.New("invalid head slot")
+	}
+
+	ok, err := bls.VerifySignatureBytes(authDataRaw, signature[:], authData.PublicKey[:])
+	if err != nil || !ok {
+		return zeroKey, errors.New("invalid signature")
+	}
+	return authData.PublicKey, nil
 }
