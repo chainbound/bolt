@@ -13,6 +13,8 @@ import (
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	consensusspec "github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	fastSsz "github.com/ferranbt/fastssz"
 )
 
@@ -177,4 +179,9 @@ func (c *ConstraintSubscriptionAuth) String() string {
 		return fmt.Sprintf("failed to marshal ConstraintSubscriptionAuth: %v", err)
 	}
 	return string(buf)
+}
+
+type ConstraintsDecoded = map[common.Hash]*struct {
+	Tx    *types.Transaction
+	Index *uint64
 }
