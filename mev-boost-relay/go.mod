@@ -1,6 +1,6 @@
 module github.com/flashbots/mev-boost-relay
 
-go 1.21
+go 1.22.2
 
 require (
 	github.com/NYTimes/gziphandler v1.1.1
@@ -12,7 +12,6 @@ require (
 	github.com/buger/jsonparser v1.1.1
 	github.com/ethereum/go-ethereum v1.13.15
 	github.com/flashbots/go-boost-utils v1.8.0
-	github.com/flashbots/go-utils v0.5.0
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
 	github.com/gorilla/mux v1.8.1
 	github.com/holiman/uint256 v1.2.4
@@ -20,19 +19,21 @@ require (
 	github.com/lib/pq v1.10.8
 	github.com/pkg/errors v0.9.1
 	github.com/r3labs/sse/v2 v2.10.0
+	github.com/chainbound/shardmap v0.0.2
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.8.4
 	github.com/tdewolff/minify v2.3.6+incompatible
+	github.com/thedevbirb/flashbots-go-utils v0.0.0-20240522160613-f4f36d8f39af
 	go.uber.org/atomic v1.11.0
 	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa
 	golang.org/x/text v0.14.0
+	gotest.tools v2.2.0+incompatible
 )
 
 require (
 	github.com/DataDog/zstd v1.5.2 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
-	github.com/VictoriaMetrics/fastcache v1.12.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.10.0 // indirect
 	github.com/cockroachdb/errors v1.9.1 // indirect
@@ -55,6 +56,7 @@ require (
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/golang/snappy v0.0.5-0.20220116011046-fa5810519dcb // indirect
+	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/uuid v1.3.1 // indirect
 	github.com/klauspost/compress v1.15.15 // indirect
 	github.com/kr/pretty v0.3.1 // indirect

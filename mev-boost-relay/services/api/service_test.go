@@ -1,14 +1,19 @@
 package api
 
 import (
+	"bufio"
 	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"log"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -31,6 +36,7 @@ import (
 	"github.com/holiman/uint256"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+	"gotest.tools/assert"
 )
 
 const (
@@ -275,6 +281,175 @@ func TestGetHeader(t *testing.T) {
 	// Check 3: Request returns 204 if sending a filtered user agent
 	rr = backend.requestWithUA(http.MethodGet, path, "mev-boost/v1.5.0 Go-http-client/1.1", nil)
 	require.Equal(t, http.StatusNoContent, rr.Code)
+}
+
+func TestSubmitConstraints(t *testing.T) {
+	// Setup backend with headSlot and genesisTime
+	backend := newTestBackend(t, 1)
+	backend.relay.genesisInfo = &beaconclient.GetGenesisResponse{
+		Data: beaconclient.GetGenesisResponseData{
+			GenesisTime: uint64(time.Now().UTC().Unix()),
+		},
+	}
+
+	// request params
+	slot := uint64(128)
+	backend.relay.headSlot.Store(slot)
+
+	// Setup mocked beacon client for proposer
+	beaconClient := beaconclient.NewMockBeaconInstance()
+
+	// Proposer data
+	proposerSecretKeyEC, proposerPublicKeyEC, err := bls.GenerateNewKeypair()
+	require.NoError(t, err)
+	proposerPublicKey, err := utils.BlsPublicKeyToPublicKey(proposerPublicKeyEC)
+	require.NoError(t, err)
+	proposerIndex := uint64(1)
+	mockValidatorEntry := beaconclient.ValidatorResponseEntry{
+		Index: proposerIndex, Balance: "1000000", Validator: beaconclient.ValidatorResponseValidatorData{Pubkey: proposerPublicKey.String()},
+	}
+
+	// Update beacon client, create MultiBeaconClient and refresh validators in the datastore
+	beaconClient.AddValidator(mockValidatorEntry)
+	logger := logrus.New()
+	loggerEntry := logrus.NewEntry(logger)
+
+	mockMultiBeaconClient := beaconclient.NewMockMultiBeaconClient(loggerEntry, []beaconclient.IBeaconInstance{beaconClient})
+
+	backend.relay.datastore.RefreshKnownValidators(backend.relay.log, mockMultiBeaconClient, slot)
+
+	// request path
+	path := "/eth/v1/builder/constraints"
+
+	txHash := _HexToHash("0xba40436abdc8adc037e2c92ea1099a5849053510c3911037ff663085ce44bc49")
+	rawTx := _HexToBytes("0x02f871018304a5758085025ff11caf82565f94388c818ca8b9251b393131c08a736a67ccb1929787a41bb7ee22b41380c001a0c8630f734aba7acb4275a8f3b0ce831cf0c7c487fd49ee7bcca26ac622a28939a04c3745096fa0130a188fa249289fd9e60f9d6360854820dba22ae779ea6f573f")
+
+	// Build the constraint
+	constraintSubmission := ConstraintSubmission{
+		Slot:   slot,
+		TxHash: txHash,
+		RawTx:  rawTx,
+	}
+	constraintSubmissionJSON, err := constraintSubmission.MarshalJSON()
+	require.NoError(t, err)
+	signatureEC := bls.Sign(proposerSecretKeyEC, constraintSubmissionJSON)
+	constraintSignature := phase0.BLSSignature(bls.SignatureToBytes(signatureEC)[:])
+	signedConstraintSubmission := SignedConstraintSubmission{Message: &constraintSubmission, Signature: constraintSignature, ProposerIndex: proposerIndex}
+	payload := []*SignedConstraintSubmission{&signedConstraintSubmission}
+
+	t.Run("Constraints sent", func(t *testing.T) {
+		ch := make(chan *ConstraintSubmission, 256)
+		backend.relay.constraintsConsumers = []chan *ConstraintSubmission{ch}
+		rr := backend.request(http.MethodPost, path, payload)
+		require.Equal(t, http.StatusOK, rr.Code)
+
+		constraintCache := backend.relay.constraints
+		slotConstraints, _ := constraintCache.Get(slot)
+		require.NotNil(t, slotConstraints)
+		expected := (*slotConstraints)[txHash]
+		actual := Constraint{RawTx: constraintSubmission.RawTx}
+		actualFromCh := <-backend.relay.constraintsConsumers[0]
+		actualConstraintFromCh := Constraint{RawTx: actualFromCh.RawTx}
+
+		require.Equal(t, expected, &actual, actualConstraintFromCh)
+	})
+
+	t.Run("Empty constraint list", func(t *testing.T) {
+		rr := backend.request(http.MethodPost, path, []SignedConstraintSubmission{})
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+}
+
+func TestSubscribeToConstraints(t *testing.T) {
+	backend := newTestBackend(t, 1)
+	path := "/relay/v1/builder/constraints"
+
+	// Create and start HTTP server.
+	// This will server the endpoint to subscribe to constraints via SSE
+	go func() {
+		backend.relay.srv = &http.Server{
+			Addr:    backend.relay.opts.ListenAddr,
+			Handler: backend.relay.getRouter(),
+
+			ReadTimeout:       time.Duration(apiReadTimeoutMs) * time.Millisecond,
+			ReadHeaderTimeout: time.Duration(apiReadHeaderTimeoutMs) * time.Millisecond,
+			WriteTimeout:      time.Duration(apiWriteTimeoutMs) * time.Millisecond,
+			IdleTimeout:       time.Duration(apiIdleTimeoutMs) * time.Millisecond,
+			MaxHeaderBytes:    apiMaxHeaderBytes,
+		}
+
+		t.Logf("Server starting on %s", backend.relay.opts.ListenAddr)
+		err := backend.relay.srv.ListenAndServe()
+		if errors.Is(err, http.ErrServerClosed) {
+			t.Log("Server closed")
+			return
+		}
+	}()
+
+	// Wait for the server to start
+	time.Sleep(500 * time.Millisecond)
+
+	// Setup information of the builder making the request
+	builderPrivateKey, builderPublicKey, err := bls.GenerateNewKeypair()
+	require.NoError(t, err)
+	var phase0BuilderPublicKey phase0.BLSPubKey = builderPublicKey.Bytes()
+
+	headSlot := backend.relay.headSlot.Load()
+	message, err := json.Marshal(ConstraintSubscriptionAuth{PublicKey: phase0BuilderPublicKey, Slot: headSlot})
+	require.NoError(t, err)
+	signatureEC := bls.Sign(builderPrivateKey, message)
+	subscriptionSignatureJSON := `"` + phase0.BLSSignature(bls.SignatureToBytes(signatureEC)[:]).String() + `"`
+
+	// Run the request in a goroutine so that it doesn't block the test,
+	// but it finishes as soon as the message is sent over the channel
+	go func() {
+		url := "http://" + backend.relay.opts.ListenAddr + path
+		req, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			log.Fatalf("Failed to create request: %v", err)
+		}
+
+		// Add authentication
+		authHeader := "BOLT " + subscriptionSignatureJSON + "," + string(message)
+		req.Header.Set("Authorization", authHeader)
+
+		// Send the request
+		client := &http.Client{}
+		// NOTE: this response arrives after the first data is flushed
+		resp, err := client.Do(req)
+		assert.Equal(t, err, nil)
+		assert.Equal(t, resp.StatusCode, http.StatusOK)
+		defer resp.Body.Close()
+
+		bufReader := bufio.NewReader(resp.Body)
+		for {
+			line, err := bufReader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					fmt.Println("End of stream")
+					break
+				}
+				log.Fatalf("Error reading from response body: %v", err)
+			}
+
+			if strings.HasPrefix(line, "data: ") {
+				data := strings.TrimPrefix(line, "data: ")
+				fmt.Printf("Received event: %s\n", data)
+			}
+		}
+	}()
+
+	// Wait for the HTTP request goroutine to start and add the consumer
+	time.Sleep(1 * time.Second)
+
+	// Now we can safely send the constraints, and we should get a response
+	// in the HTTP request defined in the goroutine above
+	backend.relay.constraintsConsumers[0] <- &ConstraintSubmission{}
+	time.Sleep(500 * time.Millisecond)
+	backend.relay.constraintsConsumers[0] <- &ConstraintSubmission{}
+
+	// Wait for the HTTP request goroutine to process the constraints
+	time.Sleep(2 * time.Second)
 }
 
 func TestBuilderApiGetValidators(t *testing.T) {

@@ -1,8 +1,11 @@
 package api
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 )
 
@@ -22,4 +25,17 @@ type HTTPErrorResp struct {
 
 type HTTPMessageResp struct {
 	Message string `json:"message"`
+}
+
+type ConstraintSubscriptionAuth struct {
+	PublicKey phase0.BLSPubKey `json:"publicKey"`
+	Slot      uint64           `json:"slot"`
+}
+
+func (c *ConstraintSubscriptionAuth) String() string {
+	buf, err := json.Marshal(c)
+	if err != nil {
+		return fmt.Sprintf("failed to marshal ConstraintSubscriptionAuth: %v", err)
+	}
+	return string(buf)
 }
