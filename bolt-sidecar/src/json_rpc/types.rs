@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use tracing::error;
 
 use super::api::PreconfirmationError;
-use crate::traits::Signable;
+use crate::bls::Signable;
 
 /// Slot number type alias
 pub(crate) type Slot = u64;

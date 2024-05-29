@@ -1,13 +1,14 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 
+use blst::min_pk::SecretKey;
 use bytes::Bytes;
-use secp256k1::SecretKey;
 use tokio::sync::mpsc;
 use tracing::{error, info};
 use warp::{http::Method, reject::Rejection, Filter};
 
 mod api;
+mod relays;
 mod types;
 
 use self::{
@@ -16,11 +17,15 @@ use self::{
 };
 
 /// Entrypoint for the JSON-RPC server to start listening on the given port.
-pub(crate) async fn start_server(port: u16, pk: SecretKey) -> eyre::Result<mpsc::Sender<()>> {
+pub(crate) async fn start_server(
+    port: u16,
+    pk: SecretKey,
+    relays: Vec<String>,
+) -> eyre::Result<mpsc::Sender<()>> {
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
     let cors = warp::cors().allow_any_origin().allow_method(Method::POST);
 
-    let rpc_api = Arc::new(api::JsonRpcApi::new(pk));
+    let rpc_api = Arc::new(api::JsonRpcApi::new(pk, relays));
 
     let rpc = warp::post()
         .and(warp::path::end())

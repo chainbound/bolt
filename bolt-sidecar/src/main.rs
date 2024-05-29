@@ -8,23 +8,23 @@
 #![deny(unused_must_use, rust_2018_idioms)]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
-use std::str::FromStr;
-
+use blst::min_pk::SecretKey;
 use clap::Parser;
-use eyre::Context;
 use tracing::{info, warn};
 
+mod bls;
 mod json_rpc;
-mod traits;
 
 #[derive(Parser)]
 struct Opts {
     /// Port to listen on for incoming JSON-RPC requests.
     #[clap(short = 'p', long, default_value = "8000")]
     port: u16,
-    /// Private key to use for signing preconfirmation requests.
+    /// BLS12_381 Private key to use for signing preconfirmation requests.
     #[clap(short = 'k', long)]
-    private_key: String,
+    bls_private_key: String,
+    /// List of Bolt-compliant PBS relay endpoints to connect to.
+    relays: Vec<String>,
 }
 
 #[tokio::main]
@@ -35,10 +35,18 @@ async fn main() -> eyre::Result<()> {
 
     let opts = Opts::parse();
 
-    let pk = secp256k1::SecretKey::from_str(&opts.private_key)
-        .wrap_err("failed to parse private key")?;
+    let pk = SecretKey::from_bytes(&hex::decode(opts.bls_private_key)?)
+        .map_err(|e| eyre::eyre!("failed to parse BLS private key: {:?}", e))?;
 
-    let shutdown_tx = json_rpc::start_server(opts.port, pk).await?;
+    if opts.relays.is_empty() {
+        warn!(
+            "No relay URLs provided, sidecar will not be able to submit preconfirmation requests"
+        );
+    } else {
+        info!("Connecting to relays: {:?}", opts.relays);
+    }
+
+    let shutdown_tx = json_rpc::start_server(opts.port, pk, opts.relays).await?;
 
     tokio::signal::ctrl_c().await?;
     shutdown_tx.send(()).await.ok();
