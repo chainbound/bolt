@@ -1980,6 +1980,20 @@ func (api *RelayAPI) updateRedisBid(
 		return nil, nil, false
 	}
 
+	slotConstraints, _ := api.constraints.Get(api.headSlot.Load())
+	if slotConstraints != nil {
+		transactionsRoot, err := getHeaderResponse.TransactionsRoot()
+		if err != nil {
+			api.RespondError(opts.w, http.StatusBadRequest, err.Error())
+			return nil, nil, false
+		}
+		err = api.verifyConstraintProofs(transactionsRoot, proofs, *slotConstraints)
+		if err != nil {
+			api.RespondError(opts.w, http.StatusBadRequest, err.Error())
+			return nil, nil, false
+		}
+	}
+
 	getPayloadResponse, err := common.BuildGetPayloadResponse(opts.payload)
 	if err != nil {
 		opts.log.WithError(err).Error("could not build getPayload response")
