@@ -2490,6 +2490,20 @@ func (api *RelayAPI) handleSubmitNewBlockWithPreconfs(w http.ResponseWriter, req
 		}
 	}
 
+	// BOLT: Send an event to the web demo
+	if len(payload.Proofs) > 0 {
+		slot, _ := payload.Inner.Slot()
+		message := fmt.Sprintf("BOLT-RELAY: received block bid with %d preconfirmations for slot %d", len(payload.Proofs), slot)
+		event := strings.NewReader(fmt.Sprintf("{ \"message\": \"%s\"}", message))
+		eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
+		if err != nil {
+			log.Error("Failed to log preconfirms event: ", err)
+		}
+		if eventRes != nil {
+			defer eventRes.Body.Close()
+		}
+	}
+
 	num, _ := payload.Inner.BlockNumber()
 	bhash, _ := payload.Inner.BlockHash()
 	api.boltLog.Infof("Got decoded payload from builder: \nPayload: %v\nBlock hash: %s\nBlockNum: %d\n", payload.Inner.String(), bhash, num)
