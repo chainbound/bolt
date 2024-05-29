@@ -26,6 +26,7 @@ import (
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/utils"
+	"github.com/gorilla/handlers"
 	"github.com/holiman/uint256"
 	"github.com/stretchr/testify/require"
 )
@@ -601,11 +602,18 @@ func TestSubscribeProposerConstraints(t *testing.T) {
 	// ------------ End Builder setup ------------- //
 
 	// Attach the sseHandler to the relay port
-	constraintsPath := SubscribeConstraintsPath
-	http.HandleFunc(constraintsPath, sseConstraintsHandler)
-	go http.ListenAndServe(":"+relayPort, nil)
+	mux := http.NewServeMux()
+	mux.HandleFunc(SubscribeConstraintsPath, sseConstraintsHandler)
 
-	go builder.subscribeToRelayForConstraints(builder.relay.Config().Endpoint)
+	// Wrap the mux with the GzipHandler middleware
+	// NOTE: In this case, we don't need to create a gzip writer in the handlers,
+	// by default the `http.ResponseWriter` will implement gzip compression
+	gzipMux := handlers.CompressHandler(mux)
+
+	http.HandleFunc(SubscribeConstraintsPath, sseConstraintsHandler)
+	go http.ListenAndServe(":"+relayPort, gzipMux)
+
+	builder.subscribeToRelayForConstraints(builder.relay.Config().Endpoint)
 	// Wait 2 seconds to save all constraints in cache
 	time.Sleep(2 * time.Second)
 
@@ -622,10 +630,12 @@ func TestSubscribeProposerConstraints(t *testing.T) {
 	}
 }
 
+// TODO: add authorization checks
 func sseConstraintsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Content-Encoding", "gzip")
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -634,7 +644,6 @@ func sseConstraintsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for i := 0; i < 10; i++ {
-		fmt.Println("inside loop, flushing")
 		// Generate some duplicated constraints
 		slot := uint64(i) % 5
 		constraints := generateMockConstraintsForSlot(slot)

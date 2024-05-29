@@ -2,10 +2,12 @@ package builder
 
 import (
 	"bufio"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"net/http"
@@ -271,10 +273,18 @@ func (b *Builder) SubscribeProposerConstraints() {
 	}
 }
 
-// TODO: add builder authorization + gzip decompression
+// TODO: add builder authorization
 func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error {
 	// Subscribe to constraints
-	resp, err := http.Get(relayBaseEndpoint + SubscribeConstraintsPath)
+	req, err := http.NewRequest(http.MethodGet, relayBaseEndpoint+SubscribeConstraintsPath, nil)
+	if err != nil {
+		log.Error(fmt.Sprintf("Failed to create new http request: %v", err))
+		return err
+	}
+	req.Header.Set("Accept-Encoding", "gzip")
+
+	client := http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		log.Error(fmt.Sprintf("Failed to connect to SSE server: %v", err))
 		return err
@@ -286,48 +296,66 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error
 		return err
 	}
 
-	scanner := bufio.NewScanner(resp.Body)
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "data: ") {
-			data := strings.TrimPrefix(line, "data: ")
+	var reader io.Reader
 
-			// We assume the data is the JSON representation of the constraints
-			fmt.Printf("Received: %s\n", data)
-			constraints := make(Constraints, 0, 8)
-			if err := json.Unmarshal([]byte(data), &constraints); err != nil {
-				log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))
-				continue
-			}
-			if len(constraints) == 0 {
-				log.Warn("Received 0 length list of constraints")
-				continue
-			}
-
-		OUTER:
-			for _, constraint := range constraints {
-				// For every constraint, we need to check if it has already been seen for the associated slot
-				slotConstraints, _ := b.constraintsCache.Get(constraint.Message.Slot)
-				if len(slotConstraints) == 0 {
-					// New constraint for this slot, add it in the map and continue with the next constraint
-					b.constraintsCache.Put(constraint.Message.Slot, Constraints{constraint})
-					continue
-				}
-				for _, slotConstraint := range slotConstraints {
-					if slotConstraint.Signature == constraint.Signature {
-						// The constraint has already been seen, we can continue with the next one
-						continue OUTER
-					}
-				}
-				// The constraint is new, we need to append it to the current list
-				b.constraintsCache.Put(constraint.Message.Slot, append(slotConstraints, constraint))
-			}
+	// Step 2: Check if the response is gzipped
+	if resp.Header.Get("Content-Encoding") == "gzip" {
+		// Step 3: Decompress the response body
+		gzipReader, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			return fmt.Errorf("error creating gzip reader: %v", err)
 		}
+		defer gzipReader.Close()
+		reader = gzipReader
+	} else {
+		reader = resp.Body
 	}
 
-	if err := scanner.Err(); err != nil {
-		log.Error(fmt.Sprintf("Error reading from server: %v", err))
-		return err
+	bufReader := bufio.NewReader(reader)
+	for {
+		line, err := bufReader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				fmt.Println("End of stream")
+				break
+			}
+			log.Error("Error reading from response body: %v", err)
+		}
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := strings.TrimPrefix(line, "data: ")
+
+		// We assume the data is the JSON representation of the constraints
+		fmt.Printf("Received: %s\n", data)
+		constraints := make(Constraints, 0, 8)
+		if err := json.Unmarshal([]byte(data), &constraints); err != nil {
+			log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))
+			continue
+		}
+		if len(constraints) == 0 {
+			log.Warn("Received 0 length list of constraints")
+			continue
+		}
+
+	OUTER:
+		for _, constraint := range constraints {
+			// For every constraint, we need to check if it has already been seen for the associated slot
+			slotConstraints, _ := b.constraintsCache.Get(constraint.Message.Slot)
+			if len(slotConstraints) == 0 {
+				// New constraint for this slot, add it in the map and continue with the next constraint
+				b.constraintsCache.Put(constraint.Message.Slot, Constraints{constraint})
+				continue
+			}
+			for _, slotConstraint := range slotConstraints {
+				if slotConstraint.Signature == constraint.Signature {
+					// The constraint has already been seen, we can continue with the next one
+					continue OUTER
+				}
+			}
+			// The constraint is new, we need to append it to the current list
+			b.constraintsCache.Put(constraint.Message.Slot, append(slotConstraints, constraint))
+		}
 	}
 
 	return nil
