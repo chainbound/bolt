@@ -98,15 +98,17 @@ func init() {
 	}
 
 	signer := types.LatestSigner(params.TestChainConfig)
-	tx1 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
-		ChainID:  params.TestChainConfig.ChainID,
-		Nonce:    0,
-		To:       &testUserAddress,
-		Value:    big.NewInt(1000),
-		Gas:      params.TxGas,
-		GasPrice: big.NewInt(params.InitialBaseFee),
-	})
-	pendingTxs = append(pendingTxs, tx1)
+	for i := 0; i < 100; i++ {
+		tx1 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
+			ChainID:  params.TestChainConfig.ChainID,
+			Nonce:    uint64(i),
+			To:       &testUserAddress,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: big.NewInt(params.InitialBaseFee),
+		})
+		pendingTxs = append(pendingTxs, tx1)
+	}
 
 	tx2 := types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
 		Nonce:    1,
@@ -130,7 +132,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	if alloc == nil {
 		alloc = defaultGenesisAlloc
 	}
-	var gspec = &core.Genesis{
+	gspec := &core.Genesis{
 		Config:   chainConfig,
 		GasLimit: gasLimit,
 		Alloc:    alloc,

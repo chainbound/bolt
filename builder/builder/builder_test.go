@@ -492,7 +492,7 @@ func TestGenerateSSZProofs2(t *testing.T) {
 	t.Logf("rootNode: %x", rootNode.Hash()) // e557527d9e7d97eaf4592637901e02a31c09c27d6076c27970799f418e47deab
 
 	// BOLT: calculate merkle proofs for preconfirmed transactions
-	preconfirmationsProofs := make([]*PreconfirmationWithProof, 0, len(preconfs))
+	preconfirmationsProofs := make([]*common.PreconfirmationWithProof, 0, len(preconfs))
 
 	for i, preconf := range preconfs {
 		// get the index of the preconfirmed transaction in the block
@@ -516,10 +516,10 @@ func TestGenerateSSZProofs2(t *testing.T) {
 		t.Logf("[BOLT]: Calculated merkle proof for preconf %s in %s", preconf.Hash(), time.Since(timeStart))
 		t.Logf("[BOLT]: LEAF: %x, Is leaf nil? %v", proof.Leaf, proof.Leaf == nil)
 
-		merkleProof := new(SerializedMerkleProof)
+		merkleProof := new(common.SerializedMerkleProof)
 		merkleProof.FromFastSszProof(proof)
 
-		preconfirmationsProofs = append(preconfirmationsProofs, &PreconfirmationWithProof{
+		preconfirmationsProofs = append(preconfirmationsProofs, &common.PreconfirmationWithProof{
 			TxHash:      phase0.Hash32(preconf.Hash()),
 			MerkleProof: merkleProof,
 		})
@@ -668,11 +668,11 @@ func sseConstraintsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func generateMockConstraintsForSlot(slot uint64) Constraints {
-	return Constraints{
-		&ConstraintSigned{
-			Message: ConstraintMessage{
-				Constraints: []*Constraint{}, ValidatorIndex: 0, Slot: slot,
+func generateMockConstraintsForSlot(slot uint64) common.Constraints {
+	return common.Constraints{
+		&common.ConstraintSigned{
+			Message: common.ConstraintMessage{
+				Constraints: []*common.Constraint{}, ValidatorIndex: 0, Slot: slot,
 			}, Signature: phase0.BLSSignature{},
 		},
 	}
@@ -706,7 +706,7 @@ func validateConstraintSubscriptionAuth(auth string, headSlot uint64) (phase0.BL
 	}
 
 	authDataRaw := []byte(parts[1])
-	authData := new(ConstraintSubscriptionAuth)
+	authData := new(common.ConstraintSubscriptionAuth)
 	if err := json.Unmarshal(authDataRaw, authData); err != nil {
 		fmt.Println("Failed to unmarshal authData: ", err)
 		return zeroKey, errors.New("ill-formed authorization header")

@@ -11,6 +11,7 @@ import (
 
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/flashbots/go-boost-utils/utils"
 )
@@ -183,7 +184,7 @@ func (r *RemoteRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, 
 	return nil
 }
 
-func (r *RemoteRelay) SubmitBlockWithPreconfsProofs(msg *VersionedSubmitBlockRequestWithPreconfsProofs, _ ValidatorData) error {
+func (r *RemoteRelay) SubmitBlockWithPreconfsProofs(msg *common.VersionedSubmitBlockRequestWithPreconfsProofs, _ ValidatorData) error {
 	log.Info("submitting block to remote relay", "endpoint", r.config.Endpoint)
 	endpoint := r.config.Endpoint + "/relay/v1/builder/blocks_with_preconfs"
 	if r.cancellationsEnabled {

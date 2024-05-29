@@ -8,6 +8,7 @@ import (
 	builderApiBellatrix "github.com/attestantio/go-builder-client/api/bellatrix"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,9 +25,9 @@ type testRelay struct {
 
 	requestedSlot             uint64
 	submittedMsg              *builderSpec.VersionedSubmitBlockRequest
-	submittedMsgWithPreconf   *VersionedSubmitBlockRequestWithPreconfsProofs
+	submittedMsgWithPreconf   *common.VersionedSubmitBlockRequestWithPreconfsProofs
 	submittedMsgCh            chan *builderSpec.VersionedSubmitBlockRequest
-	submittedMsgWithPreconfCh chan *VersionedSubmitBlockRequestWithPreconfsProofs
+	submittedMsgWithPreconfCh chan *common.VersionedSubmitBlockRequestWithPreconfsProofs
 }
 
 type testRelayAggBackend struct {
@@ -58,7 +59,7 @@ func (r *testRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, re
 	return r.sbError
 }
 
-func (r *testRelay) SubmitBlockWithPreconfsProofs(msg *VersionedSubmitBlockRequestWithPreconfsProofs, vd ValidatorData) error {
+func (r *testRelay) SubmitBlockWithPreconfsProofs(msg *common.VersionedSubmitBlockRequestWithPreconfsProofs, vd ValidatorData) error {
 	if r.submittedMsgWithPreconfCh != nil {
 		select {
 		case r.submittedMsgWithPreconfCh <- msg:

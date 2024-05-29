@@ -15,7 +15,7 @@ import (
 )
 
 type IEthereumService interface {
-	BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, preconfs []*types.Transaction) error
+	BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraints types.ConstraintsDecoded) error
 	GetBlockByHash(hash common.Hash) *types.Block
 	Config() *params.ChainConfig
 	Synced() bool
@@ -36,7 +36,7 @@ type testEthereumService struct {
 	testPreconfs       []*types.Transaction
 }
 
-func (t *testEthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, preconfs []*types.Transaction) error {
+func (t *testEthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraints types.ConstraintsDecoded) error {
 	sealedBlockCallback(t.testBlock, t.testBlockValue, t.testBlobSidecar, time.Now(), t.testBundlesMerged, t.testAllBundles, t.testUsedSbundles)
 	return nil
 }
@@ -60,19 +60,19 @@ func NewEthereumService(eth *eth.Ethereum) *EthereumService {
 }
 
 // TODO: we should move to a setup similar to catalyst local blocks & payload ids
-func (s *EthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, preconfs []*types.Transaction) error {
+func (s *EthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraints types.ConstraintsDecoded) error {
 	// Send a request to generate a full block in the background.
 	// The result can be obtained via the returned channel.
 	args := &miner.BuildPayloadArgs{
-		Parent:           attrs.HeadHash,
-		Timestamp:        uint64(attrs.Timestamp),
-		FeeRecipient:     attrs.SuggestedFeeRecipient,
-		GasLimit:         attrs.GasLimit,
-		Random:           attrs.Random,
-		Withdrawals:      attrs.Withdrawals,
-		BeaconRoot:       attrs.ParentBeaconBlockRoot,
-		BlockHook:        sealedBlockCallback,
-		Preconfirmations: preconfs,
+		Parent:       attrs.HeadHash,
+		Timestamp:    uint64(attrs.Timestamp),
+		FeeRecipient: attrs.SuggestedFeeRecipient,
+		GasLimit:     attrs.GasLimit,
+		Random:       attrs.Random,
+		Withdrawals:  attrs.Withdrawals,
+		BeaconRoot:   attrs.ParentBeaconBlockRoot,
+		BlockHook:    sealedBlockCallback,
+		Constraints:  constraints,
 	}
 
 	payload, err := s.eth.Miner().BuildPayload(args)
