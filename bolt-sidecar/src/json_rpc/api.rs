@@ -1,107 +1,112 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
+use blst::min_pk::SecretKey;
 use parking_lot::RwLock;
-use secp256k1::{
-    hashes::{sha256, Hash},
-    Message, Secp256k1, SecretKey,
-};
+use serde_json::Value;
 use thiserror::Error;
 use tracing::info;
 
-use super::types::{PreconfirmationRequestParams, Slot};
+use super::types::InclusionRequestParams;
+use crate::{bls::Signer, json_rpc::types::InclusionRequestResponse, types::Slot};
 
-/// Default size of the preconfirmation cache (implemented as a LRU).
-const DEFAULT_PRECONFIRMATION_CACHE_SIZE: usize = 1000;
+/// Default size of the api request cache (implemented as a LRU).
+const DEFAULT_API_REQUEST_CACHE_SIZE: usize = 1000;
 
+/// An error that can occur while processing any API request.
 #[derive(Error, Debug)]
-pub enum PreconfirmationError {
+pub enum ApiError {
     #[error("failed to parse JSON: {0}")]
     Parse(#[from] serde_json::Error),
     #[error("failed to decode hex string: {0}")]
     DecodeHex(#[from] hex::FromHexError),
-    #[error("failed while processing preconfirmation: {0}")]
+    #[error("duplicate: the same request already exists")]
+    DuplicateRequest,
+    #[error("failed while processing API request: {0}")]
     Custom(String),
 }
 
+/// Alias for the result of an API call that returns a JSON value.
+pub type JsonApiResult = Result<Value, ApiError>;
+
+/// The JSON-RPC API trait that defines the methods that can be called.
+#[async_trait::async_trait]
+pub trait CommitmentsRpc {
+    /// Request an inclusion commitment for a given slot.
+    async fn request_inclusion_commitment(&self, params: Value) -> JsonApiResult;
+}
+
+/// The struct that implements handlers for all JSON-RPC API methods.
+///
+/// # Functionality
+/// - We keep track of API requests in a local cache in order to avoid
+///   accepting duplicate commitments from users.
+/// - We also sign each request with a BLS signature to irrevocably bind
+///   the request to this sidecar's identity.
 pub struct JsonRpcApi {
-    cache: Arc<RwLock<lru::LruCache<Slot, Vec<PreconfirmationRequestParams>>>>,
-    private_key: Option<SecretKey>,
+    /// A cache of commitment requests.
+    cache: Arc<RwLock<lru::LruCache<Slot, Vec<InclusionRequestParams>>>>,
+    /// The BLS signer for this sidecar.
+    bls_signer: Signer,
 }
 
 impl JsonRpcApi {
     /// Create a new instance of the JSON-RPC API.
-    pub fn new(private_key: Option<SecretKey>) -> Self {
-        let cap = NonZeroUsize::new(DEFAULT_PRECONFIRMATION_CACHE_SIZE).unwrap();
+    pub fn new(private_key: SecretKey) -> Self {
+        let cap = NonZeroUsize::new(DEFAULT_API_REQUEST_CACHE_SIZE).unwrap();
 
         Self {
             cache: Arc::new(RwLock::new(lru::LruCache::new(cap))),
-            private_key,
+            bls_signer: Signer::new(private_key),
         }
     }
 }
 
 #[async_trait::async_trait]
-pub trait PreconfirmationRpc {
-    async fn request_preconfirmation(
-        &self,
-        params: serde_json::Value,
-    ) -> Result<serde_json::Value, PreconfirmationError>;
-}
-
-#[async_trait::async_trait]
-impl PreconfirmationRpc for JsonRpcApi {
-    async fn request_preconfirmation(
-        &self,
-        params: serde_json::Value,
-    ) -> Result<serde_json::Value, PreconfirmationError> {
+impl CommitmentsRpc for JsonRpcApi {
+    async fn request_inclusion_commitment(&self, params: Value) -> JsonApiResult {
         let Some(params) = params.as_array().and_then(|a| a.first()).cloned() else {
-            return Err(PreconfirmationError::Custom(
+            return Err(ApiError::Custom(
                 "request params must be an array with a single object".to_string(),
             ));
         };
 
-        let params = serde_json::from_value::<PreconfirmationRequestParams>(params)?;
-        info!(?params, "received preconfirmation request");
+        let params = serde_json::from_value::<InclusionRequestParams>(params)?;
+        info!(?params, "received inclusion commitment request");
 
-        // sanity checks: tx hash and raw tx must be valid hex strings
-        hex::decode(params.tx_hash.trim_start_matches("0x"))
-            .map_err(PreconfirmationError::DecodeHex)?;
-        hex::decode(params.raw_tx.trim_start_matches("0x"))
-            .map_err(PreconfirmationError::DecodeHex)?;
-        if params.tx_hash.len() != 66 || params.raw_tx.len() % 2 != 0 {
-            return Err(PreconfirmationError::Custom(
+        // parse the raw transaction bytes
+        hex::decode(params.tx.trim_start_matches("0x")).map_err(ApiError::DecodeHex)?;
+        if params.tx.len() % 2 != 0 {
+            return Err(ApiError::Custom(
                 "tx hash and raw tx must be valid hex strings".to_string(),
             ));
         }
 
-        // sign the preconfirmation request object
-        let signature = if let Some(pk) = self.private_key {
-            let secp = Secp256k1::new();
-            let digest = sha256::Hash::hash(&params.as_bytes());
-            let message = Message::from_digest(digest.to_byte_array());
-            Some(secp.sign_ecdsa(&message, &pk).to_string())
-        } else {
-            None
-        };
-
         {
             let mut cache = self.cache.write();
-            if let Some(preconfs) = cache.get_mut(&params.slot) {
-                if preconfs.iter().any(|p| p.tx_hash == params.tx_hash) {
-                    return Err(PreconfirmationError::Custom(
-                        "this preconfirmation request already exists".to_string(),
-                    ));
+            if let Some(commitments) = cache.get_mut(&params.slot) {
+                if commitments.iter().any(|p| p.tx == params.tx) {
+                    return Err(ApiError::DuplicateRequest);
                 }
 
-                preconfs.push(params);
+                commitments.push(params.clone());
             } else {
-                cache.put(params.slot, vec![params]);
+                cache.put(params.slot, vec![params.clone()]);
             }
         } // Drop the lock
 
-        Ok(serde_json::json!({
-            "status": "ok",
-            "signature": signature,
-        }))
+        // sign the commitment request object
+        let signature = hex::encode(self.bls_signer.sign(&params).to_bytes());
+
+        // TODO: simulate and check if the transaction can be included in the next block
+        // self.block_builder.try_append(params.slot, params.tx)
+
+        // TODO: check if there is enough time left in the current slot
+
+        // TODO: If valid, broadcast the commitment to all connected relays
+
+        Ok(serde_json::to_value(InclusionRequestResponse {
+            request: params,
+            signature,
+        })?)
     }
 }

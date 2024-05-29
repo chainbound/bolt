@@ -1,7 +1,7 @@
 use alloy_primitives::{Bytes, Signature, TxHash};
 use alloy_rpc_types::Transaction;
 
-use super::Slot;
+use crate::types::Slot;
 
 /// A request for a proposer commitment.
 ///
@@ -12,16 +12,6 @@ pub enum CommitmentRequest {
     /// Inclusion request.
     Inclusion(InclusionRequest),
 }
-
-// /// A request for inclusion, a.k.a. inclusion preconfirmation.
-// #[derive(Debug, Clone)]
-// pub struct InclusionRequest {
-//     pub slot: Slot,
-//     pub tx_hash: TxHash,
-//     pub raw_tx: Bytes,
-//     pub signature: Bytes,
-//     pub sender: Address,
-// }
 
 /// A request for inclusion, a.k.a. inclusion preconfirmation.
 #[derive(Debug, Clone)]

@@ -7,9 +7,12 @@ edition = "2021"
 # core
 clap = { version = "4.5.4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
-secp256k1 = { version = "0.29.0", features = ["hashes", "rand"] }
 warp = "0.3.7"
 futures = "0.3"
+
+# crypto
+secp256k1 = { version = "0.29.0", features = ["hashes", "rand"] }
+blst = "0.3.11"
 
 # alloy
 alloy-rpc-client = { git = "https://github.com/alloy-rs/alloy", features = [

@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use clap::Parser;
 
 #[derive(Parser)]
@@ -7,7 +5,7 @@ pub(super) struct Opts {
     /// Port to listen on for incoming JSON-RPC requests.
     #[clap(short = 'p', long)]
     pub(super) port: Option<u16>,
-    /// Private key to use for signing preconfirmation requests.
+    /// BLS private key to use for signing commitment requests.
     #[clap(short = 'k', long)]
     pub(super) private_key: String,
     /// Max commitments to accept per block.
@@ -17,7 +15,7 @@ pub(super) struct Opts {
 
 pub struct Config {
     pub rpc_port: u16,
-    pub private_key: secp256k1::SecretKey,
+    pub private_key: blst::min_pk::SecretKey,
     pub limits: Limits,
 }
 
@@ -25,14 +23,16 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             rpc_port: 8000,
-            private_key: secp256k1::SecretKey::new(&mut secp256k1::rand::thread_rng()),
+            private_key: blst::min_pk::SecretKey::default(),
             limits: Limits::default(),
         }
     }
 }
 
-impl From<Opts> for Config {
-    fn from(opts: Opts) -> Self {
+impl TryFrom<Opts> for Config {
+    type Error = eyre::Report;
+
+    fn try_from(opts: Opts) -> eyre::Result<Self> {
         // Start with default config
         let mut config = Config::default();
 
@@ -40,8 +40,8 @@ impl From<Opts> for Config {
             config.rpc_port = port;
         }
 
-        let private_key = secp256k1::SecretKey::from_str(&opts.private_key)
-            .expect("Invalid secpk256k1 private key");
+        let private_key = blst::min_pk::SecretKey::from_bytes(&hex::decode(opts.private_key)?)
+            .map_err(|e| eyre::eyre!("failed to parse private key: {:?}", e))?;
 
         config.private_key = private_key;
 
@@ -49,7 +49,7 @@ impl From<Opts> for Config {
             config.limits.max_commitments_per_block = max_commitments;
         }
 
-        config
+        Ok(config)
     }
 }
 
