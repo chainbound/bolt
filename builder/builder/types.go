@@ -163,3 +163,18 @@ type Constraint struct {
 	Index *uint64     `json:"index"`
 	Tx    []*HexBytes `json:"tx"`
 }
+
+// ConstraintSubscriptionAuth is the struct the builder signs over to authenticate
+// when subscribing to SSE constraint events from the relay
+type ConstraintSubscriptionAuth struct {
+	PublicKey phase0.BLSPubKey `json:"publicKey"`
+	Slot      uint64           `json:"slot"`
+}
+
+func (c *ConstraintSubscriptionAuth) String() string {
+	buf, err := json.Marshal(c)
+	if err != nil {
+		return fmt.Sprintf("failed to marshal ConstraintSubscriptionAuth: %v", err)
+	}
+	return string(buf)
+}
