@@ -69,7 +69,7 @@ type ValidatorData struct {
 
 type IRelay interface {
 	SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, vd ValidatorData) error
-	SubmitBlockWithPreconfsProofs(msg *VersionedSubmitBlockRequestWithPreconfsProofs, vd ValidatorData) error
+	SubmitBlockWithPreconfsProofs(msg *common.VersionedSubmitBlockRequestWithPreconfsProofs, vd ValidatorData) error
 	GetValidatorForSlot(nextSlot uint64) (ValidatorData, error)
 	Config() RelayConfig
 	Start() error
@@ -98,7 +98,7 @@ type Builder struct {
 	builderResubmitInterval     time.Duration
 	discardRevertibleTxOnErr    bool
 
-	constraintsCache *shardmap.FIFOMap[uint64, Constraints]
+	constraintsCache *shardmap.FIFOMap[uint64, common.Constraints]
 
 	limiter                       *rate.Limiter
 	submissionOffsetFromEndOfSlot time.Duration
@@ -197,7 +197,7 @@ func NewBuilder(args BuilderArgs) (*Builder, error) {
 		discardRevertibleTxOnErr:      args.discardRevertibleTxOnErr,
 		submissionOffsetFromEndOfSlot: args.submissionOffsetFromEndOfSlot,
 
-		constraintsCache: shardmap.NewFIFOMap[uint64, Constraints](64, 16, shardmap.HashUint64),
+		constraintsCache: shardmap.NewFIFOMap[uint64, common.Constraints](64, 16, shardmap.HashUint64),
 
 		limiter:       args.limiter,
 		slotCtx:       slotCtx,
@@ -262,7 +262,7 @@ func (b *Builder) Start() error {
 func (b *Builder) GenerateAuthenticationHeader() (string, error) {
 	// NOTE: I'm not 100% sure this is the correct way to retrieve the current slot
 	slot := b.slotAttrs.Slot
-	message, err := json.Marshal(ConstraintSubscriptionAuth{PublicKey: b.builderPublicKey, Slot: slot})
+	message, err := json.Marshal(common.ConstraintSubscriptionAuth{PublicKey: b.builderPublicKey, Slot: slot})
 	if err != nil {
 		log.Error(fmt.Sprintf("Failed to marshal auth message: %v", err))
 		return "", err
@@ -351,7 +351,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 
 		// We assume the data is the JSON representation of the constraints
 		fmt.Printf("Received: %s\n", data)
-		constraints := make(Constraints, 0, 8)
+		constraints := make(common.Constraints, 0, 8)
 		if err := json.Unmarshal([]byte(data), &constraints); err != nil {
 			log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))
 			continue
@@ -367,7 +367,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 			slotConstraints, _ := b.constraintsCache.Get(constraint.Message.Slot)
 			if len(slotConstraints) == 0 {
 				// New constraint for this slot, add it in the map and continue with the next constraint
-				b.constraintsCache.Put(constraint.Message.Slot, Constraints{constraint})
+				b.constraintsCache.Put(constraint.Message.Slot, common.Constraints{constraint})
 				continue
 			}
 			for _, slotConstraint := range slotConstraints {
@@ -384,13 +384,32 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 	return nil
 }
 
+func (b *Builder) GetPreconfirmedTransactionForSlot(slot uint64) types.ConstraintsDecoded {
+	constraintsDecoded := make(types.ConstraintsDecoded)
+	constraintsSigned, _ := b.constraintsCache.Get(slot)
+	for _, constraintSigned := range constraintsSigned {
+		constraints := constraintSigned.Message.Constraints
+		for _, constraint := range constraints {
+			decoded := new(types.Transaction)
+			if err := decoded.UnmarshalBinary(constraint.Tx); err != nil {
+				log.Error("Failed to decode preconfirmation transaction RLP: ", err)
+			}
+			constraintsDecoded[decoded.Hash()] = &struct {
+				Index *uint64
+				Tx    *types.Transaction
+			}{Index: constraint.Index, Tx: decoded}
+		}
+	}
+	return constraintsDecoded
+}
+
 func (b *Builder) Stop() error {
 	close(b.stop)
 	return nil
 }
 
 // BOLT: modify to calculate merkle inclusion proofs for preconfirmed transactions
-func (b *Builder) onSealedBlock(opts SubmitBlockOpts, preconfs []*types.Transaction) error {
+func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.ConstraintsDecoded) error {
 	executableData := engine.BlockToExecutableData(opts.Block, opts.BlockValue, opts.BlobSidecars)
 	var dataVersion spec.DataVersion
 	if b.eth.Config().IsCancun(opts.Block.Number(), opts.Block.Time()) {
@@ -423,12 +442,12 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, preconfs []*types.Transact
 	payloadTransactions := opts.Block.Transactions()
 
 	// BOLT: sanity check: verify that the block actually contains the preconfirmed transactions
-	for _, preconf := range preconfs {
-		if !slices.Contains(payloadTransactions, preconf) {
-			log.Error(fmt.Sprintf("[BOLT]: Preconfirmed transaction %s not found in block %s", preconf.Hash(), opts.Block.Hash()))
-			continue
-		}
-	}
+	// for _, preconf := range constraints {
+	// 	if !slices.Contains(payloadTransactions, preconf) {
+	// 		log.Error(fmt.Sprintf("[BOLT]: Preconfirmed transaction %s not found in block %s", preconf.Hash(), opts.Block.Hash()))
+	// 		continue
+	// 	}
+	// }
 
 	// BOLT: generate merkle tree from payload transactions (we need raw RLP bytes for this)
 	rawTxs := make([]bellatrix.Transaction, len(payloadTransactions))
@@ -454,13 +473,13 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, preconfs []*types.Transact
 	rootNode.Hash()
 
 	// BOLT: calculate merkle proofs for preconfirmed transactions
-	preconfirmationsProofs := make([]*PreconfirmationWithProof, 0, len(preconfs))
+	preconfirmationsProofs := make([]*common.PreconfirmationWithProof, 0, len(constraints))
 
-	for i, preconf := range preconfs {
+	for hash := range constraints {
 		// get the index of the preconfirmed transaction in the block
-		preconfIndex := slices.IndexFunc(payloadTransactions, func(tx *types.Transaction) bool { return tx.Hash() == preconf.Hash() })
+		preconfIndex := slices.IndexFunc(payloadTransactions, func(tx *types.Transaction) bool { return tx.Hash() == hash })
 		if preconfIndex == -1 {
-			log.Error(fmt.Sprintf("Preconfirmed transaction %s not found in block %s", preconf.Hash(), opts.Block.Hash()))
+			log.Error(fmt.Sprintf("Preconfirmed transaction %s not found in block %s", hash, opts.Block.Hash()))
 			log.Error(fmt.Sprintf("block has %v transactions", len(payloadTransactions)))
 			continue
 		}
@@ -469,26 +488,26 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, preconfs []*types.Transact
 		generalizedIndex := int(math.Pow(float64(2), float64(21))) + preconfIndex
 
 		log.Info(fmt.Sprintf("[BOLT]: Calculating merkle proof for preconfirmed transaction %s with index %d. Preconf index: %d",
-			preconf.Hash(), generalizedIndex, preconfIndex))
+			hash, generalizedIndex, preconfIndex))
 
 		timeStart := time.Now()
 		proof, err := rootNode.Prove(generalizedIndex)
 		if err != nil {
-			log.Error("[BOLT]: could not calculate merkle proof for preconfirmed transaction", "txHash", preconf.Hash(), "err", err)
+			log.Error("[BOLT]: could not calculate merkle proof for preconfirmed transaction", "txHash", hash, "err", err)
 			continue
 		}
-		log.Info(fmt.Sprintf("[BOLT]: Calculated merkle proof for preconf %s in %s", preconf.Hash(), time.Since(timeStart)))
+		log.Info(fmt.Sprintf("[BOLT]: Calculated merkle proof for preconf %s in %s", hash, time.Since(timeStart)))
 		log.Info(fmt.Sprintf("[BOLT]: LEAF: %x, Is leaf nil? %v", proof.Leaf, proof.Leaf == nil))
 
-		merkleProof := new(SerializedMerkleProof)
+		merkleProof := new(common.SerializedMerkleProof)
 		merkleProof.FromFastSszProof(proof)
 
-		preconfirmationsProofs = append(preconfirmationsProofs, &PreconfirmationWithProof{
-			TxHash:      phase0.Hash32(preconf.Hash()),
+		preconfirmationsProofs = append(preconfirmationsProofs, &common.PreconfirmationWithProof{
+			TxHash:      phase0.Hash32(hash),
 			MerkleProof: merkleProof,
 		})
 
-		log.Info(fmt.Sprintf("[BOLT]: Added merkle proof for preconfirmed transaction %s", preconfirmationsProofs[i]))
+		// log.Info(fmt.Sprintf("[BOLT]: Added merkle proof for preconfirmed transaction %s", preconfirmationsProofs[i]))
 	}
 
 	versionedBlockRequest, err := b.getBlockRequest(executableData, dataVersion, &blockBidMsg)
@@ -497,7 +516,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, preconfs []*types.Transact
 		return err
 	}
 
-	versionedBlockRequestWithPreconfsProofs := &VersionedSubmitBlockRequestWithPreconfsProofs{
+	versionedBlockRequestWithPreconfsProofs := &common.VersionedSubmitBlockRequestWithPreconfsProofs{
 		Inner:  versionedBlockRequest,
 		Proofs: preconfirmationsProofs,
 	}
@@ -677,12 +696,9 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 
 	log.Debug("runBuildingJob", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp))
 
-	// fetch preconfs here
-	preconfs, err := b.eth.Preconfirmations(b.boltCCEndpoint, attrs.Slot)
-	log.Info("[BOLT]: Got preconfirmations", "preconfs", len(preconfs))
-	if err != nil {
-		log.Error("[BOLT]: could not get preconfirmations", "err", err)
-	}
+	// fetch constraints here
+	constraints := b.GetPreconfirmedTransactionForSlot(attrs.Slot)
+	log.Info("[BOLT]: Got preconfirmations", "preconfs", len(constraints))
 
 	submitBestBlock := func() {
 		queueMu.Lock()
@@ -700,7 +716,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 				ValidatorData:     vd,
 				PayloadAttributes: attrs,
 			}
-			err := b.onSealedBlock(submitBlockOpts, preconfs)
+			err := b.onSealedBlock(submitBlockOpts, constraints)
 
 			if err != nil {
 				log.Error("could not run sealed block hook", "err", err)
@@ -756,7 +772,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 			"slot", attrs.Slot,
 			"parent", attrs.HeadHash,
 			"resubmit-interval", b.builderResubmitInterval.String())
-		err := b.eth.BuildBlock(attrs, blockHook, preconfs)
+		err := b.eth.BuildBlock(attrs, blockHook, constraints)
 		if err != nil {
 			log.Warn("Failed to build block", "err", err)
 		}
