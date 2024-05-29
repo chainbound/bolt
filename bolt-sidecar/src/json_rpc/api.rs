@@ -1,13 +1,20 @@
-use std::{num::NonZeroUsize, sync::Arc};
+use std::{num::NonZeroUsize, str::FromStr, sync::Arc};
 
-use blst::min_pk::SecretKey;
+use alloy_consensus::TxEnvelope;
+use alloy_eips::eip2718::Decodable2718;
+use alloy_primitives::Signature;
 use parking_lot::RwLock;
+use secp256k1::SecretKey;
 use serde_json::Value;
 use thiserror::Error;
 use tracing::info;
 
 use super::types::InclusionRequestParams;
-use crate::{bls::Signer, json_rpc::types::InclusionRequestResponse, types::Slot};
+use crate::{
+    crypto::{SignableECDSA, Signer},
+    json_rpc::types::InclusionRequestResponse,
+    types::Slot,
+};
 
 /// Default size of the api request cache (implemented as a LRU).
 const DEFAULT_API_REQUEST_CACHE_SIZE: usize = 1000;
@@ -21,6 +28,10 @@ pub enum ApiError {
     DecodeHex(#[from] hex::FromHexError),
     #[error("duplicate: the same request already exists")]
     DuplicateRequest,
+    #[error("signature error: {0}")]
+    Signature(#[from] alloy_primitives::SignatureError),
+    #[error("failed to decode RLP: {0}")]
+    Rlp(#[from] alloy_rlp::Error),
     #[error("failed while processing API request: {0}")]
     Custom(String),
 }
@@ -45,8 +56,8 @@ pub trait CommitmentsRpc {
 pub struct JsonRpcApi {
     /// A cache of commitment requests.
     cache: Arc<RwLock<lru::LruCache<Slot, Vec<InclusionRequestParams>>>>,
-    /// The BLS signer for this sidecar.
-    bls_signer: Signer,
+    /// The signer for this sidecar.
+    signer: Signer,
 }
 
 impl JsonRpcApi {
@@ -56,7 +67,7 @@ impl JsonRpcApi {
 
         Self {
             cache: Arc::new(RwLock::new(lru::LruCache::new(cap))),
-            bls_signer: Signer::new(private_key),
+            signer: Signer::new(private_key),
         }
     }
 }
@@ -74,28 +85,35 @@ impl CommitmentsRpc for JsonRpcApi {
         info!(?params, "received inclusion commitment request");
 
         // parse the raw transaction bytes
-        hex::decode(params.tx.trim_start_matches("0x")).map_err(ApiError::DecodeHex)?;
-        if params.tx.len() % 2 != 0 {
+        let hex_decoded_tx = hex::decode(params.message.tx.trim_start_matches("0x"))?;
+        let transaction = TxEnvelope::decode_2718(&mut hex_decoded_tx.as_slice())?;
+        let tx_sender = transaction.recover_signer()?;
+
+        // validate the user's signature
+        let user_sig = Signature::from_str(params.signature.trim_start_matches("0x"))?;
+        let signer_address = user_sig.recover_address_from_msg(params.message.digest().as_ref())?;
+
+        if signer_address != tx_sender {
             return Err(ApiError::Custom(
-                "tx hash and raw tx must be valid hex strings".to_string(),
+                "commitment signature does not match the transaction sender".to_string(),
             ));
         }
 
         {
             let mut cache = self.cache.write();
-            if let Some(commitments) = cache.get_mut(&params.slot) {
-                if commitments.iter().any(|p| p.tx == params.tx) {
+            if let Some(commitments) = cache.get_mut(&params.message.slot) {
+                if commitments.iter().any(|p| p == &params) {
                     return Err(ApiError::DuplicateRequest);
                 }
 
                 commitments.push(params.clone());
             } else {
-                cache.put(params.slot, vec![params.clone()]);
+                cache.put(params.message.slot, vec![params.clone()]);
             }
         } // Drop the lock
 
         // sign the commitment request object
-        let signature = hex::encode(self.bls_signer.sign(&params).to_bytes());
+        let sidecar_signature = self.signer.sign_ecdsa(&params).to_string();
 
         // TODO: simulate and check if the transaction can be included in the next block
         // self.block_builder.try_append(params.slot, params.tx)
@@ -106,7 +124,36 @@ impl CommitmentsRpc for JsonRpcApi {
 
         Ok(serde_json::to_value(InclusionRequestResponse {
             request: params,
-            signature,
+            signature: sidecar_signature,
         })?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Value;
+
+    use super::{CommitmentsRpc, JsonApiResult};
+
+    struct MockCommitmentsRpc;
+
+    #[async_trait::async_trait]
+    impl CommitmentsRpc for MockCommitmentsRpc {
+        async fn request_inclusion_commitment(&self, _params: Value) -> JsonApiResult {
+            Ok(Value::Null)
+        }
+    }
+
+    #[tokio::test]
+    async fn test_request_inclusion_commitment() {
+        let rpc = MockCommitmentsRpc;
+        let params = serde_json::json!([{
+            "slot": 1,
+            "tx": "0x1234",
+            "signature": "0x5678",
+        }]);
+
+        let result = rpc.request_inclusion_commitment(params).await;
+        assert!(result.is_ok());
     }
 }

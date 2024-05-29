@@ -2,8 +2,8 @@ use std::convert::Infallible;
 use std::sync::Arc;
 
 use api::JsonRpcApi;
-use blst::min_pk::SecretKey;
 use bytes::Bytes;
+use secp256k1::SecretKey;
 use tokio::sync::mpsc;
 use tracing::{error, info};
 use warp::{http::Method, reject::Rejection, Filter};

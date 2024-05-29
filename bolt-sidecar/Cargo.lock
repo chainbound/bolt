@@ -763,7 +763,6 @@ dependencies = [
  "alloy-transport-http",
  "alloy-transport-ws",
  "async-trait",
- "blst",
  "bytes",
  "clap",
  "eyre",

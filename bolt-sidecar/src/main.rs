@@ -6,16 +6,15 @@
 use clap::Parser;
 use tracing::info;
 
-mod bls;
 mod client;
 mod common;
 mod config;
+mod crypto;
 mod json_rpc;
 mod pubsub;
 mod state;
 mod template;
 mod types;
-use json_rpc::start_server;
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
@@ -27,7 +26,7 @@ async fn main() -> eyre::Result<()> {
 
     let config = config::Config::try_from(opts)?;
 
-    let shutdown_tx = start_server(config.rpc_port, config.private_key).await?;
+    let shutdown_tx = json_rpc::start_server(config.rpc_port, config.private_key).await?;
 
     tokio::signal::ctrl_c().await?;
     shutdown_tx.send(()).await.ok();
