@@ -154,7 +154,7 @@ export default function Home() {
                   Please wait a few minutes for it to activate.
                 </small>
 
-                <Progress value={newSlotNumber} max={128} />
+                <Progress value={(newSlotNumber / 128) * 100} />
               </div>
             </div>
           )}
