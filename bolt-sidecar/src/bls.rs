@@ -43,6 +43,7 @@ impl Signer {
         obj.sign(&self.key)
     }
 
+    #[allow(dead_code)]
     pub fn verify<T: Signable>(&self, obj: &T, signature: &Signature, pubkey: &PublicKey) -> bool {
         obj.verify(signature, pubkey)
     }
@@ -54,6 +55,10 @@ mod tests {
 
     use super::Signable;
     use crate::bls::Signer;
+
+    fn test_bls_secret_key() -> SecretKey {
+        SecretKey::key_gen(&[0u8; 32], &[]).unwrap()
+    }
 
     struct TestSignableData {
         data: Vec<u8>,
@@ -67,12 +72,12 @@ mod tests {
 
     #[test]
     fn test_signer() {
-        let key = SecretKey::key_gen(&[], &[]).unwrap();
+        let key = test_bls_secret_key();
         let pubkey = key.sk_to_pk();
         let signer = Signer::new(key);
 
         let msg = TestSignableData {
-            data: b"hello world".to_vec(),
+            data: vec![1, 2, 3, 4],
         };
 
         let signature = signer.sign(&msg);
