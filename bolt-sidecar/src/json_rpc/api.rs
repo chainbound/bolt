@@ -93,6 +93,8 @@ impl CommitmentsRpc for JsonRpcApi {
         let user_sig = Signature::from_str(params.signature.trim_start_matches("0x"))?;
         let signer_address = user_sig.recover_address_from_msg(params.message.digest().as_ref())?;
 
+        // TODO: relax this check to allow for external signers to request commitments
+        // about transactions that they did not sign themselves
         if signer_address != tx_sender {
             return Err(ApiError::Custom(
                 "commitment signature does not match the transaction sender".to_string(),
