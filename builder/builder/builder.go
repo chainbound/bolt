@@ -384,8 +384,8 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 	return nil
 }
 
-func (b *Builder) GetPreconfirmedTransactionForSlot(slot uint64) types.ConstraintsDecoded {
-	constraintsDecoded := make(types.ConstraintsDecoded)
+func (b *Builder) GetPreconfirmedTransactionForSlot(slot uint64) types.HashToConstraintDecoded {
+	constraintsDecoded := make(types.HashToConstraintDecoded)
 	constraintsSigned, _ := b.constraintsCache.Get(slot)
 	for _, constraintSigned := range constraintsSigned {
 		constraints := constraintSigned.Message.Constraints
@@ -394,10 +394,8 @@ func (b *Builder) GetPreconfirmedTransactionForSlot(slot uint64) types.Constrain
 			if err := decoded.UnmarshalBinary(constraint.Tx); err != nil {
 				log.Error("Failed to decode preconfirmation transaction RLP: ", err)
 			}
-			constraintsDecoded[decoded.Hash()] = &struct {
-				Index *uint64
-				Tx    *types.Transaction
-			}{Index: constraint.Index, Tx: decoded}
+			sender := decoded.Sender()
+			constraintsDecoded[decoded.Hash()] = &types.ConstraintDecoded{Index: constraint.Index, Tx: decoded}
 		}
 	}
 	return constraintsDecoded
@@ -409,7 +407,7 @@ func (b *Builder) Stop() error {
 }
 
 // BOLT: modify to calculate merkle inclusion proofs for preconfirmed transactions
-func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.ConstraintsDecoded) error {
+func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToConstraintDecoded) error {
 	executableData := engine.BlockToExecutableData(opts.Block, opts.BlockValue, opts.BlobSidecars)
 	var dataVersion spec.DataVersion
 	if b.eth.Config().IsCancun(opts.Block.Number(), opts.Block.Time()) {

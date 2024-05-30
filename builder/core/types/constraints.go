@@ -6,7 +6,10 @@ import "github.com/ethereum/go-ethereum/common"
 // `common.Hash`, `Transaction` and it's used in both the builder
 // package and the miner package, here it's a good place for now
 
-type ConstraintsDecoded = map[common.Hash]*struct {
-	Index *uint64
-	Tx    *Transaction
-}
+type (
+	HashToConstraintDecoded = map[common.Hash]*ConstraintDecoded
+	ConstraintDecoded       struct {
+		Index *uint64
+		Tx    *Transaction
+	}
+)
