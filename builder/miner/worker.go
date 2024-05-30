@@ -644,7 +644,7 @@ func (w *worker) mainLoop() {
 				blobTxs := newTransactionsByPriceAndNonce(w.current.signer, nil, nil, nil, w.current.header.BaseFee)  // Empty bag, don't bother optimising
 
 				tcount := w.current.tcount
-				w.commitTransactions(w.current, plainTxs, blobTxs, nil)
+				w.commitTransactions(w.current, plainTxs, blobTxs, nil, nil)
 
 				// Only update the snapshot if any new transactions were added
 				// to the pending block
@@ -1017,14 +1017,49 @@ func (w *worker) commitBundle(env *environment, txs []*types.Transaction, interr
 	return nil
 }
 
-func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, interrupt *atomic.Int32) error {
+// commitTransactions applies sorted transactions to the current environment, updating the state
+// and creating the resulting block
+//
+// Assumptions:
+//   - there are no nonce-conflicting transactions between `plainTxs`, `blobTxs` and the constraints
+//   - all transaction are correctly signed
+func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, constraints types.HashToConstraintDecoded, interrupt *atomic.Int32) error {
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
 	}
 	var coalescedLogs []*types.Log
 
+	constraintsTotalGasLeft := uint64(0)
+	constraintsTotalBlobGasLeft := uint64(0)
+
+	constraintsOrderedByIndex := make([]*types.ConstraintDecoded, 0, len(constraints))
+
+	for _, constraint := range constraints {
+		constraintsTotalGasLeft += constraint.Tx.Gas()
+		constraintsTotalBlobGasLeft += constraint.Tx.BlobGas()
+		constraintsOrderedByIndex = append(constraintsOrderedByIndex, constraint)
+	}
+
+	// The ordering is the following: first txs sorted by index, then the ones without it
+	sort.Slice(constraintsOrderedByIndex, func(i, j int) bool {
+		a := constraintsOrderedByIndex[i]
+		b := constraintsOrderedByIndex[j]
+		if a.Index == nil {
+			return false
+		} else if b.Index == nil {
+			return true
+		} else {
+			return *a.Index < *b.Index
+		}
+	})
+
+	var currentIndex uint64
+
 	for {
+		// `env.tcount` starts from 0 so it's correct to use it as the current index
+		currentIndex = uint64(env.tcount)
+
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
 			if signal := interrupt.Load(); signal != commitInterruptNone {
@@ -1036,102 +1071,160 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 			log.Trace("Not enough gas for further transactions", "have", env.gasPool, "want", params.TxGas)
 			break
 		}
+
+		blobGasLeft := uint64(params.MaxBlobGasPerBlock - env.blobs*params.BlobTxBlobGasPerBlob)
+
 		// If we don't have enough blob space for any further blob transactions,
 		// skip that list altogether
-		if !blobTxs.Empty() && env.blobs*params.BlobTxBlobGasPerBlob >= params.MaxBlobGasPerBlock {
+		if !blobTxs.Empty() && blobGasLeft <= 0 {
 			log.Trace("Not enough blob space for further blob transactions")
 			blobTxs.Clear()
 			// Fall though to pick up any plain txs
 		}
 		// Retrieve the next transaction and abort if all done.
 		var (
-			ltx  *txpool.LazyTransaction
-			txs  *transactionsByPriceAndNonce
-			pltx *txpool.LazyTransaction
-			ptip *uint256.Int
-			bltx *txpool.LazyTransaction
-			btip *uint256.Int
+			lazyTx      *txpool.LazyTransaction
+			txs         *transactionsByPriceAndNonce
+			plainLazyTx *txpool.LazyTransaction
+			plainTxTip  *uint256.Int
+			blobLazyTx  *txpool.LazyTransaction
+			blobTxTip   *uint256.Int
 		)
 
-		pTxWithMinerFee := plainTxs.Peek()
-		if pTxWithMinerFee != nil {
-			pltx = pTxWithMinerFee.Tx()
-			ptip = pTxWithMinerFee.fees
+		if pTxWithMinerFee := plainTxs.Peek(); pTxWithMinerFee != nil {
+			plainLazyTx = pTxWithMinerFee.Tx()
+			plainTxTip = pTxWithMinerFee.fees
 		}
 
-		bTxWithMinerFee := blobTxs.Peek()
-		if bTxWithMinerFee != nil {
-			bltx = bTxWithMinerFee.Tx()
-			btip = bTxWithMinerFee.fees
+		if bTxWithMinerFee := blobTxs.Peek(); bTxWithMinerFee != nil {
+			blobLazyTx = bTxWithMinerFee.Tx()
+			blobTxTip = bTxWithMinerFee.fees
 		}
 
 		switch {
-		case pltx == nil:
-			txs, ltx = blobTxs, bltx
-		case bltx == nil:
-			txs, ltx = plainTxs, pltx
+		case plainLazyTx == nil:
+			txs, lazyTx = blobTxs, blobLazyTx
+		case blobLazyTx == nil:
+			txs, lazyTx = plainTxs, plainLazyTx
 		default:
-			if ptip.Lt(btip) {
-				txs, ltx = blobTxs, bltx
+			if plainTxTip.Lt(blobTxTip) {
+				txs, lazyTx = blobTxs, blobLazyTx
 			} else {
-				txs, ltx = plainTxs, pltx
+				txs, lazyTx = plainTxs, plainLazyTx
 			}
 		}
 
-		if ltx == nil {
-			break
+		type candidateTx struct {
+			tx           *types.Transaction
+			isConstraint bool
+		}
+		// candidate is the transaction we should execute in this cycle of the loop
+		var candidate struct {
+			tx           *types.Transaction
+			isConstraint bool
 		}
 
-		// If we don't have enough space for the next transaction, skip the account.
-		if env.gasPool.Gas() < ltx.Gas {
-			log.Trace("Not enough gas left for transaction", "hash", ltx.Hash, "left", env.gasPool.Gas(), "needed", ltx.Gas)
-			txs.Pop()
-			continue
+		var constraintTx *types.ConstraintDecoded
+		if len(constraintsOrderedByIndex) > 0 {
+			constraintTx = constraintsOrderedByIndex[0]
 		}
-		if left := uint64(params.MaxBlobGasPerBlock - env.blobs*params.BlobTxBlobGasPerBlob); left < ltx.BlobGas {
-			log.Trace("Not enough blob gas left for transaction", "hash", ltx.Hash, "left", left, "needed", ltx.BlobGas)
-			txs.Pop()
-			continue
+
+		isSomePoolTxLeft := lazyTx != nil
+
+		isThereConstraintWithThisIndex := constraintTx != nil && constraintTx.Index != nil && *constraintTx.Index == currentIndex
+		if isThereConstraintWithThisIndex {
+			candidate = candidateTx{tx: common.Shift(&constraintsOrderedByIndex).Tx, isConstraint: true}
+		} else {
+			if isSomePoolTxLeft {
+				// Check if there enough gas left for this tx
+				if constraintsTotalGasLeft+lazyTx.Gas > env.gasPool.Gas() || constraintsTotalBlobGasLeft+lazyTx.BlobGas > blobGasLeft {
+					// Skip this tx and try to fit one with less gas.
+					// Drop all consecutive transactions from the same sender because of `nonce-too-high` clause.
+					log.Debug("Could not find transactions gas with the remaining constraints, account skipped", "hash", lazyTx.Hash)
+					txs.Pop()
+					// Edge case:
+					//
+					// Assumption: suppose sender A sends tx T_1 with nonce 1, and T_2 with nonce 2, and T_2 is a constraint.
+					//
+					//
+					// When running the block building algorithm I first have to make sure to reserve enough gas for the constraints.
+					// This implies that when a pooled tx comes I have to check if there is enough gas for it while taking into account
+					// the rest of the remaining constraint gas to allocate.
+					// Suppose there is no gas for the pooled tx T_1, then I have to drop it and consequently drop every tx from the same
+					// sender with higher nonce due to "nonce-too-high" issues, including T_2.
+					// But then, I have dropped a constraint which means my bid is invalid.
+					//
+					// FIXME: for the PoC we're not handling this
+
+					// Repeat the loop to try to find another pool transaction
+					continue
+				}
+				// We can safely consider the pool tx as the candidate,
+				// since by assumption it is not nonce-conflicting
+				tx := lazyTx.Resolve()
+				if tx == nil {
+					log.Trace("Ignoring evicted transaction", "hash", lazyTx.Hash)
+					txs.Pop()
+					continue
+				}
+				candidate = candidateTx{tx: lazyTx.Resolve(), isConstraint: false}
+			} else {
+				// No more pool tx left, we can add the unindexed ones if available
+				if len(constraintsOrderedByIndex) == 0 {
+					// No more constraints left, we can safely exit
+					break
+				}
+				// Unindexed tx are last in the list
+				c := constraintsOrderedByIndex[len(constraintsOrderedByIndex)-1]
+				if c.Index == nil {
+					// To recap, this means:
+					// 1. there are no more pool tx left
+					// 2. there are no more constraints without an index
+					// 3. the remaining indexes, if any, cannot be satisfied
+					// As such, we can safely exist
+					break
+				}
+				candidate = candidateTx{tx: c.Tx, isConstraint: true}
+			}
 		}
-		// Transaction seems to fit, pull it up from the pool
-		tx := ltx.Resolve()
-		if tx == nil {
-			log.Trace("Ignoring evicted transaction", "hash", ltx.Hash)
-			txs.Pop()
-			continue
-		}
-		// Error may be ignored here. The error has already been checked
-		// during transaction acceptance is the transaction pool.
-		from, _ := types.Sender(env.signer, tx)
+
+		// Error may be ignored here, see assumption
+		from, _ := types.Sender(env.signer, candidate.tx)
 
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
-		if tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number) {
-			log.Trace("Ignoring replay protected transaction", "hash", ltx.Hash, "eip155", w.chainConfig.EIP155Block)
+		if candidate.tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number) {
+			log.Trace("Ignoring replay protected transaction", "hash", lazyTx.Hash, "eip155", w.chainConfig.EIP155Block)
 			txs.Pop()
 			continue
 		}
 		// Start executing the transaction
-		env.state.SetTxContext(tx.Hash(), env.tcount)
+		env.state.SetTxContext(candidate.tx.Hash(), env.tcount)
 
-		logs, err := w.commitTransaction(env, tx)
+		logs, err := w.commitTransaction(env, candidate.tx)
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
-			log.Trace("Skipping transaction with low nonce", "hash", ltx.Hash, "sender", from, "nonce", tx.Nonce())
-			txs.Shift()
+			log.Trace("Skipping transaction with low nonce", "hash", lazyTx.Hash, "sender", from, "nonce", candidate.tx.Nonce())
+			if !candidate.isConstraint {
+				txs.Shift()
+			}
 
 		case errors.Is(err, nil):
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
-			txs.Shift()
+			if !candidate.isConstraint {
+				txs.Shift()
+			}
 
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.
-			log.Debug("Transaction failed, account skipped", "hash", ltx.Hash, "err", err)
-			txs.Pop()
+			log.Debug("Transaction failed, account skipped", "hash", lazyTx.Hash, "err", err)
+			if !candidate.isConstraint {
+				txs.Pop()
+			}
 		}
 	}
 	if !w.isRunning() && len(coalescedLogs) > 0 {
@@ -1154,17 +1247,17 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 
 // generateParams wraps various of settings for generating sealing task.
 type generateParams struct {
-	timestamp   uint64                   // The timestamp for sealing task
-	forceTime   bool                     // Flag whether the given timestamp is immutable or not
-	parentHash  common.Hash              // Parent block hash, empty means the latest chain head
-	coinbase    common.Address           // The fee recipient address for including transaction
-	gasLimit    uint64                   // The validator's requested gas limit target
-	random      common.Hash              // The randomness generated by beacon chain, empty before the merge
-	withdrawals types.Withdrawals        // List of withdrawals to include in block.
-	beaconRoot  *common.Hash             // The beacon root (cancun field).
-	noTxs       bool                     // Flag whether an empty block without any transaction is expected
-	onBlock     BlockHookFn              // Callback to call for each produced block
-	constraints types.ConstraintsDecoded // The preconfirmations to include in the block
+	timestamp   uint64                        // The timestamp for sealing task
+	forceTime   bool                          // Flag whether the given timestamp is immutable or not
+	parentHash  common.Hash                   // Parent block hash, empty means the latest chain head
+	coinbase    common.Address                // The fee recipient address for including transaction
+	gasLimit    uint64                        // The validator's requested gas limit target
+	random      common.Hash                   // The randomness generated by beacon chain, empty before the merge
+	withdrawals types.Withdrawals             // List of withdrawals to include in block.
+	beaconRoot  *common.Hash                  // The beacon root (cancun field).
+	noTxs       bool                          // Flag whether an empty block without any transaction is expected
+	onBlock     BlockHookFn                   // Callback to call for each produced block
+	constraints types.HashToConstraintDecoded // The preconfirmations to include in the block
 }
 
 func doPrepareHeader(genParams *generateParams, chain *core.BlockChain, config *Config, chainConfig *params.ChainConfig, extra []byte, engine consensus.Engine) (*types.Header, *types.Header, error) {
@@ -1267,7 +1360,7 @@ func (w *worker) prepareWork(genParams *generateParams) (*environment, error) {
 	return env, nil
 }
 
-func (w *worker) fillTransactionsSelectAlgo(interrupt *atomic.Int32, env *environment, constraints types.ConstraintsDecoded) ([]types.SimulatedBundle, []types.SimulatedBundle, []types.UsedSBundle, map[common.Hash]struct{}, error) {
+func (w *worker) fillTransactionsSelectAlgo(interrupt *atomic.Int32, env *environment, constraints types.HashToConstraintDecoded) ([]types.SimulatedBundle, []types.SimulatedBundle, []types.UsedSBundle, map[common.Hash]struct{}, error) {
 	var (
 		blockBundles    []types.SimulatedBundle
 		allBundles      []types.SimulatedBundle
@@ -1275,7 +1368,7 @@ func (w *worker) fillTransactionsSelectAlgo(interrupt *atomic.Int32, env *enviro
 		mempoolTxHashes map[common.Hash]struct{}
 		err             error
 	)
-	fmt.Println("Inside fillTransactionsSelectAlgo", w.flashbots.algoType)
+
 	switch w.flashbots.algoType {
 	case ALGO_GREEDY, ALGO_GREEDY_BUCKETS, ALGO_GREEDY_MULTISNAP, ALGO_GREEDY_BUCKETS_MULTISNAP:
 		blockBundles, allBundles, usedSbundles, mempoolTxHashes, err = w.fillTransactionsAlgoWorker(interrupt, env, constraints)
@@ -1290,8 +1383,7 @@ func (w *worker) fillTransactionsSelectAlgo(interrupt *atomic.Int32, env *enviro
 // fillTransactions retrieves the pending transactions from the txpool and fills them
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
-func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, constraints types.ConstraintsDecoded) ([]types.SimulatedBundle, []types.SimulatedBundle, map[common.Hash]struct{}, error) {
-	fmt.Println("inside fillTransactions")
+func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, constraints types.HashToConstraintDecoded) ([]types.SimulatedBundle, []types.SimulatedBundle, map[common.Hash]struct{}, error) {
 	w.mu.RLock()
 	tip := w.tip
 	w.mu.RUnlock()
@@ -1318,6 +1410,37 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 
 	filter.OnlyPlainTxs, filter.OnlyBlobTxs = false, true
 	pendingBlobTxs := w.eth.TxPool().Pending(filter)
+
+	// Drop all transactions which nonce is conflicting with the constraints.
+	type senderAndNonce struct {
+		sender common.Address
+		nonce  uint64
+	}
+	signerAndNonceOfConstraints := make(map[senderAndNonce]struct{})
+	// senderToConstraints := make(map[common.Address][]*types.ConstraintDecoded)
+	for _, constraint := range constraints {
+		from, err := types.Sender(env.signer, constraint.Tx)
+		if err != nil {
+			// NOTE: is this the right behaviour? If this happens the builder is not able to
+			// produce a valid bid
+			log.Error("Failed to recover sender from constraint. Skipping constraint", "err", err)
+			continue
+		}
+		signerAndNonceOfConstraints[senderAndNonce{sender: from, nonce: constraint.Tx.Nonce()}] = struct{}{}
+		// senderToConstraints[from] = append(senderToConstraints[from], constraint)
+	}
+	for sender, lazyTxs := range pendingPlainTxs {
+		common.Filter(&lazyTxs, func(lazyTx *txpool.LazyTransaction) bool {
+			_, in := signerAndNonceOfConstraints[senderAndNonce{sender: sender, nonce: lazyTx.Tx.Nonce()}]
+			return !in
+		})
+	}
+	for sender, lazyTxs := range pendingBlobTxs {
+		common.Filter(&lazyTxs, func(lazyTx *txpool.LazyTransaction) bool {
+			_, in := signerAndNonceOfConstraints[senderAndNonce{sender: sender, nonce: lazyTx.Tx.Nonce()}]
+			return !in
+		})
+	}
 
 	// Split the pending transactions into locals and remotes.
 	localPlainTxs, remotePlainTxs := make(map[common.Address][]*txpool.LazyTransaction), pendingPlainTxs
@@ -1369,7 +1492,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 		plainTxs := newTransactionsByPriceAndNonce(env.signer, localPlainTxs, nil, nil, env.header.BaseFee)
 		blobTxs := newTransactionsByPriceAndNonce(env.signer, localBlobTxs, nil, nil, env.header.BaseFee)
 
-		if err := w.commitTransactions(env, plainTxs, blobTxs, interrupt); err != nil {
+		if err := w.commitTransactions(env, plainTxs, blobTxs, constraints, interrupt); err != nil {
 			return nil, nil, nil, err
 		}
 	}
@@ -1377,7 +1500,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 		plainTxs := newTransactionsByPriceAndNonce(env.signer, remotePlainTxs, nil, nil, env.header.BaseFee)
 		blobTxs := newTransactionsByPriceAndNonce(env.signer, remoteBlobTxs, nil, nil, env.header.BaseFee)
 
-		if err := w.commitTransactions(env, plainTxs, blobTxs, interrupt); err != nil {
+		if err := w.commitTransactions(env, plainTxs, blobTxs, constraints, interrupt); err != nil {
 			return nil, nil, nil, err
 		}
 	}
@@ -1388,9 +1511,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 // fillTransactionsAlgoWorker retrieves the pending transactions and bundles from the txpool and fills them
 // into the given sealing block.
 // Returns error if any, otherwise the bundles that made it into the block and all bundles that passed simulation
-func (w *worker) fillTransactionsAlgoWorker(interrupt *atomic.Int32, env *environment, constraints types.ConstraintsDecoded) ([]types.SimulatedBundle, []types.SimulatedBundle, []types.UsedSBundle, map[common.Hash]struct{}, error) {
-	log.Info(fmt.Sprintf("[BOLT]: Inside fillTransactionsAlgoWorker with %d preconfirmations", len(constraints)))
-
+func (w *worker) fillTransactionsAlgoWorker(interrupt *atomic.Int32, env *environment, constraints types.HashToConstraintDecoded) ([]types.SimulatedBundle, []types.SimulatedBundle, []types.UsedSBundle, map[common.Hash]struct{}, error) {
 	tip := w.tip
 	// Retrieve the pending transactions pre-filtered by the 1559/4844 dynamic fees
 	filter := txpool.PendingFilter{
@@ -1405,36 +1526,6 @@ func (w *worker) fillTransactionsAlgoWorker(interrupt *atomic.Int32, env *enviro
 	// Split the pending transactions into locals and remotes
 	// Fill the block with all available pending transactions.
 	pending := w.eth.TxPool().Pending(filter)
-
-	// if len(constraints) > 0 {
-	// 	mockLazyResolver := txpool.MockLazyResolver{Transactions: make(map[common.Hash]*types.Transaction)}
-	//
-	// 	for _, tx := range constraints {
-	// 		txJson, _ := tx.MarshalJSON()
-	// 		log.Info(fmt.Sprintf("[BOLT]: Adding preconfirmation transaction to pending (JSON string): %s", string(txJson)))
-	//
-	// 		sender, _ := types.Sender(env.signer, tx)
-	//
-	// 		mockLazyResolver.Transactions[tx.Hash()] = tx
-	//
-	// 		if pending[sender] == nil {
-	// 			pending[sender] = []*txpool.LazyTransaction{}
-	// 		}
-	//
-	// 		pending[sender] = append(pending[sender], &txpool.LazyTransaction{
-	// 			Pool:      &mockLazyResolver,
-	// 			Tx:        tx,
-	// 			Hash:      tx.Hash(),
-	// 			Time:      time.Now(),
-	// 			Gas:       tx.Gas(),
-	// 			GasPrice:  uint256.MustFromBig(tx.GasPrice()),
-	// 			GasFeeCap: uint256.MustFromBig(tx.GasFeeCap()),
-	// 			GasTipCap: uint256.MustFromBig(tx.GasTipCap()),
-	// 			BlobGas:   tx.BlobGas(),
-	// 		})
-	// 		log.Info(fmt.Sprintf("[BOLT]: Added preconfirmation to pending transactions %v", *pending[sender][0]))
-	// 	}
-	// }
 
 	mempoolTxHashes := make(map[common.Hash]struct{}, len(pending))
 	for _, txs := range pending {

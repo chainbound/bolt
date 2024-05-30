@@ -44,7 +44,7 @@ type BuildPayloadArgs struct {
 	Version      engine.PayloadVersion // Versioning byte for payload id calculation.
 	GasLimit     uint64
 	BlockHook    BlockHookFn
-	Constraints  types.ConstraintsDecoded
+	Constraints  types.HashToConstraintDecoded
 }
 
 // Id computes an 8-byte identifier by hashing the components of the payload arguments.

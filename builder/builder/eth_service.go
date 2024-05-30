@@ -60,7 +60,7 @@ func NewEthereumService(eth *eth.Ethereum) *EthereumService {
 }
 
 // TODO: we should move to a setup similar to catalyst local blocks & payload ids
-func (s *EthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraints types.ConstraintsDecoded) error {
+func (s *EthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraints types.HashToConstraintDecoded) error {
 	// Send a request to generate a full block in the background.
 	// The result can be obtained via the returned channel.
 	args := &miner.BuildPayloadArgs{
