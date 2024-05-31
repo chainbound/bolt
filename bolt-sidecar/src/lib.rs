@@ -7,6 +7,7 @@ mod client;
 mod common;
 mod crypto;
 mod pubsub;
+mod relays;
 mod state;
 mod template;
 mod types;

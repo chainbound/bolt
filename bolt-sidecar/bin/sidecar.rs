@@ -1,4 +1,7 @@
-use bolt_sidecar::{config, json_rpc};
+use bolt_sidecar::{
+    config::{Config, Opts},
+    json_rpc::start_server,
+};
 
 use clap::Parser;
 use tracing::info;
@@ -9,9 +12,9 @@ async fn main() -> eyre::Result<()> {
 
     info!("Starting sidecar");
 
-    let opts = config::Opts::parse();
-    let config = config::Config::try_from(opts)?;
-    let shutdown_tx = json_rpc::start_server(config.rpc_port, config.private_key).await?;
+    let opts = Opts::parse();
+    let config = Config::try_from(opts)?;
+    let shutdown_tx = start_server(config.rpc_port, config.private_key, config.relays).await?;
 
     tokio::signal::ctrl_c().await?;
     shutdown_tx.send(()).await.ok();

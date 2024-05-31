@@ -12,6 +12,9 @@ pub struct Opts {
     /// Private key to use for signing preconfirmation requests
     #[clap(short = 'k', long)]
     pub(super) private_key: String,
+    /// List of relay HTTP endpoints to use
+    #[clap(short = 'r', long)]
+    pub(super) relays: Vec<String>,
     /// Max commitments to accept per block
     #[clap(short = 'm', long)]
     pub(super) max_commitments: Option<usize>,
@@ -24,6 +27,8 @@ pub struct Config {
     pub rpc_port: u16,
     /// Private key to use for signing preconfirmation requests
     pub private_key: SecretKey,
+    /// List of relay HTTP endpoints to use
+    pub relays: Vec<String>,
     /// Limits for the sidecar
     pub limits: Limits,
 }
@@ -32,6 +37,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             rpc_port: 8000,
+            relays: Vec::new(),
             private_key: SecretKey::new(&mut rand::thread_rng()),
             limits: Limits::default(),
         }
@@ -52,6 +58,7 @@ impl TryFrom<Opts> for Config {
             config.limits.max_commitments_per_slot = max_commitments;
         }
 
+        config.relays = opts.relays;
         config.private_key = SecretKey::from_str(&opts.private_key)?;
 
         Ok(config)
