@@ -533,7 +533,7 @@ func TestGetSealingWorkAlgos(t *testing.T) {
 		*local = *ethashChainConfig
 		local.TerminalTotalDifficulty = big.NewInt(0)
 		testConfig.AlgoType = algoType
-		testGetSealingWork(t, local, ethash.NewFaker())
+		testGetSealingWork(t, local, ethash.NewFaker(), nil)
 	}
 	t.Fail()
 }
