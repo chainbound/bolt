@@ -15,6 +15,7 @@ mod types;
 use self::api::CommitmentsRpc;
 use self::spec::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 
+/// Start the JSON-RPC server. Returns a sender that can be used to send a shutdown signal.
 pub async fn start_server(port: u16, pk: SecretKey) -> eyre::Result<mpsc::Sender<()>> {
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
     let cors = warp::cors().allow_any_origin().allow_method(Method::POST);

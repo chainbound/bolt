@@ -3,22 +3,28 @@ use std::str::FromStr;
 use clap::Parser;
 use secp256k1::{rand, SecretKey};
 
-#[derive(Parser)]
-pub(super) struct Opts {
-    /// Port to listen on for incoming JSON-RPC requests.
+/// Command-line options for the sidecar
+#[derive(Parser, Debug)]
+pub struct Opts {
+    /// Port to listen on for incoming JSON-RPC requests
     #[clap(short = 'p', long)]
     pub(super) port: Option<u16>,
-    /// Private key to use for signing preconfirmation requests.
+    /// Private key to use for signing preconfirmation requests
     #[clap(short = 'k', long)]
     pub(super) private_key: String,
-    /// Max commitments to accept per block.
+    /// Max commitments to accept per block
     #[clap(short = 'm', long)]
     pub(super) max_commitments: Option<usize>,
 }
 
+/// Configuration options for the sidecar
+#[derive(Debug)]
 pub struct Config {
+    /// Port to listen on for incoming JSON-RPC requests
     pub rpc_port: u16,
+    /// Private key to use for signing preconfirmation requests
     pub private_key: SecretKey,
+    /// Limits for the sidecar
     pub limits: Limits,
 }
 
@@ -52,7 +58,10 @@ impl TryFrom<Opts> for Config {
     }
 }
 
+/// Limits for the sidecar.
+#[derive(Debug)]
 pub struct Limits {
+    /// Maximum number of commitments to accept per block
     pub max_commitments_per_slot: usize,
 }
 

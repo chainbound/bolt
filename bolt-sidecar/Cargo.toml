@@ -2,6 +2,7 @@
 name = "bolt-sidecar"
 version = "0.1.0"
 edition = "2021"
+default-run = "bolt-sidecar"
 
 [dependencies]
 # core
@@ -56,3 +57,8 @@ tracing-subscriber = "0.3.18"
 
 [dev-dependencies]
 alloy-node-bindings = { git = "https://github.com/alloy-rs/alloy" }
+
+
+[[bin]]
+name = "bolt-sidecar"
+path = "bin/sidecar.rs"
