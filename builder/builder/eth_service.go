@@ -15,13 +15,10 @@ import (
 )
 
 type IEthereumService interface {
-	BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraints types.ConstraintsDecoded) error
+	BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraints types.HashToConstraintDecoded) error
 	GetBlockByHash(hash common.Hash) *types.Block
 	Config() *params.ChainConfig
 	Synced() bool
-	// BOLT: needed to retrieve the preconfirmations and distinguish
-	// between test implementation and real implementation
-	Preconfirmations(boltCCEndpoint string, slot uint64) ([]*types.Transaction, error)
 }
 
 type testEthereumService struct {
@@ -36,7 +33,7 @@ type testEthereumService struct {
 	testPreconfs       []*types.Transaction
 }
 
-func (t *testEthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraints types.ConstraintsDecoded) error {
+func (t *testEthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraints types.HashToConstraintDecoded) error {
 	sealedBlockCallback(t.testBlock, t.testBlockValue, t.testBlobSidecar, time.Now(), t.testBundlesMerged, t.testAllBundles, t.testUsedSbundles)
 	return nil
 }
@@ -46,10 +43,6 @@ func (t *testEthereumService) GetBlockByHash(hash common.Hash) *types.Block { re
 func (t *testEthereumService) Config() *params.ChainConfig { return params.TestChainConfig }
 
 func (t *testEthereumService) Synced() bool { return t.synced }
-
-func (t *testEthereumService) Preconfirmations(boltCCEndpoint string, slot uint64) ([]*types.Transaction, error) {
-	return t.testPreconfs, nil
-}
 
 type EthereumService struct {
 	eth *eth.Ethereum
@@ -116,8 +109,4 @@ func (s *EthereumService) Synced() bool {
 
 func (s *EthereumService) Ethereum() *eth.Ethereum {
 	return s.eth
-}
-
-func (s *EthereumService) Preconfirmations(boltCCEndpoint string, slot uint64) ([]*types.Transaction, error) {
-	return eth.GetPreconfirmations(boltCCEndpoint, slot)
 }

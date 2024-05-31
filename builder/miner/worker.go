@@ -644,6 +644,7 @@ func (w *worker) mainLoop() {
 				blobTxs := newTransactionsByPriceAndNonce(w.current.signer, nil, nil, nil, w.current.header.BaseFee)  // Empty bag, don't bother optimising
 
 				tcount := w.current.tcount
+				fmt.Println("calling commit transactions inside worker mainLoop")
 				w.commitTransactions(w.current, plainTxs, blobTxs, nil, nil)
 
 				// Only update the snapshot if any new transactions were added
@@ -1384,6 +1385,7 @@ func (w *worker) fillTransactionsSelectAlgo(interrupt *atomic.Int32, env *enviro
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
 func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, constraints types.HashToConstraintDecoded) ([]types.SimulatedBundle, []types.SimulatedBundle, map[common.Hash]struct{}, error) {
+	fmt.Println("inside fillTransactions")
 	w.mu.RLock()
 	tip := w.tip
 	w.mu.RUnlock()

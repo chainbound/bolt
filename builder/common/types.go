@@ -492,7 +492,7 @@ func (h HexBytes) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
-func (s HexBytes) UnmarshalJSON(input []byte) error {
+func (s *HexBytes) UnmarshalJSON(input []byte) error {
 	if len(input) == 0 {
 		return errors.New("input missing")
 	}
@@ -504,7 +504,10 @@ func (s HexBytes) UnmarshalJSON(input []byte) error {
 		return errors.New("invalid suffix")
 	}
 
-	_, err := hex.Decode(s, input[3:len(input)-1])
+	src := input[3 : len(input)-1]
+	*s = make([]byte, hex.DecodedLen(len(src)))
+
+	_, err := hex.Decode(*s, input[3:len(input)-1])
 	if err != nil {
 		return err
 	}
