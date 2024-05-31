@@ -5,7 +5,7 @@ use std::{
 
 use alloy::ClientBuilder;
 use alloy_eips::BlockNumberOrTag;
-use alloy_primitives::{Address, U64};
+use alloy_primitives::{Address, U256, U64};
 use alloy_rpc_client as alloy;
 use alloy_rpc_types::{AccountInfo, FeeHistory};
 use alloy_transport::TransportResult;
@@ -16,6 +16,8 @@ use crate::types::AccountState;
 
 /// An HTTP-based JSON-RPC client that supports batching. Implements all methods that are relevant
 /// to Bolt state.
+
+#[derive(Clone)]
 pub struct RpcClient(alloy::RpcClient<Http<Client>>);
 
 impl RpcClient {
@@ -44,7 +46,9 @@ impl RpcClient {
 
     /// Get the latest block number
     pub async fn get_head(&self) -> TransportResult<u64> {
-        self.0.request("eth_blockNumber", ()).await
+        let result: U64 = self.0.request("eth_blockNumber", ()).await?;
+
+        Ok(result.to())
     }
 
     /// Gets the latest account state for the given address
@@ -56,16 +60,22 @@ impl RpcClient {
             .expect("Correct parameters");
 
         let nonce = batch
-            .add_call("eth_getNonce", &(address, BlockNumberOrTag::Latest))
+            .add_call(
+                "eth_getTransactionCount",
+                &(address, BlockNumberOrTag::Latest),
+            )
             .expect("Correct parameters");
 
         // After the batch is complete, we can get the results.
         // Note that requests may error separately!
         batch.send().await?;
 
+        let nonce: U64 = nonce.await?;
+        let balance: U256 = balance.await?;
+
         Ok(AccountState {
-            balance: balance.await.unwrap(),
-            nonce: nonce.await.unwrap(),
+            balance,
+            nonce: nonce.to(),
         })
     }
 }
@@ -86,20 +96,31 @@ impl DerefMut for RpcClient {
 
 #[cfg(test)]
 mod tests {
-    use alloy_node_bindings::Anvil;
+    use alloy_consensus::constants::ETH_TO_WEI;
+    use alloy_node_bindings::{Anvil, AnvilInstance};
+    use alloy_primitives::{uint, Uint};
 
     use super::*;
 
+    fn launch_anvil() -> AnvilInstance {
+        Anvil::new().block_time(1).spawn()
+    }
+
     #[tokio::test]
     async fn test_rpc_client() {
-        let anvil = Anvil::new()
-            .block_time(1)
-            .chain_id(1337)
-            .try_spawn()
-            .expect("Anvil not found");
-
+        let anvil = launch_anvil();
         let client = RpcClient::new(&anvil.endpoint());
 
-        client.get_basefee().await.unwrap();
+        let addr = anvil.addresses().first().unwrap();
+
+        let account_state = client.get_account_state(addr).await.unwrap();
+
+        // Accounts in Anvil start with 10_000 ETH
+        assert_eq!(
+            account_state.balance,
+            uint!(10_000U256 * Uint::from(ETH_TO_WEI))
+        );
+
+        assert_eq!(account_state.nonce, 0);
     }
 }
