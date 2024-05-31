@@ -644,7 +644,6 @@ func (w *worker) mainLoop() {
 				blobTxs := newTransactionsByPriceAndNonce(w.current.signer, nil, nil, nil, w.current.header.BaseFee)  // Empty bag, don't bother optimising
 
 				tcount := w.current.tcount
-				fmt.Println("calling commit transactions inside worker mainLoop")
 				w.commitTransactions(w.current, plainTxs, blobTxs, nil, nil)
 
 				// Only update the snapshot if any new transactions were added
@@ -1419,7 +1418,6 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 		nonce  uint64
 	}
 	signerAndNonceOfConstraints := make(map[senderAndNonce]struct{})
-	// senderToConstraints := make(map[common.Address][]*types.ConstraintDecoded)
 	for _, constraint := range constraints {
 		from, err := types.Sender(env.signer, constraint.Tx)
 		if err != nil {
@@ -1429,7 +1427,6 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 			continue
 		}
 		signerAndNonceOfConstraints[senderAndNonce{sender: from, nonce: constraint.Tx.Nonce()}] = struct{}{}
-		// senderToConstraints[from] = append(senderToConstraints[from], constraint)
 	}
 	for sender, lazyTxs := range pendingPlainTxs {
 		common.Filter(&lazyTxs, func(lazyTx *txpool.LazyTransaction) bool {
