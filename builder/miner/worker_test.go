@@ -85,6 +85,8 @@ var (
 	defaultGenesisAlloc = types.GenesisAlloc{testBankAddress: {Balance: testBankFunds}}
 )
 
+const pendingTxsLen = 100
+
 func init() {
 	testTxPoolConfig = legacypool.DefaultConfig
 	testTxPoolConfig.Journal = ""
@@ -98,7 +100,7 @@ func init() {
 	}
 
 	signer := types.LatestSigner(params.TestChainConfig)
-	for i := 0; i < 100; i++ {
+	for i := 0; i < pendingTxsLen; i++ {
 		tx1 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
 			ChainID:  params.TestChainConfig.ChainID,
 			Nonce:    uint64(i),
@@ -253,10 +255,10 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), nil, 0)
 	defer w.close()
 
-	taskCh := make(chan struct{}, 2)
+	taskCh := make(chan struct{}, pendingTxsLen*2)
 	checkEqual := func(t *testing.T, task *task) {
 		// The work should contain 1 tx
-		receiptLen, balance := 1, uint256.NewInt(1000)
+		receiptLen, balance := pendingTxsLen, uint256.NewInt(100_000)
 		if len(task.receipts) != receiptLen {
 			t.Fatalf("receipt number mismatch: have %d, want %d", len(task.receipts), receiptLen)
 		}

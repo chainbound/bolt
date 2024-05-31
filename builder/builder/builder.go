@@ -83,7 +83,6 @@ type IBuilder interface {
 }
 
 type Builder struct {
-	boltCCEndpoint              string
 	ds                          flashbotsextra.IDatabaseService
 	blockConsumer               flashbotsextra.BlockConsumer
 	relay                       IRelay
@@ -181,7 +180,6 @@ func NewBuilder(args BuilderArgs) (*Builder, error) {
 
 	slotCtx, slotCtxCancel := context.WithCancel(context.Background())
 	return &Builder{
-		boltCCEndpoint:                args.boltCCEndpoint,
 		ds:                            args.ds,
 		blockConsumer:                 args.blockConsumer,
 		relay:                         args.relay,
@@ -351,18 +349,18 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 
 		// We assume the data is the JSON representation of the constraints
 		fmt.Printf("Received: %s\n", data)
-		constraints := make(common.Constraints, 0, 8)
-		if err := json.Unmarshal([]byte(data), &constraints); err != nil {
+		constraintsSigned := make(common.Constraints, 0, 8)
+		if err := json.Unmarshal([]byte(data), &constraintsSigned); err != nil {
 			log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))
 			continue
 		}
-		if len(constraints) == 0 {
+		if len(constraintsSigned) == 0 {
 			log.Warn("Received 0 length list of constraints")
 			continue
 		}
 
 	OUTER:
-		for _, constraint := range constraints {
+		for _, constraint := range constraintsSigned {
 			// For every constraint, we need to check if it has already been seen for the associated slot
 			slotConstraints, _ := b.constraintsCache.Get(constraint.Message.Slot)
 			if len(slotConstraints) == 0 {
@@ -384,17 +382,18 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 	return nil
 }
 
-func (b *Builder) GetPreconfirmedTransactionForSlot(slot uint64) types.HashToConstraintDecoded {
+func (b *Builder) GetConstraintsForSlot(slot uint64) types.HashToConstraintDecoded {
 	constraintsDecoded := make(types.HashToConstraintDecoded)
 	constraintsSigned, _ := b.constraintsCache.Get(slot)
+
 	for _, constraintSigned := range constraintsSigned {
 		constraints := constraintSigned.Message.Constraints
 		for _, constraint := range constraints {
 			decoded := new(types.Transaction)
 			if err := decoded.UnmarshalBinary(constraint.Tx); err != nil {
 				log.Error("Failed to decode preconfirmation transaction RLP: ", err)
+				continue
 			}
-			sender := decoded.Sender()
 			constraintsDecoded[decoded.Hash()] = &types.ConstraintDecoded{Index: constraint.Index, Tx: decoded}
 		}
 	}
@@ -695,8 +694,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 	log.Debug("runBuildingJob", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp))
 
 	// fetch constraints here
-	constraints := b.GetPreconfirmedTransactionForSlot(attrs.Slot)
-	log.Info("[BOLT]: Got preconfirmations", "preconfs", len(constraints))
+	constraints := b.GetConstraintsForSlot(attrs.Slot)
 
 	submitBestBlock := func() {
 		queueMu.Lock()
