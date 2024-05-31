@@ -184,9 +184,9 @@ func (r *RemoteRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, 
 	return nil
 }
 
-func (r *RemoteRelay) SubmitBlockWithPreconfsProofs(msg *common.VersionedSubmitBlockRequestWithPreconfsProofs, _ ValidatorData) error {
+func (r *RemoteRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequestWithProofs, _ ValidatorData) error {
 	log.Info("submitting block to remote relay", "endpoint", r.config.Endpoint)
-	endpoint := r.config.Endpoint + "/relay/v1/builder/blocks_with_preconfs"
+	endpoint := r.config.Endpoint + "/relay/v1/builder/blocks_with_proofs"
 	if r.cancellationsEnabled {
 		endpoint = endpoint + "?cancellations=1"
 	}

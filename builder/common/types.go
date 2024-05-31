@@ -564,7 +564,7 @@ func (p PreconfirmationWithProof) String() string {
 
 // A wrapper struct over `builderSpec.VersionedSubmitBlockRequest`
 // to include preconfirmation proofs
-type VersionedSubmitBlockRequestWithPreconfsProofs struct {
+type VersionedSubmitBlockRequestWithProofs struct {
 	Inner  *builderSpec.VersionedSubmitBlockRequest `json:"inner"`
 	Proofs []*PreconfirmationWithProof              `json:"proofs"`
 }
@@ -572,7 +572,7 @@ type VersionedSubmitBlockRequestWithPreconfsProofs struct {
 // this is necessary, because the mev-boost-relay deserialization doesn't expect a "Version" and "Data" wrapper object
 // for deserialization. Instead, it tries to decode the object into the "Deneb" version first and if that fails, it tries
 // the "Capella" version. This is a workaround to make the deserialization work.
-func (v *VersionedSubmitBlockRequestWithPreconfsProofs) MarshalJSON() ([]byte, error) {
+func (v *VersionedSubmitBlockRequestWithProofs) MarshalJSON() ([]byte, error) {
 	switch v.Inner.Version {
 	case consensusSpec.DataVersionBellatrix:
 		return json.Marshal(struct {
@@ -603,7 +603,7 @@ func (v *VersionedSubmitBlockRequestWithPreconfsProofs) MarshalJSON() ([]byte, e
 	return nil, fmt.Errorf("unknown data version %d", v.Inner.Version)
 }
 
-func (v *VersionedSubmitBlockRequestWithPreconfsProofs) String() string {
+func (v *VersionedSubmitBlockRequestWithProofs) String() string {
 	out, err := json.Marshal(v)
 	if err != nil {
 		return err.Error()

@@ -69,7 +69,7 @@ type ValidatorData struct {
 
 type IRelay interface {
 	SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, vd ValidatorData) error
-	SubmitBlockWithPreconfsProofs(msg *common.VersionedSubmitBlockRequestWithPreconfsProofs, vd ValidatorData) error
+	SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequestWithProofs, vd ValidatorData) error
 	GetValidatorForSlot(nextSlot uint64) (ValidatorData, error)
 	Config() RelayConfig
 	Start() error
@@ -258,7 +258,6 @@ func (b *Builder) Start() error {
 // GenerateAuthenticationHeader generates an authentication string for the builder
 // to subscribe to SSE constraint events emitted by relays
 func (b *Builder) GenerateAuthenticationHeader() (string, error) {
-	// NOTE: I'm not 100% sure this is the correct way to retrieve the current slot
 	slot := b.slotAttrs.Slot
 	message, err := json.Marshal(common.ConstraintSubscriptionAuth{PublicKey: b.builderPublicKey, Slot: slot})
 	if err != nil {
@@ -348,7 +347,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 		data := strings.TrimPrefix(line, "data: ")
 
 		// We assume the data is the JSON representation of the constraints
-		fmt.Printf("Received: %s\n", data)
+		log.Debug("Received new constraint: %s\n", data)
 		constraintsSigned := make(common.Constraints, 0, 8)
 		if err := json.Unmarshal([]byte(data), &constraintsSigned); err != nil {
 			log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))
@@ -439,12 +438,12 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 	payloadTransactions := opts.Block.Transactions()
 
 	// BOLT: sanity check: verify that the block actually contains the preconfirmed transactions
-	// for _, preconf := range constraints {
-	// 	if !slices.Contains(payloadTransactions, preconf) {
-	// 		log.Error(fmt.Sprintf("[BOLT]: Preconfirmed transaction %s not found in block %s", preconf.Hash(), opts.Block.Hash()))
-	// 		continue
-	// 	}
-	// }
+	for hash, constraint := range constraints {
+		if !slices.Contains(payloadTransactions, constraint.Tx) {
+			log.Error(fmt.Sprintf("[BOLT]: Preconfirmed transaction %s not found in block %s", hash, opts.Block.Hash()))
+			continue
+		}
+	}
 
 	// BOLT: generate merkle tree from payload transactions (we need raw RLP bytes for this)
 	rawTxs := make([]bellatrix.Transaction, len(payloadTransactions))
@@ -528,7 +527,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 		return err
 	}
 
-	versionedBlockRequestWithPreconfsProofs := &common.VersionedSubmitBlockRequestWithPreconfsProofs{
+	versionedBlockRequestWithPreconfsProofs := &common.VersionedSubmitBlockRequestWithProofs{
 		Inner:  versionedBlockRequest,
 		Proofs: preconfirmationsProofs,
 	}
@@ -548,7 +547,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 	} else {
 		// NOTE: we can ignore preconfs for `processBuiltBlock`
 		go b.processBuiltBlock(opts.Block, opts.BlockValue, opts.OrdersClosedAt, opts.SealedAt, opts.CommitedBundles, opts.AllBundles, opts.UsedSbundles, &blockBidMsg)
-		err = b.relay.SubmitBlockWithPreconfsProofs(versionedBlockRequestWithPreconfsProofs, opts.ValidatorData)
+		err = b.relay.SubmitBlockWithProofs(versionedBlockRequestWithPreconfsProofs, opts.ValidatorData)
 		if err != nil {
 			log.Error("could not submit block", "err", err, "verion", dataVersion, "#commitedBundles", len(opts.CommitedBundles))
 			return err
