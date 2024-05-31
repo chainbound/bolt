@@ -45,3 +45,11 @@ func Shift[T any](slice *[]*T) *T {
 	*slice = (*slice)[1:]
 	return el
 }
+
+func Map[T any, U any](slice []*T, mapper func(el *T) *U) []*U {
+	result := make([]*U, len(slice))
+	for i, el := range slice {
+		result[i] = mapper(el)
+	}
+	return result
+}

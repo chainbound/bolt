@@ -117,7 +117,7 @@ func (r *LocalRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, _
 	return r.submitBlock(msg.Bellatrix)
 }
 
-func (r *LocalRelay) SubmitBlockWithPreconfsProofs(msg *common.VersionedSubmitBlockRequestWithPreconfsProofs, _ ValidatorData) error {
+func (r *LocalRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequestWithProofs, _ ValidatorData) error {
 	panic("Not implemented!")
 }
 
