@@ -1,14 +1,14 @@
 use std::str::FromStr;
 
 use clap::Parser;
-use secp256k1::SecretKey;
+use secp256k1::{rand, SecretKey};
 
 #[derive(Parser)]
 pub(super) struct Opts {
     /// Port to listen on for incoming JSON-RPC requests.
     #[clap(short = 'p', long)]
     pub(super) port: Option<u16>,
-    /// BLS private key to use for signing commitment requests.
+    /// Private key to use for signing preconfirmation requests.
     #[clap(short = 'k', long)]
     pub(super) private_key: String,
     /// Max commitments to accept per block.
@@ -26,7 +26,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             rpc_port: 8000,
-            private_key: SecretKey::from_slice(&[0; 32]).unwrap(),
+            private_key: SecretKey::new(&mut rand::thread_rng()),
             limits: Limits::default(),
         }
     }

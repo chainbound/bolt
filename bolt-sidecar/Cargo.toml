@@ -22,6 +22,8 @@ alloy-rpc-client = { git = "https://github.com/alloy-rs/alloy", features = [
 alloy-provider = { git = "https://github.com/alloy-rs/alloy", features = [
     "ws",
 ] }
+alloy-signer = { git = "https://github.com/alloy-rs/alloy" }
+alloy-signer-wallet = { git = "https://github.com/alloy-rs/alloy" }
 alloy-transport = { git = "https://github.com/alloy-rs/alloy" }
 alloy-eips = { git = "https://github.com/alloy-rs/alloy" }
 alloy-transport-http = { git = "https://github.com/alloy-rs/alloy" }
