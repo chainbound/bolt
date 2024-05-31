@@ -1,7 +1,7 @@
 use alloy_primitives::{Bytes, Signature, TxHash};
 use alloy_rpc_types::Transaction;
 
-use super::Slot;
+use crate::types::Slot;
 
 /// A request for a proposer commitment.
 ///

@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use clap::Parser;
+use secp256k1::{rand, SecretKey};
 
 #[derive(Parser)]
 pub(super) struct Opts {
@@ -17,7 +18,7 @@ pub(super) struct Opts {
 
 pub struct Config {
     pub rpc_port: u16,
-    pub private_key: secp256k1::SecretKey,
+    pub private_key: SecretKey,
     pub limits: Limits,
 }
 
@@ -25,42 +26,40 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             rpc_port: 8000,
-            private_key: secp256k1::SecretKey::new(&mut secp256k1::rand::thread_rng()),
+            private_key: SecretKey::new(&mut rand::thread_rng()),
             limits: Limits::default(),
         }
     }
 }
 
-impl From<Opts> for Config {
-    fn from(opts: Opts) -> Self {
-        // Start with default config
+impl TryFrom<Opts> for Config {
+    type Error = eyre::Report;
+
+    fn try_from(opts: Opts) -> eyre::Result<Self> {
         let mut config = Config::default();
 
         if let Some(port) = opts.port {
             config.rpc_port = port;
         }
 
-        let private_key = secp256k1::SecretKey::from_str(&opts.private_key)
-            .expect("Invalid secpk256k1 private key");
-
-        config.private_key = private_key;
-
         if let Some(max_commitments) = opts.max_commitments {
-            config.limits.max_commitments_per_block = max_commitments;
+            config.limits.max_commitments_per_slot = max_commitments;
         }
 
-        config
+        config.private_key = SecretKey::from_str(&opts.private_key)?;
+
+        Ok(config)
     }
 }
 
 pub struct Limits {
-    pub max_commitments_per_block: usize,
+    pub max_commitments_per_slot: usize,
 }
 
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            max_commitments_per_block: 6,
+            max_commitments_per_slot: 6,
         }
     }
 }

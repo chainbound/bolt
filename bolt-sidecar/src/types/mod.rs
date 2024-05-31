@@ -2,6 +2,7 @@ use alloy_primitives::U256;
 
 pub mod commitment;
 
+/// An alias for a Beacon Chain slot number
 pub type Slot = u64;
 
 /// Minimal account state needed for commitment validation.

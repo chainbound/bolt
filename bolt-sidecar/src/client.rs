@@ -7,7 +7,7 @@ use alloy::ClientBuilder;
 use alloy_eips::BlockNumberOrTag;
 use alloy_primitives::{Address, U256, U64};
 use alloy_rpc_client as alloy;
-use alloy_rpc_types::{AccountInfo, FeeHistory};
+use alloy_rpc_types::FeeHistory;
 use alloy_transport::TransportResult;
 use alloy_transport_http::Http;
 use reqwest::{Client, Url};

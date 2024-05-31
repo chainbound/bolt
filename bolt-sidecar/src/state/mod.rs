@@ -215,8 +215,6 @@ mod tests {
     use alloy_signer_wallet::LocalWallet;
     use fetcher::StateClient;
 
-    use crate::types::commitment::InclusionRequest;
-
     use super::*;
 
     fn launch_anvil() -> AnvilInstance {
