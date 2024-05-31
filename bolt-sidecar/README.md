@@ -29,3 +29,6 @@ The block template is built and simulated on in FIFO order.
 *Updating state*
 We store a list of commitment addresses along with their account state. For each new block, we should update that state and check if we have to invalidate any commitments. This is critical as we don't want to return an invalid block
 in case a fallback block is required.
+
+## Running
+- We require Anvil to be installed in the $PATH for running tests
