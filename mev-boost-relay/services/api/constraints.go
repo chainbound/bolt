@@ -33,6 +33,11 @@ type Constraint struct {
 // For SSZ purposes, we consider `Index` as Union[uint64, None]
 type Index uint64
 
+func NewIndex(i uint64) *Index {
+	idx := Index(i)
+	return &idx
+}
+
 func (c *SignedConstraints) String() string {
 	return JSONStringify(c)
 }
@@ -118,7 +123,7 @@ func (c *SignedConstraints) UnmarshalSSZ(buf []byte) (err error) {
 	}
 
 	// Field (1) `Signature`
-	copy(c.Signature[:], buf[4:100])
+	copy(c.Signature[:], tail[4:100])
 
 	return
 }
@@ -142,7 +147,7 @@ func (m *ConstraintsMessage) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	// Field (2) `Constraints`
 	dst = ssz.WriteOffset(dst, offset)
 
-	// ------- Dynnamic fields -------
+	// ------- Dynamic fields -------
 
 	// Field (2) `Constraints`
 	if size := len(m.Constraints); size > MAX_CONSTRAINTS_PER_SLOT {
@@ -164,7 +169,6 @@ func (m *ConstraintsMessage) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 			err = ssz.ErrBytesLengthFn("Constraints[i].Tx", size, MAX_BYTES_PER_TRANSACTION)
 			return
 		}
-		dst = append(dst, m.Constraints[i].Tx...)
 	}
 
 	return
@@ -179,7 +183,9 @@ func (m *ConstraintsMessage) SizeSSZ() int {
 	for i := 0; i < len(m.Constraints); i++ {
 		// The offset to the transaction list
 		size += 4
+
 		size += len(m.Constraints[i].Tx)
+		size += m.Constraints[i].Index.SizeSSZ()
 	}
 	return size
 }
@@ -192,15 +198,7 @@ func (m *ConstraintsMessage) UnmarshalSSZ(buf []byte) (err error) {
 	}
 
 	tail := buf
-	var o0 uint64
-
-	// Offset (0) 'Constraints'
-	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
-		return ssz.ErrOffset
-	}
-	if o0 < 20 {
-		return ssz.ErrInvalidVariableOffset
-	}
+	var o2 uint64
 
 	// Field (0) `ValidatorIndex`
 	m.ValidatorIndex = binary.LittleEndian.Uint64(buf[0:8])
@@ -208,15 +206,27 @@ func (m *ConstraintsMessage) UnmarshalSSZ(buf []byte) (err error) {
 	// Field (1) `Slot`
 	m.Slot = binary.LittleEndian.Uint64(buf[8:16])
 
+	// Offset (2) 'Constraints'
+	if o2 = ssz.ReadOffset(buf[16:20]); o2 > size {
+		return ssz.ErrOffset
+	}
+	if o2 < 20 {
+		return ssz.ErrInvalidVariableOffset
+	}
+
 	// Field (2) `Constraints`
-	buf = tail[o0:]
-	// We first read the amount of offset values we have
+	buf = tail[o2:]
+	// We first read the amount of offset values we have, by looking
+	// at how big is the first offset
 	var length int
-	if length, err = ssz.DivideInt2(len(buf), 4, MAX_CONSTRAINTS_PER_SLOT); err != nil {
+	if length, err = ssz.DecodeDynamicLength(buf, MAX_CONSTRAINTS_PER_SLOT); err != nil {
 		return
 	}
 	m.Constraints = make([]*Constraint, length)
 	err = ssz.UnmarshalDynamic(buf, length, func(indx int, buf []byte) (err error) {
+		if m.Constraints[indx] == nil {
+			m.Constraints[indx] = new(Constraint)
+		}
 		return m.Constraints[indx].UnmarshalSSZ(buf)
 	})
 
@@ -246,6 +256,8 @@ func (c *Constraint) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	if c.Index == nil {
 		dst = append(dst, 0)
 	} else {
+		// Index is `Union[None, uint64]
+		dst = append(dst, 1)
 		dst = ssz.MarshalUint64(dst, uint64(*c.Index))
 	}
 
@@ -284,7 +296,7 @@ func (c *Constraint) UnmarshalSSZ(buf []byte) (err error) {
 	}
 
 	// Offset (1) 'Index'
-	if o0 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
 		return ssz.ErrOffset
 	}
 
@@ -313,5 +325,6 @@ func (i *Index) SizeSSZ() int {
 	if i == nil {
 		return 1
 	}
-	return 8
+	// selector + uint64
+	return 9
 }
