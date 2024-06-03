@@ -6,10 +6,11 @@
 
 use std::collections::HashMap;
 
+use alloy_consensus::TxEnvelope;
 use alloy_primitives::{Address, U256};
 use alloy_rpc_types::Transaction;
 
-use crate::common::max_transaction_cost;
+use crate::{common::max_transaction_cost, types::transaction::TxInfo};
 
 /// A block template that serves as a fallback block, but is also used
 /// to keep intermediary state for new commitment requests.
@@ -23,7 +24,7 @@ use crate::common::max_transaction_cost;
 pub struct BlockTemplate {
     /// The state diffs per address given the list of commitments.
     state_diff: StateDiff,
-    transactions: Vec<Transaction>,
+    transactions: Vec<TxEnvelope>,
 }
 
 impl BlockTemplate {
@@ -39,18 +40,18 @@ impl BlockTemplate {
     }
 
     /// Adds a transaction to the block template and updates the state diff.
-    pub fn add_transaction(&mut self, transaction: Transaction) {
+    pub fn add_transaction(&mut self, transaction: TxEnvelope) {
         let max_cost = max_transaction_cost(&transaction);
 
         // Update intermediate state
         self.state_diff
             .diffs
-            .entry(transaction.from)
+            .entry(transaction.from().expect("Passed validation"))
             .and_modify(|(nonce, balance)| {
                 *nonce += 1;
                 *balance += max_cost;
             })
-            .or_insert((transaction.nonce, max_cost));
+            .or_insert((transaction.nonce(), max_cost));
 
         self.transactions.push(transaction);
     }

@@ -1,6 +1,7 @@
 //! The `state` module is responsible for keeping a local copy of relevant state that is needed
 //! to simulate commitments against. It is updated on every block.
-use alloy_primitives::Address;
+use alloy_consensus::TxEnvelope;
+use alloy_primitives::{Address, SignatureError};
 use alloy_rpc_types::Transaction;
 use alloy_transport::TransportError;
 use std::collections::HashMap;
@@ -9,7 +10,7 @@ use thiserror::Error;
 use crate::{
     common::{calculate_max_basefee, validate_transaction},
     template::BlockTemplate,
-    types::{commitment::CommitmentRequest, AccountState},
+    types::{commitment::CommitmentRequest, transaction::TxInfo, AccountState},
 };
 
 mod fetcher;
@@ -34,6 +35,8 @@ pub enum ValidationError {
     NonceTooHigh,
     #[error("Not enough balance to pay for value + maximum fee")]
     InsufficientBalance,
+    #[error("Signature error: {0:?}")]
+    Signature(#[from] SignatureError),
     /// NOTE: this should not be exposed to the user.
     #[error("Internal error: {0}")]
     Internal(String),
@@ -82,11 +85,10 @@ impl<C: StateFetcher> State<C> {
     /// NOTE: This function only simulates against execution state, it does not consider
     /// timing or proposer slot targets.
     ///
-    /// If the commitment is invalid
-    /// because of nonce, basefee or balance errors, it will return an error.
+    /// If the commitment is invalid because of nonce, basefee or balance errors, it will return an error.
     /// If the commitment is valid, it will be added to the block template and its account state
     /// will be cached. If this is succesful, any callers can be sure that the commitment is valid
-    /// and can sign it.
+    /// and SHOULD sign it and respond to the requester.
     pub async fn try_commit(&mut self, request: &CommitmentRequest) -> Result<(), ValidationError> {
         // TODO: more pre-checks
         // - Check if the target slot is actually our proposer slot
@@ -94,7 +96,7 @@ impl<C: StateFetcher> State<C> {
 
         let CommitmentRequest::Inclusion(req) = request;
 
-        let sender = req.transaction.from;
+        let sender = req.transaction.from()?;
 
         // TODO: for now, we don't accept same-slot inclusion requests.
         // In the future, we can do this (up to a certain deadline like 6s-8s)
@@ -132,7 +134,8 @@ impl<C: StateFetcher> State<C> {
             validate_transaction(&account_state, &req.transaction)?;
         }
 
-        // self.block_template.Ok(())
+        self.commit_transaction_to_block(req.transaction.clone());
+
         Ok(())
     }
 
@@ -154,7 +157,7 @@ impl<C: StateFetcher> State<C> {
 
     /// Commits the transaction to the current block template. Initializes a new block template
     /// if one does not exist.
-    fn commit_transaction_to_block(&mut self, transaction: Transaction) {
+    fn commit_transaction_to_block(&mut self, transaction: TxEnvelope) {
         if let Some(ref mut template) = self.block_template {
             template.add_transaction(transaction);
         } else {

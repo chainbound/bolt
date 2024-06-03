@@ -1,6 +1,7 @@
 use alloy_primitives::U256;
 
 pub mod commitment;
+pub mod transaction;
 
 /// An alias for a Beacon Chain slot number
 pub type Slot = u64;

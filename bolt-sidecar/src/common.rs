@@ -1,7 +1,9 @@
 use alloy_primitives::U256;
-use alloy_rpc_types::Transaction;
 
-use crate::{state::ValidationError, types::AccountState};
+use crate::{
+    state::ValidationError,
+    types::{transaction::TxInfo, AccountState},
+};
 
 /// Calculates the max_basefee `slot_diff` blocks in the future given a current basefee (in gwei).
 /// Returns None if an overflow would occur.
@@ -26,32 +28,32 @@ pub fn calculate_max_basefee(current: u128, slot_diff: u64) -> Option<u128> {
 }
 
 /// Calculates the max transaction cost (gas + value) in wei.
-pub fn max_transaction_cost(transaction: &Transaction) -> U256 {
-    let gas_limit = transaction.gas;
+pub fn max_transaction_cost<T: TxInfo>(transaction: &T) -> U256 {
+    let gas_limit = transaction.gas_limit();
 
     let fee_cap = transaction
-        .max_fee_per_gas
-        .or(transaction.gas_price)
+        .max_fee_per_gas()
+        .or(transaction.gas_price())
         .expect("Gas price");
 
-    let fee_cap = fee_cap + transaction.max_priority_fee_per_gas.unwrap_or(0);
+    let fee_cap = fee_cap + transaction.max_priority_fee_per_gas().unwrap_or(0);
 
-    U256::from(gas_limit * fee_cap) + transaction.value
+    U256::from(gas_limit * fee_cap) + transaction.value()
 }
 
 /// This function validates a transaction against an account state. It checks 2 things:
 /// 1. The nonce of the transaction must be higher than the account's nonce, but not higher than current + 1.
 /// 2. The balance of the account must be higher than the transaction's max cost.
-pub fn validate_transaction(
+pub fn validate_transaction<T: TxInfo>(
     account_state: &AccountState,
-    transaction: &Transaction,
+    transaction: &T,
 ) -> Result<(), ValidationError> {
     // Check if the nonce is correct
-    if transaction.nonce <= account_state.nonce {
+    if transaction.nonce() <= account_state.nonce {
         return Err(ValidationError::NonceTooLow);
     }
 
-    if transaction.nonce > account_state.nonce + 1 {
+    if transaction.nonce() > account_state.nonce + 1 {
         return Err(ValidationError::NonceTooHigh);
     }
 
