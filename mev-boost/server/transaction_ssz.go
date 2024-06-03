@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/ethereum/go-ethereum/core/types"
 	ssz "github.com/ferranbt/fastssz"
 )
 
@@ -49,4 +50,15 @@ func (tx *Transaction) GetTree() (*ssz.Node, error) {
 	w := &ssz.Wrapper{}
 	tx.HashTreeRootWith(w)
 	return w.Node(), nil
+}
+
+// Hash returns the hash of the transaction
+func (tx *Transaction) Hash() ([32]byte, error) {
+	var parsed = new(types.Transaction)
+	err := parsed.UnmarshalBinary(*tx)
+	if err != nil {
+		return [32]byte{}, err
+	}
+
+	return parsed.Hash(), nil
 }

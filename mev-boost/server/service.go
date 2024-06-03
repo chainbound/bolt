@@ -45,9 +45,10 @@ var (
 
 // Bolt errors
 var (
-	errNilProof      = errors.New("nil proof")
-	errInvalidProofs = errors.New("proof verification failed")
-	errInvalidRoot   = errors.New("failed getting tx root from bid")
+	errNilProof          = errors.New("nil proof")
+	errMismatchProofSize = errors.New("proof size mismatch")
+	errInvalidProofs     = errors.New("proof verification failed")
+	errInvalidRoot       = errors.New("failed getting tx root from bid")
 )
 
 var (
@@ -332,8 +333,18 @@ func (m *BoostService) handleRegisterValidator(w http.ResponseWriter, req *http.
 }
 
 // verifyConstraintProofs verifies the proofs against the constraints, and returns an error if the proofs are invalid.
-func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithInclusionProofs, constraints Constraints) error {
+func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithInclusionProofs, slot uint64) error {
 	log := m.log.WithFields(logrus.Fields{})
+
+	// BOLT: get constraints for the slot
+	inclusionConstraints := m.constraints.Get(slot)
+
+	if len(responsePayload.Proofs) != len(inclusionConstraints) {
+		log.Warnf("[BOLT]: Proof verification failed - number of preconfirmations mismatch: proofs %d != constraints %d",
+			len(responsePayload.Proofs), len(inclusionConstraints))
+		return errMismatchProofSize
+	}
+
 	// BOLT: verify preconfirmation inclusion proofs. If they don't match, we don't consider the bid to be valid.
 	if responsePayload.Proofs != nil {
 		// BOLT: remove unnecessary fields while logging
@@ -353,15 +364,15 @@ func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithInclusionP
 				return errNilProof
 			}
 
-			// Find the raw tx with the hash specified
-			constraint, ok := constraints[proof.TxHash]
+			// Find the constraint associated with this transaction in the cache
+			constraint, ok := m.constraints.FindTransactionByHash(proof.TxHash)
 			if !ok {
 				log.Warnf("[BOLT]: Tx hash %s not found in constraints", proof.TxHash.String())
 				// We don't actually have to return an error here, the relay just provided a proof that was unnecessary
 				continue
 			}
 
-			rawTx := constraint.RawTx
+			rawTx := constraint.Tx
 
 			log.Infof("[BOLT]: Raw tx: %x", rawTx)
 
@@ -419,7 +430,7 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 
 	log.Info("submitConstraint")
 
-	payload := []SignedConstraintSubmission{}
+	payload := BatchedSignedConstraints{}
 	if err := DecodeJSON(req.Body, &payload); err != nil {
 		log.Error("error decoding payload: ", err)
 		m.respondError(w, http.StatusBadRequest, err.Error())
@@ -427,18 +438,18 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 	}
 
 	// Add all constraints to the cache
-	for _, signedConstraint := range payload {
-		constraint := signedConstraint.Message
+	for _, signedConstraints := range payload {
+		constraintMessage := signedConstraints.Message
 
 		log.WithFields(logrus.Fields{
-			"slot":   constraint.Slot,
-			"txHash": constraint.TxHash.String(),
-			"rawTx":  fmt.Sprintf("%#x", constraint.RawTx),
-		}).Info("[BOLT]: adding inclusion constraint to cache")
+			"slot":           constraintMessage.Slot,
+			"validatorIndex": constraintMessage.ValidatorIndex,
+			"count":          len(constraintMessage.Constraints),
+		}).Info("[BOLT]: adding inclusion constraints to cache")
 
-		// Add the constraint to the cache. They will be cleared when we receive a payload for the slot
-		// in `handleGetPayload`
-		m.constraints.AddInclusionConstraint(constraint.Slot, constraint.TxHash, constraint.RawTx)
+		// Add the constraints to the cache.
+		// They will be cleared when we receive a payload for the slot in `handleGetPayload`
+		m.constraints.AddInclusionConstraints(constraintMessage.Slot, constraintMessage.Constraints)
 	}
 
 	relayRespCh := make(chan error, len(m.relays))
@@ -832,24 +843,13 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 				return
 			}
 
-			// BOLT: Get the inclusion constraints for this slot
-			inclusionConstraints := m.constraints.Get(slotUint)
-
-			// BOLT: verify matching proofs & constraints
-			if len(responsePayload.Proofs) != len(inclusionConstraints) {
-				log.Warnf("[BOLT]: Proof verification failed - number of preconfirmations mismatch: proofs %d != constraints %d",
-					len(responsePayload.Proofs), len(inclusionConstraints))
-				return
-			}
-
 			// BOLT: verify preconfirmation inclusion proofs. If they don't match, we don't consider the bid to be valid.
 			if responsePayload.Proofs != nil {
 				// BOLT: verify the proofs against the constraints. If they don't match, we don't consider the bid to be valid.
-				if err := m.verifyConstraintProofs(responsePayload, inclusionConstraints); err != nil {
+				if err := m.verifyConstraintProofs(responsePayload, slotUint); err != nil {
 					log.Warnf("[BOLT]: Proof verification failed for relay %s: %s", relay.URL, err)
 					return
 				}
-
 			}
 
 			mu.Lock()

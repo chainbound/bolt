@@ -317,18 +317,15 @@ func TestConstraintsAndProofs(t *testing.T) {
 	txHash := _HexToHash("0xba40436abdc8adc037e2c92ea1099a5849053510c3911037ff663085ce44bc49")
 	rawTx := _HexToBytes("0x02f871018304a5758085025ff11caf82565f94388c818ca8b9251b393131c08a736a67ccb1929787a41bb7ee22b41380c001a0c8630f734aba7acb4275a8f3b0ce831cf0c7c487fd49ee7bcca26ac622a28939a04c3745096fa0130a188fa249289fd9e60f9d6360854820dba22ae779ea6f573f")
 
-	// Build the constraint
-	constraint := SignedConstraintSubmission{
-		Message: &ConstraintSubmission{
-			Slot:   slot,
-			TxHash: txHash,
-			RawTx:  rawTx,
+	payload := BatchedSignedConstraints{&SignedConstraints{
+		Message: ConstraintsMessage{
+			ValidatorIndex: 12345,
+			Slot:           slot,
+			Constraints:    []*Constraint{{Transaction(rawTx), nil}},
 		},
-		Signature: _HexToSignature(
+		Signature: _HexToBytes(
 			"0x81510b571e22f89d1697545aac01c9ad0c1e7a3e778b3078bef524efae14990e58a6e960a152abd49de2e18d7fd3081c15d5c25867ccfad3d47beef6b39ac24b6b9fbf2cfa91c88f67aff750438a6841ec9e4a06a94ae41410c4f97b75ab284c"),
-	}
-
-	payload := []SignedConstraintSubmission{constraint}
+	}}
 
 	// Build getHeader request
 	hash := _HexToHash("0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7")
@@ -341,8 +338,11 @@ func TestConstraintsAndProofs(t *testing.T) {
 		rr := backend.request(t, http.MethodPost, path, payload)
 		require.Equal(t, http.StatusOK, rr.Code)
 		require.Equal(t, 1, backend.relays[0].GetRequestCount(path))
-		require.Equal(t, 1, len(backend.boost.constraints.Get(slot)))
-		require.Equal(t, Transaction(rawTx), backend.boost.constraints.Get(slot)[txHash].RawTx)
+
+		got, ok := backend.boost.constraints.FindTransactionByHash(txHash)
+		require.True(t, ok)
+		require.Equal(t, Transaction(rawTx), got.Tx)
+		require.Nil(t, got.Index)
 	})
 
 	t.Run("Normal function with constraints", func(t *testing.T) {
