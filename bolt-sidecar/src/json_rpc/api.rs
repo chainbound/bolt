@@ -13,6 +13,7 @@ use super::types::InclusionRequestParams;
 use crate::{
     crypto::{SignableECDSA, Signer},
     json_rpc::types::InclusionRequestResponse,
+    relays::RelayManager,
     types::Slot,
 };
 
@@ -51,24 +52,32 @@ pub trait CommitmentsRpc {
 /// # Functionality
 /// - We keep track of API requests in a local cache in order to avoid
 ///   accepting duplicate commitments from users.
-/// - We also sign each request with a BLS signature to irrevocably bind
-///   the request to this sidecar's identity.
+/// - We also sign each request to irrevocably bind it to this
+///   sidecar's validator identity.
 pub struct JsonRpcApi {
     /// A cache of commitment requests.
     cache: Arc<RwLock<lru::LruCache<Slot, Vec<InclusionRequestParams>>>>,
     /// The signer for this sidecar.
     signer: Signer,
+    /// The manager to interact with all connected relays.
+    relay_manager: RelayManager,
 }
 
 impl JsonRpcApi {
     /// Create a new instance of the JSON-RPC API.
-    pub fn new(private_key: SecretKey) -> Self {
+    pub fn new(private_key: SecretKey, relays: Vec<String>) -> Arc<Self> {
         let cap = NonZeroUsize::new(DEFAULT_API_REQUEST_CACHE_SIZE).unwrap();
 
-        Self {
+        Arc::new(Self {
             cache: Arc::new(RwLock::new(lru::LruCache::new(cap))),
             signer: Signer::new(private_key),
-        }
+            relay_manager: RelayManager::new(relays),
+        })
+    }
+
+    /// Shut down the API and all connected relays gracefully.
+    pub fn shutdown(&self) {
+        self.relay_manager.shutdown();
     }
 }
 
@@ -102,6 +111,7 @@ impl CommitmentsRpc for JsonRpcApi {
         }
 
         {
+            // check for duplicate requests and update the cache if necessary
             let mut cache = self.cache.write();
             if let Some(commitments) = cache.get_mut(&params.message.slot) {
                 if commitments.iter().any(|p| p == &params) {
@@ -122,12 +132,15 @@ impl CommitmentsRpc for JsonRpcApi {
 
         // TODO: check if there is enough time left in the current slot
 
-        // TODO: If valid, broadcast the commitment to all connected relays
-
-        Ok(serde_json::to_value(InclusionRequestResponse {
+        let response = serde_json::to_value(InclusionRequestResponse {
             request: params,
             signature: sidecar_signature,
-        })?)
+        })?;
+
+        // broadcast the commitment to all connected relays in the background
+        self.relay_manager.broadcast_commitment(response.clone());
+
+        Ok(response)
     }
 }
 

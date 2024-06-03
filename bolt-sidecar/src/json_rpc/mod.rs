@@ -15,26 +15,35 @@ mod types;
 use self::api::CommitmentsRpc;
 use self::spec::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 
-pub async fn start_server(port: u16, pk: SecretKey) -> eyre::Result<mpsc::Sender<()>> {
+/// Start the JSON-RPC server. Returns a sender that can be used to send a shutdown signal.
+pub async fn start_server(
+    port: u16,
+    pk: SecretKey,
+    relays: Vec<String>,
+) -> eyre::Result<mpsc::Sender<()>> {
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
     let cors = warp::cors().allow_any_origin().allow_method(Method::POST);
 
-    let rpc_api = Arc::new(api::JsonRpcApi::new(pk));
+    let rpc_api = api::JsonRpcApi::new(pk, relays);
+    let rpc_api_context = Arc::clone(&rpc_api);
+
+    let shutdown_fn = async move {
+        shutdown_rx.recv().await;
+        rpc_api.shutdown();
+    };
 
     let rpc = warp::post()
         .and(warp::path::end())
         .and(warp::body::bytes())
         .and(warp::header::exact("content-type", "application/json"))
-        .and(warp::any().map(move || Arc::clone(&rpc_api)))
+        .and(warp::any().map(move || Arc::clone(&rpc_api_context)))
         .and_then(handle_rpc_request)
         .and_then(|reply| async move { Ok::<_, Rejection>(warp::reply::json(&reply)) })
         .recover(handle_rejection)
         .with(cors);
 
     let (addr, server) =
-        warp::serve(rpc).bind_with_graceful_shutdown(([0, 0, 0, 0], port), async move {
-            shutdown_rx.recv().await;
-        });
+        warp::serve(rpc).bind_with_graceful_shutdown(([0, 0, 0, 0], port), shutdown_fn);
 
     tokio::spawn(server);
     info!("RPC HTTP server listening on http://{}", addr);
