@@ -1384,7 +1384,6 @@ func (w *worker) fillTransactionsSelectAlgo(interrupt *atomic.Int32, env *enviro
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
 func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, constraints types.HashToConstraintDecoded) ([]types.SimulatedBundle, []types.SimulatedBundle, map[common.Hash]struct{}, error) {
-	fmt.Println("inside fillTransactions")
 	w.mu.RLock()
 	tip := w.tip
 	w.mu.RUnlock()
@@ -1412,12 +1411,9 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 	filter.OnlyPlainTxs, filter.OnlyBlobTxs = false, true
 	pendingBlobTxs := w.eth.TxPool().Pending(filter)
 
-	// Drop all transactions which nonce is conflicting with the constraints.
-	type senderAndNonce struct {
-		sender common.Address
-		nonce  uint64
-	}
-	signerAndNonceOfConstraints := make(map[senderAndNonce]struct{})
+	// Drop all transactions that conflict with the constraints (sender, nonce)
+	signerAndNonceOfConstraints := make(map[common.Address]uint64)
+
 	for _, constraint := range constraints {
 		from, err := types.Sender(env.signer, constraint.Tx)
 		if err != nil {
@@ -1426,18 +1422,30 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 			log.Error("Failed to recover sender from constraint. Skipping constraint", "err", err)
 			continue
 		}
-		signerAndNonceOfConstraints[senderAndNonce{sender: from, nonce: constraint.Tx.Nonce()}] = struct{}{}
+
+		signerAndNonceOfConstraints[from] = constraint.Tx.Nonce()
 	}
 	for sender, lazyTxs := range pendingPlainTxs {
 		common.Filter(&lazyTxs, func(lazyTx *txpool.LazyTransaction) bool {
-			_, in := signerAndNonceOfConstraints[senderAndNonce{sender: sender, nonce: lazyTx.Tx.Nonce()}]
-			return !in
+			if nonce, ok := signerAndNonceOfConstraints[sender]; ok {
+				if lazyTx.Tx.Nonce() == nonce {
+					return false
+				}
+			}
+
+			return true
 		})
 	}
+
 	for sender, lazyTxs := range pendingBlobTxs {
 		common.Filter(&lazyTxs, func(lazyTx *txpool.LazyTransaction) bool {
-			_, in := signerAndNonceOfConstraints[senderAndNonce{sender: sender, nonce: lazyTx.Tx.Nonce()}]
-			return !in
+			if nonce, ok := signerAndNonceOfConstraints[sender]; ok {
+				if lazyTx.Tx.Nonce() == nonce {
+					return false
+				}
+			}
+
+			return true
 		})
 	}
 

@@ -9,6 +9,7 @@ func Find[T any](slice []*T, predicate func(el *T) bool) *T {
 	return nil
 }
 
+// Filter filters a slice in place, removing elements for which the predicate returns false.
 func Filter[T any](slice *[]*T, predicate func(el *T) bool) {
 	if slice == nil {
 		return
