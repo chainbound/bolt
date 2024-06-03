@@ -258,6 +258,7 @@ func (b *Builder) Start() error {
 // GenerateAuthenticationHeader generates an authentication string for the builder
 // to subscribe to SSE constraint events emitted by relays
 func (b *Builder) GenerateAuthenticationHeader() (string, error) {
+	// NOTE: the `slot` acts similarly to a nonce for the message to sign, to avoid replay attacks.
 	slot := b.slotAttrs.Slot
 	message, err := json.Marshal(common.ConstraintSubscriptionAuth{PublicKey: b.builderPublicKey, Slot: slot})
 	if err != nil {
