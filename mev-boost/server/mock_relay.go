@@ -183,7 +183,7 @@ func (m *mockRelay) handleSubmitConstraint(w http.ResponseWriter, req *http.Requ
 }
 
 func (m *mockRelay) defaultHandleSubmitConstraint(w http.ResponseWriter, req *http.Request) {
-	payload := []SignedConstraintSubmission{}
+	payload := BatchedSignedConstraints{}
 	if err := DecodeJSON(req.Body, &payload); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

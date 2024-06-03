@@ -39,6 +39,10 @@ func (p *InclusionProof) String() string {
 
 type HexBytes []byte
 
+func (h HexBytes) Equal(other HexBytes) bool {
+	return bytes.Equal(h, other)
+}
+
 // MarshalJSON implements json.Marshaler.
 func (h HexBytes) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf(`"%#x"`, h)), nil
