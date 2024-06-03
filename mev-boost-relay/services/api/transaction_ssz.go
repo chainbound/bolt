@@ -2,13 +2,14 @@ package api
 
 import (
 	ssz "github.com/ferranbt/fastssz"
+	"github.com/flashbots/mev-boost-relay/common"
 )
 
 // MaxBytesPerTransaction is the maximum length in bytes of a raw RLP-encoded transaction
 var MaxBytesPerTransaction uint64 = 1_073_741_824 // 2**30
 
-// Transaction is a wrapper type of byte slice to implement the ssz.HashRoot interface
-type Transaction []byte
+// Transaction is a wrapper type of `common.HexBytes` to implement the ssz.HashRoot interface
+type Transaction common.HexBytes
 
 // HashTreeRoot calculates the hash tree root of the transaction, which
 // is a list of basic types (byte).

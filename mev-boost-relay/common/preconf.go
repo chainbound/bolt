@@ -85,6 +85,10 @@ func (h *HexBytes) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
+func (h HexBytes) String() string {
+	return JSONStringify(h)
+}
+
 // SerializedMerkleProof contains a serialized Merkle proof of transaction inclusion.
 //   - `Index“ is the generalized index of the included transaction from the SSZ tree
 //     created from the list of transactions.

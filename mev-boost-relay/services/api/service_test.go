@@ -304,9 +304,9 @@ func TestSubmitConstraints(t *testing.T) {
 	require.NoError(t, err)
 	proposerPublicKey, err := utils.BlsPublicKeyToPublicKey(proposerPublicKeyEC)
 	require.NoError(t, err)
-	proposerIndex := uint64(1)
+	validatorIndex := uint64(1)
 	mockValidatorEntry := beaconclient.ValidatorResponseEntry{
-		Index: proposerIndex, Balance: "1000000", Validator: beaconclient.ValidatorResponseValidatorData{Pubkey: proposerPublicKey.String()},
+		Index: validatorIndex, Balance: "1000000", Validator: beaconclient.ValidatorResponseValidatorData{Pubkey: proposerPublicKey.String()},
 	}
 
 	// Update beacon client, create MultiBeaconClient and refresh validators in the datastore
@@ -322,24 +322,35 @@ func TestSubmitConstraints(t *testing.T) {
 	path := "/eth/v1/builder/constraints"
 
 	txHash := _HexToHash("0xba40436abdc8adc037e2c92ea1099a5849053510c3911037ff663085ce44bc49")
-	rawTx := _HexToBytes("0x02f871018304a5758085025ff11caf82565f94388c818ca8b9251b393131c08a736a67ccb1929787a41bb7ee22b41380c001a0c8630f734aba7acb4275a8f3b0ce831cf0c7c487fd49ee7bcca26ac622a28939a04c3745096fa0130a188fa249289fd9e60f9d6360854820dba22ae779ea6f573f")
+	tx := _HexToBytes("0x02f871018304a5758085025ff11caf82565f94388c818ca8b9251b393131c08a736a67ccb1929787a41bb7ee22b41380c001a0c8630f734aba7acb4275a8f3b0ce831cf0c7c487fd49ee7bcca26ac622a28939a04c3745096fa0130a188fa249289fd9e60f9d6360854820dba22ae779ea6f573f")
+
+	constraintMessage := &ConstraintsMessage{
+		ValidatorIndex: validatorIndex,
+		Slot:           slot,
+		Constraints: []*Constraint{{
+			Tx:    tx,
+			Index: nil,
+		}},
+	}
 
 	// Build the constraint
-	constraintSubmission := ConstraintSubmission{
-		Slot:   slot,
-		TxHash: txHash,
-		RawTx:  rawTx,
+	constraintSubmission := SignedConstraints{
+		// Slot:   slot,
+		// TxHash: txHash,
+		// RawTx:  rawTx,
+		Message: constraintMessage,
 	}
+
 	constraintSubmissionJSON, err := constraintSubmission.MarshalJSON()
 	require.NoError(t, err)
 	signatureEC := bls.Sign(proposerSecretKeyEC, constraintSubmissionJSON)
 	constraintSignature := phase0.BLSSignature(bls.SignatureToBytes(signatureEC)[:])
-	signedConstraintSubmission := SignedConstraintSubmission{Message: &constraintSubmission, Signature: constraintSignature, ProposerIndex: proposerIndex}
+	signedConstraintSubmission := SignedConstraintSubmission{Message: &constraintSubmission, Signature: constraintSignature, ProposerIndex: validatorIndex}
 	payload := []*SignedConstraintSubmission{&signedConstraintSubmission}
 
 	t.Run("Constraints sent", func(t *testing.T) {
-		ch := make(chan *ConstraintSubmission, 256)
-		backend.relay.constraintsConsumers = []chan *ConstraintSubmission{ch}
+		ch := make(chan *SignedConstraints, 256)
+		backend.relay.constraintsConsumers = []chan *SignedConstraints{ch}
 		rr := backend.request(http.MethodPost, path, payload)
 		require.Equal(t, http.StatusOK, rr.Code)
 
@@ -444,9 +455,9 @@ func TestSubscribeToConstraints(t *testing.T) {
 
 	// Now we can safely send the constraints, and we should get a response
 	// in the HTTP request defined in the goroutine above
-	backend.relay.constraintsConsumers[0] <- &ConstraintSubmission{}
+	backend.relay.constraintsConsumers[0] <- &SignedConstraints{}
 	time.Sleep(500 * time.Millisecond)
-	backend.relay.constraintsConsumers[0] <- &ConstraintSubmission{}
+	backend.relay.constraintsConsumers[0] <- &SignedConstraints{}
 
 	// Wait for the HTTP request goroutine to process the constraints
 	time.Sleep(2 * time.Second)

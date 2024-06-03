@@ -41,6 +41,7 @@ import (
 	"github.com/thedevbirb/flashbots-go-utils/cli"
 	"github.com/thedevbirb/flashbots-go-utils/httplogger"
 	uberatomic "go.uber.org/atomic"
+	"golang.org/x/crypto/sha3"
 	"golang.org/x/exp/slices"
 )
 
@@ -191,8 +192,8 @@ type RelayAPI struct {
 	redis                *datastore.RedisCache
 	memcached            *datastore.Memcached
 	db                   database.IDatabaseService
-	constraints          *shardmap.FIFOMap[uint64, *Constraints]
-	constraintsConsumers []chan *ConstraintSubmission
+	constraints          *shardmap.FIFOMap[uint64, *[]*SignedConstraints]
+	constraintsConsumers []chan *SignedConstraints
 
 	headSlot     uberatomic.Uint64
 	genesisInfo  *beaconclient.GetGenesisResponse
@@ -292,8 +293,8 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		redis:                opts.Redis,
 		memcached:            opts.Memcached,
 		db:                   opts.DB,
-		constraints:          shardmap.NewFIFOMap[uint64, *Constraints](64, 8, shardmap.HashUint64), // 2 epochs cache
-		constraintsConsumers: make([]chan *ConstraintSubmission, 0, 10),
+		constraints:          shardmap.NewFIFOMap[uint64, *[]*SignedConstraints](64, 8, shardmap.HashUint64), // 2 epochs cache
+		constraintsConsumers: make([]chan *SignedConstraints, 0, 10),
 
 		payloadAttributes: make(map[string]payloadAttributesHelper),
 
@@ -585,7 +586,7 @@ func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 }
 
 // removeConstraintsConsumer is an helper function to remove the consumer from the list
-func (api *RelayAPI) removeConstraintsConsumer(ch chan *ConstraintSubmission) {
+func (api *RelayAPI) removeConstraintsConsumer(ch chan *SignedConstraints) {
 	for i, c := range api.constraintsConsumers {
 		if c == ch {
 			api.constraintsConsumers = append(api.constraintsConsumers[:i], api.constraintsConsumers[i+1:]...)
@@ -1677,7 +1678,7 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 	}
 
 	// Decode payload
-	payload := new([]*SignedConstraintSubmission)
+	payload := new([]*SignedConstraints)
 	if err := json.NewDecoder(bytes.NewReader(body)).Decode(payload); err != nil {
 		log.WithError(err).Warn("failed to decode submit contraints body")
 		api.RespondError(w, http.StatusBadRequest, "failed to decode payload")
@@ -1690,12 +1691,12 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 	}
 
 	// Add all constraints to the cache
-	for _, signedConstraint := range *payload {
+	for _, signedConstraints := range *payload {
 		// Retrieve proposer information
-		proposerIndex := signedConstraint.ProposerIndex
-		proposerPubKeyStr, found := api.datastore.GetKnownValidatorPubkeyByIndex(proposerIndex)
+		validatorIndex := signedConstraints.Message.ValidatorIndex
+		proposerPubKeyStr, found := api.datastore.GetKnownValidatorPubkeyByIndex(validatorIndex)
 		if !found {
-			log.Errorf("could not find proposer pubkey for index %d", proposerIndex)
+			log.Errorf("could not find proposer pubkey for index %d", validatorIndex)
 			api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
 			return
 		}
@@ -1713,7 +1714,7 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 		}
 
 		// Verify signature
-		signatureBytes := []byte(signedConstraint.Signature[:])
+		signatureBytes := []byte(signedConstraints.Signature[:])
 		signature, err := bls.SignatureFromBytes(signatureBytes)
 		if err != nil {
 			log.Errorf("could not convert signature to bls.Signature: %v", err)
@@ -1721,14 +1722,16 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 			return
 		}
 
+		message := signedConstraints.Message
+
 		// NOTE: Assuming this is what actually the proposer is signing
-		messageSigned, err := signedConstraint.Message.MarshalJSON()
+		messageJson, err := json.Marshal(message)
 		if err != nil {
 			log.Errorf("could not marshal constraint message to json: %v", err)
 			api.RespondError(w, http.StatusInternalServerError, "could not marshal constraint message to json")
 			return
 		}
-		ok, err := bls.VerifySignature(signature, blsPublicKey, messageSigned)
+		ok, err := bls.VerifySignature(signature, blsPublicKey, messageJson)
 		if err != nil {
 			log.Errorf("error while veryfing signature: %v", err)
 			api.RespondError(w, http.StatusInternalServerError, "error while veryfing signature")
@@ -1736,28 +1739,18 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 		}
 		if !ok {
 			log.Error("Invalid BLS signature over constraint message")
-			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("Invalid BLS signature over constraint message %s", messageSigned))
+			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("Invalid BLS signature over constraint message %s", messageJson))
 			return
 		}
 
-		constraint := signedConstraint.Message
-
-		log.WithFields(logrus.Fields{
-			"slot":   constraint.Slot,
-			"txHash": constraint.TxHash.String(),
-			"rawTx":  fmt.Sprintf("%#x", constraint.RawTx),
-		}).Info("[BOLT]: adding inclusion constraint to cache")
-
-		broadcastToChannels(api.constraintsConsumers, constraint)
+		broadcastToChannels(api.constraintsConsumers, signedConstraints)
 
 		// Add the constraint to the cache.
-		slotConstraints, _ := api.constraints.Get(constraint.Slot)
+		slotConstraints, _ := api.constraints.Get(message.Slot)
 		if slotConstraints == nil {
-			constraints := make(Constraints)
-			constraints[constraint.TxHash] = &Constraint{RawTx: constraint.RawTx}
-			api.constraints.Put(constraint.Slot, &constraints)
+			api.constraints.Put(message.Slot, &[]*SignedConstraints{signedConstraints})
 		} else {
-			(*slotConstraints)[constraint.TxHash] = &Constraint{RawTx: constraint.RawTx}
+			*slotConstraints = append(*slotConstraints, signedConstraints)
 		}
 	}
 
@@ -1987,7 +1980,17 @@ func (api *RelayAPI) updateRedisBid(
 			api.RespondError(opts.w, http.StatusBadRequest, err.Error())
 			return nil, nil, false
 		}
-		err = api.verifyConstraintProofs(transactionsRoot, proofs, *slotConstraints)
+		constraints := make(map[phase0.Hash32]*Constraint)
+		for _, signedConstraints := range *slotConstraints {
+			for _, constraint := range signedConstraints.Message.Constraints {
+				hasher := sha3.New256()
+				hasher.Write(constraint.Tx)
+				hash := phase0.Hash32(hasher.Sum(nil))
+				constraints[hash] = constraint
+			}
+		}
+
+		err = verifyConstraintProofs(api.log, transactionsRoot, proofs, constraints)
 		if err != nil {
 			api.RespondError(opts.w, http.StatusBadRequest, err.Error())
 			return nil, nil, false
@@ -2855,7 +2858,7 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 	}
 
 	// Add the new consumer
-	constraintsCh := make(chan *ConstraintSubmission, 256)
+	constraintsCh := make(chan *SignedConstraints, 256)
 	api.constraintsConsumers = append(api.constraintsConsumers, constraintsCh)
 
 	// Remove the consumer and close the channel when the client disconnects
@@ -2882,7 +2885,7 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 			// Client disconnected
 			return
 		case constraint := <-constraintsCh:
-			constraintJSON, err := constraint.MarshalJSON()
+			constraintJSON, err := json.Marshal(constraint)
 			api.log.Infof("New constraint received: %s", constraint)
 
 			if err != nil {
