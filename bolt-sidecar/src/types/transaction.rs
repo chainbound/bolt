@@ -16,8 +16,8 @@ impl TxInfo for TxEnvelope {
         match self {
             TxEnvelope::Legacy(tx) => Some(tx.tx().gas_price),
             TxEnvelope::Eip2930(tx) => Some(tx.tx().gas_price),
-            TxEnvelope::Eip1559(tx) => None,
-            TxEnvelope::Eip4844(tx) => None,
+            TxEnvelope::Eip1559(_) => None,
+            TxEnvelope::Eip4844(_) => None,
             _ => unimplemented!("TxEnvelope variant not supported"),
         }
     }
