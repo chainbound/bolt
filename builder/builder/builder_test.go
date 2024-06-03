@@ -670,14 +670,14 @@ func sseConstraintsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func generateMockConstraintsForSlot(slot uint64) common.Constraints {
+func generateMockConstraintsForSlot(slot uint64) common.SignedConstraintsList {
 	rawTx := new(common.HexBytes)
 	err := rawTx.UnmarshalJSON([]byte("\"0x02f876018305da308401312d0085041f1196d2825208940c598786c88883ff5e4f461750fad64d3fae54268804b7ec32d7a2000080c080a0086f02eacec72820be3b117e1edd5bd7ed8956964b28b2d903d2cba53dd13560a06d61ec9ccce6acb31bf21878b9a844e7fdac860c5b7d684f7eb5f38a5945357c\""))
 	if err != nil {
 		fmt.Println("Failed to unmarshal rawTx: ", err)
 	}
-	return common.Constraints{
-		&common.ConstraintSigned{
+	return common.SignedConstraintsList{
+		&common.SignedConstraints{
 			Message: common.ConstraintMessage{
 				Constraints: []*common.Constraint{{Tx: *rawTx}}, ValidatorIndex: 0, Slot: slot,
 			}, Signature: phase0.BLSSignature{},
