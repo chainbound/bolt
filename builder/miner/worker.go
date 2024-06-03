@@ -1030,35 +1030,32 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 	}
 	var coalescedLogs []*types.Log
 
+	// Here we initialize and track the constraints left to be executed along
+	// with their gas requirements
+	constraintsOrderedByIndex := make([]*types.ConstraintDecoded, 0, len(constraints))
+	constraintsWithoutIndex := make([]*types.ConstraintDecoded, 0, len(constraints))
 	constraintsTotalGasLeft := uint64(0)
 	constraintsTotalBlobGasLeft := uint64(0)
 
-	constraintsOrderedByIndex := make([]*types.ConstraintDecoded, 0, len(constraints))
-
 	for _, constraint := range constraints {
+		if constraint.Index == nil {
+			constraintsWithoutIndex = append(constraintsWithoutIndex, constraint)
+		} else {
+			constraintsOrderedByIndex = append(constraintsOrderedByIndex, constraint)
+		}
 		constraintsTotalGasLeft += constraint.Tx.Gas()
 		constraintsTotalBlobGasLeft += constraint.Tx.BlobGas()
-		constraintsOrderedByIndex = append(constraintsOrderedByIndex, constraint)
 	}
 
-	// The ordering is the following: first txs sorted by index, then the ones without it
+	// Sorts the constraints by index ascending
 	sort.Slice(constraintsOrderedByIndex, func(i, j int) bool {
-		a := constraintsOrderedByIndex[i]
-		b := constraintsOrderedByIndex[j]
-		if a.Index == nil {
-			return false
-		} else if b.Index == nil {
-			return true
-		} else {
-			return *a.Index < *b.Index
-		}
+		// By assumption, all constraints here have a non-nil index
+		return *constraintsOrderedByIndex[i].Index < *constraintsOrderedByIndex[j].Index
 	})
-
-	var currentIndex uint64
 
 	for {
 		// `env.tcount` starts from 0 so it's correct to use it as the current index
-		currentIndex = uint64(env.tcount)
+		currentTxIndex := uint64(env.tcount)
 
 		// Check interruption signal and abort building if it's fired.
 		if interrupt != nil {
@@ -1131,8 +1128,9 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 
 		isSomePoolTxLeft := lazyTx != nil
 
-		isThereConstraintWithThisIndex := constraintTx != nil && constraintTx.Index != nil && *constraintTx.Index == currentIndex
+		isThereConstraintWithThisIndex := constraintTx != nil && constraintTx.Index != nil && *constraintTx.Index == currentTxIndex
 		if isThereConstraintWithThisIndex {
+			// we retrieve the candidate constraint by shifting it from the list
 			candidate = candidateTx{tx: common.Shift(&constraintsOrderedByIndex).Tx, isConstraint: true}
 		} else {
 			if isSomePoolTxLeft {
@@ -1170,21 +1168,15 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 				candidate = candidateTx{tx: lazyTx.Resolve(), isConstraint: false}
 			} else {
 				// No more pool tx left, we can add the unindexed ones if available
-				if len(constraintsOrderedByIndex) == 0 {
-					// No more constraints left, we can safely exit
-					break
-				}
-				// Unindexed tx are last in the list
-				c := constraintsOrderedByIndex[len(constraintsOrderedByIndex)-1]
-				if c.Index == nil {
+				if len(constraintsWithoutIndex) == 0 {
 					// To recap, this means:
 					// 1. there are no more pool tx left
 					// 2. there are no more constraints without an index
-					// 3. the remaining indexes, if any, cannot be satisfied
+					// 3. the remaining indexes inside `constraintsOrderedByIndex`, if any, cannot be satisfied
 					// As such, we can safely exist
 					break
 				}
-				candidate = candidateTx{tx: c.Tx, isConstraint: true}
+				candidate = candidateTx{tx: common.Pop(&constraintsWithoutIndex).Tx, isConstraint: true}
 			}
 		}
 
@@ -1370,8 +1362,13 @@ func (w *worker) fillTransactionsSelectAlgo(interrupt *atomic.Int32, env *enviro
 	)
 
 	switch w.flashbots.algoType {
+
 	case ALGO_GREEDY, ALGO_GREEDY_BUCKETS, ALGO_GREEDY_MULTISNAP, ALGO_GREEDY_BUCKETS_MULTISNAP:
-		blockBundles, allBundles, usedSbundles, mempoolTxHashes, err = w.fillTransactionsAlgoWorker(interrupt, env, constraints)
+		// FIXME: (BOLT) the greedy algorithms do not support the constraints interface at the moment.
+		// As such for this PoC we will be always using the MEV GETH algorithm regardless of the worker configuration.
+
+		// 	blockBundles, allBundles, usedSbundles, mempoolTxHashes, err = w.fillTransactionsAlgoWorker(interrupt, env)
+		blockBundles, allBundles, mempoolTxHashes, err = w.fillTransactions(interrupt, env, constraints)
 	case ALGO_MEV_GETH:
 		blockBundles, allBundles, mempoolTxHashes, err = w.fillTransactions(interrupt, env, constraints)
 	default:
@@ -1518,7 +1515,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 // fillTransactionsAlgoWorker retrieves the pending transactions and bundles from the txpool and fills them
 // into the given sealing block.
 // Returns error if any, otherwise the bundles that made it into the block and all bundles that passed simulation
-func (w *worker) fillTransactionsAlgoWorker(interrupt *atomic.Int32, env *environment, constraints types.HashToConstraintDecoded) ([]types.SimulatedBundle, []types.SimulatedBundle, []types.UsedSBundle, map[common.Hash]struct{}, error) {
+func (w *worker) fillTransactionsAlgoWorker(interrupt *atomic.Int32, env *environment) ([]types.SimulatedBundle, []types.SimulatedBundle, []types.UsedSBundle, map[common.Hash]struct{}, error) {
 	tip := w.tip
 	// Retrieve the pending transactions pre-filtered by the 1559/4844 dynamic fees
 	filter := txpool.PendingFilter{
