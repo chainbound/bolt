@@ -97,7 +97,8 @@ type Builder struct {
 	builderResubmitInterval     time.Duration
 	discardRevertibleTxOnErr    bool
 
-	constraintsCache *shardmap.FIFOMap[uint64, common.Constraints]
+	// constraintsCache is a map from slot to the constraints made by proposers
+	constraintsCache *shardmap.FIFOMap[uint64, common.SignedConstraintsList]
 
 	limiter                       *rate.Limiter
 	submissionOffsetFromEndOfSlot time.Duration
@@ -195,7 +196,7 @@ func NewBuilder(args BuilderArgs) (*Builder, error) {
 		discardRevertibleTxOnErr:      args.discardRevertibleTxOnErr,
 		submissionOffsetFromEndOfSlot: args.submissionOffsetFromEndOfSlot,
 
-		constraintsCache: shardmap.NewFIFOMap[uint64, common.Constraints](64, 16, shardmap.HashUint64),
+		constraintsCache: shardmap.NewFIFOMap[uint64, common.SignedConstraintsList](64, 16, shardmap.HashUint64),
 
 		limiter:       args.limiter,
 		slotCtx:       slotCtx,
@@ -349,7 +350,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 
 		// We assume the data is the JSON representation of the constraints
 		log.Debug("Received new constraint: %s\n", data)
-		constraintsSigned := make(common.Constraints, 0, 8)
+		constraintsSigned := make(common.SignedConstraintsList, 0, 8)
 		if err := json.Unmarshal([]byte(data), &constraintsSigned); err != nil {
 			log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))
 			continue
@@ -365,7 +366,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 			slotConstraints, _ := b.constraintsCache.Get(constraint.Message.Slot)
 			if len(slotConstraints) == 0 {
 				// New constraint for this slot, add it in the map and continue with the next constraint
-				b.constraintsCache.Put(constraint.Message.Slot, common.Constraints{constraint})
+				b.constraintsCache.Put(constraint.Message.Slot, common.SignedConstraintsList{constraint})
 				continue
 			}
 			for _, slotConstraint := range slotConstraints {

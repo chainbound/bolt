@@ -611,13 +611,14 @@ func (v *VersionedSubmitBlockRequestWithProofs) String() string {
 	return string(out)
 }
 
-// Constraints are a list of proposer constraints that a builder must satisfy
-// in order to produce a valid bid.
-// Reference: https://chainbound.github.io/bolt-docs/api/builder-api
-type Constraints = []*ConstraintSigned
+// SignedConstraintsList are a list of proposer constraints that a builder must satisfy
+// in order to produce a valid bid. This is not defined on the
+// [spec](https://chainbound.github.io/bolt-docs/api/builder-api)
+// but it's useful as an helper type
+type SignedConstraintsList = []*SignedConstraints
 
 // Reference: https://chainbound.github.io/bolt-docs/api/builder-api
-type ConstraintSigned struct {
+type SignedConstraints struct {
 	Message   ConstraintMessage   `json:"message"`
 	Signature phase0.BLSSignature `json:"signature"`
 }
