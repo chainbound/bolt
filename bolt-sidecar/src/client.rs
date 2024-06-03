@@ -59,7 +59,7 @@ impl RpcClient {
             .add_call("eth_getBalance", &(address, BlockNumberOrTag::Latest))
             .expect("Correct parameters");
 
-        let nonce = batch
+        let tx_count = batch
             .add_call(
                 "eth_getTransactionCount",
                 &(address, BlockNumberOrTag::Latest),
@@ -70,12 +70,12 @@ impl RpcClient {
         // Note that requests may error separately!
         batch.send().await?;
 
-        let nonce: U64 = nonce.await?;
+        let tx_count: U64 = tx_count.await?;
         let balance: U256 = balance.await?;
 
         Ok(AccountState {
             balance,
-            nonce: nonce.to(),
+            transaction_count: tx_count.to(),
         })
     }
 }
@@ -121,6 +121,6 @@ mod tests {
             uint!(10_000U256 * Uint::from(ETH_TO_WEI))
         );
 
-        assert_eq!(account_state.nonce, 0);
+        assert_eq!(account_state.transaction_count, 0);
     }
 }

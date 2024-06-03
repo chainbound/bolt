@@ -48,12 +48,12 @@ pub fn validate_transaction<T: TxInfo>(
     account_state: &AccountState,
     transaction: &T,
 ) -> Result<(), ValidationError> {
-    // Check if the nonce is correct
-    if transaction.nonce() <= account_state.nonce {
+    // Check if the nonce is correct (should be the same as the transaction count)
+    if transaction.nonce() < account_state.transaction_count {
         return Err(ValidationError::NonceTooLow);
     }
 
-    if transaction.nonce() > account_state.nonce + 1 {
+    if transaction.nonce() > account_state.transaction_count {
         return Err(ValidationError::NonceTooHigh);
     }
 

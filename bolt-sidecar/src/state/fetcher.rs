@@ -94,10 +94,10 @@ impl StateFetcher for StateClient {
             account_states
                 .entry(**addr)
                 .and_modify(|s: &mut AccountState| {
-                    s.nonce = nonce;
+                    s.transaction_count = nonce;
                 })
                 .or_insert(AccountState {
-                    nonce,
+                    transaction_count: nonce,
                     balance: U256::ZERO,
                 });
         }
@@ -110,7 +110,10 @@ impl StateFetcher for StateClient {
                 .and_modify(|s: &mut AccountState| {
                     s.balance = balance;
                 })
-                .or_insert(AccountState { nonce: 0, balance });
+                .or_insert(AccountState {
+                    transaction_count: 0,
+                    balance,
+                });
         }
 
         Ok(StateUpdate {

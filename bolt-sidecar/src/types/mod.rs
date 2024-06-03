@@ -9,6 +9,8 @@ pub type Slot = u64;
 /// Minimal account state needed for commitment validation.
 #[derive(Debug, Clone, Copy)]
 pub struct AccountState {
-    pub nonce: u64,
+    /// The nonce of the account. This is the number of transactions sent from this account
+    /// and should be the
+    pub transaction_count: u64,
     pub balance: U256,
 }

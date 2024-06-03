@@ -28,7 +28,7 @@ pub enum ValidationError {
     #[error("Slot too low: {0}")]
     SlotTooLow(u64),
     #[error("Transaction fee is too low, need {0} gwei to cover the maximum base fee")]
-    FeeTooLow(u128),
+    BaseFeeTooLow(u128),
     #[error("Transaction nonce too low")]
     NonceTooLow,
     #[error("Transaction nonce too high")]
@@ -40,6 +40,12 @@ pub enum ValidationError {
     /// NOTE: this should not be exposed to the user.
     #[error("Internal error: {0}")]
     Internal(String),
+}
+
+impl ValidationError {
+    fn is_internal(&self) -> bool {
+        matches!(self, Self::Internal(_))
+    }
 }
 
 /// The minimal state of the chain at some block number (`head`).
@@ -113,14 +119,16 @@ impl<C: StateFetcher> State<C> {
 
         // Validate the base fee
         if !req.validate_basefee(max_basefee) {
-            return Err(ValidationError::FeeTooLow(max_basefee as u128));
+            return Err(ValidationError::BaseFeeTooLow(max_basefee as u128));
         }
 
         // If we have the account state, use it here
         if let Some(account_state) = self.account_state(&sender) {
             // Validate the transaction against the account state
+            tracing::debug!(address = %sender, "Known account state: {account_state:?}");
             validate_transaction(&account_state, &req.transaction)?;
         } else {
+            tracing::debug!(address = %sender, "Unknown account state");
             // If we don't have the account state, we need to fetch it
             let account_state = self
                 .client
@@ -128,6 +136,9 @@ impl<C: StateFetcher> State<C> {
                 .await
                 .map_err(|e| reject_internal(&e.to_string()))?;
 
+            tracing::debug!(address = %sender, "Fetched account state: {account_state:?}");
+
+            // Record the account state for later
             self.account_states.insert(sender, account_state);
 
             // Validate the transaction against the account state
@@ -184,7 +195,7 @@ impl<C: StateFetcher> State<C> {
                 // Apply the diffs from the block template
                 if let Some((nonce_diff, balance_diff)) = template.state_diff().get_diff(address) {
                     // Nonce will always be increased
-                    account_state.nonce += nonce_diff;
+                    account_state.transaction_count += nonce_diff;
                     // Balance will always be decreased
                     account_state.balance -= balance_diff;
                 }
@@ -211,17 +222,34 @@ fn reject_internal(reason: &str) -> ValidationError {
 mod tests {
     use std::time::Duration;
 
+    use alloy_consensus::constants::ETH_TO_WEI;
     use alloy_node_bindings::{Anvil, AnvilInstance};
-    use alloy_primitives::U256;
+    use alloy_primitives::{hex, uint, Uint, U256};
     use alloy_provider::network::{EthereumSigner, TransactionBuilder};
     use alloy_rpc_types::TransactionRequest;
+    use alloy_signer::{k256::ecdsa::signature::SignerMut, SignerSync};
     use alloy_signer_wallet::LocalWallet;
     use fetcher::StateClient;
+    use tracing_subscriber::fmt;
+
+    use crate::types::commitment::InclusionRequest;
 
     use super::*;
 
     fn launch_anvil() -> AnvilInstance {
         Anvil::new().block_time(1).spawn()
+    }
+
+    fn default_transaction(sender: Address) -> TransactionRequest {
+        TransactionRequest::default()
+            .with_from(sender)
+            // Burn it
+            .with_to(Address::ZERO)
+            .with_nonce(0)
+            .with_value(U256::from(100))
+            .with_gas_limit(21_000)
+            .with_max_priority_fee_per_gas(1_000_000_000)
+            .with_max_fee_per_gas(20_000_000_000)
     }
 
     #[tokio::test]
@@ -239,6 +267,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_valid_inclusion_request() {
+        let _ = fmt::try_init();
+
         // let mut state = State::new(get_client()).await.unwrap();
         let anvil = launch_anvil();
         let client = StateClient::new(&anvil.endpoint(), 1);
@@ -246,30 +276,121 @@ mod tests {
         let mut state = State::new(client).await.unwrap();
 
         let wallet: LocalWallet = anvil.keys()[0].clone().into();
-        let signer: EthereumSigner = wallet.into();
 
         let sender = anvil.addresses()[0];
 
-        let tx = TransactionRequest::default()
-            .with_from(sender)
-            // Burn it
-            .with_to(Address::ZERO)
-            .with_nonce(0)
-            .with_chain_id(anvil.chain_id())
-            .with_value(U256::from(100))
-            .with_gas_limit(21_000)
-            .with_max_priority_fee_per_gas(1_000_000_000)
-            .with_max_fee_per_gas(20_000_000_000);
+        let tx = default_transaction(sender);
 
+        let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
+
+        let signer: EthereumSigner = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
-        todo!("finish this test")
 
-        // let request = CommitmentRequest::Inclusion(InclusionRequest {
-        //     slot: state.head + 1,
-        //     transaction: signed.into(),
-        //     signature: Default::default(),
-        // });
+        let request = CommitmentRequest::Inclusion(InclusionRequest {
+            slot: state.head + 1,
+            transaction: signed,
+            signature: sig,
+        });
 
-        // state.try_commit()
+        assert!(state.try_commit(&request).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_invalid_inclusion_request_nonce() {
+        let _ = fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(&anvil.endpoint(), 1);
+
+        let mut state = State::new(client).await.unwrap();
+
+        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+
+        let sender = anvil.addresses()[0];
+
+        let tx = default_transaction(sender).with_nonce(1);
+
+        let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
+
+        let signer: EthereumSigner = wallet.into();
+        let signed = tx.build(&signer).await.unwrap();
+
+        let request = CommitmentRequest::Inclusion(InclusionRequest {
+            slot: state.head + 1,
+            transaction: signed,
+            signature: sig,
+        });
+
+        assert!(matches!(
+            state.try_commit(&request).await,
+            Err(ValidationError::NonceTooHigh)
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_invalid_inclusion_request_balance() {
+        let _ = fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(&anvil.endpoint(), 1);
+
+        let mut state = State::new(client).await.unwrap();
+
+        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+
+        let sender = anvil.addresses()[0];
+
+        let tx =
+            default_transaction(sender).with_value(uint!(11_000_U256 * Uint::from(ETH_TO_WEI)));
+
+        let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
+
+        let signer: EthereumSigner = wallet.into();
+        let signed = tx.build(&signer).await.unwrap();
+
+        let request = CommitmentRequest::Inclusion(InclusionRequest {
+            slot: state.head + 1,
+            transaction: signed,
+            signature: sig,
+        });
+
+        assert!(matches!(
+            state.try_commit(&request).await,
+            Err(ValidationError::InsufficientBalance)
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_invalid_inclusion_request_basefee() {
+        let _ = fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(&anvil.endpoint(), 1);
+
+        let mut state = State::new(client).await.unwrap();
+
+        let basefee = state.basefee;
+
+        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+
+        let sender = anvil.addresses()[0];
+
+        let tx = default_transaction(sender).with_max_fee_per_gas(basefee - 1);
+
+        let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
+
+        let signer: EthereumSigner = wallet.into();
+        let signed = tx.build(&signer).await.unwrap();
+
+        let request = CommitmentRequest::Inclusion(InclusionRequest {
+            slot: state.head + 1,
+            transaction: signed,
+            signature: sig,
+        });
+
+        assert!(matches!(
+            state.try_commit(&request).await,
+            Err(ValidationError::BaseFeeTooLow(_))
+        ));
     }
 }
