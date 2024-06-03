@@ -27,6 +27,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	eth2UtilBellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/holiman/uint256"
 	"github.com/prysmaticlabs/go-bitfield"
@@ -339,7 +340,7 @@ func TestConstraintsAndProofs(t *testing.T) {
 		require.Equal(t, http.StatusOK, rr.Code)
 		require.Equal(t, 1, backend.relays[0].GetRequestCount(path))
 
-		got, ok := backend.boost.constraints.FindTransactionByHash(txHash)
+		got, ok := backend.boost.constraints.FindTransactionByHash(common.HexToHash(txHash.String()))
 		require.True(t, ok)
 		require.Equal(t, Transaction(rawTx), got.Tx)
 		require.Nil(t, got.Index)

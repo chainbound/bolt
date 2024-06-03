@@ -22,6 +22,7 @@ import (
 	eth2ApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	eth2ApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/common"
 	fastSsz "github.com/ferranbt/fastssz"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/types"
@@ -365,7 +366,7 @@ func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithInclusionP
 			}
 
 			// Find the constraint associated with this transaction in the cache
-			constraint, ok := m.constraints.FindTransactionByHash(proof.TxHash)
+			constraint, ok := m.constraints.FindTransactionByHash(common.HexToHash(proof.TxHash.String()))
 			if !ok {
 				log.Warnf("[BOLT]: Tx hash %s not found in constraints", proof.TxHash.String())
 				// We don't actually have to return an error here, the relay just provided a proof that was unnecessary
