@@ -1,6 +1,10 @@
 package server
 
 import (
+	"encoding/hex"
+	"fmt"
+	"strings"
+
 	ssz "github.com/ferranbt/fastssz"
 )
 
@@ -49,4 +53,28 @@ func (tx *Transaction) GetTree() (*ssz.Node, error) {
 	w := &ssz.Wrapper{}
 	tx.HashTreeRootWith(w)
 	return w.Node(), nil
+}
+
+// UnmarshalJSON custom unmarshal function for the Transaction type
+func (tx *Transaction) UnmarshalJSON(data []byte) error {
+	// Remove the quotes from the JSON string
+	jsonString := string(data)
+	if len(jsonString) < 2 || jsonString[0] != '"' || jsonString[len(jsonString)-1] != '"' {
+		return fmt.Errorf("invalid JSON string")
+	}
+	jsonString = jsonString[1 : len(jsonString)-1]
+
+	// Remove the "0x" prefix if present
+	jsonString = strings.TrimPrefix(jsonString, "0x")
+
+	// Decode the hex string into the Transaction byte slice
+	decodedBytes, err := hex.DecodeString(jsonString)
+	if err != nil {
+		return err
+	}
+
+	// Set the decoded bytes to the Transaction
+	*tx = Transaction(decodedBytes)
+
+	return nil
 }
