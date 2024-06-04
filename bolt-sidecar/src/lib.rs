@@ -3,6 +3,7 @@
 #![deny(unused_must_use, rust_2018_idioms)]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
+mod api;
 mod client;
 mod common;
 mod crypto;
