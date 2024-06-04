@@ -7,7 +7,7 @@ use futures::{stream::FuturesOrdered, StreamExt};
 
 use crate::{client::RpcClient, types::AccountState};
 
-use super::StateUpdate;
+use super::execution::StateUpdate;
 
 /// Maximum retries for RPC requests.
 const MAX_RETRIES: u32 = 8;
