@@ -14,7 +14,8 @@ async fn main() -> eyre::Result<()> {
 
     let opts = Opts::parse();
     let config = Config::try_from(opts)?;
-    let shutdown_tx = start_server(config.rpc_port, config.private_key, config.relays).await?;
+
+    let shutdown_tx = start_server(config).await?;
 
     tokio::signal::ctrl_c().await?;
     shutdown_tx.send(()).await.ok();

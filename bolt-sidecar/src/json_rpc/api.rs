@@ -9,11 +9,10 @@ use serde_json::Value;
 use thiserror::Error;
 use tracing::info;
 
-use super::types::InclusionRequestParams;
+use super::{mevboost::MevBoostClient, types::InclusionRequestParams};
 use crate::{
     crypto::{SignableECDSA, Signer},
-    json_rpc::types::InclusionRequestResponse,
-    relays::RelayManager,
+    json_rpc::types::{BatchedSignedConstraints, ConstraintsMessage, SignedConstraints},
     types::Slot,
 };
 
@@ -33,6 +32,8 @@ pub enum ApiError {
     Signature(#[from] alloy_primitives::SignatureError),
     #[error("failed to decode RLP: {0}")]
     Rlp(#[from] alloy_rlp::Error),
+    #[error("failed during HTTP call: {0}")]
+    Http(#[from] reqwest::Error),
     #[error("failed while processing API request: {0}")]
     Custom(String),
 }
@@ -59,25 +60,20 @@ pub struct JsonRpcApi {
     cache: Arc<RwLock<lru::LruCache<Slot, Vec<InclusionRequestParams>>>>,
     /// The signer for this sidecar.
     signer: Signer,
-    /// The manager to interact with all connected relays.
-    relay_manager: RelayManager,
+    /// The client for the MEV-Boost sidecar.
+    mevboost_client: MevBoostClient,
 }
 
 impl JsonRpcApi {
     /// Create a new instance of the JSON-RPC API.
-    pub fn new(private_key: SecretKey, relays: Vec<String>) -> Arc<Self> {
+    pub fn new(private_key: SecretKey, mevboost_url: String) -> Arc<Self> {
         let cap = NonZeroUsize::new(DEFAULT_API_REQUEST_CACHE_SIZE).unwrap();
 
         Arc::new(Self {
             cache: Arc::new(RwLock::new(lru::LruCache::new(cap))),
+            mevboost_client: MevBoostClient::new(mevboost_url),
             signer: Signer::new(private_key),
-            relay_manager: RelayManager::new(relays),
         })
-    }
-
-    /// Shut down the API and all connected relays gracefully.
-    pub fn shutdown(&self) {
-        self.relay_manager.shutdown();
     }
 }
 
@@ -124,23 +120,26 @@ impl CommitmentsRpc for JsonRpcApi {
             }
         } // Drop the lock
 
-        // sign the commitment request object
-        let sidecar_signature = self.signer.sign_ecdsa(&params).to_string();
+        // parse the request into constraints and sign them with the sidecar signer
+        // TODO: get the validator index from somewhere
+        let constraints = ConstraintsMessage::build(0, params.message.slot, params.clone());
+        let constraints_sig = self.signer.sign_ecdsa(&constraints).to_string();
+        let signed_constraints: BatchedSignedConstraints = vec![SignedConstraints {
+            message: constraints,
+            signature: constraints_sig,
+        }];
 
         // TODO: simulate and check if the transaction can be included in the next block
         // self.block_builder.try_append(params.slot, params.tx)
 
         // TODO: check if there is enough time left in the current slot
 
-        let response = serde_json::to_value(InclusionRequestResponse {
-            request: params,
-            signature: sidecar_signature,
-        })?;
+        // Forward the constraints to mev-boost's builder API
+        self.mevboost_client
+            .post_constraints(&signed_constraints)
+            .await?;
 
-        // broadcast the commitment to all connected relays in the background
-        self.relay_manager.broadcast_commitment(response.clone());
-
-        Ok(response)
+        Ok(serde_json::to_value(signed_constraints)?)
     }
 }
 
