@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use alloy_consensus::TxEnvelope;
+use alloy_consensus::{TxEnvelope, TxType};
 use alloy_primitives::{Address, SignatureError};
 use thiserror::Error;
 
@@ -11,6 +11,8 @@ use crate::{
 };
 
 use super::{fetcher::StateFetcher, ChainHead, StateError};
+
+const MAX_EIP4844_TRANSACTIONS_PER_BLOCK: usize = 6;
 
 /// Possible commitment validation errors.
 #[derive(Debug, Error)]
@@ -23,6 +25,8 @@ pub enum ValidationError {
     NonceTooHigh,
     #[error("Not enough balance to pay for value + maximum fee")]
     InsufficientBalance,
+    #[error("Too many EIP-4844 transactions in target block")]
+    Eip4844Limit,
     #[error("Signature error: {0:?}")]
     Signature(#[from] SignatureError),
     /// NOTE: this should not be exposed to the user.
@@ -137,6 +141,15 @@ impl<C: StateFetcher> ExecutionState<C> {
 
             // Validate the transaction against the account state
             validate_transaction(&account_state, &req.transaction)?;
+        }
+
+        // Check EIP-4844-specific limits
+        if req.transaction.tx_type() == TxType::Eip4844 {
+            if let Some(template) = self.block_templates.get(&req.slot) {
+                if template.blob_count() >= MAX_EIP4844_TRANSACTIONS_PER_BLOCK {
+                    return Err(ValidationError::Eip4844Limit);
+                }
+            }
         }
 
         self.commit_transaction(req.slot, req.transaction.clone());

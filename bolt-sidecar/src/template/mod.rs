@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use alloy_consensus::TxEnvelope;
+use alloy_consensus::{TxEnvelope, TxType};
 use alloy_primitives::{Address, U256};
 
 use crate::{
@@ -58,8 +58,20 @@ impl BlockTemplate {
         self.transactions.push(transaction);
     }
 
+    /// Returns the length of the transactions in the block template.
     pub fn transactions_len(&self) -> usize {
         self.transactions.len()
+    }
+
+    /// Returns the blob count of the block template.
+    pub fn blob_count(&self) -> usize {
+        self.transactions.iter().fold(0, |mut acc, tx| {
+            if tx.tx_type() == TxType::Eip4844 {
+                acc += tx.blob_count();
+            }
+
+            acc
+        })
     }
 
     /// Removes the transaction at the specified index and updates the state diff.

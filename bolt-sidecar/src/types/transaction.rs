@@ -9,6 +9,7 @@ pub trait TxInfo {
     fn gas_limit(&self) -> u128;
     fn nonce(&self) -> u64;
     fn value(&self) -> U256;
+    fn blob_count(&self) -> usize;
 }
 
 impl TxInfo for TxEnvelope {
@@ -72,6 +73,16 @@ impl TxInfo for TxEnvelope {
             TxEnvelope::Eip2930(tx) => tx.tx().value,
             TxEnvelope::Eip1559(tx) => tx.tx().value,
             TxEnvelope::Eip4844(tx) => tx.tx().tx().value,
+            _ => unimplemented!("TxEnvelope variant not supported"),
+        }
+    }
+
+    fn blob_count(&self) -> usize {
+        match self {
+            TxEnvelope::Legacy(_) => 0,
+            TxEnvelope::Eip2930(_) => 0,
+            TxEnvelope::Eip1559(_) => 0,
+            TxEnvelope::Eip4844(tx) => tx.tx().tx().blob_versioned_hashes.len(),
             _ => unimplemented!("TxEnvelope variant not supported"),
         }
     }
