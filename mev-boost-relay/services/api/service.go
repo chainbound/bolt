@@ -75,7 +75,7 @@ var (
 	pathBuilderGetValidators = "/relay/v1/builder/validators"
 	pathSubmitNewBlock       = "/relay/v1/builder/blocks"
 	// BOLT: allow builders to ship merkle proofs with their blocks
-	pathSubmitNewBlockWithPreconfs = "/relay/v1/builder/blocks_with_preconfs"
+	pathSubmitNewBlockWithProofs = "/relay/v1/builder/blocks_with_proofs"
 	// BOLT: allow builders to subscribe to constraints
 	pathSubscribeConstraints = "/relay/v1/builder/constraints"
 
@@ -365,7 +365,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 		r.HandleFunc(pathBuilderGetValidators, api.handleBuilderGetValidators).Methods(http.MethodGet)
 		r.HandleFunc(pathSubmitNewBlock, api.handleSubmitNewBlock).Methods(http.MethodPost)
 		// BOLT
-		r.HandleFunc(pathSubmitNewBlockWithPreconfs, api.handleSubmitNewBlockWithPreconfs).Methods(http.MethodPost)
+		r.HandleFunc(pathSubmitNewBlockWithProofs, api.handleSubmitNewBlockWithProofs).Methods(http.MethodPost)
 		r.HandleFunc(pathSubscribeConstraints, api.handleSubscribeConstraints).Methods(http.MethodGet)
 	}
 
@@ -1714,8 +1714,7 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 		}
 
 		// Verify signature
-		signatureBytes := []byte(signedConstraints.Signature[:])
-		signature, err := bls.SignatureFromBytes(signatureBytes)
+		signature, err := bls.SignatureFromBytes(signedConstraints.Signature[:])
 		if err != nil {
 			log.Errorf("could not convert signature to bls.Signature: %v", err)
 			api.RespondError(w, http.StatusBadRequest, "Invalid raw BLS signature")
@@ -1724,14 +1723,14 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 
 		message := signedConstraints.Message
 
-		// NOTE: Assuming this is what actually the proposer is signing
-		messageJson, err := json.Marshal(message)
+		// NOTE: even if payload is sent with JSON, the signature digest is the SSZ encoding of the message
+		messageSSZ, err := message.MarshalSSZ()
 		if err != nil {
 			log.Errorf("could not marshal constraint message to json: %v", err)
 			api.RespondError(w, http.StatusInternalServerError, "could not marshal constraint message to json")
 			return
 		}
-		ok, err := bls.VerifySignature(signature, blsPublicKey, messageJson)
+		ok, err := bls.VerifySignature(signature, blsPublicKey, messageSSZ)
 		if err != nil {
 			log.Errorf("error while veryfing signature: %v", err)
 			api.RespondError(w, http.StatusInternalServerError, "error while veryfing signature")
@@ -1739,7 +1738,7 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 		}
 		if !ok {
 			log.Error("Invalid BLS signature over constraint message")
-			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("Invalid BLS signature over constraint message %s", messageJson))
+			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("Invalid BLS signature over constraint message %s", messageSSZ))
 			return
 		}
 
@@ -2427,10 +2426,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 	w.WriteHeader(http.StatusOK)
 }
 
-// TODO: We should check the preconfirmation proofs in this function to discard bids that are not valid.
-// This is necessary to avoid the relay accept a high bid with invalid proofs, resulting in a missed opportunity
-// for the proposer, who will refuse to sign the associated block header.
-func (api *RelayAPI) handleSubmitNewBlockWithPreconfs(w http.ResponseWriter, req *http.Request) {
+func (api *RelayAPI) handleSubmitNewBlockWithProofs(w http.ResponseWriter, req *http.Request) {
 	var pf common.Profile
 	var prevTime, nextTime time.Time
 
@@ -2491,7 +2487,7 @@ func (api *RelayAPI) handleSubmitNewBlockWithPreconfs(w http.ResponseWriter, req
 	prevTime = nextTime
 
 	// BOLT: new payload type
-	payload := new(common.VersionedSubmitBlockRequestWithPreconfsProofs)
+	payload := new(common.VersionedSubmitBlockRequestWithProofs)
 
 	// Check for SSZ encoding
 	contentType := req.Header.Get("Content-Type")

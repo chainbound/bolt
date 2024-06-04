@@ -321,7 +321,7 @@ func TestSubmitConstraints(t *testing.T) {
 	// request path
 	path := "/eth/v1/builder/constraints"
 
-	txHash := _HexToHash("0xba40436abdc8adc037e2c92ea1099a5849053510c3911037ff663085ce44bc49")
+	// txHash := _HexToHash("0xba40436abdc8adc037e2c92ea1099a5849053510c3911037ff663085ce44bc49")
 	tx := _HexToBytes("0x02f871018304a5758085025ff11caf82565f94388c818ca8b9251b393131c08a736a67ccb1929787a41bb7ee22b41380c001a0c8630f734aba7acb4275a8f3b0ce831cf0c7c487fd49ee7bcca26ac622a28939a04c3745096fa0130a188fa249289fd9e60f9d6360854820dba22ae779ea6f573f")
 
 	constraintMessage := &ConstraintsMessage{
@@ -333,20 +333,18 @@ func TestSubmitConstraints(t *testing.T) {
 		}},
 	}
 
+	constraintMessageSSZ, err := constraintMessage.MarshalSSZ()
+	require.NoError(t, err)
+	signatureEC := bls.Sign(proposerSecretKeyEC, constraintMessageSSZ)
+	constraintSignature := phase0.BLSSignature(bls.SignatureToBytes(signatureEC)[:])
+
 	// Build the constraint
-	constraintSubmission := SignedConstraints{
-		// Slot:   slot,
-		// TxHash: txHash,
-		// RawTx:  rawTx,
-		Message: constraintMessage,
+	signedConstraints := SignedConstraints{
+		Message:   constraintMessage,
+		Signature: constraintSignature,
 	}
 
-	constraintSubmissionJSON, err := constraintSubmission.MarshalJSON()
-	require.NoError(t, err)
-	signatureEC := bls.Sign(proposerSecretKeyEC, constraintSubmissionJSON)
-	constraintSignature := phase0.BLSSignature(bls.SignatureToBytes(signatureEC)[:])
-	signedConstraintSubmission := SignedConstraintSubmission{Message: &constraintSubmission, Signature: constraintSignature, ProposerIndex: validatorIndex}
-	payload := []*SignedConstraintSubmission{&signedConstraintSubmission}
+	payload := []*SignedConstraints{&signedConstraints}
 
 	t.Run("Constraints sent", func(t *testing.T) {
 		ch := make(chan *SignedConstraints, 256)
@@ -355,18 +353,18 @@ func TestSubmitConstraints(t *testing.T) {
 		require.Equal(t, http.StatusOK, rr.Code)
 
 		constraintCache := backend.relay.constraints
-		slotConstraints, _ := constraintCache.Get(slot)
-		require.NotNil(t, slotConstraints)
-		expected := (*slotConstraints)[txHash]
-		actual := Constraint{RawTx: constraintSubmission.RawTx}
+		actuals, _ := constraintCache.Get(slot)
+		require.NotNil(t, actuals)
+		actual := (*actuals)[0]
 		actualFromCh := <-backend.relay.constraintsConsumers[0]
-		actualConstraintFromCh := Constraint{RawTx: actualFromCh.RawTx}
 
-		require.Equal(t, expected, &actual, actualConstraintFromCh)
+		expected := signedConstraints
+
+		require.Equal(t, expected.String(), actual.String(), actualFromCh.String())
 	})
 
 	t.Run("Empty constraint list", func(t *testing.T) {
-		rr := backend.request(http.MethodPost, path, []SignedConstraintSubmission{})
+		rr := backend.request(http.MethodPost, path, []*SignedConstraints{})
 		require.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 }

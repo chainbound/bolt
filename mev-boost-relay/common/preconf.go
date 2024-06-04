@@ -15,15 +15,16 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
-// VersionedSubmitBlockRequestWithPreconfsProofs is a wrapper struct
+// VersionedSubmitBlockRequestWithProofs is a wrapper struct
 // over `builderSpec.VersionedSubmitBlockRequest`
 // to include preconfirmation proofs
-type VersionedSubmitBlockRequestWithPreconfsProofs struct {
-	Inner  *VersionedSubmitBlockRequest `json:"inner"`
-	Proofs []*PreconfirmationWithProof  `json:"proofs"`
+type VersionedSubmitBlockRequestWithProofs struct {
+	Inner *VersionedSubmitBlockRequest `json:"inner"`
+	// FIXME: this is not spec-aligned yet https://github.com/chainbound/bolt/issues/55
+	Proofs []*PreconfirmationWithProof `json:"proofs"`
 }
 
-func (v *VersionedSubmitBlockRequestWithPreconfsProofs) String() string {
+func (v *VersionedSubmitBlockRequestWithProofs) String() string {
 	out, err := json.Marshal(v)
 	if err != nil {
 		return err.Error()
@@ -58,7 +59,7 @@ type HexBytes []byte
 
 // MarshalJSON implements json.Marshaler.
 func (h HexBytes) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf(`"%#x"`, h)), nil
+	return []byte(fmt.Sprintf(`"%#x"`, []byte(h))), nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler.

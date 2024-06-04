@@ -38,15 +38,15 @@ func NewIndex(i uint64) *Index {
 	return &idx
 }
 
-func (c *SignedConstraints) String() string {
+func (c SignedConstraints) String() string {
 	return JSONStringify(c)
 }
 
-func (c *ConstraintsMessage) String() string {
+func (c ConstraintsMessage) String() string {
 	return JSONStringify(c)
 }
 
-func (c *Constraint) String() string {
+func (c Constraint) String() string {
 	return JSONStringify(c)
 }
 

@@ -51,3 +51,15 @@ func (tx *Transaction) GetTree() (*ssz.Node, error) {
 	tx.HashTreeRootWith(w)
 	return w.Node(), nil
 }
+
+func (tx Transaction) MarshalJSON() ([]byte, error) {
+	return common.HexBytes(tx).MarshalJSON()
+}
+
+func (tx *Transaction) UnmarshalJSON(buf []byte) error {
+	return (*common.HexBytes)(tx).UnmarshalJSON(buf)
+}
+
+func (tx Transaction) String() string {
+	return JSONStringify(tx)
+}
