@@ -47,6 +47,7 @@ var (
 // Bolt errors
 var (
 	errNilProof          = errors.New("nil proof")
+	errMissingConstraint = errors.New("missing constraint")
 	errMismatchProofSize = errors.New("proof size mismatch")
 	errInvalidProofs     = errors.New("proof verification failed")
 	errInvalidRoot       = errors.New("failed getting tx root from bid")
@@ -161,7 +162,7 @@ func NewBoostService(opts BoostServiceOpts) (*BoostService, error) {
 		requestMaxRetries: opts.RequestMaxRetries,
 
 		// BOLT: Initialize the constraint cache
-		constraints: NewConstraintCache(),
+		constraints: NewConstraintCache(64),
 	}, nil
 }
 
@@ -338,7 +339,11 @@ func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithInclusionP
 	log := m.log.WithFields(logrus.Fields{})
 
 	// BOLT: get constraints for the slot
-	inclusionConstraints := m.constraints.Get(slot)
+	inclusionConstraints, exists := m.constraints.Get(slot)
+	if !exists {
+		log.Warnf("[BOLT]: No constraints found for slot %d", slot)
+		return errMissingConstraint
+	}
 
 	if len(responsePayload.Proofs) != len(inclusionConstraints) {
 		log.Warnf("[BOLT]: Proof verification failed - number of preconfirmations mismatch: proofs %d != constraints %d",
@@ -1201,14 +1206,6 @@ func (m *BoostService) handleGetPayload(w http.ResponseWriter, req *http.Request
 		return
 	}
 
-	slot := uint64(0)
-
-	// BOLT: Make sure we remove the constraints for this slot after we've received the payload.
-	defer func() {
-		// This will use the value of `slot` at execution time
-		m.constraints.Delete(slot)
-	}()
-
 	// Decode the body now
 	payload := new(eth2ApiV1Deneb.SignedBlindedBeaconBlock)
 	if err := DecodeJSON(bytes.NewReader(body), payload); err != nil {
@@ -1220,12 +1217,10 @@ func (m *BoostService) handleGetPayload(w http.ResponseWriter, req *http.Request
 			return
 		}
 
-		slot = uint64(payload.Message.Slot)
 		m.processCapellaPayload(w, req, log, payload, body)
 		return
 	}
 
-	slot = uint64(payload.Message.Slot)
 	m.processDenebPayload(w, req, log, payload)
 }
 
