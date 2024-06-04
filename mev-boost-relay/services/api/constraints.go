@@ -10,12 +10,15 @@ import (
 // These types are taken from https://chainbound.github.io/bolt-docs/
 
 const (
+	// NOTE: This is still a work in progress and not documented on the specs
 	MAX_CONSTRAINTS_PER_SLOT  = 256
 	MAX_BYTES_PER_TRANSACTION = 1073741824 // 2**30
 )
 
 type SignedConstraints struct {
-	Message   *ConstraintsMessage `json:"message"`
+	Message *ConstraintsMessage `json:"message"`
+	// NOTE: This might change to an ECDSA signature in the future. In such case,
+	// when encoding/decoding SSZ we should take into account that it is 64 bytes long instead of 96
 	Signature phase0.BLSSignature `ssz-size:"96" json:"signature"`
 }
 
