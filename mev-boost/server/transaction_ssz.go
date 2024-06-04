@@ -1,10 +1,6 @@
 package server
 
 import (
-	"encoding/hex"
-	"fmt"
-	"strings"
-
 	ssz "github.com/ferranbt/fastssz"
 )
 
@@ -12,7 +8,7 @@ import (
 var MaxBytesPerTransaction uint64 = 1_073_741_824 // 2**30
 
 // Transaction is a wrapper type of byte slice to implement the ssz.HashRoot interface
-type Transaction []byte
+type Transaction HexBytes
 
 // HashTreeRoot calculates the hash tree root of the transaction, which
 // is a list of basic types (byte).
@@ -55,26 +51,14 @@ func (tx *Transaction) GetTree() (*ssz.Node, error) {
 	return w.Node(), nil
 }
 
-// UnmarshalJSON custom unmarshal function for the Transaction type
-func (tx *Transaction) UnmarshalJSON(data []byte) error {
-	// Remove the quotes from the JSON string
-	jsonString := string(data)
-	if len(jsonString) < 2 || jsonString[0] != '"' || jsonString[len(jsonString)-1] != '"' {
-		return fmt.Errorf("invalid JSON string")
-	}
-	jsonString = jsonString[1 : len(jsonString)-1]
+func (tx *Transaction) Equal(other *Transaction) bool {
+	return HexBytes(*tx).Equal(HexBytes(*other))
+}
 
-	// Remove the "0x" prefix if present
-	jsonString = strings.TrimPrefix(jsonString, "0x")
+func (tx *Transaction) MarshalJSON() ([]byte, error) {
+	return (*HexBytes)(tx).MarshalJSON()
+}
 
-	// Decode the hex string into the Transaction byte slice
-	decodedBytes, err := hex.DecodeString(jsonString)
-	if err != nil {
-		return err
-	}
-
-	// Set the decoded bytes to the Transaction
-	*tx = Transaction(decodedBytes)
-
-	return nil
+func (tx *Transaction) UnmarshalJSON(input []byte) error {
+	return (*HexBytes)(tx).UnmarshalJSON(input)
 }
