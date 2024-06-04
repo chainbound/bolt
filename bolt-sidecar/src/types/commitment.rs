@@ -1,6 +1,5 @@
 use alloy_consensus::TxEnvelope;
-use alloy_primitives::{Address, Bytes, Signature, TxHash, U256};
-use alloy_rpc_types::Transaction;
+use alloy_primitives::{Bytes, Signature, TxHash};
 
 use crate::types::Slot;
 

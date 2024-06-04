@@ -16,7 +16,6 @@ use crate::types::AccountState;
 
 /// An HTTP-based JSON-RPC client that supports batching. Implements all methods that are relevant
 /// to Bolt state.
-
 #[derive(Clone)]
 pub struct RpcClient(alloy::RpcClient<Http<Client>>);
 
@@ -30,16 +29,13 @@ impl RpcClient {
     }
 
     /// Get the basefee of the latest block.
-    pub async fn get_basefee(&self) -> TransportResult<u128> {
+    pub async fn get_basefee(&self, block_number: Option<u64>) -> TransportResult<u128> {
+        let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
+
         let fee_history: FeeHistory = self
             .0
-            .request(
-                "eth_feeHistory",
-                (U64::from(1), BlockNumberOrTag::Latest, &[] as &[f64]),
-            )
+            .request("eth_feeHistory", (U64::from(1), tag, &[] as &[f64]))
             .await?;
-
-        println!("{:?}", fee_history);
 
         Ok(fee_history.latest_block_base_fee().unwrap())
     }
@@ -52,11 +48,17 @@ impl RpcClient {
     }
 
     /// Gets the latest account state for the given address
-    pub async fn get_account_state(&self, address: &Address) -> TransportResult<AccountState> {
+    pub async fn get_account_state(
+        &self,
+        address: &Address,
+        block_number: Option<u64>,
+    ) -> TransportResult<AccountState> {
         let mut batch = self.0.new_batch();
 
+        let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
+
         let balance = batch
-            .add_call("eth_getBalance", &(address, BlockNumberOrTag::Latest))
+            .add_call("eth_getBalance", &(address, tag))
             .expect("Correct parameters");
 
         let tx_count = batch
@@ -113,7 +115,7 @@ mod tests {
 
         let addr = anvil.addresses().first().unwrap();
 
-        let account_state = client.get_account_state(addr).await.unwrap();
+        let account_state = client.get_account_state(addr, None).await.unwrap();
 
         // Accounts in Anvil start with 10_000 ETH
         assert_eq!(

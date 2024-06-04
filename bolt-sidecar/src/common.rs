@@ -8,13 +8,13 @@ use crate::{
 /// Calculates the max_basefee `slot_diff` blocks in the future given a current basefee (in gwei).
 /// Returns None if an overflow would occur.
 /// Cfr. https://github.com/flashbots/ethers-provider-flashbots-bundle/blob/7ddaf2c9d7662bef400151e0bfc89f5b13e72b4c/src/index.ts#L308
-pub fn calculate_max_basefee(current: u128, slot_diff: u64) -> Option<u128> {
+pub fn calculate_max_basefee(current: u128, block_diff: u64) -> Option<u128> {
     // Define the multiplier and divisor for fixed-point arithmetic
     let multiplier: u128 = 1125; // Represents 112.5%
     let divisor: u128 = 1000;
     let mut max_basefee = current;
 
-    for _ in 0..slot_diff {
+    for _ in 0..block_diff {
         // Check for potential overflow when multiplying
         if max_basefee > u128::MAX / multiplier {
             return None; // Overflow would occur

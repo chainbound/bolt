@@ -8,9 +8,11 @@ use std::collections::HashMap;
 
 use alloy_consensus::TxEnvelope;
 use alloy_primitives::{Address, U256};
-use alloy_rpc_types::Transaction;
 
-use crate::{common::max_transaction_cost, types::transaction::TxInfo};
+use crate::{
+    common::max_transaction_cost,
+    types::{transaction::TxInfo, AccountState},
+};
 
 /// A block template that serves as a fallback block, but is also used
 /// to keep intermediary state for new commitment requests.
@@ -54,6 +56,57 @@ impl BlockTemplate {
             .or_insert((transaction.nonce(), max_cost));
 
         self.transactions.push(transaction);
+    }
+
+    pub fn transactions_len(&self) -> usize {
+        self.transactions.len()
+    }
+
+    /// Removes the transaction at the specified index and updates the state diff.
+    fn remove_transaction_at_index(&mut self, index: usize) {
+        let tx = self.transactions.remove(index);
+        let max_cost = max_transaction_cost(&tx);
+
+        // Update intermediate state
+        self.state_diff
+            .diffs
+            .entry(tx.from().expect("Passed validation"))
+            .and_modify(|(nonce, balance)| {
+                *nonce = nonce.saturating_sub(1);
+                *balance += max_cost;
+            });
+    }
+
+    /// Retain removes any transactions that conflict with the given account state.
+    pub fn retain(&mut self, address: Address, mut state: AccountState) {
+        let mut indexes = Vec::new();
+
+        for (index, tx) in self.transactions.iter().enumerate() {
+            let max_cost = max_transaction_cost(tx);
+            if tx.from().unwrap() == address
+                && (state.balance < max_cost || state.transaction_count > tx.nonce())
+            {
+                tracing::trace!(
+                    %address,
+                    "Removing transaction at index {} due to conflict with account state",
+                    index
+                );
+
+                indexes.push(index);
+                // Continue to the next iteration, not updating the state
+                continue;
+            }
+
+            // Update intermediary state for next transaction (if the tx was not removed)
+            state.balance -= max_cost;
+            state.transaction_count += 1;
+        }
+
+        // Remove transactions that conflict with the account state. We start in reverse
+        // order to avoid invalidating the indexes.
+        for index in indexes.into_iter().rev() {
+            self.remove_transaction_at_index(index);
+        }
     }
 }
 

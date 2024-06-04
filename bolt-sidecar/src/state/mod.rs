@@ -1,10 +1,12 @@
 //! The `state` module is responsible for keeping a local copy of relevant state that is needed
-//! to simulate commitments against. It is updated on every block.
+//! to simulate commitments against. It is updated on every block. It has both execution state and consensus state.
 use alloy_consensus::TxEnvelope;
 use alloy_primitives::{Address, SignatureError};
-use alloy_rpc_types::Transaction;
 use alloy_transport::TransportError;
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{atomic::AtomicU64, Arc},
+};
 use thiserror::Error;
 
 use crate::{
@@ -22,11 +24,41 @@ pub enum StateError {
     Rpc(#[from] TransportError),
 }
 
+#[derive(Debug, Clone)]
+struct ProposerDuties {
+    assigned_slots: Vec<u64>,
+}
+
+#[derive(Debug, Clone)]
+struct ChainHead {
+    /// The current slot number.
+    slot: Arc<AtomicU64>,
+    /// The current block number.
+    block: Arc<AtomicU64>,
+}
+
+impl ChainHead {
+    pub fn new(slot: u64, head: u64) -> Self {
+        Self {
+            slot: Arc::new(AtomicU64::new(slot)),
+            block: Arc::new(AtomicU64::new(head)),
+        }
+    }
+
+    /// Get the slot number (consensus layer).
+    pub fn slot(&self) -> u64 {
+        self.slot.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Get the block number (execution layer).
+    pub fn block(&self) -> u64 {
+        self.block.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
 /// Possible commitment validation errors.
 #[derive(Debug, Error)]
 pub enum ValidationError {
-    #[error("Slot too low: {0}")]
-    SlotTooLow(u64),
     #[error("Transaction fee is too low, need {0} gwei to cover the maximum base fee")]
     BaseFeeTooLow(u128),
     #[error("Transaction nonce too low")]
@@ -43,46 +75,52 @@ pub enum ValidationError {
 }
 
 impl ValidationError {
-    fn is_internal(&self) -> bool {
+    pub fn is_internal(&self) -> bool {
         matches!(self, Self::Internal(_))
     }
 }
 
-/// The minimal state of the chain at some block number (`head`).
+/// The minimal state of the execution layer at some block number (`head`).
 /// This is the state that is needed to simulate commitments.
 /// It contains per-address nonces and balances, as well as the minimum basefee.
-/// It also contains the block template which can be used
+/// It also contains the block template which can be used to simulate new commitments
+/// and as a fallback block in case of faults.
 ///
-/// # Updating
+/// # Updating & Invalidation
 /// The state can be updated with a new head block number. This will fetch the state
-/// update from the client and apply it to the state.
-struct State<C> {
+/// update from the client and apply it to the state. It will also invalidate any commitments
+/// that conflict with the new state so that we NEVER propose an invalid block.
+struct ExecutionState<C> {
     /// The latest head block number.
-    head: u64,
+    head: ChainHead,
 
     /// The base fee at the head block.
     basefee: u128,
-    /// The cached account states.
+    /// The cached account states. This should never be read directly.
+    /// These only contain the canonical account states at the head block,
+    /// not the intermediate states.
     account_states: HashMap<Address, AccountState>,
 
-    /// The optional block template.
-    block_template: Option<BlockTemplate>,
+    /// The block templates by target SLOT NUMBER.
+    /// We have multiple block templates because in rare cases we might have multiple
+    /// proposal duties for a single lookahead.
+    block_templates: HashMap<u64, BlockTemplate>,
 
     /// The state fetcher client.
     client: C,
 }
 
-impl<C: StateFetcher> State<C> {
+impl<C: StateFetcher> ExecutionState<C> {
     /// Creates a new state with the given client. Initializes the `head` and `basefee` fields
     /// with the current head and basefee.
-    pub async fn new(client: C) -> Result<Self, StateError> {
-        let (head, basefee) = tokio::try_join!(client.get_head(), client.get_basefee())?;
+    pub async fn new(client: C, head: ChainHead) -> Result<Self, StateError> {
+        let basefee = client.get_basefee(Some(head.block())).await?;
 
         Ok(Self {
             head,
             basefee,
             account_states: HashMap::new(),
-            block_template: None,
+            block_templates: HashMap::new(),
             client,
         })
     }
@@ -104,14 +142,8 @@ impl<C: StateFetcher> State<C> {
 
         let sender = req.transaction.from()?;
 
-        // TODO: for now, we don't accept same-slot inclusion requests.
-        // In the future, we can do this (up to a certain deadline like 6s-8s)
-        if req.slot <= self.head {
-            return Err(ValidationError::SlotTooLow(req.slot));
-        }
-
         // Check if the max_fee_per_gas would cover the maximum possible basefee.
-        let slot_diff = req.slot - self.head;
+        let slot_diff = req.slot - self.head.slot();
 
         // Calculate the max possible basefee given the slot diff
         let max_basefee = calculate_max_basefee(self.basefee, slot_diff)
@@ -132,7 +164,7 @@ impl<C: StateFetcher> State<C> {
             // If we don't have the account state, we need to fetch it
             let account_state = self
                 .client
-                .get_account_state(&sender)
+                .get_account_state(&sender, None)
                 .await
                 .map_err(|e| reject_internal(&e.to_string()))?;
 
@@ -145,54 +177,78 @@ impl<C: StateFetcher> State<C> {
             validate_transaction(&account_state, &req.transaction)?;
         }
 
-        self.commit_transaction_to_block(req.transaction.clone());
+        self.commit_transaction(req.slot, req.transaction.clone());
 
         Ok(())
     }
 
-    // Updates the state with a new head
-    pub async fn update(&mut self, block_number: u64) -> Result<(), StateError> {
-        // TODO: invalidate any state that we don't need anymore (will be based on block template)
-        let update = self
-            .client
-            .get_state_update(
-                Some(block_number),
-                self.account_states.keys().collect::<Vec<_>>(),
-            )
-            .await?;
-
-        self.apply_state_update(block_number, update);
-
-        Ok(())
-    }
-
-    /// Commits the transaction to the current block template. Initializes a new block template
-    /// if one does not exist.
-    fn commit_transaction_to_block(&mut self, transaction: TxEnvelope) {
-        if let Some(ref mut template) = self.block_template {
+    /// Commits the transaction to the target block. Initializes a new block template
+    /// if one does not exist for said block number.
+    fn commit_transaction(&mut self, target_slot: u64, transaction: TxEnvelope) {
+        if let Some(template) = self.block_templates.get_mut(&target_slot) {
             template.add_transaction(transaction);
         } else {
             let mut template = BlockTemplate::new();
             template.add_transaction(transaction);
-            self.block_template = Some(template);
+            self.block_templates.insert(target_slot, template);
         }
     }
 
-    fn apply_state_update(&mut self, block_number: u64, update: StateUpdate) {
-        self.head = block_number;
-        self.basefee = update.min_basefee;
+    // Updates the state with a new head
+    pub async fn update_head(&mut self, head: ChainHead) -> Result<(), StateError> {
+        // TODO: invalidate any state that we don't need anymore (will be based on block template)
+        let update = self
+            .client
+            .get_state_update(
+                self.account_states.keys().collect::<Vec<_>>(),
+                Some(head.block()),
+            )
+            .await?;
 
-        // `extend` will overwrite existing values
-        self.account_states.extend(update.account_states)
+        self.apply_state_update(head, update);
+
+        Ok(())
     }
 
-    /// Returns the account state for the given address INCLUDING any intermediate block template state.
+    fn apply_state_update(&mut self, head: ChainHead, update: StateUpdate) {
+        // Update head and basefee
+        self.head = head;
+        self.basefee = update.min_basefee;
+
+        // `extend` will overwrite existing values. This is what we want.
+        self.account_states.extend(update.account_states);
+
+        self.refresh_templates();
+    }
+
+    /// Refreshes the block templates with the latest account states and removes any invalid transactions by checking
+    /// the nonce and balance of the account after applying the state diffs.
+    fn refresh_templates(&mut self) {
+        for (address, account_state) in self.account_states.iter_mut() {
+            tracing::trace!(%address, ?account_state, "Refreshing template...");
+            // Iterate over all block templates and apply the state diff
+            for (_, template) in self.block_templates.iter_mut() {
+                // Retain only the transactions that are still valid based on the canonical account states.
+                template.retain(*address, *account_state);
+
+                // Update the account state with the remaining state diff for the next iteration.
+                if let Some((nonce_diff, balance_diff)) = template.state_diff().get_diff(address) {
+                    // Nonce will always be increased
+                    account_state.transaction_count += nonce_diff;
+                    // Balance will always be decreased
+                    account_state.balance -= balance_diff;
+                }
+            }
+        }
+    }
+
+    /// Returns the account state for the given address INCLUDING any intermediate block templates state.
     fn account_state(&self, address: &Address) -> Option<AccountState> {
         let account_state = self.account_states.get(address).copied();
 
         if let Some(mut account_state) = account_state {
-            if let Some(ref template) = self.block_template {
-                // Apply the diffs from the block template
+            // Iterate over all block templates and apply the state diff
+            for (_, template) in self.block_templates.iter() {
                 if let Some((nonce_diff, balance_diff)) = template.state_diff().get_diff(address) {
                     // Nonce will always be increased
                     account_state.transaction_count += nonce_diff;
@@ -205,6 +261,11 @@ impl<C: StateFetcher> State<C> {
         } else {
             None
         }
+    }
+
+    /// Gets the block template for the given slot number and removes it from the cache.
+    pub fn get_block_template(&mut self, slot: u64) -> Option<BlockTemplate> {
+        self.block_templates.remove(&slot)
     }
 }
 
@@ -220,14 +281,16 @@ fn reject_internal(reason: &str) -> ValidationError {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
     use alloy_consensus::constants::ETH_TO_WEI;
+    use alloy_eips::eip2718::Encodable2718;
     use alloy_node_bindings::{Anvil, AnvilInstance};
     use alloy_primitives::{hex, uint, Uint, U256};
-    use alloy_provider::network::{EthereumSigner, TransactionBuilder};
+    use alloy_provider::{
+        network::{EthereumSigner, TransactionBuilder},
+        Provider, ProviderBuilder,
+    };
     use alloy_rpc_types::TransactionRequest;
-    use alloy_signer::{k256::ecdsa::signature::SignerMut, SignerSync};
+    use alloy_signer::SignerSync;
     use alloy_signer_wallet::LocalWallet;
     use fetcher::StateClient;
     use tracing_subscriber::fmt;
@@ -237,7 +300,7 @@ mod tests {
     use super::*;
 
     fn launch_anvil() -> AnvilInstance {
-        Anvil::new().block_time(1).spawn()
+        Anvil::new().block_time(1).chain_id(1337).spawn()
     }
 
     fn default_transaction(sender: Address) -> TransactionRequest {
@@ -245,24 +308,12 @@ mod tests {
             .with_from(sender)
             // Burn it
             .with_to(Address::ZERO)
+            .with_chain_id(1337)
             .with_nonce(0)
             .with_value(U256::from(100))
             .with_gas_limit(21_000)
             .with_max_priority_fee_per_gas(1_000_000_000)
             .with_max_fee_per_gas(20_000_000_000)
-    }
-
-    #[tokio::test]
-    async fn test_new_state() {
-        let anvil = launch_anvil();
-        let client = StateClient::new(&anvil.endpoint(), 1);
-        // Wait 2 seconds for Anvil to start up and append some blocks
-        tokio::time::sleep(Duration::from_secs(2)).await;
-
-        let state = State::new(client).await.unwrap();
-
-        assert_ne!(state.head, 0);
-        assert_ne!(state.basefee, 0);
     }
 
     #[tokio::test]
@@ -273,7 +324,9 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(&anvil.endpoint(), 1);
 
-        let mut state = State::new(client).await.unwrap();
+        let head = ChainHead::new(1, 0);
+
+        let mut state = ExecutionState::new(client, head).await.unwrap();
 
         let wallet: LocalWallet = anvil.keys()[0].clone().into();
 
@@ -287,7 +340,7 @@ mod tests {
         let signed = tx.build(&signer).await.unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
-            slot: state.head + 1,
+            slot: 10,
             transaction: signed,
             signature: sig,
         });
@@ -302,7 +355,9 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(&anvil.endpoint(), 1);
 
-        let mut state = State::new(client).await.unwrap();
+        let head = ChainHead::new(1, 0);
+
+        let mut state = ExecutionState::new(client, head).await.unwrap();
 
         let wallet: LocalWallet = anvil.keys()[0].clone().into();
 
@@ -316,7 +371,7 @@ mod tests {
         let signed = tx.build(&signer).await.unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
-            slot: state.head + 1,
+            slot: 10,
             transaction: signed,
             signature: sig,
         });
@@ -334,7 +389,9 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(&anvil.endpoint(), 1);
 
-        let mut state = State::new(client).await.unwrap();
+        let head = ChainHead::new(1, 0);
+
+        let mut state = ExecutionState::new(client, head).await.unwrap();
 
         let wallet: LocalWallet = anvil.keys()[0].clone().into();
 
@@ -349,7 +406,7 @@ mod tests {
         let signed = tx.build(&signer).await.unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
-            slot: state.head + 1,
+            slot: 10,
             transaction: signed,
             signature: sig,
         });
@@ -367,7 +424,9 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(&anvil.endpoint(), 1);
 
-        let mut state = State::new(client).await.unwrap();
+        let head = ChainHead::new(1, 0);
+
+        let mut state = ExecutionState::new(client, head).await.unwrap();
 
         let basefee = state.basefee;
 
@@ -383,7 +442,7 @@ mod tests {
         let signed = tx.build(&signer).await.unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
-            slot: state.head + 1,
+            slot: 10,
             transaction: signed,
             signature: sig,
         });
@@ -392,5 +451,55 @@ mod tests {
             state.try_commit(&request).await,
             Err(ValidationError::BaseFeeTooLow(_))
         ));
+    }
+
+    #[tokio::test]
+    async fn test_invalidate_inclusion_request() {
+        let _ = fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(&anvil.endpoint(), 1);
+
+        let head = ChainHead::new(1, 0);
+
+        let mut state = ExecutionState::new(client, head).await.unwrap();
+
+        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+
+        let sender = anvil.addresses()[0];
+
+        let tx = default_transaction(sender);
+
+        let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
+
+        let signer: EthereumSigner = wallet.into();
+        let signed = tx.build(&signer).await.unwrap();
+
+        let request = CommitmentRequest::Inclusion(InclusionRequest {
+            slot: 10,
+            transaction: signed.clone(),
+            signature: sig,
+        });
+
+        assert!(state.try_commit(&request).await.is_ok());
+        assert!(state.block_templates.get(&10).unwrap().transactions_len() == 1);
+
+        let provider = ProviderBuilder::new().on_http(anvil.endpoint_url());
+
+        let notif = provider
+            .send_raw_transaction(&signed.encoded_2718())
+            .await
+            .unwrap();
+
+        // Wait for confirmation
+        let receipt = notif.get_receipt().await.unwrap();
+
+        let new_head = ChainHead::new(2, receipt.block_number.unwrap());
+
+        // Update the head, which should invalidate the transaction due to a nonce conflict
+        state.update_head(new_head).await.unwrap();
+
+        let transactions_len = state.block_templates.get(&10).unwrap().transactions_len();
+        assert!(transactions_len == 0);
     }
 }
