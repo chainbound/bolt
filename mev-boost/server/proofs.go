@@ -45,7 +45,7 @@ func (h HexBytes) Equal(other HexBytes) bool {
 
 // MarshalJSON implements json.Marshaler.
 func (h HexBytes) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf(`"%#x"`, h)), nil
+	return []byte(fmt.Sprintf(`"%#x"`, []byte(h))), nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
