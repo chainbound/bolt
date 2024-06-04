@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-
 use alloy_consensus::{TxEnvelope, TxType};
+use alloy_eips::eip4844::MAX_BLOBS_PER_BLOCK;
 use alloy_primitives::{Address, SignatureError};
+use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::{
@@ -11,8 +11,6 @@ use crate::{
 };
 
 use super::{fetcher::StateFetcher, ChainHead, StateError};
-
-const MAX_EIP4844_TRANSACTIONS_PER_BLOCK: usize = 6;
 
 /// Possible commitment validation errors.
 #[derive(Debug, Error)]
@@ -146,10 +144,12 @@ impl<C: StateFetcher> ExecutionState<C> {
         // Check EIP-4844-specific limits
         if req.transaction.tx_type() == TxType::Eip4844 {
             if let Some(template) = self.block_templates.get(&req.slot) {
-                if template.blob_count() >= MAX_EIP4844_TRANSACTIONS_PER_BLOCK {
+                if template.blob_count() >= MAX_BLOBS_PER_BLOCK {
                     return Err(ValidationError::Eip4844Limit);
                 }
             }
+
+            // TODO: check max_fee_per_blob_gas against the blob_base_fee
         }
 
         self.commit_transaction(req.slot, req.transaction.clone());
