@@ -16,3 +16,6 @@ pub mod config;
 
 /// JSON-RPC server and handlers for the sidecar
 pub mod json_rpc;
+
+pub use api::builder::{start_builder_proxy, BuilderProxyConfig};
+pub use types::{NoopPayloadFetcher, PayloadFetcher};

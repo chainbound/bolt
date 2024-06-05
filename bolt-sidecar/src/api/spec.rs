@@ -21,23 +21,22 @@ pub const GET_PAYLOAD_PATH: &str = "/eth/v1/builder/blinded_blocks";
 #[derive(Debug, thiserror::Error)]
 pub enum BuilderApiError {
     #[error("No validators could be registered")]
-    NoValidatorsCouldBeRegistered,
+    FailedRegisteringValidators,
     #[error("Failed to fetch local payload for slot {0}")]
     FailedToFetchLocalPayload(u64),
     #[error("Axum error: {0:?}")]
     AxumError(#[from] axum::Error),
     #[error("Json error: {0:?}")]
     JsonError(#[from] serde_json::Error),
+    #[error("Reqwest error: {0:?}")]
+    ReqwestError(#[from] reqwest::Error),
 }
 
 impl IntoResponse for BuilderApiError {
     fn into_response(self) -> Response {
         match self {
-            BuilderApiError::NoValidatorsCouldBeRegistered => {
+            BuilderApiError::FailedRegisteringValidators => {
                 (StatusCode::BAD_REQUEST, self.to_string()).into_response()
-            }
-            BuilderApiError::FailedToFetchLocalPayload(_) => {
-                (StatusCode::NO_CONTENT, self.to_string()).into_response()
             }
             BuilderApiError::AxumError(err) => {
                 (StatusCode::BAD_REQUEST, err.to_string()).into_response()
@@ -45,6 +44,16 @@ impl IntoResponse for BuilderApiError {
             BuilderApiError::JsonError(err) => {
                 (StatusCode::BAD_REQUEST, err.to_string()).into_response()
             }
+            BuilderApiError::FailedToFetchLocalPayload(_) => {
+                (StatusCode::NO_CONTENT, self.to_string()).into_response()
+            }
+            BuilderApiError::ReqwestError(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                StatusCode::INTERNAL_SERVER_ERROR
+                    .canonical_reason()
+                    .unwrap(),
+            )
+                .into_response(),
         }
     }
 }

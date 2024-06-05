@@ -11,7 +11,9 @@ use serde_json::Value;
 use crate::{
     api::{
         builder::GetHeaderParams,
-        spec::{BuilderApi, BuilderApiError, ConstraintsApi},
+        spec::{
+            BuilderApi, BuilderApiError, ConstraintsApi, REGISTER_VALIDATORS_PATH, STATUS_PATH,
+        },
     },
     types::{constraint::BatchedSignedConstraints, SignedBuilderBid},
 };
@@ -62,13 +64,23 @@ impl MevBoostClient {
         let body = serde_json::to_vec(constraints)?;
         self.post_json("/eth/v1/builder/constraints", body).await
     }
+
+    fn endpoint(&self, path: &str) -> String {
+        format!("{}{}", self.url, path)
+    }
 }
 
 #[async_trait::async_trait]
 impl BuilderApi for MevBoostClient {
     /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/status>
     async fn status(&self) -> Result<StatusCode, BuilderApiError> {
-        todo!()
+        Ok(self
+            .client
+            .get(self.endpoint(STATUS_PATH))
+            .header("content-type", "application/json")
+            .send()
+            .await?
+            .status())
     }
 
     /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/registerValidator>
@@ -76,7 +88,20 @@ impl BuilderApi for MevBoostClient {
         &self,
         registrations: Vec<SignedValidatorRegistration>,
     ) -> Result<(), BuilderApiError> {
-        todo!()
+        if self
+            .client
+            .post(self.endpoint(REGISTER_VALIDATORS_PATH))
+            .header("content-type", "application/json")
+            .body(serde_json::to_vec(&registrations)?)
+            .send()
+            .await?
+            .status()
+            != StatusCode::OK
+        {
+            return Err(BuilderApiError::FailedRegisteringValidators);
+        }
+
+        Ok(())
     }
 
     /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/getHeader>
@@ -84,7 +109,20 @@ impl BuilderApi for MevBoostClient {
         &self,
         params: GetHeaderParams,
     ) -> Result<SignedBuilderBid, BuilderApiError> {
-        todo!()
+        // TODO: fix response?
+        let response: SignedBuilderBid = self
+            .client
+            .get(self.endpoint(&format!(
+                "/eth/v1/builder/header/{}/{}/{}",
+                params.slot, params.parent_hash, params.public_key
+            )))
+            .header("content-type", "application/json")
+            .send()
+            .await?
+            .json()
+            .await?;
+
+        Ok(response)
     }
 
     /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/submitBlindedBlock>
