@@ -13,7 +13,10 @@ use ethereum_consensus::{
 use serde::Deserialize;
 use std::sync::Arc;
 
-use super::spec::BuilderApi;
+use super::spec::{
+    BuilderApi, ConstraintsApi, GET_HEADER_PATH, GET_PAYLOAD_PATH, REGISTER_VALIDATORS_PATH,
+    STATUS_PATH,
+};
 use crate::{client::mevboost::MevBoostClient, types::SignedBuilderBid};
 
 const MAX_BLINDED_BLOCK_LENGTH: usize = 1024 * 1024;
@@ -23,13 +26,6 @@ pub struct BuilderProxyServer<T: BuilderApi> {
     proxy_target: T,
 }
 
-pub const STATUS_PATH: &str = "/eth/v1/builder/status";
-pub const REGISTER_VALIDATORS_PATH: &str = "/eth/v1/builder/validators";
-pub const GET_HEADER_PATH: &str = "/eth/v1/builder/header/:slot/:parent_hash/:pubkey";
-pub const GET_HEADER_WITH_PROOFS_PATH: &str =
-    "/eth/v1/builder/header_with_proofs/:slot/:parent_hash/:pubkey";
-pub const GET_PAYLOAD_PATH: &str = "/eth/v1/builder/blinded_blocks";
-
 #[derive(Debug, Deserialize)]
 pub struct GetHeaderParams {
     pub slot: u64,
@@ -38,11 +34,12 @@ pub struct GetHeaderParams {
     pub public_key: BlsPublicKey,
 }
 
-impl<T: BuilderApi> BuilderProxyServer<T> {
+impl<T: ConstraintsApi> BuilderProxyServer<T> {
     pub fn new(proxy_target: T) -> Self {
         Self { proxy_target }
     }
 
+    /// Gets the status. Just forwards the request to mev-boost and returns the status.
     pub async fn status(State(server): State<Arc<BuilderProxyServer<T>>>) -> StatusCode {
         server
             .proxy_target
@@ -52,6 +49,8 @@ impl<T: BuilderApi> BuilderProxyServer<T> {
             .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR)
     }
 
+    /// Registers the validators. Just forwards the request to mev-boost and returns the status.
+    /// TODO: intercept this to register Bolt validators on-chain as well.
     pub async fn register_validators(
         State(server): State<Arc<BuilderProxyServer<T>>>,
         Json(registrations): Json<Vec<SignedValidatorRegistration>>,
@@ -68,15 +67,18 @@ impl<T: BuilderApi> BuilderProxyServer<T> {
         }
     }
 
+    /// Gets the header. NOTE: converts this request to a get_header_with_proofs request to the modified mev-boost.
+    /// If we get an error response / timeout, we return the locally built block.
     pub async fn get_header(
         State(server): State<Arc<BuilderProxyServer<T>>>,
         Path(params): Path<GetHeaderParams>,
     ) -> Result<impl IntoResponse, impl IntoResponse> {
+        // TODO: on error / timeout, return locally built block
         server
             .proxy_target
-            .get_header(params)
+            .get_header_with_proofs(params)
             .await
-            .map(|header| Json(header))
+            .map(Json)
             // TODO: convert errors to status codes
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }

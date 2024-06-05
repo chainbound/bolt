@@ -9,7 +9,10 @@ use ethereum_consensus::{
 use serde_json::Value;
 
 use crate::{
-    api::{builder::GetHeaderParams, spec::BuilderApi},
+    api::{
+        builder::GetHeaderParams,
+        spec::{BuilderApi, ConstraintsApi},
+    },
     types::{constraint::BatchedSignedConstraints, SignedBuilderBid},
 };
 
@@ -86,6 +89,23 @@ impl BuilderApi for MevBoostClient {
         &self,
         signed_block: SignedBlindedBeaconBlock,
     ) -> Result<Body, Box<dyn std::error::Error>> {
+        todo!()
+    }
+}
+
+#[async_trait::async_trait]
+impl ConstraintsApi for MevBoostClient {
+    async fn submit_constraints(
+        &self,
+        constraints: String,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        todo!()
+    }
+
+    async fn get_header_with_proofs(
+        &self,
+        params: GetHeaderParams,
+    ) -> Result<SignedBuilderBid, Box<dyn std::error::Error>> {
         todo!()
     }
 }
