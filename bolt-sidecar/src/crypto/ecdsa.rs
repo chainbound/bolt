@@ -25,11 +25,11 @@ pub trait SignableECDSA {
 }
 
 /// A signer that can sign any type that implements `Signable{curve}` trait.
-pub struct Signer {
+pub struct ECDSASigner {
     secp256k1_key: SecretKey,
 }
 
-impl Signer {
+impl ECDSASigner {
     /// Create a new signer with the given SECP256K1 secret key.
     pub fn new(secp256k1_key: SecretKey) -> Self {
         Self { secp256k1_key }
@@ -49,5 +49,29 @@ impl Signer {
         pubkey: &PublicKey,
     ) -> bool {
         obj.verify(sig, pubkey)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ECDSASigner, SignableECDSA};
+    use secp256k1::{PublicKey, SecretKey};
+
+    impl SignableECDSA for String {
+        fn digest(&self) -> secp256k1::Message {
+            secp256k1::Message::from_digest_slice(&self.as_bytes()).unwrap()
+        }
+    }
+
+    #[test]
+    fn test_signer() {
+        let secp256k1_key = SecretKey::from_slice(&[1; 32]).unwrap();
+        let signer = ECDSASigner::new(secp256k1_key);
+
+        let message = "hello world".to_string();
+        let signature = signer.sign_ecdsa(&message);
+        let pubkey = PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &secp256k1_key);
+
+        assert!(signer.verify_ecdsa(&message, &signature, &pubkey));
     }
 }

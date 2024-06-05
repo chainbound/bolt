@@ -1,14 +1,14 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
 use parking_lot::RwLock;
-use secp256k1::SecretKey;
+use secp256k1::hashes::hex::DisplayHex;
 use serde_json::Value;
 use thiserror::Error;
 use tracing::info;
 
 use super::mevboost::MevBoostClient;
 use crate::{
-    crypto::Signer,
+    crypto::{bls::from_bls_signature_to_consensus_signature, BLSSigner},
     json_rpc::types::{BatchedSignedConstraints, ConstraintsMessage, SignedConstraints},
     primitives::{CommitmentRequest, Slot},
 };
@@ -56,20 +56,20 @@ pub struct JsonRpcApi {
     /// A cache of commitment requests.
     cache: Arc<RwLock<lru::LruCache<Slot, Vec<CommitmentRequest>>>>,
     /// The signer for this sidecar.
-    signer: Signer,
+    signer: BLSSigner,
     /// The client for the MEV-Boost sidecar.
     mevboost_client: MevBoostClient,
 }
 
 impl JsonRpcApi {
     /// Create a new instance of the JSON-RPC API.
-    pub fn new(private_key: SecretKey, mevboost_url: String) -> Arc<Self> {
+    pub fn new(private_key: blst::min_pk::SecretKey, mevboost_url: String) -> Arc<Self> {
         let cap = NonZeroUsize::new(DEFAULT_API_REQUEST_CACHE_SIZE).unwrap();
 
         Arc::new(Self {
             cache: Arc::new(RwLock::new(lru::LruCache::new(cap))),
             mevboost_client: MevBoostClient::new(mevboost_url),
-            signer: Signer::new(private_key),
+            signer: BLSSigner::new(private_key),
         })
     }
 }
@@ -121,12 +121,11 @@ impl CommitmentsRpc for JsonRpcApi {
 
         // parse the request into constraints and sign them with the sidecar signer
         // TODO: get the validator index from somewhere
-        let constraints = ConstraintsMessage::build(0, params.slot, params.clone());
-        let constraints_sig = self.signer.sign_ecdsa(&constraints).to_string();
-        let signed_constraints: BatchedSignedConstraints = vec![SignedConstraints {
-            message: constraints,
-            signature: constraints_sig,
-        }];
+        let message = ConstraintsMessage::build(0, params.slot, params.clone());
+
+        let signature = from_bls_signature_to_consensus_signature(self.signer.sign(&message));
+        let signed_constraints: BatchedSignedConstraints =
+            vec![SignedConstraints { message, signature }];
 
         // TODO: simulate and check if the transaction can be included in the next block
         // self.block_builder.try_append(params.slot, params.tx)

@@ -1,30 +1,35 @@
-use alloy_consensus::TxEnvelope;
-use alloy_primitives::keccak256;
-use secp256k1::Message;
-use serde::{Deserialize, Serialize};
+use alloy_rlp::Encodable;
+use ethereum_consensus::deneb::{mainnet::MAX_BYTES_PER_TRANSACTION, BlsSignature, Transaction};
+use ethereum_consensus::ssz::prelude::*;
 
-use crate::{crypto::SignableECDSA, primitives::InclusionRequest};
+use crate::{crypto::SignableBLS, primitives::InclusionRequest};
 
 /// The inclusion request transformed into an explicit list of signed constraints
 /// that need to be forwarded to the PBS pipeline to inform block production.
 pub type BatchedSignedConstraints = Vec<SignedConstraints>;
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+const MAX_CONSTRAINTS_PER_SLOT: usize = 256;
+
+#[derive(Debug, Clone, PartialEq, SimpleSerialize, serde::Deserialize, serde::Serialize)]
 pub struct SignedConstraints {
     pub message: ConstraintsMessage,
-    pub signature: String,
+    pub signature: BlsSignature,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(
+    Debug, Clone, Default, PartialEq, SimpleSerialize, serde::Deserialize, serde::Serialize,
+)]
 pub struct ConstraintsMessage {
     pub validator_index: u64,
     pub slot: u64,
-    pub constraints: Vec<Constraint>,
+    pub constraints: List<Constraint, MAX_CONSTRAINTS_PER_SLOT>,
 }
+
+type ConstraintsList = List<Constraint, MAX_CONSTRAINTS_PER_SLOT>;
 
 impl ConstraintsMessage {
     pub fn build(validator_index: u64, slot: u64, request: InclusionRequest) -> Self {
-        let constraints = vec![Constraint::from(request)];
+        let constraints = ConstraintsList::try_from(vec![Constraint::from(request)]).unwrap();
         Self {
             validator_index,
             slot,
@@ -33,45 +38,27 @@ impl ConstraintsMessage {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(
+    Debug, Clone, PartialEq, Default, SimpleSerialize, serde::Serialize, serde::Deserialize,
+)]
 pub struct Constraint {
-    pub tx: TxEnvelope,
+    pub tx: Transaction<MAX_BYTES_PER_TRANSACTION>,
     pub index: Option<u64>,
-}
-
-impl Constraint {
-    // TODO: actually use SSZ encoding here
-    pub fn as_bytes(&self) -> Vec<u8> {
-        let mut data = Vec::new();
-        data.extend_from_slice(self.tx.tx_hash().as_slice());
-        data.extend_from_slice(&self.index.unwrap_or(0).to_le_bytes());
-        data
-    }
 }
 
 impl From<InclusionRequest> for Constraint {
     fn from(params: InclusionRequest) -> Self {
-        Self {
-            tx: params.tx,
-            index: None,
-        }
+        let mut buf: Vec<u8> = Vec::new();
+        params.tx.encode(&mut buf);
+
+        let tx = Transaction::try_from(buf.as_slice()).unwrap();
+
+        Self { tx, index: None }
     }
 }
 
-/// What the proposer sidecar will need to sign to confirm the inclusion request.
-impl SignableECDSA for ConstraintsMessage {
-    fn digest(&self) -> Message {
-        let mut data = Vec::new();
-        data.extend_from_slice(&self.validator_index.to_le_bytes());
-        data.extend_from_slice(&self.slot.to_le_bytes());
-
-        let mut constraint_bytes = Vec::new();
-        for constraint in &self.constraints {
-            constraint_bytes.extend_from_slice(&constraint.as_bytes());
-        }
-        data.extend_from_slice(&constraint_bytes);
-
-        let hash = keccak256(data).0;
-        Message::from_digest_slice(&hash).expect("digest")
+impl SignableBLS for ConstraintsMessage {
+    fn digest(&self) -> Vec<u8> {
+        return ssz_rs::serialize(self).unwrap_or(Vec::new());
     }
 }
