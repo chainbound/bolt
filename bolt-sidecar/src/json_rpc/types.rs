@@ -1,84 +1,107 @@
+use alloy_primitives::keccak256;
+use secp256k1::Message;
 use serde::{Deserialize, Serialize};
-use tracing::error;
 
-use super::api::PreconfirmationError;
+use crate::{crypto::SignableECDSA, types::Slot};
 
-pub type Slot = u64;
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
+/// The API parameters to request an inclusion commitment for a given slot.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct PreconfirmationRequestParams {
-    pub slot: Slot,
-    pub tx_hash: String,
-    pub raw_tx: String,
+pub struct InclusionRequestParams {
+    #[serde(flatten)]
+    pub message: InclusionRequestMessage,
+    pub signature: String,
 }
 
-impl PreconfirmationRequestParams {
+/// The message to request an inclusion commitment for a given slot.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct InclusionRequestMessage {
+    pub slot: Slot,
+    pub tx: String,
+    pub index: Option<u64>,
+}
+
+/// What users have to sign to request an inclusion commitment.
+/// We use the [SignableECDSA] trait to abstract over the signature verification step.
+impl SignableECDSA for InclusionRequestMessage {
+    fn digest(&self) -> Message {
+        let mut data = Vec::new();
+        data.extend_from_slice(&self.slot.to_le_bytes());
+        data.extend_from_slice(self.tx.as_bytes());
+        data.extend_from_slice(&self.index.unwrap_or(0).to_le_bytes());
+
+        let hash = keccak256(data).0;
+        Message::from_digest_slice(&hash).expect("digest")
+    }
+}
+
+/// The inclusion request transformed into an explicit list of signed constraints
+/// that need to be forwarded to the PBS pipeline to inform block production.
+pub type BatchedSignedConstraints = Vec<SignedConstraints>;
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct SignedConstraints {
+    pub message: ConstraintsMessage,
+    pub signature: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ConstraintsMessage {
+    pub validator_index: u64,
+    pub slot: u64,
+    pub constraints: Vec<Constraint>,
+}
+
+impl ConstraintsMessage {
+    pub fn build(validator_index: u64, slot: u64, request: InclusionRequestParams) -> Self {
+        let constraints = vec![Constraint::from(request)];
+        Self {
+            validator_index,
+            slot,
+            constraints,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Constraint {
+    pub tx: String,
+    pub index: Option<u64>,
+}
+
+impl Constraint {
     pub fn as_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
-        bytes.extend_from_slice(&self.slot.to_be_bytes());
-        bytes.extend_from_slice(&hex::decode(&self.tx_hash[2..]).unwrap());
-        bytes.extend_from_slice(&hex::decode(&self.raw_tx[2..]).unwrap());
-        bytes
+        let mut data = Vec::new();
+        data.extend_from_slice(self.tx.as_bytes());
+        data.extend_from_slice(&self.index.unwrap_or(0).to_le_bytes());
+        data
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct GetPreconfirmationsAtSlotParams {
-    pub slot: Slot,
-}
-
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct JsonRpcError {
-    pub code: i64,
-    pub message: String,
-}
-
-impl warp::reject::Reject for JsonRpcError {}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct JsonRpcRequest {
-    pub jsonrpc: String,
-    pub id: String,
-    pub method: String,
-    pub params: serde_json::Value,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct JsonRpcResponse {
-    pub jsonrpc: String,
-    pub id: String,
-    pub result: serde_json::Value,
-}
-
-impl From<eyre::Report> for JsonRpcError {
-    fn from(err: eyre::Report) -> Self {
+impl From<InclusionRequestParams> for Constraint {
+    fn from(params: InclusionRequestParams) -> Self {
         Self {
-            code: -32000,
-            message: err.to_string(),
+            tx: params.message.tx,
+            index: params.message.index,
         }
     }
 }
 
-impl From<JsonRpcError> for warp::reply::Json {
-    fn from(err: JsonRpcError) -> Self {
-        warp::reply::json(&err)
-    }
-}
+/// What the proposer sidecar will need to sign to confirm the inclusion request.
+impl SignableECDSA for ConstraintsMessage {
+    fn digest(&self) -> Message {
+        let mut data = Vec::new();
+        data.extend_from_slice(&self.validator_index.to_le_bytes());
+        data.extend_from_slice(&self.slot.to_le_bytes());
 
-impl From<PreconfirmationError> for JsonRpcError {
-    fn from(err: PreconfirmationError) -> Self {
-        Self {
-            code: -32000,
-            message: err.to_string(),
+        let mut constraint_bytes = Vec::new();
+        for constraint in &self.constraints {
+            constraint_bytes.extend_from_slice(&constraint.as_bytes());
         }
-    }
-}
+        data.extend_from_slice(&constraint_bytes);
 
-impl From<PreconfirmationError> for warp::Rejection {
-    fn from(err: PreconfirmationError) -> Self {
-        error!(err = ?err, "failed to process RPC request");
-        warp::reject::custom(JsonRpcError::from(err))
+        let hash = keccak256(data).0;
+        Message::from_digest_slice(&hash).expect("digest")
     }
 }
