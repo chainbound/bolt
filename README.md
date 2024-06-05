@@ -1,4 +1,18 @@
-# BOLT
+<div align="center">
+  <picture>
+    <source srcset="./.github/assets/bolt-logo-wm-dark.png" media="(prefers-color-scheme: dark)">
+    <source srcset="./.github/assets/bolt-logo-wm-light.png" media="(prefers-color-scheme: light)">
+    <img src="./.github/assets/bolt-logo-wm-light.png" alt="BOLT">
+  </picture>
+</div>
+
+<div align="center">
+
+[![Docs](https://img.shields.io/badge/Docs-7B36ED?style=for-the-badge&logo=gitbook&logoColor=white)][docs]
+[![Twitter](https://img.shields.io/badge/Twitter-1DA1F2?style=for-the-badge&logo=twitter&logoColor=white)][twitter]
+[![Discord](https://img.shields.io/badge/Discord-7289DA?style=for-the-badge&logo=discord&logoColor=white)][discord]
+
+</div>
 
 > [!IMPORTANT]
 > Bolt is an implementation of _permissionless proposer commitments through
@@ -157,6 +171,8 @@ just clean
 
 <!-- Links -->
 
+[twitter]: https://twitter.com/chainbound_
+[discord]: https://discord.gg/pK8GgjxYQS
 [docs]: https://chainbound.github.io/bolt-docs/
 [new-issue]: https://github.com/chainbound/bolt/issues/new
 [fb-mev-boost]: https://github.com/flashbots/mev-boost
