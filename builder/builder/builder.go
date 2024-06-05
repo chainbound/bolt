@@ -97,8 +97,8 @@ type Builder struct {
 	builderResubmitInterval     time.Duration
 	discardRevertibleTxOnErr    bool
 
-	// constraintsCache is a map from slot to the constraints made by proposers
-	constraintsCache *shardmap.FIFOMap[uint64, common.SignedConstraintsList]
+	// constraintsCache is a map from slot to the decoded constraints made by proposers
+	constraintsCache *shardmap.FIFOMap[uint64, types.HashToConstraintDecoded]
 
 	limiter                       *rate.Limiter
 	submissionOffsetFromEndOfSlot time.Duration
@@ -196,7 +196,7 @@ func NewBuilder(args BuilderArgs) (*Builder, error) {
 		discardRevertibleTxOnErr:      args.discardRevertibleTxOnErr,
 		submissionOffsetFromEndOfSlot: args.submissionOffsetFromEndOfSlot,
 
-		constraintsCache: shardmap.NewFIFOMap[uint64, common.SignedConstraintsList](64, 16, shardmap.HashUint64),
+		constraintsCache: shardmap.NewFIFOMap[uint64, types.HashToConstraintDecoded](64, 16, shardmap.HashUint64),
 
 		limiter:       args.limiter,
 		slotCtx:       slotCtx,
@@ -341,20 +341,24 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 				fmt.Println("End of stream")
 				break
 			}
-			log.Error("Error reading from response body: %v", err)
+			log.Error(fmt.Sprintf("Error reading from response body: %v", err))
+			continue
 		}
+
 		if !strings.HasPrefix(line, "data: ") {
 			continue
 		}
+
 		data := strings.TrimPrefix(line, "data: ")
 
-		// We assume the data is the JSON representation of the constraints
-		log.Debug("Received new constraint: %s\n", data)
-		constraintsSigned := make(common.SignedConstraintsList, 0, 8)
+		// Assume the data is the JSON representation of the constraints
+		log.Debug(fmt.Sprintf("Received new constraint: %s\n", data))
+		var constraintsSigned common.SignedConstraintsList
 		if err := json.Unmarshal([]byte(data), &constraintsSigned); err != nil {
 			log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))
 			continue
 		}
+
 		if len(constraintsSigned) == 0 {
 			log.Warn("Received 0 length list of constraints")
 			continue
@@ -362,21 +366,41 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 
 	OUTER:
 		for _, constraint := range constraintsSigned {
+			decodedConstraints, err := DecodeConstraint(constraint)
+			if err != nil {
+				log.Error("Failed to decode transaction RLP: ", err)
+				continue
+			}
+
 			// For every constraint, we need to check if it has already been seen for the associated slot
 			slotConstraints, _ := b.constraintsCache.Get(constraint.Message.Slot)
 			if len(slotConstraints) == 0 {
 				// New constraint for this slot, add it in the map and continue with the next constraint
-				b.constraintsCache.Put(constraint.Message.Slot, common.SignedConstraintsList{constraint})
+				b.constraintsCache.Put(constraint.Message.Slot, decodedConstraints)
 				continue
 			}
-			for _, slotConstraint := range slotConstraints {
-				if slotConstraint.Signature == constraint.Signature {
-					// The constraint has already been seen, we can continue with the next one
-					continue OUTER
+
+			// Temporary map to keep track of the constraints that are already in the slot
+			seenTx := make(map[common.Hash]bool)
+			for hash := range slotConstraints {
+				seenTx[hash] = true
+			}
+
+			isNewConstraint := false
+			for hash := range decodedConstraints {
+				if !seenTx[hash] {
+					// The constraint is new, we will add this to the slot constraints
+					isNewConstraint = true
+					slotConstraints[hash] = decodedConstraints[hash]
 				}
 			}
+
+			if !isNewConstraint {
+				continue OUTER
+			}
+
 			// The constraint is new, we need to append it to the current list
-			b.constraintsCache.Put(constraint.Message.Slot, append(slotConstraints, constraint))
+			b.constraintsCache.Put(constraint.Message.Slot, slotConstraints)
 		}
 	}
 
@@ -384,20 +408,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 }
 
 func (b *Builder) GetConstraintsForSlot(slot uint64) types.HashToConstraintDecoded {
-	constraintsDecoded := make(types.HashToConstraintDecoded)
-	constraintsSigned, _ := b.constraintsCache.Get(slot)
-
-	for _, constraintSigned := range constraintsSigned {
-		constraints := constraintSigned.Message.Constraints
-		for _, constraint := range constraints {
-			decoded := new(types.Transaction)
-			if err := decoded.UnmarshalBinary(constraint.Tx); err != nil {
-				log.Error("Failed to decode preconfirmation transaction RLP: ", err)
-				continue
-			}
-			constraintsDecoded[decoded.Hash()] = &types.ConstraintDecoded{Index: constraint.Index, Tx: decoded}
-		}
-	}
+	constraintsDecoded, _ := b.constraintsCache.Get(slot)
 	return constraintsDecoded
 }
 

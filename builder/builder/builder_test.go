@@ -627,12 +627,12 @@ func TestSubscribeProposerConstraints(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	slots := []uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	for slot := range slots {
-		slot := uint64(slot)
+	for _, slot := range slots {
 		constraints, ok := builder.constraintsCache.Get(slot)
-		expected := generateMockConstraintsForSlot(slot)[0].Message.Constraints[0].Tx
-		actual := constraints[0].Message.Constraints[0].Tx
-		require.Equal(t, expected, actual)
+		expected := generateMockConstraintsForSlot(slot)[0]
+		decoded, _ := DecodeConstraint(expected)
+		// actual := constraints[0].Message.Constraints[0].Tx
+		require.Equal(t, constraints, decoded)
 		require.Equal(t, true, ok)
 	}
 }
