@@ -1,8 +1,8 @@
-<div align="center">
+<div align="center" style="max-width: 500px; margin: 0 auto;">
   <picture>
     <source srcset="./.github/assets/bolt-logo-wm-dark.png" media="(prefers-color-scheme: dark)">
     <source srcset="./.github/assets/bolt-logo-wm-light.png" media="(prefers-color-scheme: light)">
-    <img src="./.github/assets/bolt-logo-wm-light.png" alt="BOLT" style="max-width: 400px; width: 100%;">
+    <img src="./.github/assets/bolt-logo-wm-light.png" alt="BOLT" style="max-width: 100%; width: 100%;">
   </picture>
 </div>
 
