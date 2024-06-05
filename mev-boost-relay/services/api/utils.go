@@ -203,3 +203,11 @@ func validateConstraintSubscriptionAuth(auth string, headSlot uint64) (phase0.BL
 	}
 	return authData.PublicKey, nil
 }
+
+func JSONStringify[T any](obj T) string {
+	out, err := json.Marshal(obj)
+	if err != nil {
+		return fmt.Sprintf("Error while marshalling: %v", err)
+	}
+	return string(out)
+}
