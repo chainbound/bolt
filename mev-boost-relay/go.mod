@@ -1,6 +1,6 @@
 module github.com/flashbots/mev-boost-relay
 
-go 1.22.2
+go 1.22
 
 require (
 	github.com/NYTimes/gziphandler v1.1.1
@@ -10,6 +10,7 @@ require (
 	github.com/bradfitz/gomemcache v0.0.0-20230124162541-5f7a7d875746
 	github.com/btcsuite/btcd/btcutil v1.1.2
 	github.com/buger/jsonparser v1.1.1
+	github.com/chainbound/shardmap v0.0.2
 	github.com/ethereum/go-ethereum v1.13.15
 	github.com/flashbots/go-boost-utils v1.8.0
 	github.com/go-redis/redis/v9 v9.0.0-rc.1
@@ -19,7 +20,6 @@ require (
 	github.com/lib/pq v1.10.8
 	github.com/pkg/errors v0.9.1
 	github.com/r3labs/sse/v2 v2.10.0
-	github.com/chainbound/shardmap v0.0.2
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.8.4
@@ -107,7 +107,7 @@ require (
 	github.com/yuin/gopher-lua v1.1.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.25.0 // indirect
-	golang.org/x/crypto v0.18.0 // indirect
+	golang.org/x/crypto v0.18.0
 	golang.org/x/net v0.18.0 // indirect
 	golang.org/x/sys v0.16.0 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
