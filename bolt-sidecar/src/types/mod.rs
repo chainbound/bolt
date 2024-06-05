@@ -86,7 +86,8 @@ impl PayloadFetcher for NoopPayloadFetcher {
     }
 }
 
-#[derive(Debug, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
+/// TODO: implement SSZ
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PayloadAndBlobs {
     pub execution_payload: ExecutionPayload,
     pub blobs_bundle: Option<BlobsBundle>,
