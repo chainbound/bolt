@@ -8,7 +8,7 @@ import (
 var MaxBytesPerTransaction uint64 = 1_073_741_824 // 2**30
 
 // Transaction is a wrapper type of byte slice to implement the ssz.HashRoot interface
-type Transaction []byte
+type Transaction HexBytes
 
 // HashTreeRoot calculates the hash tree root of the transaction, which
 // is a list of basic types (byte).
@@ -49,4 +49,16 @@ func (tx *Transaction) GetTree() (*ssz.Node, error) {
 	w := &ssz.Wrapper{}
 	tx.HashTreeRootWith(w)
 	return w.Node(), nil
+}
+
+func (tx *Transaction) Equal(other *Transaction) bool {
+	return HexBytes(*tx).Equal(HexBytes(*other))
+}
+
+func (tx *Transaction) MarshalJSON() ([]byte, error) {
+	return (*HexBytes)(tx).MarshalJSON()
+}
+
+func (tx *Transaction) UnmarshalJSON(input []byte) error {
+	return (*HexBytes)(tx).UnmarshalJSON(input)
 }

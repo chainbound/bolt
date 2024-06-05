@@ -27,6 +27,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	eth2UtilBellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/flashbots/go-boost-utils/types"
 	"github.com/holiman/uint256"
 	"github.com/prysmaticlabs/go-bitfield"
@@ -53,16 +54,17 @@ func newTestBackend(t *testing.T, numRelays int, relayTimeout time.Duration) *te
 	}
 
 	opts := BoostServiceOpts{
-		Log:                      testLog,
-		ListenAddr:               "localhost:12345",
-		Relays:                   relayEntries,
-		GenesisForkVersionHex:    "0x00000000",
-		RelayCheck:               true,
-		RelayMinBid:              types.IntToU256(12345),
-		RequestTimeoutGetHeader:  relayTimeout,
-		RequestTimeoutGetPayload: relayTimeout,
-		RequestTimeoutRegVal:     relayTimeout,
-		RequestMaxRetries:        5,
+		Log:                            testLog,
+		ListenAddr:                     "localhost:12345",
+		Relays:                         relayEntries,
+		GenesisForkVersionHex:          "0x00000000",
+		RelayCheck:                     true,
+		RelayMinBid:                    types.IntToU256(12345),
+		RequestTimeoutGetHeader:        relayTimeout,
+		RequestTimeoutGetPayload:       relayTimeout,
+		RequestTimeoutRegVal:           relayTimeout,
+		RequestTimeoutSubmitConstraint: relayTimeout,
+		RequestMaxRetries:              5,
 	}
 	service, err := NewBoostService(opts)
 	require.NoError(t, err)
@@ -81,6 +83,7 @@ func (be *testBackend) request(t *testing.T, method, path string, payload any) *
 	} else {
 		payloadBytes, err2 := json.Marshal(payload)
 		require.NoError(t, err2)
+		fmt.Println("payload:", string(payloadBytes))
 		req, err = http.NewRequest(method, path, bytes.NewReader(payloadBytes))
 	}
 
@@ -308,8 +311,118 @@ func TestRegisterValidator(t *testing.T) {
 	})
 }
 
+func TestParseConstraints(t *testing.T) {
+	jsonStr := `[{
+		"message": {
+			"validatorIndex": 12345,
+			"slot": 8978583,
+			"constraints": [{
+				"tx": "0x02f871018304a5758085025ff11caf82565f94388c818ca8b9251b393131c08a736a67ccb1929787a41bb7ee22b41380c001a0c8630f734aba7acb4275a8f3b0ce831cf0c7c487fd49ee7bcca26ac622a28939a04c3745096fa0130a188fa249289fd9e60f9d6360854820dba22ae779ea6f573f",
+				"index": null
+			}]
+		},
+		"signature": "0x81510b571e22f89d1697545aac01c9ad0c1e7a3e778b3078bef524efae14990e58a6e960a152abd49de2e18d7fd3081c15d5c25867ccfad3d47beef6b39ac24b6b9fbf2cfa91c88f67aff750438a6841ec9e4a06a94ae41410c4f97b75ab284c"
+	}]`
+
+	constraints := BatchedSignedConstraints{}
+	err := json.Unmarshal([]byte(jsonStr), &constraints)
+	require.NoError(t, err)
+	require.Len(t, constraints, 1)
+	require.Equal(t, uint64(12345), constraints[0].Message.ValidatorIndex)
+	require.Equal(t, uint64(8978583), constraints[0].Message.Slot)
+	require.Len(t, constraints[0].Message.Constraints, 1)
+	require.Equal(t, constraints[0].Message.Constraints[0].Tx, Transaction(_HexToBytes("0x02f871018304a5758085025ff11caf82565f94388c818ca8b9251b393131c08a736a67ccb1929787a41bb7ee22b41380c001a0c8630f734aba7acb4275a8f3b0ce831cf0c7c487fd49ee7bcca26ac622a28939a04c3745096fa0130a188fa249289fd9e60f9d6360854820dba22ae779ea6f573f")))
+	require.Nil(t, constraints[0].Message.Constraints[0].Index)
+}
+
+func TestConstraintsAndProofs(t *testing.T) {
+	path := pathSubmitConstraint
+	slot := uint64(8978583)
+
+	txHash := _HexToHash("0xba40436abdc8adc037e2c92ea1099a5849053510c3911037ff663085ce44bc49")
+	rawTx := _HexToBytes("0x02f871018304a5758085025ff11caf82565f94388c818ca8b9251b393131c08a736a67ccb1929787a41bb7ee22b41380c001a0c8630f734aba7acb4275a8f3b0ce831cf0c7c487fd49ee7bcca26ac622a28939a04c3745096fa0130a188fa249289fd9e60f9d6360854820dba22ae779ea6f573f")
+
+	payload := BatchedSignedConstraints{&SignedConstraints{
+		Message: ConstraintsMessage{
+			ValidatorIndex: 12345,
+			Slot:           slot,
+			Constraints:    []*Constraint{{Transaction(rawTx), nil}},
+		},
+		Signature: _HexToBytes(
+			"0x81510b571e22f89d1697545aac01c9ad0c1e7a3e778b3078bef524efae14990e58a6e960a152abd49de2e18d7fd3081c15d5c25867ccfad3d47beef6b39ac24b6b9fbf2cfa91c88f67aff750438a6841ec9e4a06a94ae41410c4f97b75ab284c"),
+	}}
+
+	// Build getHeader request
+	hash := _HexToHash("0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7")
+	pubkey := _HexToPubkey(
+		"0x8a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")
+	getHeaderPath := getHeaderWithProofsPath(slot, hash, pubkey)
+
+	t.Run("Normal function", func(t *testing.T) {
+		backend := newTestBackend(t, 1, time.Second)
+		rr := backend.request(t, http.MethodPost, path, payload)
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Equal(t, 1, backend.relays[0].GetRequestCount(path))
+
+		got, ok := backend.boost.constraints.FindTransactionByHash(common.HexToHash(txHash.String()))
+		require.True(t, ok)
+		require.Equal(t, Transaction(rawTx), got.Tx)
+		require.Nil(t, got.Index)
+	})
+
+	t.Run("Normal function with constraints", func(t *testing.T) {
+		backend := newTestBackend(t, 1, time.Second)
+
+		// Submit constraint
+		backend.request(t, http.MethodPost, path, payload)
+
+		resp := backend.relays[0].MakeGetHeaderWithConstraintsResponse(
+			slot,
+			"0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7",
+			"0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7",
+			"0x8a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249",
+			spec.DataVersionDeneb,
+			[]struct {
+				tx   Transaction
+				hash phase0.Hash32
+			}{{rawTx, txHash}},
+		)
+		backend.relays[0].GetHeaderWithProofsResponse = resp
+
+		rr := backend.request(t, http.MethodGet, getHeaderPath, nil)
+		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+		require.Equal(t, 1, backend.relays[0].GetRequestCount(getHeaderPath))
+	})
+
+	t.Run("No proofs given", func(t *testing.T) {
+		backend := newTestBackend(t, 1, time.Second)
+
+		// Submit constraint
+		backend.request(t, http.MethodPost, path, payload)
+
+		resp := backend.relays[0].MakeGetHeaderResponse(
+			slot,
+			"0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7",
+			"0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7",
+			"0x8a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249",
+			spec.DataVersionDeneb,
+		)
+		backend.relays[0].GetHeaderResponse = resp
+
+		rr := backend.request(t, http.MethodGet, getHeaderPath, nil)
+		// When we have constraints registered, but the relay does not return any proofs, we should return no content.
+		// This will force a locally built block.
+		require.Equal(t, http.StatusNoContent, rr.Code, rr.Body.String())
+		require.Equal(t, 1, backend.relays[0].GetRequestCount(getHeaderPath))
+	})
+}
+
 func getHeaderPath(slot uint64, parentHash phase0.Hash32, pubkey phase0.BLSPubKey) string {
 	return fmt.Sprintf("/eth/v1/builder/header/%d/%s/%s", slot, parentHash.String(), pubkey.String())
+}
+
+func getHeaderWithProofsPath(slot uint64, parentHash phase0.Hash32, pubkey phase0.BLSPubKey) string {
+	return fmt.Sprintf("/eth/v1/builder/header_with_proofs/%d/%s/%s", slot, parentHash.String(), pubkey.String())
 }
 
 func TestGetHeader(t *testing.T) {

@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -16,9 +17,11 @@ import (
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	utilbellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
@@ -54,13 +57,16 @@ type mockRelay struct {
 	requestCount map[string]int
 
 	// Overriders
-	handlerOverrideRegisterValidator func(w http.ResponseWriter, req *http.Request)
-	handlerOverrideGetHeader         func(w http.ResponseWriter, req *http.Request)
-	handlerOverrideGetPayload        func(w http.ResponseWriter, req *http.Request)
+	handlerOverrideRegisterValidator   func(w http.ResponseWriter, req *http.Request)
+	handlerOverrideSubmitConstraint    func(w http.ResponseWriter, req *http.Request)
+	handlerOverrideGetHeader           func(w http.ResponseWriter, req *http.Request)
+	handlerOverrideGetHeaderWithProofs func(w http.ResponseWriter, req *http.Request)
+	handlerOverrideGetPayload          func(w http.ResponseWriter, req *http.Request)
 
 	// Default responses placeholders, used if overrider does not exist
-	GetHeaderResponse  *builderSpec.VersionedSignedBuilderBid
-	GetPayloadResponse *builderApi.VersionedSubmitBlindedBlockResponse
+	GetHeaderResponse           *builderSpec.VersionedSignedBuilderBid
+	GetHeaderWithProofsResponse *BidWithInclusionProofs
+	GetPayloadResponse          *builderApi.VersionedSubmitBlindedBlockResponse
 
 	// Server section
 	Server        *httptest.Server
@@ -115,6 +121,8 @@ func (m *mockRelay) getRouter() http.Handler {
 	r.HandleFunc(pathStatus, m.handleStatus).Methods(http.MethodGet)
 	r.HandleFunc(pathRegisterValidator, m.handleRegisterValidator).Methods(http.MethodPost)
 	r.HandleFunc(pathGetHeader, m.handleGetHeader).Methods(http.MethodGet)
+	r.HandleFunc(pathGetHeaderWithProofs, m.handleGetHeaderWithProofs).Methods(http.MethodGet)
+	r.HandleFunc(pathSubmitConstraint, m.handleSubmitConstraint).Methods(http.MethodPost)
 	r.HandleFunc(pathGetPayload, m.handleGetPayload).Methods(http.MethodPost)
 
 	return m.newTestMiddleware(r)
@@ -164,6 +172,71 @@ func (m *mockRelay) defaultHandleRegisterValidator(w http.ResponseWriter, req *h
 	w.WriteHeader(http.StatusOK)
 }
 
+func (m *mockRelay) handleSubmitConstraint(w http.ResponseWriter, req *http.Request) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.handlerOverrideSubmitConstraint != nil {
+		m.handlerOverrideSubmitConstraint(w, req)
+		return
+	}
+	m.defaultHandleSubmitConstraint(w, req)
+}
+
+func (m *mockRelay) defaultHandleSubmitConstraint(w http.ResponseWriter, req *http.Request) {
+	payload := BatchedSignedConstraints{}
+	if err := DecodeJSON(req.Body, &payload); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (m *mockRelay) MakeGetHeaderWithConstraintsResponse(value uint64, blockHash, parentHash, publicKey string, version spec.DataVersion, constraints []struct {
+	tx   Transaction
+	hash phase0.Hash32
+}) *BidWithInclusionProofs {
+
+	transactions := new(utilbellatrix.ExecutionPayloadTransactions)
+
+	for _, con := range constraints {
+		transactions.Transactions = append(transactions.Transactions, bellatrix.Transaction(con.tx))
+	}
+
+	rootNode, err := transactions.GetTree()
+	if err != nil {
+		panic(err)
+	}
+
+	// BOLT: Set the value of nodes. This is MANDATORY for the proof calculation
+	// to output the leaf correctly. This is also never documented in fastssz. -__-
+	// Also calculates the transactions_root
+	txsRoot := rootNode.Hash()
+
+	bidWithProofs := m.MakeGetHeaderWithProofsResponseWithTxsRoot(value, blockHash, parentHash, publicKey, version, phase0.Root(txsRoot))
+	bidWithProofs.Proofs = make([]*InclusionProof, len(constraints))
+
+	for i, con := range constraints {
+		generalizedIndex := int(math.Pow(float64(2), float64(21))) + i
+
+		proof, err := rootNode.Prove(generalizedIndex)
+		if err != nil {
+			panic(err)
+		}
+
+		merkleProof := new(SerializedMerkleProof)
+		merkleProof.FromFastSszProof(proof)
+
+		bidWithProofs.Proofs[i] = &InclusionProof{
+			TxHash:      con.hash,
+			MerkleProof: merkleProof,
+		}
+	}
+
+	return bidWithProofs
+}
+
 // MakeGetHeaderResponse is used to create the default or can be used to create a custom response to the getHeader
 // method
 func (m *mockRelay) MakeGetHeaderResponse(value uint64, blockHash, parentHash, publicKey string, version spec.DataVersion) *builderSpec.VersionedSignedBuilderBid {
@@ -192,6 +265,7 @@ func (m *mockRelay) MakeGetHeaderResponse(value uint64, blockHash, parentHash, p
 			},
 		}
 	case spec.DataVersionDeneb:
+
 		message := &builderApiDeneb.BuilderBid{
 			Header: &deneb.ExecutionPayloadHeader{
 				BlockHash:       _HexToHash(blockHash),
@@ -213,6 +287,70 @@ func (m *mockRelay) MakeGetHeaderResponse(value uint64, blockHash, parentHash, p
 			Deneb: &builderApiDeneb.SignedBuilderBid{
 				Message:   message,
 				Signature: signature,
+			},
+		}
+	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
+		return nil
+	}
+	return nil
+}
+
+// MakeGetHeaderWithProofsResponseWithTxsRoot is used to create the default or can be used to create a custom response to the getHeaderWithProofs
+// method
+func (m *mockRelay) MakeGetHeaderWithProofsResponseWithTxsRoot(value uint64, blockHash, parentHash, publicKey string, version spec.DataVersion, txsRoot phase0.Root) *BidWithInclusionProofs {
+	switch version {
+	case spec.DataVersionCapella:
+		// Fill the payload with custom values.
+		message := &builderApiCapella.BuilderBid{
+			Header: &capella.ExecutionPayloadHeader{
+				BlockHash:        _HexToHash(blockHash),
+				ParentHash:       _HexToHash(parentHash),
+				WithdrawalsRoot:  phase0.Root{},
+				TransactionsRoot: txsRoot,
+			},
+			Value:  uint256.NewInt(value),
+			Pubkey: _HexToPubkey(publicKey),
+		}
+
+		// Sign the message.
+		signature, err := ssz.SignMessage(message, ssz.DomainBuilder, m.secretKey)
+		require.NoError(m.t, err)
+
+		return &BidWithInclusionProofs{
+			Bid: &builderSpec.VersionedSignedBuilderBid{
+				Version: spec.DataVersionCapella,
+				Capella: &builderApiCapella.SignedBuilderBid{
+					Message:   message,
+					Signature: signature,
+				},
+			},
+		}
+	case spec.DataVersionDeneb:
+
+		message := &builderApiDeneb.BuilderBid{
+			Header: &deneb.ExecutionPayloadHeader{
+				BlockHash:        _HexToHash(blockHash),
+				ParentHash:       _HexToHash(parentHash),
+				WithdrawalsRoot:  phase0.Root{},
+				BaseFeePerGas:    uint256.NewInt(0),
+				TransactionsRoot: txsRoot,
+			},
+			BlobKZGCommitments: make([]deneb.KZGCommitment, 0),
+			Value:              uint256.NewInt(value),
+			Pubkey:             _HexToPubkey(publicKey),
+		}
+
+		// Sign the message.
+		signature, err := ssz.SignMessage(message, ssz.DomainBuilder, m.secretKey)
+		require.NoError(m.t, err)
+
+		return &BidWithInclusionProofs{
+			Bid: &builderSpec.VersionedSignedBuilderBid{
+				Version: spec.DataVersionDeneb,
+				Deneb: &builderApiDeneb.SignedBuilderBid{
+					Message:   message,
+					Signature: signature,
+				},
 			},
 		}
 	case spec.DataVersionUnknown, spec.DataVersionPhase0, spec.DataVersionAltair, spec.DataVersionBellatrix:
@@ -247,8 +385,47 @@ func (m *mockRelay) defaultHandleGetHeader(w http.ResponseWriter) {
 		"0x8a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249",
 		spec.DataVersionCapella,
 	)
+
 	if m.GetHeaderResponse != nil {
 		response = m.GetHeaderResponse
+	}
+
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+// handleGetHeaderWithProofs handles incoming requests to server.pathGetHeader
+func (m *mockRelay) handleGetHeaderWithProofs(w http.ResponseWriter, req *http.Request) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	// Try to override default behavior is custom handler is specified.
+	if m.handlerOverrideGetHeader != nil {
+		m.handlerOverrideGetHeaderWithProofs(w, req)
+		return
+	}
+	m.defaultHandleGetHeaderWithProofs(w)
+}
+
+// defaultHandleGetHeaderWithProofs returns the default handler for handleGetHeaderWithProofs
+func (m *mockRelay) defaultHandleGetHeaderWithProofs(w http.ResponseWriter) {
+	// By default, everything will be ok.
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+
+	// Build the default response.
+	response := m.MakeGetHeaderWithConstraintsResponse(
+		12345,
+		"0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7",
+		"0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7",
+		"0x8a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249",
+		spec.DataVersionCapella,
+		nil,
+	)
+
+	if m.GetHeaderWithProofsResponse != nil {
+		response = m.GetHeaderWithProofsResponse
 	}
 
 	if err := json.NewEncoder(w).Encode(response); err != nil {
