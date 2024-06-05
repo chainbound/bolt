@@ -1206,7 +1206,11 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 			// Everything ok, collect the logs and shift in the next transaction from the same account
 			coalescedLogs = append(coalescedLogs, logs...)
 			env.tcount++
-			if !candidate.isConstraint {
+			if candidate.isConstraint {
+				// Update the amount of gas left for the constraints
+				constraintsTotalGasLeft -= candidate.tx.Gas()
+				constraintsTotalBlobGasLeft -= candidate.tx.BlobGas()
+			} else {
 				txs.Shift()
 			}
 
