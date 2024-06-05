@@ -58,7 +58,7 @@ mod tests {
     };
     use alloy_rpc_types::TransactionRequest;
     use alloy_signer::SignerSync;
-    use alloy_signer_wallet::LocalWallet;
+    use alloy_signer_local::LocalWallet;
     use execution::{ExecutionState, ValidationError};
     use fetcher::StateClient;
     use tracing_subscriber::fmt;
