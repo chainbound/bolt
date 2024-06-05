@@ -1,6 +1,6 @@
 # BOLT
 
-> [!INFO]
+> [!IMPORTANT]
 > Bolt is an implementation of _permissionless proposer commitments through
 > PBS_. In its essence, it consists in a light fork of the current MEV-Boost
 > stack that allows users to request **preconfirmations** from proposers, and
@@ -12,14 +12,9 @@
 - [How it works](#how-it-works)
 - [Scope of this repository](#scope-of-this-repository)
 - [Devnet and demo app](#devnet-and-demo-app)
-  - [Requirements](#requirements)
+  - [Requirements and setup](#requirements-and-setup)
   - [Running the devnet and demo](#running-the-devnet-and-demo)
   - [Stopping the devnet and demo](#stopping-the-devnet-and-demo)
-- [Changelog](#changelog)
-  - [Bolt Sidecar](#bolt-sidecar)
-  - [Builder](#builder)
-  - [Relay](#relay)
-  - [MEV-Boost](#mev-boost)
 
 <!-- vim-markdown-toc -->
 
@@ -76,29 +71,39 @@ sequenceDiagram
 
 ## Scope of this repository
 
-This proof of concept aims to provide a working example of the flow depicted
-above, proof generation and verification included, but it simplifies some parts
-of the process to make it easier to implement in a devnet and to avoid
-unnecessary complexity at this stage, such as:
+This repository contains all the necessary components to illustrate the flow
+described above. It can be thought of a reference implementation.
+In particular, the core components are:
 
-- the builder will place the preconfirmed transactions on the top of the block
-  to ensure their validity. In a real scenario, builders would adapt their bundle
-  merging algorithms to place the preconfirmed transactions where they fit best.
-- the relay doesn't ensure to store bids with valid proofs of inclusion. In a
-  production environment this should be done to forward only valid bids to the
-  proposer and minimize the risk of falling back to a locally built block.
-- the fallback logic to a locally built block is simplified.
+- [**Bolt Sidecar**](./bolt-sidecar/): New validator software (akin to [mev-boost][fb-mev-boost])
+  that handles the receipt of preconfirmation requests from users, translates them
+  into constraints, and forwards them to relays. Additionally, it handles the
+  fallback logic to produce a block locally when relays send invalid inclusion proofs.
+- [**Builder**](./builder/): A fork of the [Flashbots builder][fb-builder] that
+  subscribes to new constraints from relays, builds blocks that respect them, and
+  includes the necessary proofs of inclusion in the bid submitted to relays.
+- [**Relay**](./mev-boost-relay/): A fork of the [Flashbots relay][fb-relay] that
+  receives constraints from proposers, and forwards them to builders. It also
+  receives bids with proofs of inclusion from builders, verifies them and forwards
+  the best bid to proposers for block proposal.
+- [**MEV-Boost**](./mev-boost/): A fork of the [Flashbots MEV-Boost][fb-mev-boost] sidecar
+  that includes new API endpoints to proxy requests from the Bolt Sidecar to the connected relays.
+- [**Bolt Contracts**](./bolt-contracts/): A set of smart contracts for peripheral functionality
+  such as proposer registration and permissionless dispute resolution for attributable faults.
+
+Additionally, this repository contains the necessary scripts to spin up a [Kurtosis][kurtosis] devnet
+with all the components running, and a simple [web demo](./bolt-web-demo/) to showcase the preconfirmation flow.
 
 ## Devnet and demo app
 
-We are using a full [Kurtosis](https://www.kurtosis.com/) devnet stack, with
-custom PBS docker images. Additionally, this repo contains a simple web demo
-that allows us to test the whole preconfirmation flow.
+We are using a full [Kurtosis][kurtosis] devnet stack, with custom Docker images
+for the core components outlined above. The exact version of the Ethereum-package used
+in our devnet can be seen [here](https://github.com/chainbound/ethereum-package).
 
-End-to-end test scenarios are also available as playgrounds to showcase
-different fault scenarios and how the system behaves.
+### Requirements and setup
 
-### Requirements
+8GB of RAM and a modern laptop CPU are recommended to run the devnet efficiently,
+but it should work on most machines. Please [Open an issue][new-issue] if you encounter any problems.
 
 Make sure you have the following requirements on your machine:
 
@@ -129,8 +134,7 @@ just up
 just demo
 ```
 
-The web demo will be available on your browser at
-[`http://localhost:3000`](http://localhost:3000).
+The web demo will be available on your browser at [`http://localhost:3000`](http://localhost:3000).
 
 ### Stopping the devnet and demo
 
@@ -149,80 +153,13 @@ just clean
 
 > [!WARNING]
 > Remember to shut down the devnet environment when you are done with it, as it
-> consumes significant resources on your machine :)
+> consumes significant resources (CPU & RAM) on your machine.
 
-## Changelog
+<!-- Links -->
 
-All notable changes to the components of this project will be documented here.
-
-### Bolt Sidecar
-
-The sidecar is responsible for handling the preconfirmation requests from the
-user via JSON-RPC, and forward them to the relay.
-
-**Added**
-
-- `eth_requestPreconfirmation` whose params are a RLP-encoded `rawTx` and the `slot`
-  for which the preconfirmation is requested.
-- `eth_getPreconfirmation` which returns the preconfirmation accepted by the
-  proposer for the given `slot`.
-
-### Builder
-
-The outlined changes refer to the implementation of the [builder made by
-the Flashbots team](https://github.com/flashbots/builder/tree/v1.13.14-0.3.0). In order to
-best comprehend the changes it is recommended to keep [Flashbots' builder flow
-diagram](https://github.com/flashbots/builder/blob/v1.13.14-0.3.0/docs/builder/builder-diagram.png)
-at hand.
-
-The PR implementing the changes can be found [here](https://github.com/chainbound/bolt/pull/9).
-
-**Added**
-
-- Utility to pull preconfirmed transactions from the relay
-- Utility to generate the SSZ hash tree root of a transaction
-- Utility to generate a Merkle proof of inclusion of at a certain index
-  in the SSZ list of transactions
-
-**Changed**
-
-- Fetch preconfirmed transactions when running building job
-  (`runBuildingJob`) using the sidecar/relay endpoint `eth_getPreconfirmation`
-- Preconfirmed transactions are propagated downstream in the building pipeline,
-  and injected as part of the mempool when the block filling process begins
-  (`fillTrasanctionsAlgoWorker`)
-- Generate Merkle proofs of inclusions for the preconfirmed transactions when the block is sealed
-  (`onSealedBlock`) and the bid is ready to be sent to the relay
-- Builder bid is sent to a new relay endpoint `/relay/v1/builder/blocks_with_preconfs`
-  along with the proofs
-
-### Relay
-
-The outlined changes refer to the implementation of the [relay made by the
-Flashbots team](https://github.com/flashbots/mev-boost-relay/tree/v0.29.1).
-
-The PR implementing the changes can be found
-[here](https://github.com/chainbound/bolt/pull/10).
-
-**Added**
-
-- New endpoint `/relay/v1/builder/blocks_with_preconfs` to receive builder
-  bids with preconfirmed transactions and their Merkle proofs of inclusion.
-  This endpoint doesn't accept SSZ encoded content, only JSON for now.
-- New Redis cache key `cache-preconfirmations-proofs` to store Merkle proofs
-
-### MEV-Boost
-
-The outlined changes refer to the implementation of the [MEV-Boost made by the
-Flashbots team](https://github.com/flashbots/mev-boost/tree/v1.7).
-
-The PR implementing the changes can be found [here](https://github.com/chainbound/bolt/pull/11)
-
-**Added**
-
-- Utility to generate the SSZ hash tree root of a transaction and to verify a
-  Merkle proof of inclusion
-
-**Changed**
-
-- The `getHeader` endpoint verifies the Merkle proofs if expected, and rejects the bid if not valid
+[docs]: https://chainbound.github.io/bolt-docs/
+[new-issue]: https://github.com/chainbound/bolt/issues/new
+[fb-mev-boost]: https://github.com/flashbots/mev-boost
+[fb-relay]: https://github.com/flashbots/mev-boost-relay
+[fb-builder]: https://github.com/flashbots/builder
+[kurtosis]: https://www.kurtosis.com/
