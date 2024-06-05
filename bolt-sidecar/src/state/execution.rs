@@ -6,8 +6,8 @@ use thiserror::Error;
 
 use crate::{
     common::{calculate_max_basefee, validate_transaction},
+    primitives::{AccountState, CommitmentRequest},
     template::BlockTemplate,
-    types::{commitment::CommitmentRequest, transaction::TxInfo, AccountState},
 };
 
 use super::{fetcher::StateFetcher, ChainHead, StateError};
@@ -102,7 +102,7 @@ impl<C: StateFetcher> ExecutionState<C> {
     pub async fn try_commit(&mut self, request: &CommitmentRequest) -> Result<(), ValidationError> {
         let CommitmentRequest::Inclusion(req) = request;
 
-        let sender = req.transaction.from()?;
+        let sender = req.tx.recover_signer()?;
 
         tracing::debug!(%sender, target_slot = req.slot, "Trying to commit inclusion request to block template");
 
@@ -122,7 +122,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         if let Some(account_state) = self.account_state(&sender) {
             // Validate the transaction against the account state
             tracing::debug!(address = %sender, "Known account state: {account_state:?}");
-            validate_transaction(&account_state, &req.transaction)?;
+            validate_transaction(&account_state, &req.tx)?;
         } else {
             tracing::debug!(address = %sender, "Unknown account state");
             // If we don't have the account state, we need to fetch it
@@ -138,11 +138,11 @@ impl<C: StateFetcher> ExecutionState<C> {
             self.account_states.insert(sender, account_state);
 
             // Validate the transaction against the account state
-            validate_transaction(&account_state, &req.transaction)?;
+            validate_transaction(&account_state, &req.tx)?;
         }
 
         // Check EIP-4844-specific limits
-        if req.transaction.tx_type() == TxType::Eip4844 {
+        if req.tx.tx_type() == TxType::Eip4844 {
             if let Some(template) = self.block_templates.get(&req.slot) {
                 if template.blob_count() >= MAX_BLOBS_PER_BLOCK {
                     return Err(ValidationError::Eip4844Limit);
@@ -152,7 +152,7 @@ impl<C: StateFetcher> ExecutionState<C> {
             // TODO: check max_fee_per_blob_gas against the blob_base_fee
         }
 
-        self.commit_transaction(req.slot, req.transaction.clone());
+        self.commit_transaction(req.slot, req.tx.clone());
 
         Ok(())
     }

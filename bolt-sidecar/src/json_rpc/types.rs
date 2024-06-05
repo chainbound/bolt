@@ -1,40 +1,9 @@
+use alloy_consensus::TxEnvelope;
 use alloy_primitives::keccak256;
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 
-use crate::{crypto::SignableECDSA, types::Slot};
-
-/// The API parameters to request an inclusion commitment for a given slot.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct InclusionRequestParams {
-    #[serde(flatten)]
-    pub message: InclusionRequestMessage,
-    pub signature: String,
-}
-
-/// The message to request an inclusion commitment for a given slot.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct InclusionRequestMessage {
-    pub slot: Slot,
-    pub tx: String,
-    pub index: Option<u64>,
-}
-
-/// What users have to sign to request an inclusion commitment.
-/// We use the [SignableECDSA] trait to abstract over the signature verification step.
-impl SignableECDSA for InclusionRequestMessage {
-    fn digest(&self) -> Message {
-        let mut data = Vec::new();
-        data.extend_from_slice(&self.slot.to_le_bytes());
-        data.extend_from_slice(self.tx.as_bytes());
-        data.extend_from_slice(&self.index.unwrap_or(0).to_le_bytes());
-
-        let hash = keccak256(data).0;
-        Message::from_digest_slice(&hash).expect("digest")
-    }
-}
+use crate::{crypto::SignableECDSA, primitives::InclusionRequest};
 
 /// The inclusion request transformed into an explicit list of signed constraints
 /// that need to be forwarded to the PBS pipeline to inform block production.
@@ -54,7 +23,7 @@ pub struct ConstraintsMessage {
 }
 
 impl ConstraintsMessage {
-    pub fn build(validator_index: u64, slot: u64, request: InclusionRequestParams) -> Self {
+    pub fn build(validator_index: u64, slot: u64, request: InclusionRequest) -> Self {
         let constraints = vec![Constraint::from(request)];
         Self {
             validator_index,
@@ -66,24 +35,25 @@ impl ConstraintsMessage {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Constraint {
-    pub tx: String,
+    pub tx: TxEnvelope,
     pub index: Option<u64>,
 }
 
 impl Constraint {
+    // TODO: actually use SSZ encoding here
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut data = Vec::new();
-        data.extend_from_slice(self.tx.as_bytes());
+        data.extend_from_slice(self.tx.tx_hash().as_slice());
         data.extend_from_slice(&self.index.unwrap_or(0).to_le_bytes());
         data
     }
 }
 
-impl From<InclusionRequestParams> for Constraint {
-    fn from(params: InclusionRequestParams) -> Self {
+impl From<InclusionRequest> for Constraint {
+    fn from(params: InclusionRequest) -> Self {
         Self {
-            tx: params.message.tx,
-            index: params.message.index,
+            tx: params.tx,
+            index: None,
         }
     }
 }

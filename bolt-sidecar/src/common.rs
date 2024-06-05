@@ -1,8 +1,9 @@
+use alloy_consensus::TxEnvelope;
 use alloy_primitives::U256;
 
 use crate::{
+    primitives::{AccountState, TxInfo},
     state::ValidationError,
-    types::{transaction::TxInfo, AccountState},
 };
 
 /// Calculates the max_basefee `slot_diff` blocks in the future given a current basefee (in gwei).
@@ -28,7 +29,7 @@ pub fn calculate_max_basefee(current: u128, block_diff: u64) -> Option<u128> {
 }
 
 /// Calculates the max transaction cost (gas + value) in wei.
-pub fn max_transaction_cost<T: TxInfo>(transaction: &T) -> U256 {
+pub fn max_transaction_cost(transaction: &TxEnvelope) -> U256 {
     let gas_limit = transaction.gas_limit();
 
     let fee_cap = transaction
@@ -44,9 +45,9 @@ pub fn max_transaction_cost<T: TxInfo>(transaction: &T) -> U256 {
 /// This function validates a transaction against an account state. It checks 2 things:
 /// 1. The nonce of the transaction must be higher than the account's nonce, but not higher than current + 1.
 /// 2. The balance of the account must be higher than the transaction's max cost.
-pub fn validate_transaction<T: TxInfo>(
+pub fn validate_transaction(
     account_state: &AccountState,
-    transaction: &T,
+    transaction: &TxEnvelope,
 ) -> Result<(), ValidationError> {
     // Check if the nonce is correct (should be the same as the transaction count)
     if transaction.nonce() < account_state.transaction_count {

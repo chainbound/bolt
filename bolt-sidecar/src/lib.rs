@@ -6,9 +6,9 @@
 mod client;
 mod common;
 mod crypto;
+mod primitives;
 mod state;
 mod template;
-mod types;
 
 /// Configuration and command-line argument parsing for the sidecar
 pub mod config;

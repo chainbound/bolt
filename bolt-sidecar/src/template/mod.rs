@@ -11,7 +11,7 @@ use alloy_primitives::{Address, U256};
 
 use crate::{
     common::max_transaction_cost,
-    types::{transaction::TxInfo, AccountState},
+    primitives::{AccountState, TxInfo},
 };
 
 /// A block template that serves as a fallback block, but is also used
