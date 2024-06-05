@@ -13,6 +13,7 @@ use ethereum_consensus::{
 use serde::Deserialize;
 use std::sync::Arc;
 
+use super::spec::BuilderApi;
 use crate::{client::mevboost::MevBoostClient, types::SignedBuilderBid};
 
 /// A proxy server for the builder API. Forwards all requests to the target after interception.
@@ -88,32 +89,6 @@ impl<T: BuilderApi> BuilderProxyServer<T> {
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }
-}
-
-#[async_trait::async_trait]
-pub trait BuilderApi {
-    /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/status>
-    async fn status(&self) -> Result<StatusCode, Box<dyn std::error::Error>>;
-    /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/registerValidator>
-    async fn register_validators(
-        &self,
-        registrations: Vec<SignedValidatorRegistration>,
-    ) -> Result<(), Box<dyn std::error::Error>>;
-    /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/getHeader>
-    async fn get_header(
-        &self,
-        params: GetHeaderParams,
-    ) -> Result<SignedBuilderBid, Box<dyn std::error::Error>>;
-    /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/submitBlindedBlock>
-    async fn get_payload(&self) -> Result<Body, Box<dyn std::error::Error>>;
-}
-
-#[async_trait::async_trait]
-pub trait ConstraintsApi: BuilderApi {
-    async fn submit_constraints(
-        &self,
-        constraints: String,
-    ) -> Result<(), Box<dyn std::error::Error>>;
 }
 
 pub struct BuilderProxyConfig {

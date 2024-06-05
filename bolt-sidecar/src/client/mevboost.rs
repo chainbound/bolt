@@ -7,8 +7,8 @@ use ethereum_consensus::builder::SignedValidatorRegistration;
 use serde_json::Value;
 
 use crate::{
-    api::builder::{BuilderApi, GetHeaderParams},
-    types::BatchedSignedConstraints,
+    api::{builder::GetHeaderParams, spec::BuilderApi},
+    types::{constraint::BatchedSignedConstraints, SignedBuilderBid},
 };
 
 #[derive(Debug)]
