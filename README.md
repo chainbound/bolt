@@ -1,5 +1,12 @@
 # BOLT
 
+> [!INFO]
+> Bolt is an implementation of _permissionless proposer commitments through
+> PBS_. In its essence, it consists in a light fork of the current MEV-Boost
+> stack that allows users to request **preconfirmations** from proposers, and
+> then adds a way for proposers to commit to transaction inclusion in a way that
+> is easily verifiable.
+
 <!-- vim-markdown-toc Marked -->
 
 - [How it works](#how-it-works)
@@ -16,32 +23,56 @@
 
 <!-- vim-markdown-toc -->
 
-> [!IMPORTANT]
-> Bolt is an implementation of _permissionless proposer commitments through
-> PBS_. In its essence, it consists in a light fork of the current MEV-Boost
-> stack that allows users to request **preconfirmations** from proposers, and
-> then adds a way for proposers to commit to transaction inclusion in a way that
-> is easily verifiable.
-
 ## How it works
 
 The flow of Bolt can be summarized in the following steps:
 
-1. Users submit transactions to the proposer next in line
-2. The proposer can accept this transaction, and after that it will send a
-   preconfirmation to the user and the constraint to the relays.
-3. Builders pull the list of preconfirmed transactions from
-   the relays
-4. Builders build valid blocks with the preconfirmations and append a proof of
-   inclusion with their bids
-5. Relays can then forward these proofs to the proposers when the
-   `getHeader` request is made
-6. The proposer now has all the necessary info to verify if the payload
-   includes the preconfirmations
-7. If the block is valid, the proposer can propose it as usual. If not, the
-   proposer can self-build it.
+1. Users submit transactions to an RPC endpoint that will forward them to the
+   proposer opted-in to Bolt in the consensus lookahead window.
+2. The proposer can accept this request and turn it into a "constraint" on the block
+   that it is going to propose. This constraint acts as guarantee of inclusion of
+   the transaction in the block, also known as a _preconfirmation_.
+3. Builders subscribe to proposer constraints in real time through a new relay
+   streaming endpoint to keep informed about the preconfirmations.
+4. Builders build valid blocks that adhere to all constraints, and append inclusion
+   proofs together with the bids to the relay.
+5. When it's time to propose a block, the proposer will fetch the best valid bid
+   from the relay, and verify its inclusion proofs locally before signing the header.
+6. If the constraints are respected, the proposer can propose the payload as usual
+   by sending the signed header back to the relay. If not, the proposer can self-build
+   a payload and propose it directly instead.
 
-A diagram of this flow is available [here](https://swimlanes.io/u/hwwDL7z1P)
+The following diagram illustrates the flow:
+
+```mermaid
+sequenceDiagram
+    participant Beacon Node as beacon node
+    participant Bolt Sidecar as bolt-sidecar
+    participant MEV-Boost as mev-boost
+    participant PBS Relay as pbs relay
+
+    Beacon Node->>Bolt Sidecar: /eth/v1/builder/header
+    Note over Beacon Node, Bolt Sidecar: when it's time, the proposer's beacon node will ask for an externally built payload
+
+    Bolt Sidecar->>MEV-Boost: /eth/v1/builder/header
+    MEV-Boost->>PBS Relay: /eth/v1/builder/header_with_proofs
+    PBS Relay->>MEV-Boost: ExecutionPayloadHeader + InclusionProofs
+    MEV-Boost->>Bolt Sidecar: ExecutionPayloadHeader + InclusionProofs
+
+    alt Inclusion proofs sent by the relay are VALID
+        Bolt Sidecar->>Beacon Node: ExecutionPayloadHeader
+        Bolt Sidecar->>MEV-Boost: /eth/v1/builder/blinded-blocks
+        MEV-Boost->>PBS Relay: /eth/v1/builder/blinded-blocks
+        Note over MEV-Boost, PBS Relay: the relay can now broadcast the full payload.
+    else Inclusion proofs sent by the relay are INVALID
+        PBS Relay->>MEV-Boost: nil response
+        Bolt Sidecar->>Beacon Node: bolt-sidecar will generate a fallback ExecutionPayload that follows all constraints committed to by the proposer.
+        Bolt Sidecar->>MEV-Boost: /eth/v1/builder/blinded-blocks
+        MEV-Boost->>PBS Relay: /eth/v1/builder/blinded-blocks
+        PBS Relay->>Beacon Node: ExecutionPayload
+        Note over Beacon Node, Bolt Sidecar: after receiving the payload, the beacon node will broadcast it to the beacon chain p2p network.
+    end
+```
 
 ## Scope of this repository
 
