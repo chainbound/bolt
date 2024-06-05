@@ -63,7 +63,7 @@ mod tests {
     use fetcher::StateClient;
     use tracing_subscriber::fmt;
 
-    use crate::types::commitment::{CommitmentRequest, InclusionRequest};
+    use crate::primitives::{CommitmentRequest, InclusionRequest};
 
     use super::*;
 
@@ -109,7 +109,7 @@ mod tests {
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            transaction: signed,
+            tx: signed,
             signature: sig,
         });
 
@@ -140,7 +140,7 @@ mod tests {
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            transaction: signed,
+            tx: signed,
             signature: sig,
         });
 
@@ -175,7 +175,7 @@ mod tests {
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            transaction: signed,
+            tx: signed,
             signature: sig,
         });
 
@@ -211,7 +211,7 @@ mod tests {
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            transaction: signed,
+            tx: signed,
             signature: sig,
         });
 
@@ -245,7 +245,7 @@ mod tests {
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            transaction: signed.clone(),
+            tx: signed.clone(),
             signature: sig,
         });
 
