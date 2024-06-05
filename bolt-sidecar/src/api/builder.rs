@@ -18,13 +18,14 @@ use std::{
 use tokio::sync::{mpsc, oneshot};
 
 use super::spec::{
-    BuilderApi, ConstraintsApi, GET_HEADER_PATH, GET_PAYLOAD_PATH, REGISTER_VALIDATORS_PATH,
-    STATUS_PATH,
+    BuilderApi, BuilderApiError, ConstraintsApi, GET_HEADER_PATH, GET_PAYLOAD_PATH,
+    REGISTER_VALIDATORS_PATH, STATUS_PATH,
 };
 use crate::{client::mevboost::MevBoostClient, types::SignedBuilderBid};
 
 const MAX_BLINDED_BLOCK_LENGTH: usize = 1024 * 1024;
 
+/// TODO: determine value
 const GET_HEADER_WITH_PROOFS_TIMEOUT: Duration = Duration::from_millis(500);
 
 /// A proxy server for the builder API. Forwards all requests to the target after interception.
@@ -34,6 +35,7 @@ pub struct BuilderProxyServer<T: BuilderApi> {
     // in failed get_header
     // This will only be some in case of a failed get_header
     local_payload: Mutex<Option<u64>>,
+    /// The payload fetcher to get locally built payloads.
     payload_fetcher: LocalPayloadFetcher,
 }
 
@@ -95,17 +97,12 @@ impl<T: ConstraintsApi> BuilderProxyServer<T> {
     pub async fn register_validators(
         State(server): State<Arc<BuilderProxyServer<T>>>,
         Json(registrations): Json<Vec<SignedValidatorRegistration>>,
-    ) -> StatusCode {
-        if server
+    ) -> Result<StatusCode, BuilderApiError> {
+        server
             .proxy_target
             .register_validators(registrations)
             .await
-            .is_ok()
-        {
-            StatusCode::OK
-        } else {
-            StatusCode::INTERNAL_SERVER_ERROR
-        }
+            .map(|_| StatusCode::OK)
     }
 
     /// Gets the header. NOTE: converts this request to a get_header_with_proofs request to the modified mev-boost.
@@ -113,7 +110,7 @@ impl<T: ConstraintsApi> BuilderProxyServer<T> {
     pub async fn get_header(
         State(server): State<Arc<BuilderProxyServer<T>>>,
         Path(params): Path<GetHeaderParams>,
-    ) -> Result<impl IntoResponse, impl IntoResponse> {
+    ) -> Result<Json<SignedBuilderBid>, BuilderApiError> {
         let slot = params.slot;
 
         match tokio::time::timeout(
@@ -127,6 +124,7 @@ impl<T: ConstraintsApi> BuilderProxyServer<T> {
                 // On ANY error, we fall back to locally built block
                 tracing::error!(
                     path = GET_HEADER_PATH,
+                    slot,
                     "Proxy error, fetching local payload instead"
                 );
 
@@ -137,7 +135,7 @@ impl<T: ConstraintsApi> BuilderProxyServer<T> {
                     // TODO: handle failure? In this case, we don't have a fallback block
                     // which means we haven't made any commitments. This means the beacon client should
                     // fallback to local block building.
-                    .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+                    .ok_or(BuilderApiError::FailedToFetchLocalPayload(slot))?;
 
                 {
                     // Set the payload for the following get_payload request
@@ -148,26 +146,23 @@ impl<T: ConstraintsApi> BuilderProxyServer<T> {
                 Ok(Json(payload.bid))
             }
         }
+
+        // Err::<Json<SignedBuilderBid>, BuilderApiError>(
+        //     BuilderApiError::NoValidatorsCouldBeRegistered,
+        // )
     }
 
     pub async fn get_payload(
         State(server): State<Arc<BuilderProxyServer<T>>>,
         req: Request<Body>,
-    ) -> Result<impl IntoResponse, impl IntoResponse> {
+    ) -> Result<impl IntoResponse, BuilderApiError> {
         // TODO: on error / timeout, we fetch our locally built block and return it instead.
         let body = req.into_body();
-        let body_bytes = to_bytes(body, MAX_BLINDED_BLOCK_LENGTH)
-            .await
-            .map_err(|_| StatusCode::BAD_REQUEST)?;
+        let body_bytes = to_bytes(body, MAX_BLINDED_BLOCK_LENGTH).await?;
 
-        let signed_block =
-            serde_json::from_slice(&body_bytes).map_err(|_| StatusCode::BAD_REQUEST)?;
+        let signed_block = serde_json::from_slice(&body_bytes)?;
 
-        server
-            .proxy_target
-            .get_payload(signed_block)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+        server.proxy_target.get_payload(signed_block).await
     }
 }
 

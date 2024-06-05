@@ -11,7 +11,7 @@ use serde_json::Value;
 use crate::{
     api::{
         builder::GetHeaderParams,
-        spec::{BuilderApi, ConstraintsApi},
+        spec::{BuilderApi, BuilderApiError, ConstraintsApi},
     },
     types::{constraint::BatchedSignedConstraints, SignedBuilderBid},
 };
@@ -67,45 +67,45 @@ impl MevBoostClient {
 #[async_trait::async_trait]
 impl BuilderApi for MevBoostClient {
     /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/status>
-    async fn status(&self) -> Result<StatusCode, Box<dyn std::error::Error>> {
+    async fn status(&self) -> Result<StatusCode, BuilderApiError> {
         todo!()
     }
+
     /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/registerValidator>
     async fn register_validators(
         &self,
         registrations: Vec<SignedValidatorRegistration>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> Result<(), BuilderApiError> {
         todo!()
     }
+
     /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/getHeader>
     async fn get_header(
         &self,
         params: GetHeaderParams,
-    ) -> Result<SignedBuilderBid, Box<dyn std::error::Error>> {
+    ) -> Result<SignedBuilderBid, BuilderApiError> {
         todo!()
     }
+
     /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/submitBlindedBlock>
     async fn get_payload(
         &self,
         signed_block: SignedBlindedBeaconBlock,
-    ) -> Result<Body, Box<dyn std::error::Error>> {
+    ) -> Result<Body, BuilderApiError> {
         todo!()
     }
 }
 
 #[async_trait::async_trait]
 impl ConstraintsApi for MevBoostClient {
-    async fn submit_constraints(
-        &self,
-        constraints: String,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    async fn submit_constraints(&self, constraints: String) -> Result<(), BuilderApiError> {
         todo!()
     }
 
     async fn get_header_with_proofs(
         &self,
         params: GetHeaderParams,
-    ) -> Result<SignedBuilderBid, Box<dyn std::error::Error>> {
+    ) -> Result<SignedBuilderBid, BuilderApiError> {
         todo!()
     }
 }

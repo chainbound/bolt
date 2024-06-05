@@ -10,7 +10,7 @@ clap = { version = "4.5.4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 warp = "0.3.7"
 futures = "0.3"
-axum = "0.7"
+axum = { version = "0.7", features = ["macros"] }
 
 # crypto
 blst = "0.3.12"
