@@ -341,8 +341,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 				fmt.Println("End of stream")
 				break
 			}
-			log.Error(fmt.Sprintf("Error reading from response body: %v", err))
-			continue
+			log.Error("Error reading from response body: %v", err)
 		}
 
 		if !strings.HasPrefix(line, "data: ") {
@@ -351,9 +350,9 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 
 		data := strings.TrimPrefix(line, "data: ")
 
-		// Assume the data is the JSON representation of the constraints
-		log.Debug(fmt.Sprintf("Received new constraint: %s\n", data))
-		var constraintsSigned common.SignedConstraintsList
+		// We assume the data is the JSON representation of the constraints
+		log.Debug("Received new constraint: %s\n", data)
+		constraintsSigned := make(common.SignedConstraintsList, 0, 8)
 		if err := json.Unmarshal([]byte(data), &constraintsSigned); err != nil {
 			log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))
 			continue
