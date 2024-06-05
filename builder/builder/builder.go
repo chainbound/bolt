@@ -394,6 +394,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 				}
 			}
 
+			// If there are no new constraints, we can continue with the next constraint and not update the cache
 			if !isNewConstraint {
 				continue OUTER
 			}
