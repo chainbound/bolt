@@ -84,8 +84,11 @@ require (
 )
 
 require (
+	github.com/chainbound/shardmap v0.0.2 // indirect
+	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/getsentry/sentry-go v0.18.0 // indirect
 	github.com/goccy/go-yaml v1.11.2 // indirect
+	github.com/gorilla/handlers v1.5.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.5 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/naoina/go-stringutil v0.1.0 // indirect

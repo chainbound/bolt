@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	builderSpec "github.com/attestantio/go-builder-client/spec"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -60,7 +61,7 @@ func (r *RemoteRelayAggregator) SubmitBlock(msg *builderSpec.VersionedSubmitBloc
 	return nil
 }
 
-func (r *RemoteRelayAggregator) SubmitBlockWithPreconfsProofs(msg *VersionedSubmitBlockRequestWithPreconfsProofs, registration ValidatorData) error {
+func (r *RemoteRelayAggregator) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequestWithProofs, registration ValidatorData) error {
 	r.registrationsCacheLock.RLock()
 	defer r.registrationsCacheLock.RUnlock()
 
@@ -70,7 +71,7 @@ func (r *RemoteRelayAggregator) SubmitBlockWithPreconfsProofs(msg *VersionedSubm
 	}
 	for _, relay := range relays {
 		go func(relay IRelay) {
-			err := relay.SubmitBlockWithPreconfsProofs(msg, registration)
+			err := relay.SubmitBlockWithProofs(msg, registration)
 			if err != nil {
 				log.Error("could not submit block", "err", err)
 			}

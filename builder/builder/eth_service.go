@@ -15,13 +15,10 @@ import (
 )
 
 type IEthereumService interface {
-	BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, preconfs []*types.Transaction) error
+	BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraints types.HashToConstraintDecoded) error
 	GetBlockByHash(hash common.Hash) *types.Block
 	Config() *params.ChainConfig
 	Synced() bool
-	// BOLT: needed to retrieve the preconfirmations and distinguish
-	// between test implementation and real implementation
-	Preconfirmations(boltCCEndpoint string, slot uint64) ([]*types.Transaction, error)
 }
 
 type testEthereumService struct {
@@ -36,7 +33,7 @@ type testEthereumService struct {
 	testPreconfs       []*types.Transaction
 }
 
-func (t *testEthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, preconfs []*types.Transaction) error {
+func (t *testEthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraints types.HashToConstraintDecoded) error {
 	sealedBlockCallback(t.testBlock, t.testBlockValue, t.testBlobSidecar, time.Now(), t.testBundlesMerged, t.testAllBundles, t.testUsedSbundles)
 	return nil
 }
@@ -47,10 +44,6 @@ func (t *testEthereumService) Config() *params.ChainConfig { return params.TestC
 
 func (t *testEthereumService) Synced() bool { return t.synced }
 
-func (t *testEthereumService) Preconfirmations(boltCCEndpoint string, slot uint64) ([]*types.Transaction, error) {
-	return t.testPreconfs, nil
-}
-
 type EthereumService struct {
 	eth *eth.Ethereum
 }
@@ -60,19 +53,19 @@ func NewEthereumService(eth *eth.Ethereum) *EthereumService {
 }
 
 // TODO: we should move to a setup similar to catalyst local blocks & payload ids
-func (s *EthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, preconfs []*types.Transaction) error {
+func (s *EthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraints types.HashToConstraintDecoded) error {
 	// Send a request to generate a full block in the background.
 	// The result can be obtained via the returned channel.
 	args := &miner.BuildPayloadArgs{
-		Parent:           attrs.HeadHash,
-		Timestamp:        uint64(attrs.Timestamp),
-		FeeRecipient:     attrs.SuggestedFeeRecipient,
-		GasLimit:         attrs.GasLimit,
-		Random:           attrs.Random,
-		Withdrawals:      attrs.Withdrawals,
-		BeaconRoot:       attrs.ParentBeaconBlockRoot,
-		BlockHook:        sealedBlockCallback,
-		Preconfirmations: preconfs,
+		Parent:       attrs.HeadHash,
+		Timestamp:    uint64(attrs.Timestamp),
+		FeeRecipient: attrs.SuggestedFeeRecipient,
+		GasLimit:     attrs.GasLimit,
+		Random:       attrs.Random,
+		Withdrawals:  attrs.Withdrawals,
+		BeaconRoot:   attrs.ParentBeaconBlockRoot,
+		BlockHook:    sealedBlockCallback,
+		Constraints:  constraints,
 	}
 
 	payload, err := s.eth.Miner().BuildPayload(args)
@@ -116,8 +109,4 @@ func (s *EthereumService) Synced() bool {
 
 func (s *EthereumService) Ethereum() *eth.Ethereum {
 	return s.eth
-}
-
-func (s *EthereumService) Preconfirmations(boltCCEndpoint string, slot uint64) ([]*types.Transaction, error) {
-	return eth.GetPreconfirmations(boltCCEndpoint, slot)
 }

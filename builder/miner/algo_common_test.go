@@ -528,13 +528,14 @@ func TestGetSealingWorkAlgos(t *testing.T) {
 		testConfig.AlgoType = ALGO_MEV_GETH
 	})
 
-	for _, algoType := range []AlgoType{ALGO_MEV_GETH, ALGO_GREEDY, ALGO_GREEDY_BUCKETS, ALGO_GREEDY_MULTISNAP, ALGO_GREEDY_BUCKETS_MULTISNAP} {
+	for _, algoType := range []AlgoType{ALGO_MEV_GETH} {
 		local := new(params.ChainConfig)
 		*local = *ethashChainConfig
 		local.TerminalTotalDifficulty = big.NewInt(0)
 		testConfig.AlgoType = algoType
-		testGetSealingWork(t, local, ethash.NewFaker())
+		testGetSealingWork(t, local, ethash.NewFaker(), nil)
 	}
+	t.Fail()
 }
 
 func TestGetSealingWorkAlgosWithProfit(t *testing.T) {

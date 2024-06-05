@@ -77,6 +77,9 @@ var (
 	pendingTxs []*types.Transaction
 	newTxs     []*types.Transaction
 
+	// Test testConstraints
+	testConstraints = make(types.HashToConstraintDecoded)
+
 	testConfig = &Config{
 		Recommit: time.Second,
 		GasCeil:  params.GenesisGasLimit,
@@ -84,6 +87,8 @@ var (
 
 	defaultGenesisAlloc = types.GenesisAlloc{testBankAddress: {Balance: testBankFunds}}
 )
+
+const pendingTxsLen = 50
 
 func init() {
 	testTxPoolConfig = legacypool.DefaultConfig
@@ -98,15 +103,29 @@ func init() {
 	}
 
 	signer := types.LatestSigner(params.TestChainConfig)
-	tx1 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
-		ChainID:  params.TestChainConfig.ChainID,
-		Nonce:    0,
-		To:       &testUserAddress,
-		Value:    big.NewInt(1000),
-		Gas:      params.TxGas,
-		GasPrice: big.NewInt(params.InitialBaseFee),
-	})
-	pendingTxs = append(pendingTxs, tx1)
+	for i := 0; i < pendingTxsLen; i++ {
+		tx1 := types.MustSignNewTx(testBankKey, signer, &types.AccessListTx{
+			ChainID:  params.TestChainConfig.ChainID,
+			Nonce:    uint64(i),
+			To:       &testUserAddress,
+			Value:    big.NewInt(1000),
+			Gas:      params.TxGas,
+			GasPrice: big.NewInt(params.InitialBaseFee),
+		})
+
+		// Add some constraints every 3 txs, and every 6 add an index
+		if i%3 == 0 {
+			idx := new(uint64)
+			if i%2 == 0 {
+				*idx = uint64(i)
+			} else {
+				idx = nil
+			}
+			testConstraints[tx1.Hash()] = &types.ConstraintDecoded{Index: idx, Tx: tx1}
+		}
+
+		pendingTxs = append(pendingTxs, tx1)
+	}
 
 	tx2 := types.MustSignNewTx(testBankKey, signer, &types.LegacyTx{
 		Nonce:    1,
@@ -130,7 +149,7 @@ func newTestWorkerBackend(t *testing.T, chainConfig *params.ChainConfig, engine 
 	if alloc == nil {
 		alloc = defaultGenesisAlloc
 	}
-	var gspec = &core.Genesis{
+	gspec := &core.Genesis{
 		Config:   chainConfig,
 		GasLimit: gasLimit,
 		Alloc:    alloc,
@@ -251,10 +270,10 @@ func testEmptyWork(t *testing.T, chainConfig *params.ChainConfig, engine consens
 	w, _ := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), nil, 0)
 	defer w.close()
 
-	taskCh := make(chan struct{}, 2)
+	taskCh := make(chan struct{}, pendingTxsLen*2)
 	checkEqual := func(t *testing.T, task *task) {
 		// The work should contain 1 tx
-		receiptLen, balance := 1, uint256.NewInt(1000)
+		receiptLen, balance := pendingTxsLen, uint256.NewInt(50_000)
 		if len(task.receipts) != receiptLen {
 			t.Fatalf("receipt number mismatch: have %d, want %d", len(task.receipts), receiptLen)
 		}
@@ -378,12 +397,12 @@ func testAdjustInterval(t *testing.T, chainConfig *params.ChainConfig, engine co
 
 func TestGetSealingWorkEthash(t *testing.T) {
 	t.Parallel()
-	testGetSealingWork(t, ethashChainConfig, ethash.NewFaker())
+	testGetSealingWork(t, ethashChainConfig, ethash.NewFaker(), nil)
 }
 
 func TestGetSealingWorkClique(t *testing.T) {
 	t.Parallel()
-	testGetSealingWork(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()))
+	testGetSealingWork(t, cliqueChainConfig, clique.New(cliqueChainConfig.Clique, rawdb.NewMemoryDatabase()), nil)
 }
 
 func TestGetSealingWorkPostMerge(t *testing.T) {
@@ -391,10 +410,25 @@ func TestGetSealingWorkPostMerge(t *testing.T) {
 	local := new(params.ChainConfig)
 	*local = *ethashChainConfig
 	local.TerminalTotalDifficulty = big.NewInt(0)
-	testGetSealingWork(t, local, ethash.NewFaker())
+	testGetSealingWork(t, local, ethash.NewFaker(), nil)
 }
 
-func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine) {
+// TestGetSealingWorkWithConstraints tests the getSealingWork function with constraints.
+// This is the main test for the modified block building algorithm. Unfortunately
+// is not easy to make an end to end test where the constraints are pulled from the relay.
+//
+// A suggestion is to walk through the executing code with a debugger to further inspect the algorithm.
+//
+// However, if you want to check that functionality see `builder_test.go`
+func TestGetSealingWorkWithConstraints(t *testing.T) {
+	// t.Parallel()
+	local := new(params.ChainConfig)
+	*local = *ethashChainConfig
+	local.TerminalTotalDifficulty = big.NewInt(0)
+	testGetSealingWork(t, local, ethash.NewFaker(), testConstraints)
+}
+
+func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, constraints types.HashToConstraintDecoded) {
 	defer engine.Close()
 	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), nil, 0)
 	defer w.close()
@@ -495,6 +529,7 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 			noTxs:       false,
 			forceTime:   true,
 			onBlock:     nil,
+			constraints: constraints,
 		})
 		if c.expectErr {
 			if r.err == nil {

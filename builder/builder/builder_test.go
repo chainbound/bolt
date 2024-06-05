@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,7 +27,9 @@ import (
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/utils"
+	"github.com/gorilla/handlers"
 	"github.com/holiman/uint256"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -362,7 +366,7 @@ func TestBlockWithPreconfs(t *testing.T) {
 func TestGenerateSSZProofs(t *testing.T) {
 	raw := `["0x02f872833018240385e8d4a5100085e8d4a5100082520894deaddeaddeaddeaddeaddeaddeaddeaddeaddead8306942080c001a042696cf1ef039cf23f51b8348c7fcda961727dd6350992b06c6139cf2b66ed18a012252715233c0cb9803bf827942f619b4a6857a9bfb214ef2feba983d1b5ed0e","0x02f90176833018242585012a05f2008512a05f2000830249f0946c6340ba1dc72c59197825cd94eccc1f9c67416e80b901040cc7326300000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000008ffb6787e8ad80000000000000000000000000000b77d61ea79c7ea8bfa03d3604ce5eabfb95c2ab20000000000000000000000002c57d1cfc6d5f8e4182a56b4cf75421472ebaea4000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000001cd4af4a9bf33474c802d31790a195335f7a9ab8000000000000000000000000d676af79742bcaeb4a71cf62b85d5ba2d1deaf86c001a08d03bdca0c1647263ef73d916e949ccc53284c6fa208c3fa4f9ddfe67d9c45dfa055be5793b42f1818716276033eb36420fa4fb4e3efabd0bbb01c489f7d9cd43c","0x02f86c8330182404801b825208948943545177806ed17b9f23f0a21ee5948ecaa7768701e71eeda00c3080c001a05918a7b26059059e3fc130bfeb42707bcdab9efaabad518f02f062a5d79e0ae7a06c3f27be896c38ed49a6a943050680b8bb1544b77a4df75c62ef75b357b27c7b"]`
 
-	var transactionsRaw = new([]string)
+	transactionsRaw := new([]string)
 	if err := json.Unmarshal([]byte(raw), transactionsRaw); err != nil {
 		t.Fatal("failed decoding json txs", err)
 	}
@@ -446,7 +450,7 @@ func TestGenerateSSZProofs2(t *testing.T) {
 	require.NotNil(t, preconf)
 	preconfs := []*types.Transaction{preconf}
 
-	var transactionsRaw = new([]string)
+	transactionsRaw := new([]string)
 	err = json.Unmarshal([]byte(raw), transactionsRaw)
 	require.NoError(t, err)
 
@@ -488,7 +492,7 @@ func TestGenerateSSZProofs2(t *testing.T) {
 	t.Logf("rootNode: %x", rootNode.Hash()) // e557527d9e7d97eaf4592637901e02a31c09c27d6076c27970799f418e47deab
 
 	// BOLT: calculate merkle proofs for preconfirmed transactions
-	preconfirmationsProofs := make([]*PreconfirmationWithProof, 0, len(preconfs))
+	preconfirmationsProofs := make([]*common.PreconfirmationWithProof, 0, len(preconfs))
 
 	for i, preconf := range preconfs {
 		// get the index of the preconfirmed transaction in the block
@@ -512,10 +516,10 @@ func TestGenerateSSZProofs2(t *testing.T) {
 		t.Logf("[BOLT]: Calculated merkle proof for preconf %s in %s", preconf.Hash(), time.Since(timeStart))
 		t.Logf("[BOLT]: LEAF: %x, Is leaf nil? %v", proof.Leaf, proof.Leaf == nil)
 
-		merkleProof := new(SerializedMerkleProof)
+		merkleProof := new(common.SerializedMerkleProof)
 		merkleProof.FromFastSszProof(proof)
 
-		preconfirmationsProofs = append(preconfirmationsProofs, &PreconfirmationWithProof{
+		preconfirmationsProofs = append(preconfirmationsProofs, &common.PreconfirmationWithProof{
 			TxHash:      phase0.Hash32(preconf.Hash()),
 			MerkleProof: merkleProof,
 		})
@@ -524,4 +528,204 @@ func TestGenerateSSZProofs2(t *testing.T) {
 	}
 
 	t.Logf("[BOLT]: Generated %d merkle proofs for preconfirmed transactions", len(preconfirmationsProofs))
+}
+
+func TestSubscribeProposerConstraints(t *testing.T) {
+	// ------------ Start Builder setup ------------- //
+	const (
+		validatorDesiredGasLimit = 30_000_000
+		payloadAttributeGasLimit = 0
+		parentBlockGasLimit      = 29_000_000
+	)
+	expectedGasLimit := core.CalcGasLimit(parentBlockGasLimit, validatorDesiredGasLimit)
+
+	vsk, err := bls.SecretKeyFromBytes(hexutil.MustDecode("0x370bb8c1a6e62b2882f6ec76762a67b39609002076b95aae5b023997cf9b2dc9"))
+	require.NoError(t, err)
+	validator := &ValidatorPrivateData{
+		sk: vsk,
+		Pk: hexutil.MustDecode("0xb67d2c11bcab8c4394fc2faa9601d0b99c7f4b37e14911101da7d97077917862eed4563203d34b91b5cf0aa44d6cfa05"),
+	}
+
+	testBeacon := testBeaconClient{
+		validator: validator,
+		slot:      56,
+	}
+
+	feeRecipient, _ := utils.HexToAddress("0xabcf8e0d4e9587369b2301d0790347320302cc00")
+
+	relayPort := "31245"
+	relay := NewRemoteRelay(RelayConfig{Endpoint: "http://localhost:" + relayPort}, nil, true)
+
+	sk, err := bls.SecretKeyFromBytes(hexutil.MustDecode("0x31ee185dad1220a8c88ca5275e64cf5a5cb09cb621cb30df52c9bee8fbaaf8d7"))
+	require.NoError(t, err)
+
+	bDomain := ssz.ComputeDomain(ssz.DomainTypeAppBuilder, [4]byte{0x02, 0x0, 0x0, 0x0}, phase0.Root{})
+
+	testExecutableData := &engine.ExecutableData{
+		ParentHash:   common.Hash{0x02, 0x03},
+		FeeRecipient: common.Address(feeRecipient),
+		StateRoot:    common.Hash{0x07, 0x16},
+		ReceiptsRoot: common.Hash{0x08, 0x20},
+		LogsBloom:    types.Bloom{}.Bytes(),
+		Number:       uint64(10),
+		GasLimit:     expectedGasLimit,
+		GasUsed:      uint64(100),
+		Timestamp:    uint64(105),
+		ExtraData:    hexutil.MustDecode("0x0042fafc"),
+
+		BaseFeePerGas: big.NewInt(16),
+
+		BlockHash:    common.HexToHash("0x68e516c8827b589fcb749a9e672aa16b9643437459508c467f66a9ed1de66a6c"),
+		Transactions: [][]byte{},
+	}
+
+	testBlock, err := engine.ExecutableDataToBlock(*testExecutableData, nil, nil)
+	require.NoError(t, err)
+
+	testEthService := &testEthereumService{synced: true, testExecutableData: testExecutableData, testBlock: testBlock, testBlockValue: big.NewInt(10)}
+
+	builderArgs := BuilderArgs{
+		sk:                          sk,
+		ds:                          flashbotsextra.NilDbService{},
+		relay:                       relay,
+		builderSigningDomain:        bDomain,
+		eth:                         testEthService,
+		dryRun:                      false,
+		ignoreLatePayloadAttributes: false,
+		validator:                   nil,
+		beaconClient:                &testBeacon,
+		limiter:                     nil,
+		blockConsumer:               flashbotsextra.NilDbService{},
+	}
+
+	builder, err := NewBuilder(builderArgs)
+	require.NoError(t, err)
+
+	// ------------ End Builder setup ------------- //
+
+	// Attach the sseHandler to the relay port
+	mux := http.NewServeMux()
+	mux.HandleFunc(SubscribeConstraintsPath, sseConstraintsHandler)
+
+	// Wrap the mux with the GzipHandler middleware
+	// NOTE: In this case, we don't need to create a gzip writer in the handlers,
+	// by default the `http.ResponseWriter` will implement gzip compression
+	gzipMux := handlers.CompressHandler(mux)
+
+	http.HandleFunc(SubscribeConstraintsPath, sseConstraintsHandler)
+	go http.ListenAndServe(":"+relayPort, gzipMux)
+
+	// Constraints should not be available yet
+	_, ok := builder.constraintsCache.Get(0)
+	require.Equal(t, false, ok)
+
+	// Create authentication signed message
+	authHeader, err := builder.GenerateAuthenticationHeader()
+	require.NoError(t, err)
+	builder.subscribeToRelayForConstraints(builder.relay.Config().Endpoint, authHeader)
+	// Wait 2 seconds to save all constraints in cache
+	time.Sleep(2 * time.Second)
+
+	slots := []uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	for slot := range slots {
+		slot := uint64(slot)
+		constraints, ok := builder.constraintsCache.Get(slot)
+		expected := generateMockConstraintsForSlot(slot)[0].Message.Constraints[0].Tx
+		actual := constraints[0].Message.Constraints[0].Tx
+		require.Equal(t, expected, actual)
+		require.Equal(t, true, ok)
+	}
+}
+
+func sseConstraintsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Content-Encoding", "gzip")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
+		return
+	}
+
+	auth := r.Header.Get("Authorization")
+	_, err := validateConstraintSubscriptionAuth(auth, 0)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	for i := 0; i < 256; i++ {
+		// Generate some duplicated constraints
+		slot := uint64(i) % 32
+		constraints := generateMockConstraintsForSlot(slot)
+		bytes, err := json.Marshal(constraints)
+		if err != nil {
+			log.Error(fmt.Sprintf("Error while marshaling constraints: %v", err))
+			return
+		}
+		fmt.Fprintf(w, "data: %s\n\n", string(bytes))
+		flusher.Flush()
+	}
+}
+
+func generateMockConstraintsForSlot(slot uint64) common.SignedConstraintsList {
+	rawTx := new(common.HexBytes)
+	err := rawTx.UnmarshalJSON([]byte("\"0x02f876018305da308401312d0085041f1196d2825208940c598786c88883ff5e4f461750fad64d3fae54268804b7ec32d7a2000080c080a0086f02eacec72820be3b117e1edd5bd7ed8956964b28b2d903d2cba53dd13560a06d61ec9ccce6acb31bf21878b9a844e7fdac860c5b7d684f7eb5f38a5945357c\""))
+	if err != nil {
+		fmt.Println("Failed to unmarshal rawTx: ", err)
+	}
+	return common.SignedConstraintsList{
+		&common.SignedConstraints{
+			Message: common.ConstraintMessage{
+				Constraints: []*common.Constraint{{Tx: *rawTx}}, ValidatorIndex: 0, Slot: slot,
+			}, Signature: phase0.BLSSignature{},
+		},
+	}
+}
+
+// validateConstraintSubscriptionAuth checks the authentication string data from the Builder,
+// and returns its BLS public key if the authentication is valid.
+func validateConstraintSubscriptionAuth(auth string, headSlot uint64) (phase0.BLSPubKey, error) {
+	zeroKey := phase0.BLSPubKey{}
+	if auth == "" {
+		return zeroKey, errors.New("authorization header missing")
+	}
+	// Authorization: <auth-scheme> <authorization-parameters>
+	parts := strings.Split(auth, " ")
+	if len(parts) != 2 {
+		return zeroKey, errors.New("ill-formed authorization header")
+	}
+	if parts[0] != "BOLT" {
+		return zeroKey, errors.New("not BOLT authentication scheme")
+	}
+	// <signatureJSON>,<authDataJSON>
+	parts = strings.SplitN(parts[1], ",", 2)
+	if len(parts) != 2 {
+		return zeroKey, errors.New("ill-formed authorization header")
+	}
+
+	signature := new(phase0.BLSSignature)
+	if err := signature.UnmarshalJSON([]byte(parts[0])); err != nil {
+		fmt.Println("Failed to unmarshal authData: ", err)
+		return zeroKey, errors.New("ill-formed authorization header")
+	}
+
+	authDataRaw := []byte(parts[1])
+	authData := new(common.ConstraintSubscriptionAuth)
+	if err := json.Unmarshal(authDataRaw, authData); err != nil {
+		fmt.Println("Failed to unmarshal authData: ", err)
+		return zeroKey, errors.New("ill-formed authorization header")
+	}
+
+	if headSlot != authData.Slot {
+		return zeroKey, errors.New("invalid head slot")
+	}
+
+	ok, err := bls.VerifySignatureBytes(authDataRaw, signature[:], authData.PublicKey[:])
+	if err != nil || !ok {
+		return zeroKey, errors.New("invalid signature")
+	}
+	return authData.PublicKey, nil
 }
