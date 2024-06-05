@@ -363,7 +363,6 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 			continue
 		}
 
-	OUTER:
 		for _, constraint := range constraintsSigned {
 			decodedConstraints, err := DecodeConstraint(constraint)
 			if err != nil {
@@ -385,21 +384,14 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 				seenTx[hash] = true
 			}
 
-			isNewConstraint := false
 			for hash := range decodedConstraints {
 				if !seenTx[hash] {
 					// The constraint is new, we will add this to the slot constraints
-					isNewConstraint = true
 					slotConstraints[hash] = decodedConstraints[hash]
 				}
 			}
 
-			// If there are no new constraints, we can continue with the next constraint and not update the cache
-			if !isNewConstraint {
-				continue OUTER
-			}
-
-			// The constraint is new, we need to append it to the current list
+			// Update the slot constraints
 			b.constraintsCache.Put(constraint.Message.Slot, slotConstraints)
 		}
 	}
