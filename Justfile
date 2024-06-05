@@ -46,6 +46,15 @@ boost-logs:
 sidecar-logs:
 	docker logs -f `docker ps --format "{{{{.ID}}\t{{{{.Names}}" | grep "mev-sidecar-api" | awk '{print $$1}'`
 
+# show the dora explorer in the browser. NOTE: works only for Linux and MacOS at the moment
+dora:
+  @url=$(just inspect | grep 'dora\s*http' | awk -F'-> ' '{print $2}' | awk '{print $1}') && \
+  if [ "$(uname)" = "Darwin" ]; then \
+    open "$url"; \
+  else \
+    xdg-open "$url"; \
+  fi
+
 # manually send a preconfirmation to the bolt devnet
 send-preconf:
 	cd bolt-spammer && RUST_LOG=info cargo run -- \
