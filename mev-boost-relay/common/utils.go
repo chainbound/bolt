@@ -276,3 +276,11 @@ func GetBlockSubmissionExecutionPayload(submission *VersionedSubmitBlockRequest)
 	}
 	return nil, ErrEmptyPayload
 }
+
+func JSONStringify(v interface{}) string {
+	out, err := json.Marshal(v)
+	if err != nil {
+		return err.Error()
+	}
+	return string(out)
+}
