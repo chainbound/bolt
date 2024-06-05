@@ -1,5 +1,7 @@
 use axum::{body::Body, http::StatusCode};
-use ethereum_consensus::builder::SignedValidatorRegistration;
+use ethereum_consensus::{
+    builder::SignedValidatorRegistration, deneb::mainnet::SignedBlindedBeaconBlock,
+};
 
 use crate::types::SignedBuilderBid;
 
@@ -20,7 +22,10 @@ pub trait BuilderApi {
         params: GetHeaderParams,
     ) -> Result<SignedBuilderBid, Box<dyn std::error::Error>>;
     /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/submitBlindedBlock>
-    async fn get_payload(&self) -> Result<Body, Box<dyn std::error::Error>>;
+    async fn get_payload(
+        &self,
+        signed_block: SignedBlindedBeaconBlock,
+    ) -> Result<Body, Box<dyn std::error::Error>>;
 }
 
 #[async_trait::async_trait]

@@ -1,5 +1,5 @@
 use axum::{
-    body::Body,
+    body::{to_bytes, Body},
     extract::{Path, Request, State},
     http::StatusCode,
     response::{Html, IntoResponse},
@@ -15,6 +15,8 @@ use std::sync::Arc;
 
 use super::spec::BuilderApi;
 use crate::{client::mevboost::MevBoostClient, types::SignedBuilderBid};
+
+const MAX_BLINDED_BLOCK_LENGTH: usize = 1024 * 1024;
 
 /// A proxy server for the builder API. Forwards all requests to the target after interception.
 pub struct BuilderProxyServer<T: BuilderApi> {
@@ -76,16 +78,24 @@ impl<T: BuilderApi> BuilderProxyServer<T> {
             .await
             .map(|header| Json(header))
             // TODO: convert errors to status codes
-            .map_err(|e| StatusCode::INTERNAL_SERVER_ERROR)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }
 
     pub async fn get_payload(
         State(server): State<Arc<BuilderProxyServer<T>>>,
         req: Request<Body>,
     ) -> Result<impl IntoResponse, impl IntoResponse> {
+        let body = req.into_body();
+        let body_bytes = to_bytes(body, MAX_BLINDED_BLOCK_LENGTH)
+            .await
+            .map_err(|_| StatusCode::BAD_REQUEST)?;
+
+        let signed_block =
+            serde_json::from_slice(&body_bytes).map_err(|_| StatusCode::BAD_REQUEST)?;
+
         server
             .proxy_target
-            .get_payload()
+            .get_payload(signed_block)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }
