@@ -14,14 +14,14 @@ type SignedConstraints struct {
 }
 
 type ConstraintsMessage struct {
-	ValidatorIndex uint64
-	Slot           uint64
-	Constraints    []*Constraint
+	ValidatorIndex uint64        `json:"validator_index"`
+	Slot           uint64        `json:"slot"`
+	Constraints    []*Constraint `json:"constraints"`
 }
 
 type Constraint struct {
-	Tx    Transaction
-	Index *uint64
+	Tx    Transaction `json:"tx"`
+	Index *uint64     `json:"index"`
 }
 
 // ConstraintCache is a cache for constraints.
@@ -46,7 +46,7 @@ func (c *ConstraintCache) AddInclusionConstraint(slot uint64, tx Transaction, in
 
 	// parse transaction to get its hash and store it in the cache
 	// for constant time lookup later
-	var parsedTx = new(types.Transaction)
+	parsedTx := new(types.Transaction)
 	err := parsedTx.UnmarshalBinary(tx)
 	if err != nil {
 		return err
@@ -69,7 +69,7 @@ func (c *ConstraintCache) AddInclusionConstraints(slot uint64, constraints []*Co
 
 	m, _ := c.constraints.Get(slot)
 	for _, constraint := range constraints {
-		var parsedTx = new(types.Transaction)
+		parsedTx := new(types.Transaction)
 		err := parsedTx.UnmarshalBinary(constraint.Tx)
 		if err != nil {
 			return err
