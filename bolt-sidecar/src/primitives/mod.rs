@@ -85,11 +85,13 @@ pub struct MerkleProof {
     hashes: List<Hash32, 1000>,
 }
 
+#[derive(Debug)]
 pub struct FetchPayloadRequest {
     pub slot: u64,
     pub response: oneshot::Sender<Option<PayloadAndBid>>,
 }
 
+#[derive(Debug)]
 pub struct PayloadAndBid {
     pub bid: SignedBuilderBid,
     pub payload: GetPayloadResponse,
@@ -97,6 +99,12 @@ pub struct PayloadAndBid {
 
 pub struct LocalPayloadFetcher {
     tx: mpsc::Sender<FetchPayloadRequest>,
+}
+
+impl LocalPayloadFetcher {
+    pub fn new(tx: mpsc::Sender<FetchPayloadRequest>) -> Self {
+        Self { tx }
+    }
 }
 
 #[async_trait::async_trait]
