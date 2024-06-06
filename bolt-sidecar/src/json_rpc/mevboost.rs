@@ -30,7 +30,7 @@ impl MevBoostClient {
     async fn post_json(&self, endpoint: &str, body: Vec<u8>) -> JsonApiResult {
         let res = self
             .client
-            .post(format!("{}/{}", self.url, endpoint))
+            .post(format!("{}{}", self.url, endpoint))
             .header("content-type", "application/json")
             .body(body)
             .send()
