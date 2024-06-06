@@ -46,12 +46,25 @@ async fn main() -> Result<()> {
     };
 
     let (tx_hash, tx_rlp) = sign_transaction(transaction_signer.signer(), tx).await?;
+
+    let message_digest = {
+        let mut data = Vec::new();
+        data.extend_from_slice(&slot_number.to_le_bytes());
+        data.extend_from_slice(hex::decode(tx_hash.trim_start_matches("0x"))?.as_slice());
+        ethers::utils::keccak256(data)
+    };
+
+    let signature = transaction_signer
+        .signer()
+        .sign_hash(message_digest.into())?
+        .to_string();
+
     let request = prepare_rpc_request(
-        "eth_requestPreconfirmation",
+        "bolt_inclusionPreconfirmation",
         vec![serde_json::json!({
-            "txHash": tx_hash,
-            "rawTx": tx_rlp,
             "slot": slot_number,
+            "tx": tx_rlp,
+            "signature": signature,
         })],
     );
 

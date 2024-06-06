@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use alloy_consensus::TxEnvelope;
 use alloy_eips::eip2718::Decodable2718;
-use alloy_primitives::Signature;
+use alloy_primitives::{keccak256, Signature};
 use serde::{de, Deserialize, Deserializer, Serialize};
 
 use super::transaction::TxInfo;
@@ -86,7 +86,8 @@ impl InclusionRequest {
         let mut data = Vec::new();
         data.extend_from_slice(&self.slot.to_le_bytes());
         data.extend_from_slice(self.tx.tx_hash().as_slice());
-        data
+
+        keccak256(&data).to_vec()
     }
 }
 
