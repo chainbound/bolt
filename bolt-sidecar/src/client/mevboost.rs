@@ -2,11 +2,10 @@
 //! The Bolt sidecar's main purpose is to sit between the beacon node and MEV-Boost,
 //! so most requests are simply proxied to its API.
 
-use axum::{body::Body, http::StatusCode};
+use axum::http::StatusCode;
 use ethereum_consensus::{
     builder::SignedValidatorRegistration, deneb::mainnet::SignedBlindedBeaconBlock,
 };
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{

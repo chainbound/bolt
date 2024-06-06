@@ -2,7 +2,7 @@ use axum::{
     body::{to_bytes, Body},
     extract::{Path, Request, State},
     http::StatusCode,
-    response::{Html, IntoResponse},
+    response::Html,
     routing::{get, post},
     Json, Router,
 };
@@ -22,7 +22,7 @@ use super::spec::{
 };
 use crate::{
     client::mevboost::MevBoostClient,
-    types::{GetPayloadResponse, LocalPayloadFetcher, PayloadFetcher, SignedBuilderBid},
+    types::{GetPayloadResponse, PayloadFetcher, SignedBuilderBid},
 };
 
 const MAX_BLINDED_BLOCK_LENGTH: usize = 1024 * 1024;
