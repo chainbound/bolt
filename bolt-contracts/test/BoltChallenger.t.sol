@@ -25,7 +25,7 @@ contract BoltChallengerTest is Test {
 
     function setUp() public {
         // Set up mainnet forking
-        vm.createSelectFork("https://eth.merkle.io", 19932764);
+        vm.createSelectFork("https://cloudflare-eth.com", 19932764);
         assertEq(block.number, 19932764);
 
         (alice, alicePk) = makeAddrAndKey("alice");
