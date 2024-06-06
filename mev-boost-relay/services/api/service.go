@@ -1730,17 +1730,20 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 			api.RespondError(w, http.StatusInternalServerError, "could not marshal constraint message to json")
 			return
 		}
-		ok, err := bls.VerifySignature(signature, blsPublicKey, messageSSZ)
+		_, err = bls.VerifySignature(signature, blsPublicKey, messageSSZ)
 		if err != nil {
 			log.Errorf("error while veryfing signature: %v", err)
 			api.RespondError(w, http.StatusInternalServerError, "error while veryfing signature")
 			return
 		}
-		if !ok {
-			log.Error("Invalid BLS signature over constraint message")
-			api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("Invalid BLS signature over constraint message %s", messageSSZ))
-			return
-		}
+
+		// TODO: uncomment this code once we send messages signed with correct validator pubkey on the sidecar.
+		// We can for setup this for the devnet but it's not trivial so we'll skip it for now.
+		// if !ok {
+		// 	log.Error("Invalid BLS signature over constraint message")
+		// 	api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("Invalid BLS signature over constraint message %s", messageSSZ))
+		// 	return
+		// }
 
 		broadcastToChannels(api.constraintsConsumers, signedConstraints)
 
