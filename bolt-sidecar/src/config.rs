@@ -58,7 +58,7 @@ impl TryFrom<Opts> for Config {
             config.limits.max_commitments_per_slot = max_commitments;
         }
 
-        config.mevboost_url = opts.mevboost_url;
+        config.mevboost_url = opts.mevboost_url.trim_end_matches('/').to_string();
         config.private_key = SecretKey::from_bytes(&hex::decode(opts.private_key)?)
             .map_err(|e| eyre::eyre!("Failed decoding BLS secret key: {:?}", e))?;
 

@@ -44,9 +44,6 @@ impl MevBoostClient {
     /// Posts the given signed constraints to the MEV-Boost API.
     pub async fn post_constraints(&self, constraints: &BatchedSignedConstraints) -> JsonApiResult {
         let body = serde_json::to_vec(constraints)?;
-        self.post_json("/eth/v1/builder/constraints", body)
-            .await
-            .context("Failed to post constraints to MEV-Boost API")
-            .map_err(Into::into)
+        self.post_json("/eth/v1/builder/constraints", body).await
     }
 }
