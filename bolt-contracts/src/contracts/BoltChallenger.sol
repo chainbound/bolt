@@ -197,11 +197,6 @@ contract BoltChallenger is IBoltChallenger {
             return;
         }
 
-        // From here on, we assume the function was called by the based proposer
-        if (msg.sender != challenge.basedProposer) {
-            revert Unauthorized();
-        }
-
         // Derive the block header data of the target block from the block header proof
         CoreTypes.BlockHeaderData memory verifiedHeader = _deriveBlockHeaderInfo(_blockHeaderProof);
 
@@ -245,9 +240,9 @@ contract BoltChallenger is IBoltChallenger {
         );
 
         if (!isValid) {
-            // The challenge was successful: the proposer failed to honor the preconfirmation
-            // TODO: slash the based proposer
-            _onChallengeSuccess(_challengeID);
+            // The inclusion proof isn't valid: simply revert, leaving time
+            // for another challenger to provide a valid proof.
+            revert InvalidInclusionProof();
         } else {
             // The challenge was unsuccessful: the proposer honored the preconfirmation
             _onChallengeFailure(_challengeID);
