@@ -194,7 +194,7 @@ func validateConstraintSubscriptionAuth(auth string, headSlot uint64) (phase0.BL
 	}
 
 	if headSlot != authData.Slot {
-		return zeroKey, errors.Errorf("Invalid head slot")
+		return zeroKey, errors.Errorf("Invalid head slot. Expected %d, got %d", headSlot, authData.Slot)
 	}
 
 	ok, err := bls.VerifySignatureBytes(authDataRaw, signature[:], authData.PublicKey[:])
