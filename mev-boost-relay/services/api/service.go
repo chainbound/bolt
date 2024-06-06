@@ -2846,12 +2846,14 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 
 	builderPublicKey, err := validateConstraintSubscriptionAuth(auth, api.headSlot.Load())
 	if err != nil {
+		api.log.Infof("Failed to validate constraint subscription auth: %s. err: %s", auth, err)
 		http.Error(w, err.Error(), http.StatusUnauthorized)
 		return
 	}
 
 	_, ok := api.checkBuilderEntry(w, api.log, builderPublicKey)
 	if !ok {
+		api.log.Infof("Builder rejected: %s", builderPublicKey)
 		http.Error(w, "Builder rejected", http.StatusUnauthorized)
 		return
 	}

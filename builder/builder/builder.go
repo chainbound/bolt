@@ -375,7 +375,8 @@ BEGIN:
 		data := strings.TrimPrefix(line, "data: ")
 
 		// We assume the data is the JSON representation of the constraints
-		log.Debug("Received new constraint: %s\n", data)
+		// TODO: downgrade this to debug level
+		log.Info("Received new constraint: %s\n", data)
 		constraintsSigned := make(common.SignedConstraintsList, 0, 8)
 		if err := json.Unmarshal([]byte(data), &constraintsSigned); err != nil {
 			log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))
