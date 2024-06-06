@@ -26,6 +26,8 @@ pub enum ApiError {
     DuplicateRequest,
     #[error("signature error: {0}")]
     Signature(#[from] alloy_primitives::SignatureError),
+    #[error("signature pubkey mismatch. expected: {expected}, got: {got}")]
+    SignaturePubkeyMismatch { expected: String, got: String },
     #[error("failed to decode RLP: {0}")]
     Rlp(#[from] alloy_rlp::Error),
     #[error("failed during HTTP call: {0}")]
@@ -85,22 +87,30 @@ impl CommitmentsRpc for JsonRpcApi {
         };
 
         let params = serde_json::from_value::<CommitmentRequest>(params)?;
-        let params = params
-            .as_inclusion_request()
-            .ok_or_else(|| ApiError::Custom("request must be an inclusion request".to_string()))?;
+        #[allow(irrefutable_let_patterns)] // TODO: remove this when we have more request types
+        let CommitmentRequest::Inclusion(params) = params
+        else {
+            return Err(ApiError::Custom(
+                "request must be an inclusion request".to_string(),
+            ));
+        };
+
         info!(?params, "received inclusion commitment request");
 
         let tx_sender = params.tx.recover_signer()?;
 
         // validate the user's signature
-        let signer_address = params.signature.recover_address_from_msg(params.digest())?;
+        let signer_address = params
+            .signature
+            .recover_address_from_prehash(&params.digest())?;
 
         // TODO: relax this check to allow for external signers to request commitments
         // about transactions that they did not sign themselves
         if signer_address != tx_sender {
-            return Err(ApiError::Custom(
-                "commitment signature does not match the transaction sender".to_string(),
-            ));
+            return Err(ApiError::SignaturePubkeyMismatch {
+                expected: tx_sender.to_string(),
+                got: signer_address.to_string(),
+            });
         }
 
         {
@@ -109,7 +119,7 @@ impl CommitmentsRpc for JsonRpcApi {
             if let Some(commitments) = cache.get_mut(&params.slot) {
                 if commitments
                     .iter()
-                    .any(|p| p.as_inclusion_request().is_some_and(|i| i == params))
+                    .any(|p| matches!(p, CommitmentRequest::Inclusion(req) if req == &params))
                 {
                     return Err(ApiError::DuplicateRequest);
                 }
