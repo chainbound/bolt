@@ -297,7 +297,9 @@ func (b *Builder) SubscribeProposerConstraints() error {
 
 func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader string) error {
 	attempts := 0
-	maxAttempts := 30
+	// Max 10 minutes of retries
+	maxAttempts := 60
+	retryInterval := 10 * time.Second
 
 	var resp *http.Response
 	var err error
@@ -326,7 +328,7 @@ BEGIN:
 			resp, err = client.Do(req)
 			if err != nil {
 				log.Error(fmt.Sprintf("Failed to connect to SSE server: %v", err))
-				time.Sleep(1 * time.Second)
+				time.Sleep(retryInterval)
 				attempts++
 				continue
 			}
