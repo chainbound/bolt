@@ -18,6 +18,9 @@ pub struct Opts {
     /// URL for the MEV-Boost sidecar client to use
     #[clap(short = 'b', long)]
     pub(super) mevboost_url: String,
+    /// URL for the beacon node API
+    #[clap(short = 'c', long)]
+    pub(super) beacon_url: String,
     /// Max commitments to accept per block
     #[clap(short = 'm', long)]
     pub(super) max_commitments: Option<usize>,
@@ -30,6 +33,8 @@ pub struct Config {
     pub rpc_port: u16,
     /// URL for the MEV-Boost sidecar client to use
     pub mevboost_url: String,
+    /// URL for the beacon node API
+    pub beacon_url: String,
     /// Private key to use for signing preconfirmation requests
     pub private_key: SecretKey,
     /// Limits for the sidecar
@@ -41,6 +46,7 @@ impl Default for Config {
         Self {
             rpc_port: 8000,
             mevboost_url: "http://localhost:3030".to_string(),
+            beacon_url: "http://localhost:5052".to_string(),
             private_key: random_bls_secret(),
             limits: Limits::default(),
         }
@@ -61,6 +67,7 @@ impl TryFrom<Opts> for Config {
             config.limits.max_commitments_per_slot = max_commitments;
         }
 
+        config.beacon_url = opts.beacon_url.trim_end_matches('/').to_string();
         config.mevboost_url = opts.mevboost_url.trim_end_matches('/').to_string();
         config.private_key = SecretKey::from_bytes(&hex::decode(opts.private_key)?)
             .map_err(|e| eyre::eyre!("Failed decoding BLS secret key: {:?}", e))?;

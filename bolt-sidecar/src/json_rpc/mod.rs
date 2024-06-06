@@ -22,7 +22,7 @@ pub async fn start_server(config: Config) -> eyre::Result<mpsc::Sender<()>> {
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
     let cors = warp::cors().allow_any_origin().allow_method(Method::POST);
 
-    let rpc_api = api::JsonRpcApi::new(config.private_key, config.mevboost_url);
+    let rpc_api = api::JsonRpcApi::new(config.private_key, config.mevboost_url, config.beacon_url);
 
     let rpc = warp::post()
         .and(warp::path::end())
