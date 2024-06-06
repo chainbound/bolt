@@ -64,10 +64,7 @@ impl RpcClient {
             .expect("Correct parameters");
 
         let tx_count = batch
-            .add_call(
-                "eth_getTransactionCount",
-                &(address, BlockNumberOrTag::Latest),
-            )
+            .add_call("eth_getTransactionCount", &(address, tag))
             .expect("Correct parameters");
 
         // After the batch is complete, we can get the results.
