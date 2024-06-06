@@ -9,7 +9,9 @@ demo:
 
 # spin up the bolt devnet
 up:
-	kurtosis run --enclave bolt-devnet github.com/chainbound/ethereum-package --args-file ./scripts/kurtosis_config.yaml
+	kurtosis run \
+		--enclave bolt-devnet github.com/chainbound/ethereum-package \
+		--args-file ./scripts/kurtosis_config.yaml
 
 # turn down the bolt devnet and remove the enclave
 down:
