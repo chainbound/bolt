@@ -297,12 +297,10 @@ func (b *Builder) SubscribeProposerConstraints() error {
 
 func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader string) error {
 	attempts := 0
-	// Max 10 minutes of retries
-	maxAttempts := 60
+	maxAttempts := 60 // Max 10 minutes of retries
 	retryInterval := 10 * time.Second
 
 	var resp *http.Response
-	var err error
 
 BEGIN:
 	for {
@@ -332,17 +330,23 @@ BEGIN:
 				attempts++
 				continue
 			}
+
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				log.Error(fmt.Sprintf("Non-OK HTTP status: %s", resp.Status))
+				if resp.StatusCode == http.StatusUnauthorized {
+					log.Error("Unauthorized to subscribe to constraints, retrying...")
+					time.Sleep(retryInterval)
+					attempts++
+					continue
+				}
+				return err
+			}
 			break BEGIN
 		}
 	}
 
 	log.Info(fmt.Sprintf("Connected to SSE server: %s", relayBaseEndpoint))
-
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		log.Error(fmt.Sprintf("Non-OK HTTP status: %s", resp.Status))
-		return err
-	}
 
 	var reader io.Reader
 
