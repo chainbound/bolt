@@ -296,23 +296,47 @@ func (b *Builder) SubscribeProposerConstraints() error {
 }
 
 func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader string) error {
-	// Subscribe to constraints
-	req, err := http.NewRequest(http.MethodGet, relayBaseEndpoint+SubscribeConstraintsPath, nil)
-	if err != nil {
-		log.Error(fmt.Sprintf("Failed to create new http request: %v", err))
-		return err
-	}
-	req.Header.Set("Accept-Encoding", "gzip")
-	req.Header.Set("Authorization", authHeader)
+	attempts := 0
+	maxAttempts := 30
 
-	client := http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Error(fmt.Sprintf("Failed to connect to SSE server: %v", err))
-		return err
+	var resp *http.Response
+	var err error
+
+BEGIN:
+	for {
+		select {
+		case <-b.stop:
+			return nil
+		default:
+			if attempts >= maxAttempts {
+				log.Error(fmt.Sprintf("Failed to subscribe to constraints after %d attempts", maxAttempts))
+				return errors.New("failed to subscribe to constraints")
+			}
+
+			// try to subscribe to constraints by making an initial HTTP request
+			req, err := http.NewRequest(http.MethodGet, relayBaseEndpoint+SubscribeConstraintsPath, nil)
+			if err != nil {
+				log.Error(fmt.Sprintf("Failed to create new http request: %v", err))
+				return err
+			}
+			req.Header.Set("Accept-Encoding", "gzip")
+			req.Header.Set("Authorization", authHeader)
+
+			client := http.Client{}
+			resp, err = client.Do(req)
+			if err != nil {
+				log.Error(fmt.Sprintf("Failed to connect to SSE server: %v", err))
+				time.Sleep(1 * time.Second)
+				attempts++
+				continue
+			}
+			break BEGIN
+		}
 	}
+
+	log.Info(fmt.Sprintf("Connected to SSE server: %s", relayBaseEndpoint))
+
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		log.Error(fmt.Sprintf("Non-OK HTTP status: %s", resp.Status))
 		return err
