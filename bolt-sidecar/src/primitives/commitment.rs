@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use alloy_consensus::TxEnvelope;
 use alloy_eips::eip2718::Decodable2718;
-use alloy_primitives::{keccak256, Signature};
+use alloy_primitives::{keccak256, Signature, B256};
 use serde::{de, Deserialize, Deserializer, Serialize};
 
 use super::transaction::TxInfo;
@@ -13,17 +13,6 @@ use super::transaction::TxInfo;
 pub enum CommitmentRequest {
     /// Request of inclusion of a transaction at a specific slot.
     Inclusion(InclusionRequest),
-}
-
-impl CommitmentRequest {
-    pub fn as_inclusion_request(&self) -> Option<&InclusionRequest> {
-        #[allow(irrefutable_let_patterns)] // TODO: remove when we add more variants
-        if let CommitmentRequest::Inclusion(req) = self {
-            Some(req)
-        } else {
-            None
-        }
-    }
 }
 
 /// Request to include a transaction at a specific slot.
@@ -82,12 +71,12 @@ where
 
 impl InclusionRequest {
     // TODO: actually use SSZ encoding here
-    pub fn digest(&self) -> Vec<u8> {
+    pub fn digest(&self) -> B256 {
         let mut data = Vec::new();
         data.extend_from_slice(&self.slot.to_le_bytes());
         data.extend_from_slice(self.tx.tx_hash().as_slice());
 
-        keccak256(&data).to_vec()
+        keccak256(&data)
     }
 }
 
