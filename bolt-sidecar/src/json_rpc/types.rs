@@ -28,13 +28,15 @@ pub struct ConstraintsMessage {
 type ConstraintsList = List<Constraint, MAX_CONSTRAINTS_PER_SLOT>;
 
 impl ConstraintsMessage {
-    pub fn build(validator_index: u64, slot: u64, request: InclusionRequest) -> Self {
-        let constraints = ConstraintsList::try_from(vec![Constraint::from(request)]).unwrap();
-        Self {
+    pub fn build(validator_index: u64, slot: u64, request: InclusionRequest) -> eyre::Result<Self> {
+        let constraints = ConstraintsList::try_from(vec![Constraint::try_from(request)?])
+            .map_err(|e| eyre::eyre!("Failed to build ConstraintsMessage: {:?}", e))?;
+
+        Ok(Self {
             validator_index,
             slot,
             constraints,
-        }
+        })
     }
 }
 
@@ -46,19 +48,21 @@ pub struct Constraint {
     pub index: Option<u64>,
 }
 
-impl From<InclusionRequest> for Constraint {
-    fn from(params: InclusionRequest) -> Self {
+impl TryFrom<InclusionRequest> for Constraint {
+    type Error = eyre::Error;
+
+    fn try_from(params: InclusionRequest) -> Result<Self, Self::Error> {
         let mut buf: Vec<u8> = Vec::new();
         params.tx.encode(&mut buf);
 
-        let tx = Transaction::try_from(buf.as_slice()).unwrap();
+        let tx = Transaction::try_from(buf.as_slice())?;
 
-        Self { tx, index: None }
+        Ok(Self { tx, index: None })
     }
 }
 
 impl SignableBLS for ConstraintsMessage {
     fn digest(&self) -> Vec<u8> {
-        return ssz_rs::serialize(self).unwrap_or(Vec::new());
+        ssz_rs::serialize(self).unwrap_or_default()
     }
 }

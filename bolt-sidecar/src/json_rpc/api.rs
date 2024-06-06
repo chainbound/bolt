@@ -1,7 +1,6 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
 use parking_lot::RwLock;
-use secp256k1::hashes::hex::DisplayHex;
 use serde_json::Value;
 use thiserror::Error;
 use tracing::info;
@@ -31,6 +30,8 @@ pub enum ApiError {
     Rlp(#[from] alloy_rlp::Error),
     #[error("failed during HTTP call: {0}")]
     Http(#[from] reqwest::Error),
+    #[error("downstream error: {0}")]
+    Eyre(#[from] eyre::Report),
     #[error("failed while processing API request: {0}")]
     Custom(String),
 }
@@ -121,7 +122,7 @@ impl CommitmentsRpc for JsonRpcApi {
 
         // parse the request into constraints and sign them with the sidecar signer
         // TODO: get the validator index from somewhere
-        let message = ConstraintsMessage::build(0, params.slot, params.clone());
+        let message = ConstraintsMessage::build(0, params.slot, params.clone())?;
 
         let signature = from_bls_signature_to_consensus_signature(self.signer.sign(&message));
         let signed_constraints: BatchedSignedConstraints =

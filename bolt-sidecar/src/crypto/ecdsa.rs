@@ -59,7 +59,7 @@ mod tests {
 
     impl SignableECDSA for String {
         fn digest(&self) -> secp256k1::Message {
-            secp256k1::Message::from_digest_slice(&self.as_bytes()).unwrap()
+            secp256k1::Message::from_digest_slice(self.as_bytes()).unwrap()
         }
     }
 
