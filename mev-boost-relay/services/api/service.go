@@ -1744,6 +1744,9 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 		// 	api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("Invalid BLS signature over constraint message %s", messageSSZ))
 		// 	return
 		// }
+		//
+
+		api.log.Infof("constraint message received, ready to broadcast %s", message)
 
 		broadcastToChannels(api.constraintsConsumers, signedConstraints)
 
@@ -2851,6 +2854,8 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 		return
 	}
 
+	api.log.Infof("New constraint subscription: %s", builderPublicKey)
+
 	_, ok := api.checkBuilderEntry(w, api.log, builderPublicKey)
 	if !ok {
 		api.log.Infof("Builder rejected: %s", builderPublicKey)
@@ -2879,6 +2884,8 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 
 	// Monitor client disconnect
 	notify := req.Context().Done()
+	keepAliveTicker := time.NewTicker(2 * time.Second) // Send a keep-alive message every 2 seconds
+	defer keepAliveTicker.Stop()
 
 	// Send an initial event as acknowledgement
 	fmt.Fprintf(gzipWriter, "data: %s\n\n", "ACK")
@@ -2888,23 +2895,45 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 	for {
 		select {
 		case <-notify:
+			api.log.Infof("Disconnecting from builder %s", builderPublicKey)
 			// Client disconnected
 			return
+		case <-keepAliveTicker.C:
+			if _, err := fmt.Fprintf(gzipWriter, ": keep-alive\n\n"); err != nil {
+				api.log.Errorf("Failed to write keep-alive: %v", err)
+				return
+			}
+			if err := gzipWriter.Flush(); err != nil {
+				api.log.Errorf("Failed to flush keep-alive: %v", err)
+				return
+			}
+			flusher.Flush()
+			api.log.Infof("Sent keep-alive to %s", builderPublicKey)
 		case constraint := <-constraintsCh:
-			constraintJSON, err := json.Marshal(constraint)
-			api.log.Infof("New constraint received: %s", constraint)
-
+			constraintsJSON, err := json.Marshal([]*SignedConstraints{constraint})
 			if err != nil {
-				api.log.Printf("failed to marshal constraint to json: %v", err)
+				api.log.Errorf("failed to marshal constraint to json: %v", err)
 				continue
 			}
-			fmt.Fprintf(gzipWriter, "data: %s\n\n", string(constraintJSON))
+
+			api.log.Infof("New constraint received: %s", constraintsJSON)
+
+			_, err = fmt.Fprintf(gzipWriter, "data: %s\n\n", constraintsJSON)
+			if err != nil {
+				api.log.Errorf("Failed to write data on gzip writer: %v", err)
+				continue
+			}
 
 			// NOTE: Flushing the gzip.Writer ensures that any compressed data in the buffer is
 			// written out to the underlying http.ResponseWriter. The http.ResponseWriter
 			// itself may also buffer data. Calling Flush on the http.ResponseWriter ensures
 			// that any data buffered by the HTTP server is sent to the client immediately.
-			gzipWriter.Flush()
+
+			if err := gzipWriter.Flush(); err != nil {
+				api.log.Errorf("Failed to flush gzip writer: %v", err)
+				continue
+			}
+			api.log.Info("Flushing constraints")
 			flusher.Flush()
 		}
 	}

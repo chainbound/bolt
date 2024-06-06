@@ -287,51 +287,43 @@ func (b *Builder) SubscribeProposerConstraints() error {
 	relayAggregator, ok := b.relay.(*RemoteRelayAggregator)
 	if ok {
 		for _, relay := range relayAggregator.relays {
-			go b.subscribeToRelayForConstraints(relay.Config().Endpoint, authHeader)
+			go b.subscribeToRelayForConstraints(relay.Config().Endpoint, authHeader, 0)
 		}
 	} else {
-		go b.subscribeToRelayForConstraints(b.relay.Config().Endpoint, authHeader)
+		go b.subscribeToRelayForConstraints(b.relay.Config().Endpoint, authHeader, 0)
 	}
 	return nil
 }
 
-func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader string) error {
-	attempts := 0
-	maxAttempts := 60 // Max 10 minutes of retries
-	retryInterval := 10 * time.Second
+func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader string, attempt uint) error {
+	if attempt == 0 {
+		time.Sleep(1 * 60 * time.Second)
+		log.Info("Subscribing after 1 minutes of wait")
+	}
+	log.Info(fmt.Sprintf("Subscribing to relay for constraints at attempt: %d", attempt))
 
-	var resp *http.Response
+	// try to subscribe to constraints by making an initial HTTP request
+	req, err := http.NewRequest(http.MethodGet, relayBaseEndpoint+SubscribeConstraintsPath, nil)
+	if err != nil {
+		log.Error(fmt.Sprintf("Failed to create new http request: %v", err))
+		return err
+	}
+	req.Header.Set("Accept-Encoding", "gzip")
+	req.Header.Set("Authorization", authHeader)
 
-	for {
-		log.Info("Attempting to subscribe to constraints...")
+	client := http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Error(fmt.Sprintf("Failed to connect to SSE server: %v.", err))
+	}
+	defer resp.Body.Close()
 
-		if attempts >= maxAttempts {
-			log.Error(fmt.Sprintf("Failed to subscribe to constraints after %d attempts", maxAttempts))
-			return errors.New("failed to subscribe to constraints")
+	if resp.StatusCode != http.StatusOK {
+		log.Error(fmt.Sprintf("Non-OK HTTP status: %s", resp.Status))
+		if resp.StatusCode == http.StatusUnauthorized {
+			log.Error("Unauthorized to subscribe to constraints, retrying...")
 		}
-
-		req, err := http.NewRequest(http.MethodGet, relayBaseEndpoint+SubscribeConstraintsPath, nil)
-		if err != nil {
-			log.Error(fmt.Sprintf("Failed to create new http request: %v", err))
-			return err
-		}
-		req.Header.Set("Accept-Encoding", "gzip")
-		req.Header.Set("Authorization", authHeader)
-
-		client := http.Client{}
-		resp, err = client.Do(req)
-		if err != nil {
-			log.Error(fmt.Sprintf("Failed to connect to SSE server: %v", err))
-			time.Sleep(retryInterval)
-			attempts++
-			continue
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			log.Error(fmt.Sprintf("Error subscribing to constraints via SSE: %s, %v", resp.Status, err))
-			return err
-		}
-		break
+		return err
 	}
 
 	defer resp.Body.Close()
@@ -352,16 +344,18 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 		reader = resp.Body
 	}
 
-	bufReader := bufio.NewReader(reader)
+	bufReader := bufio.NewReaderSize(reader, 64*1024) // 64KB buffer
 	for {
 		line, err := bufReader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
 				log.Info("End of stream")
 				break
+			} else if err == io.ErrUnexpectedEOF {
+				fmt.Println("Error: Unexpected EOF. Exiting loop.")
+				break
 			}
-			log.Error(fmt.Sprintf("Error reading from response body: %v", err))
-			continue
+			log.Error("Error reading from response body: %s", err)
 		}
 
 		if !strings.HasPrefix(line, "data: ") {
@@ -406,6 +400,9 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 			b.constraintsCache.Put(constraint.Message.Slot, append(slotConstraints, constraint))
 		}
 	}
+
+	newAttempt := attempt + 1
+	defer b.subscribeToRelayForConstraints(relayBaseEndpoint, authHeader, newAttempt)
 
 	return nil
 }
