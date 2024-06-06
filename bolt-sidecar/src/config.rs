@@ -12,6 +12,9 @@ pub struct Opts {
     /// Private key to use for signing preconfirmation requests
     #[clap(short = 'k', long)]
     pub(super) private_key: String,
+    /// URL for the beacon client
+    #[clap(short = 'c', long)]
+    pub(super) beacon_client_url: String,
     /// URL for the MEV-Boost sidecar client to use
     #[clap(short = 'b', long)]
     pub(super) mevboost_url: String,
