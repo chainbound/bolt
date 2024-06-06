@@ -51,7 +51,7 @@ pub struct FetchPayloadRequest {
 
 pub struct PayloadAndBid {
     pub bid: SignedBuilderBid,
-    pub payload: Body,
+    pub payload: GetPayloadResponse,
 }
 
 pub struct LocalPayloadFetcher {

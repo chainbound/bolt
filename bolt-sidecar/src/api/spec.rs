@@ -1,13 +1,14 @@
 use axum::{
-    body::Body,
     http::StatusCode,
     response::{IntoResponse, Response},
+    Json,
 };
 use ethereum_consensus::{
     builder::SignedValidatorRegistration, deneb::mainnet::SignedBlindedBeaconBlock,
 };
+use serde::{Deserialize, Serialize, Serializer};
 
-use crate::types::SignedBuilderBid;
+use crate::types::{GetPayloadResponse, SignedBuilderBid};
 
 use super::builder::GetHeaderParams;
 
@@ -18,10 +19,26 @@ pub const GET_HEADER_WITH_PROOFS_PATH: &str =
     "/eth/v1/builder/header_with_proofs/:slot/:parent_hash/:pubkey";
 pub const GET_PAYLOAD_PATH: &str = "/eth/v1/builder/blinded_blocks";
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ErrorResponse {
+    #[serde(serialize_with = "serialize_status_code")]
+    code: u16,
+    message: String,
+}
+
+pub fn serialize_status_code<S>(value: &u16, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    serializer.serialize_str(&value.to_string())
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum BuilderApiError {
-    #[error("No validators could be registered")]
-    FailedRegisteringValidators,
+    #[error("No validators could be registered: {0:?}")]
+    FailedRegisteringValidators(ErrorResponse),
+    #[error("Failed getting payload: {0:?}")]
+    FailedGettingPayload(ErrorResponse),
     #[error("Failed to fetch local payload for slot {0}")]
     FailedToFetchLocalPayload(u64),
     #[error("Axum error: {0:?}")]
@@ -35,8 +52,11 @@ pub enum BuilderApiError {
 impl IntoResponse for BuilderApiError {
     fn into_response(self) -> Response {
         match self {
-            BuilderApiError::FailedRegisteringValidators => {
-                (StatusCode::BAD_REQUEST, self.to_string()).into_response()
+            BuilderApiError::FailedRegisteringValidators(error) => {
+                (StatusCode::from_u16(error.code).unwrap(), Json(error)).into_response()
+            }
+            BuilderApiError::FailedGettingPayload(error) => {
+                (StatusCode::from_u16(error.code).unwrap(), Json(error)).into_response()
             }
             BuilderApiError::AxumError(err) => {
                 (StatusCode::BAD_REQUEST, err.to_string()).into_response()
@@ -76,7 +96,7 @@ pub trait BuilderApi {
     async fn get_payload(
         &self,
         signed_block: SignedBlindedBeaconBlock,
-    ) -> Result<Body, BuilderApiError>;
+    ) -> Result<GetPayloadResponse, BuilderApiError>;
 }
 
 #[async_trait::async_trait]

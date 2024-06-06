@@ -22,7 +22,7 @@ use super::spec::{
 };
 use crate::{
     client::mevboost::MevBoostClient,
-    types::{LocalPayloadFetcher, PayloadFetcher, SignedBuilderBid},
+    types::{GetPayloadResponse, LocalPayloadFetcher, PayloadFetcher, SignedBuilderBid},
 };
 
 const MAX_BLINDED_BLOCK_LENGTH: usize = 1024 * 1024;
@@ -36,7 +36,7 @@ pub struct BuilderProxyServer<T: BuilderApi, P> {
     // TODO: fill with local payload when we fetch a payload
     // in failed get_header
     // This will only be some in case of a failed get_header
-    local_payload: Mutex<Option<Body>>,
+    local_payload: Mutex<Option<GetPayloadResponse>>,
     /// The payload fetcher to get locally built payloads.
     payload_fetcher: P,
 }
@@ -95,11 +95,14 @@ impl<T: ConstraintsApi, P: PayloadFetcher + Send + Sync> BuilderProxyServer<T, P
     }
 
     /// Gets the header. NOTE: converts this request to a get_header_with_proofs request to the modified mev-boost.
-    /// If we get an error response / timeout, we return the locally built block.
+    /// If we get an error response / timeout, we return the locally built block header and store the actual payload
+    /// so we can return it later.
     pub async fn get_header(
         State(server): State<Arc<BuilderProxyServer<T, P>>>,
         Path(params): Path<GetHeaderParams>,
     ) -> Result<Json<SignedBuilderBid>, BuilderApiError> {
+        let start = std::time::Instant::now();
+        tracing::debug!("Received get_header request");
         let slot = params.slot;
 
         match tokio::time::timeout(
@@ -108,10 +111,13 @@ impl<T: ConstraintsApi, P: PayloadFetcher + Send + Sync> BuilderProxyServer<T, P
         )
         .await
         {
-            Ok(Ok(header)) => Ok(Json(header)),
+            Ok(Ok(header)) => {
+                tracing::debug!(elapsed = ?start.elapsed(), "Returning signed builder bid: {:?}", header);
+                Ok(Json(header))
+            }
             Ok(Err(_)) | Err(_) => {
                 // On ANY error, we fall back to locally built block
-                tracing::error!(slot, "Proxy error, fetching local payload instead");
+                tracing::error!(slot, elapsed = ?start.elapsed(), "Proxy error, fetching local payload instead");
 
                 let payload = server
                     .payload_fetcher
@@ -122,12 +128,16 @@ impl<T: ConstraintsApi, P: PayloadFetcher + Send + Sync> BuilderProxyServer<T, P
                     // fallback to local block building.
                     .ok_or(BuilderApiError::FailedToFetchLocalPayload(slot))?;
 
+                let hash = payload.bid.message.header.block_hash.clone();
+                let number = payload.bid.message.header.block_number;
+
                 {
                     // Set the payload for the following get_payload request
                     let mut local_payload = server.local_payload.lock().unwrap();
                     *local_payload = Some(payload.payload);
                 }
 
+                tracing::info!(elapsed = ?start.elapsed(), %hash, number, "Returning locally built header");
                 Ok(Json(payload.bid))
             }
         }
@@ -136,27 +146,54 @@ impl<T: ConstraintsApi, P: PayloadFetcher + Send + Sync> BuilderProxyServer<T, P
     pub async fn get_payload(
         State(server): State<Arc<BuilderProxyServer<T, P>>>,
         req: Request<Body>,
-    ) -> Result<impl IntoResponse, BuilderApiError> {
+    ) -> Result<Json<GetPayloadResponse>, BuilderApiError> {
+        let start = std::time::Instant::now();
+        tracing::debug!("Received get_payload request");
+
         // If we have a locally built payload, return it and clear the cache.
         if let Some(payload) = server.local_payload.lock().unwrap().take() {
-            return Ok(payload);
+            tracing::info!("Local block found, returning: {payload:?}");
+            return Ok(Json(payload));
         }
 
         let body = req.into_body();
-        let body_bytes = to_bytes(body, MAX_BLINDED_BLOCK_LENGTH).await?;
+        let body_bytes = to_bytes(body, MAX_BLINDED_BLOCK_LENGTH)
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to read request body");
+                e
+            })?;
 
-        let signed_block = serde_json::from_slice(&body_bytes)?;
+        // Convert to signed blinded beacon block
+        let signed_block = serde_json::from_slice(&body_bytes).map_err(|e| {
+            tracing::error!(error = %e, "Failed to parse signed blinded block");
+            e
+        })?;
 
         // TODO: how do we deal with failures here? What if we submit the signed blinded block but don't get a response?
         // should we ignore the error or proceed with a local block (highly risky -> equivocation risk)
-        server.proxy_target.get_payload(signed_block).await
+        let payload = server
+            .proxy_target
+            .get_payload(signed_block)
+            .await
+            .map(Json)
+            .map_err(|e| {
+                tracing::error!(elapsed = ?start.elapsed(), error = %e, "Failed to get payload from mev-boost");
+                e
+            })?;
+
+        tracing::debug!(elapsed = ?start.elapsed(), "Returning payload");
+
+        Ok(payload)
     }
 }
 
 /// Configuration for the builder proxy.
 #[derive(Debug, Clone)]
 pub struct BuilderProxyConfig {
+    /// The URL of the target mev-boost server.
     pub mev_boost_url: String,
+    /// The port on which the builder proxy should listen.
     pub port: u16,
 }
 
@@ -179,6 +216,7 @@ pub async fn start_builder_proxy<P: PayloadFetcher + Send + Sync + 'static>(
         target = config.mev_boost_url,
         "Starting builder proxy..."
     );
+
     let mev_boost = MevBoostClient::new(config.mev_boost_url);
     let server = Arc::new(BuilderProxyServer::new(mev_boost, payload_fetcher));
     let router = Router::new()

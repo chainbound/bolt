@@ -6,16 +6,18 @@ use axum::{body::Body, http::StatusCode};
 use ethereum_consensus::{
     builder::SignedValidatorRegistration, deneb::mainnet::SignedBlindedBeaconBlock,
 };
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
     api::{
         builder::GetHeaderParams,
         spec::{
-            BuilderApi, BuilderApiError, ConstraintsApi, REGISTER_VALIDATORS_PATH, STATUS_PATH,
+            BuilderApi, BuilderApiError, ConstraintsApi, ErrorResponse, GET_PAYLOAD_PATH,
+            REGISTER_VALIDATORS_PATH, STATUS_PATH,
         },
     },
-    types::{constraint::BatchedSignedConstraints, SignedBuilderBid},
+    types::{constraint::BatchedSignedConstraints, GetPayloadResponse, SignedBuilderBid},
 };
 
 #[derive(Debug)]
@@ -88,17 +90,17 @@ impl BuilderApi for MevBoostClient {
         &self,
         registrations: Vec<SignedValidatorRegistration>,
     ) -> Result<(), BuilderApiError> {
-        if self
+        let response = self
             .client
             .post(self.endpoint(REGISTER_VALIDATORS_PATH))
             .header("content-type", "application/json")
             .body(serde_json::to_vec(&registrations)?)
             .send()
-            .await?
-            .status()
-            != StatusCode::OK
-        {
-            return Err(BuilderApiError::FailedRegisteringValidators);
+            .await?;
+
+        if response.status() != StatusCode::OK {
+            let error = response.json::<ErrorResponse>().await?;
+            return Err(BuilderApiError::FailedRegisteringValidators(error));
         }
 
         Ok(())
@@ -129,8 +131,23 @@ impl BuilderApi for MevBoostClient {
     async fn get_payload(
         &self,
         signed_block: SignedBlindedBeaconBlock,
-    ) -> Result<Body, BuilderApiError> {
-        todo!()
+    ) -> Result<GetPayloadResponse, BuilderApiError> {
+        let response = self
+            .client
+            .post(self.endpoint(GET_PAYLOAD_PATH))
+            .header("content-type", "application/json")
+            .body(serde_json::to_vec(&signed_block)?)
+            .send()
+            .await?;
+
+        if response.status() != StatusCode::OK {
+            let error = response.json::<ErrorResponse>().await?;
+            return Err(BuilderApiError::FailedGettingPayload(error));
+        }
+
+        let payload = response.json::<GetPayloadResponse>().await?;
+
+        Ok(payload)
     }
 }
 
