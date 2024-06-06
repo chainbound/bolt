@@ -2,7 +2,6 @@
 //! The Bolt sidecar's main purpose is to sit between the beacon node and MEV-Boost,
 //! so most requests are simply proxied to its API.
 
-use eyre::Context;
 use serde_json::Value;
 
 use super::{api::JsonApiResult, types::BatchedSignedConstraints};

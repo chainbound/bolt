@@ -1,5 +1,6 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
+use beacon_api_client::mainnet::Client as BeaconApiClient;
 use parking_lot::RwLock;
 use serde_json::Value;
 use thiserror::Error;
@@ -7,7 +8,10 @@ use tracing::info;
 
 use super::mevboost::MevBoostClient;
 use crate::{
-    crypto::{bls::from_bls_signature_to_consensus_signature, BLSSigner},
+    crypto::{
+        bls::{from_bls_signature_to_consensus_signature, BlsSecretKey},
+        BLSSigner,
+    },
     json_rpc::types::{BatchedSignedConstraints, ConstraintsMessage, SignedConstraints},
     primitives::{CommitmentRequest, Slot},
 };
@@ -62,16 +66,21 @@ pub struct JsonRpcApi {
     signer: BLSSigner,
     /// The client for the MEV-Boost sidecar.
     mevboost_client: MevBoostClient,
+    /// The client for the beacon node API.
+    #[allow(dead_code)]
+    beacon_api_client: BeaconApiClient,
 }
 
 impl JsonRpcApi {
     /// Create a new instance of the JSON-RPC API.
-    pub fn new(private_key: blst::min_pk::SecretKey, mevboost_url: String) -> Arc<Self> {
+    pub fn new(private_key: BlsSecretKey, mevboost_url: String, beacon_url: String) -> Arc<Self> {
         let cap = NonZeroUsize::new(DEFAULT_API_REQUEST_CACHE_SIZE).unwrap();
+        let beacon_url = reqwest::Url::parse(&beacon_url).expect("failed to parse beacon node URL");
 
         Arc::new(Self {
             cache: Arc::new(RwLock::new(lru::LruCache::new(cap))),
             mevboost_client: MevBoostClient::new(mevboost_url),
+            beacon_api_client: BeaconApiClient::new(beacon_url),
             signer: BLSSigner::new(private_key),
         })
     }
@@ -132,6 +141,7 @@ impl CommitmentsRpc for JsonRpcApi {
 
         // parse the request into constraints and sign them with the sidecar signer
         // TODO: get the validator index from somewhere
+        // let validator_index = self.beacon_api_client.get_proposer_duties(get_epoch_from_slot(params.slot)).await?;
         let message = ConstraintsMessage::build(0, params.slot, params.clone())?;
 
         let signature = from_bls_signature_to_consensus_signature(self.signer.sign(&message));
