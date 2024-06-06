@@ -235,6 +235,13 @@ contract BoltChallenger is IBoltChallenger {
             return;
         }
 
+        // TODO: Use EIP-4788 beacon block root to prove the correctness of the SSZ TransactionsRoot 
+        // inside the execution payload contained in the proposed beacon block.
+        // 
+        // that way, we obtain the SSZ transactionsRoot which is currently different from the one 
+        // kept in the execution layer's execution payload (see: https://eips.ethereum.org/EIPS/eip-6404)
+        // Perhaps also EIP-2935 could help? (https://eips.ethereum.org/EIPS/eip-2935)
+
         bool isValid = _verifyInclusionProof(
             verifiedHeader.TxHash, _transactionIndex, _inclusionProof, challenge.signedCommitment.signedRawTransaction
         );
@@ -289,8 +296,7 @@ contract BoltChallenger is IBoltChallenger {
         internal
         returns (CoreTypes.AccountData memory account)
     {
-        // TODO: handle fee for proving. make payable?
-
+        // TODO: handle proving fee (not active yet in Relic's mainnet contracts).
         Fact memory fact = accountInfoProver.prove(_proof, false);
         account = abi.decode(fact.data, (CoreTypes.AccountData));
 
