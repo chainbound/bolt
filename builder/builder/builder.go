@@ -56,7 +56,7 @@ const (
 )
 
 const (
-	SubscribeConstraintsPath = "/eth/v1/builder/constraints"
+	SubscribeConstraintsPath = "/relay/v1/builder/constraints"
 )
 
 type PubkeyHex string
