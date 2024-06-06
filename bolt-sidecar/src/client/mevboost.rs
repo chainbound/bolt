@@ -112,7 +112,7 @@ impl BuilderApi for MevBoostClient {
         params: GetHeaderParams,
     ) -> Result<SignedBuilderBid, BuilderApiError> {
         // TODO: fix response?
-        let response: SignedBuilderBid = self
+        let response = self
             .client
             .get(self.endpoint(&format!(
                 "/eth/v1/builder/header/{}/{}/{}",
@@ -120,11 +120,16 @@ impl BuilderApi for MevBoostClient {
             )))
             .header("content-type", "application/json")
             .send()
-            .await?
-            .json()
             .await?;
 
-        Ok(response)
+        if response.status() != StatusCode::OK {
+            let error = response.json::<ErrorResponse>().await?;
+            return Err(BuilderApiError::FailedGettingHeader(error));
+        }
+
+        let header = response.json::<SignedBuilderBid>().await?;
+
+        Ok(header)
     }
 
     /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/submitBlindedBlock>

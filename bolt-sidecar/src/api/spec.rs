@@ -37,6 +37,8 @@ where
 pub enum BuilderApiError {
     #[error("No validators could be registered: {0:?}")]
     FailedRegisteringValidators(ErrorResponse),
+    #[error("Failed getting header: {0:?}")]
+    FailedGettingHeader(ErrorResponse),
     #[error("Failed getting payload: {0:?}")]
     FailedGettingPayload(ErrorResponse),
     #[error("Failed to fetch local payload for slot {0}")]
@@ -53,6 +55,9 @@ impl IntoResponse for BuilderApiError {
     fn into_response(self) -> Response {
         match self {
             BuilderApiError::FailedRegisteringValidators(error) => {
+                (StatusCode::from_u16(error.code).unwrap(), Json(error)).into_response()
+            }
+            BuilderApiError::FailedGettingHeader(error) => {
                 (StatusCode::from_u16(error.code).unwrap(), Json(error)).into_response()
             }
             BuilderApiError::FailedGettingPayload(error) => {
