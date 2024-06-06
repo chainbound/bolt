@@ -18,24 +18,8 @@ pub struct Opts {
     /// Max commitments to accept per block
     #[clap(short = 'm', long)]
     pub(super) max_commitments: Option<usize>,
-    /// Signing options
-    #[clap(flatten)]
-    pub(super) signing: SigningOpts,
-}
-
-/// Command-line options for signing
-#[derive(Debug, Clone, clap::Args)]
-#[clap(
-    group = ArgGroup::new("signing-opts").required(true)
-        .args(&["private_key", "commit_boost_url"])
-)]
-pub struct SigningOpts {
-    /// Private key to use for signing preconfirmation requests
-    #[clap(short = 'k', long)]
-    pub(super) private_key: Option<String>,
-    /// URL for the commit-boost sidecar
-    #[clap(short = 'C', long, conflicts_with("private_key"))]
-    pub(super) commit_boost_url: Option<String>,
+    #[clap(short = 'e', long)]
+    pub(super) execution_api: String,
 }
 
 /// Configuration options for the sidecar
@@ -50,7 +34,9 @@ pub struct Config {
     /// URL for the beacon client API URL
     pub beacon_client_url: String,
     /// Private key to use for signing preconfirmation requests
-    pub private_key: Option<SecretKey>,
+    pub private_key: SecretKey,
+    /// The execution API url
+    pub execution_api: String,
     /// Limits for the sidecar
     pub limits: Limits,
 }
@@ -62,7 +48,8 @@ impl Default for Config {
             mevboost_url: "http://localhost:3030".to_string(),
             commit_boost_url: None,
             beacon_client_url: "http://localhost:5052".to_string(),
-            private_key: Some(random_bls_secret()),
+            execution_api: "http://localhost:8545".to_string(),
+            private_key: random_bls_secret(),
             limits: Limits::default(),
         }
     }

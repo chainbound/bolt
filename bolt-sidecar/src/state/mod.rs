@@ -1,12 +1,11 @@
 //! The `state` module is responsible for keeping a local copy of relevant state that is needed
 //! to simulate commitments against. It is updated on every block. It has both execution state and consensus state.
 use alloy_transport::TransportError;
-use std::sync::{atomic::AtomicU64, Arc};
 use thiserror::Error;
 
 mod execution;
-pub use execution::ValidationError;
-mod fetcher;
+pub use execution::{ExecutionState, ValidationError};
+pub mod fetcher;
 
 #[derive(Debug, Error)]
 pub enum StateError {
@@ -17,33 +16,6 @@ pub enum StateError {
 #[derive(Debug, Clone)]
 struct ProposerDuties {
     assigned_slots: Vec<u64>,
-}
-
-#[derive(Debug, Clone)]
-struct ChainHead {
-    /// The current slot number.
-    slot: Arc<AtomicU64>,
-    /// The current block number.
-    block: Arc<AtomicU64>,
-}
-
-impl ChainHead {
-    pub fn new(slot: u64, head: u64) -> Self {
-        Self {
-            slot: Arc::new(AtomicU64::new(slot)),
-            block: Arc::new(AtomicU64::new(head)),
-        }
-    }
-
-    /// Get the slot number (consensus layer).
-    pub fn slot(&self) -> u64 {
-        self.slot.load(std::sync::atomic::Ordering::SeqCst)
-    }
-
-    /// Get the block number (execution layer).
-    pub fn block(&self) -> u64 {
-        self.block.load(std::sync::atomic::Ordering::SeqCst)
-    }
 }
 
 #[cfg(test)]
@@ -63,7 +35,7 @@ mod tests {
     use fetcher::StateClient;
     use tracing_subscriber::fmt;
 
-    use crate::primitives::{CommitmentRequest, InclusionRequest};
+    use crate::primitives::{ChainHead, CommitmentRequest, InclusionRequest};
 
     use super::*;
 

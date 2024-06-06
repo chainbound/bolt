@@ -1,4 +1,5 @@
-use alloy_eips::eip2718::Encodable2718;
+use std::sync::{atomic::AtomicU64, Arc};
+
 use alloy_primitives::{Bytes, TxHash, U256};
 use ethereum_consensus::deneb::{mainnet::MAX_BYTES_PER_TRANSACTION, BlsSignature, Transaction};
 use ethereum_consensus::ssz::prelude::*;
@@ -39,65 +40,179 @@ pub struct AccountState {
     pub balance: U256,
 }
 
-/// The inclusion request transformed into an explicit list of signed constraints
-/// that need to be forwarded to the PBS pipeline to inform block production.
-pub type BatchedSignedConstraints = Vec<SignedConstraints>;
+#[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
+pub struct BuilderBid {
+    pub header: ExecutionPayloadHeader,
+    pub blob_kzg_commitments: List<KzgCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK>,
+    #[serde(with = "as_str")]
+    pub value: U256,
+    #[serde(rename = "pubkey")]
+    pub public_key: BlsPublicKey,
+}
 
-const MAX_CONSTRAINTS_PER_SLOT: usize = 256;
-
-#[derive(Debug, Clone, PartialEq, SimpleSerialize, serde::Deserialize, serde::Serialize)]
-pub struct SignedConstraints {
-    pub message: ConstraintsMessage,
+#[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
+pub struct SignedBuilderBid {
+    pub message: BuilderBid,
     pub signature: BlsSignature,
 }
 
-#[derive(
-    Debug, Clone, Default, PartialEq, SimpleSerialize, serde::Deserialize, serde::Serialize,
-)]
-pub struct ConstraintsMessage {
-    pub validator_index: u64,
+#[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
+pub struct SignedBuilderBidWithProofs {
+    pub bid: SignedBuilderBid,
+    pub proofs: List<ConstraintProof, 300>,
+}
+
+#[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
+pub struct MerkleMultiProof {
+    // We use List here for SSZ, TODO: choose max
+    transaction_hashes: List<Hash32, 300>,
+    generalized_indexes: List<u64, 300>,
+    merkle_hashes: List<Hash32, 1000>,
+}
+
+#[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
+pub struct ConstraintProof {
+    #[serde(rename = "txHash")]
+    tx_hash: Hash32,
+    #[serde(rename = "merkleProof")]
+    merkle_proof: MerkleProof,
+}
+
+#[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
+pub struct MerkleProof {
+    index: u64,
+    // TODO: for now, max 1000
+    hashes: List<Hash32, 1000>,
+}
+
+pub struct FetchPayloadRequest {
     pub slot: u64,
-    pub constraints: List<Constraint, MAX_CONSTRAINTS_PER_SLOT>,
+    pub response: oneshot::Sender<Option<PayloadAndBid>>,
 }
 
-type ConstraintsList = List<Constraint, MAX_CONSTRAINTS_PER_SLOT>;
+pub struct PayloadAndBid {
+    pub bid: SignedBuilderBid,
+    pub payload: GetPayloadResponse,
+}
 
-impl ConstraintsMessage {
-    pub fn build(validator_index: u64, slot: u64, request: InclusionRequest) -> eyre::Result<Self> {
-        let constraints = ConstraintsList::try_from(vec![Constraint::try_from(request)?])
-            .map_err(|e| eyre::eyre!("Failed to build ConstraintsMessage: {:?}", e))?;
+pub struct LocalPayloadFetcher {
+    tx: mpsc::Sender<FetchPayloadRequest>,
+}
 
-        Ok(Self {
-            validator_index,
-            slot,
-            constraints,
-        })
+#[async_trait::async_trait]
+impl PayloadFetcher for LocalPayloadFetcher {
+    async fn fetch_payload(&self, slot: u64) -> Option<PayloadAndBid> {
+        let (tx, rx) = oneshot::channel();
+
+        let fetch_params = FetchPayloadRequest { slot, response: tx };
+
+        self.tx.send(fetch_params).await.ok()?;
+
+        rx.await.ok().flatten()
     }
 }
 
-#[derive(
-    Debug, Clone, PartialEq, Default, SimpleSerialize, serde::Serialize, serde::Deserialize,
-)]
-pub struct Constraint {
-    pub tx: Transaction<MAX_BYTES_PER_TRANSACTION>,
-    pub index: Option<u64>,
+#[async_trait::async_trait]
+pub trait PayloadFetcher {
+    async fn fetch_payload(&self, slot: u64) -> Option<PayloadAndBid>;
 }
 
-impl TryFrom<InclusionRequest> for Constraint {
-    type Error = eyre::Error;
+pub struct NoopPayloadFetcher;
 
-    fn try_from(params: InclusionRequest) -> Result<Self, Self::Error> {
-        let mut buf: Vec<u8> = Vec::new();
-        params.tx.encode_2718(&mut buf);
-
-        let tx = Transaction::try_from(buf.as_slice())?;
-
-        Ok(Self { tx, index: None })
+#[async_trait::async_trait]
+impl PayloadFetcher for NoopPayloadFetcher {
+    async fn fetch_payload(&self, slot: u64) -> Option<PayloadAndBid> {
+        tracing::info!(slot, "Fetch payload called");
+        None
     }
 }
 
-impl SignableBLS for ConstraintsMessage {
-    fn digest(&self) -> Vec<u8> {
-        ssz_rs::serialize(self).unwrap_or_default()
+/// TODO: implement SSZ
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PayloadAndBlobs {
+    pub execution_payload: ExecutionPayload,
+    pub blobs_bundle: Option<BlobsBundle>,
+}
+
+impl Default for PayloadAndBlobs {
+    fn default() -> Self {
+        Self {
+            execution_payload: ExecutionPayload::Capella(capella::ExecutionPayload::default()),
+            blobs_bundle: None,
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(tag = "version", content = "data")]
+pub enum GetPayloadResponse {
+    #[serde(rename = "bellatrix")]
+    Bellatrix(ExecutionPayload),
+    #[serde(rename = "capella")]
+    Capella(ExecutionPayload),
+    #[serde(rename = "deneb")]
+    Deneb(PayloadAndBlobs),
+}
+
+impl GetPayloadResponse {
+    pub fn try_from_execution_payload(exec_payload: &PayloadAndBlobs) -> Option<Self> {
+        match exec_payload.execution_payload.version() {
+            Fork::Capella => Some(GetPayloadResponse::Capella(
+                exec_payload.execution_payload.clone(),
+            )),
+            Fork::Bellatrix => Some(GetPayloadResponse::Bellatrix(
+                exec_payload.execution_payload.clone(),
+            )),
+            Fork::Deneb => Some(GetPayloadResponse::Deneb(exec_payload.clone())),
+            _ => None,
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for GetPayloadResponse {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        if let Ok(inner) = <_ as serde::Deserialize>::deserialize(&value) {
+            return Ok(Self::Capella(inner));
+        }
+        if let Ok(inner) = <_ as serde::Deserialize>::deserialize(&value) {
+            return Ok(Self::Deneb(inner));
+        }
+        if let Ok(inner) = <_ as serde::Deserialize>::deserialize(&value) {
+            return Ok(Self::Bellatrix(inner));
+        }
+        Err(serde::de::Error::custom(
+            "no variant could be deserialized from input for GetPayloadResponse",
+        ))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ChainHead {
+    /// The current slot number.
+    slot: Arc<AtomicU64>,
+    /// The current block number.
+    block: Arc<AtomicU64>,
+}
+
+impl ChainHead {
+    pub fn new(slot: u64, head: u64) -> Self {
+        Self {
+            slot: Arc::new(AtomicU64::new(slot)),
+            block: Arc::new(AtomicU64::new(head)),
+        }
+    }
+
+    /// Get the slot number (consensus layer).
+    pub fn slot(&self) -> u64 {
+        self.slot.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Get the block number (execution layer).
+    pub fn block(&self) -> u64 {
+        self.block.load(std::sync::atomic::Ordering::SeqCst)
     }
 }

@@ -1,13 +1,13 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 
-use api::JsonRpcApi;
+use api::{ApiEvent, JsonRpcApi};
 use bytes::Bytes;
 use tokio::sync::mpsc;
 use tracing::{error, info};
 use warp::{http::Method, reject::Rejection, Filter};
 
-mod api;
+pub mod api;
 mod spec;
 
 use crate::client::commit_boost::CommitBoostClient;
@@ -18,17 +18,14 @@ use self::api::CommitmentsRpc;
 use self::spec::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 
 /// Start the JSON-RPC server. Returns a sender that can be used to send a shutdown signal.
-pub async fn start_server(config: Config) -> eyre::Result<mpsc::Sender<()>> {
+pub async fn start_server(
+    config: Config,
+    event_tx: mpsc::Sender<ApiEvent>,
+) -> eyre::Result<mpsc::Sender<()>> {
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
     let cors = warp::cors().allow_any_origin().allow_method(Method::POST);
 
-    let signer: Arc<dyn SignerBLSAsync> = if let Some(url) = config.commit_boost_url {
-        Arc::new(CommitBoostClient::new(url).await?)
-    } else {
-        Arc::new(Signer::new(config.private_key.unwrap()))
-    };
-
-    let rpc_api = api::JsonRpcApi::new(config.mevboost_url, config.beacon_client_url, signer);
+    let rpc_api = api::JsonRpcApi::new(event_tx);
 
     let rpc = warp::post()
         .and(warp::path::end())

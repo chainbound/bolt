@@ -6,11 +6,11 @@ use thiserror::Error;
 
 use crate::{
     common::{calculate_max_basefee, validate_transaction},
-    primitives::{AccountState, CommitmentRequest},
+    primitives::{AccountState, ChainHead, CommitmentRequest},
     template::BlockTemplate,
 };
 
-use super::{fetcher::StateFetcher, ChainHead, StateError};
+use super::{fetcher::StateFetcher, StateError};
 
 /// Possible commitment validation errors.
 #[derive(Debug, Error)]

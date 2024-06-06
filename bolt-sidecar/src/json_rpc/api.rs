@@ -5,13 +5,13 @@ use ethereum_consensus::ssz::prelude::{ssz_rs, HashTreeRoot};
 use parking_lot::RwLock;
 use serde_json::Value;
 use thiserror::Error;
+use tokio::sync::{mpsc, oneshot};
 use tracing::info;
 
 use crate::{
-    crypto::bls::{from_bls_signature_to_consensus_signature, SignerBLSAsync},
-    primitives::{
-        BatchedSignedConstraints, CommitmentRequest, ConstraintsMessage, SignedConstraints, Slot,
-    },
+    client::mevboost::MevBoostClient,
+    crypto::{bls::from_bls_signature_to_consensus_signature, BLSSigner},
+    primitives::{CommitmentRequest, InclusionRequest, Slot},
 };
 
 /// Default size of the api request cache (implemented as a LRU).
@@ -52,6 +52,13 @@ pub trait CommitmentsRpc {
     async fn request_inclusion_commitment(&self, params: Value) -> JsonApiResult;
 }
 
+#[derive(Debug)]
+pub struct ApiEvent {
+    // TODO: change to commitment request
+    pub request: InclusionRequest,
+    pub response: oneshot::Sender<JsonApiResult>,
+}
+
 /// The struct that implements handlers for all JSON-RPC API methods.
 ///
 /// # Functionality
@@ -62,32 +69,25 @@ pub trait CommitmentsRpc {
 pub struct JsonRpcApi {
     /// A cache of commitment requests.
     cache: Arc<RwLock<lru::LruCache<Slot, Vec<CommitmentRequest>>>>,
-    /// The client for the MEV-Boost sidecar.
-    mevboost_client: MevBoostClient,
-    /// The signer for the sidecar.
-    signer: Arc<dyn SignerBLSAsync>,
-    /// The client for the beacon node API.
-    #[allow(dead_code)]
-    beacon_api_client: BeaconApiClient,
+    /// The event sender for API events.
+    event_tx: mpsc::Sender<ApiEvent>,
 }
 
 impl JsonRpcApi {
     /// Create a new instance of the JSON-RPC API.
-    pub fn new(
-        mevboost_url: String,
-        beacon_url: String,
-        signer: Arc<dyn SignerBLSAsync>,
-    ) -> Arc<Self> {
+    pub fn new(event_tx: mpsc::Sender<ApiEvent>) -> Arc<Self> {
         let cap = NonZeroUsize::new(DEFAULT_API_REQUEST_CACHE_SIZE).unwrap();
         let beacon_url = reqwest::Url::parse(&beacon_url).expect("failed to parse beacon node URL");
 
         Arc::new(Self {
             cache: Arc::new(RwLock::new(lru::LruCache::new(cap))),
-            mevboost_client: MevBoostClient::new(mevboost_url),
-            beacon_api_client: BeaconApiClient::new(beacon_url),
-            signer,
+            event_tx,
         })
     }
+}
+
+fn internal_error() -> ApiError {
+    ApiError::Custom("internal server error".to_string())
 }
 
 #[async_trait::async_trait]
@@ -143,33 +143,20 @@ impl CommitmentsRpc for JsonRpcApi {
             }
         } // Drop the lock
 
-        // parse the request into constraints and sign them with the sidecar signer
-        // TODO: get the validator index from somewhere
-        // let validator_index = self.beacon_api_client.get_proposer_duties(get_epoch_from_slot(params.slot)).await?;
-        let message = ConstraintsMessage::build(0, params.slot, params.clone())?;
-        let root = message.hash_tree_root()?;
+        let (tx, rx) = oneshot::channel();
 
-        let bls_signature = self.signer.sign(root.as_ref()).await.unwrap();
-
-        let signature = from_bls_signature_to_consensus_signature(bls_signature);
-        let signed_constraints: BatchedSignedConstraints =
-            vec![SignedConstraints { message, signature }];
-
-        // TODO: simulate and check if the transaction can be included in the next block
-        // self.block_builder.try_append(params.slot, params.tx)
-
-        // TODO: check if there is enough time left in the current slot
-
-        // Web demo: push an event to the demo server to notify the frontend
-        emit_bolt_demo_event("commitment request accepted");
-
-        // Forward the constraints to mev-boost's builder API
-        self.mevboost_client
-            .submit_constraints(&signed_constraints)
+        // send the request to the event loop
+        self.event_tx
+            .send(ApiEvent {
+                request: params.clone(),
+                response: tx,
+            })
             .await
-            .map_err(|_| ApiError::Custom("internal server error".to_string()))?;
+            .map_err(|_| internal_error())?;
 
-        Ok(serde_json::to_value(signed_constraints)?)
+        let response = rx.await.map_err(|_| internal_error())?;
+
+        Ok(serde_json::to_value("test")?)
     }
 }
 

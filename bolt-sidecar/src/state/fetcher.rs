@@ -15,7 +15,7 @@ const MAX_RETRIES: u32 = 8;
 /// The retry backoff in milliseconds.
 const RETRY_BACKOFF_MS: u64 = 200;
 
-pub(super) trait StateFetcher {
+pub trait StateFetcher {
     async fn get_state_update(
         &self,
         addresses: Vec<&Address>,
@@ -32,7 +32,7 @@ pub(super) trait StateFetcher {
 }
 
 #[derive(Clone)]
-pub(super) struct StateClient {
+pub struct StateClient {
     client: RpcClient,
     retry_backoff: Duration,
 }

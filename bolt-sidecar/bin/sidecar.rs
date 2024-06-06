@@ -1,10 +1,22 @@
 use bolt_sidecar::{
     config::{Config, Opts},
-    json_rpc::start_server,
-    start_builder_proxy, BuilderProxyConfig, NoopPayloadFetcher,
+    crypto::bls::{from_bls_signature_to_consensus_signature, BLSSigner},
+    json_rpc::{api::ApiError, start_server},
+    primitives::{
+        constraint::{BatchedSignedConstraints, ConstraintsMessage, SignedConstraints},
+        ChainHead, CommitmentRequest, NoopPayloadFetcher,
+    },
+    spec::ConstraintsApi,
+    start_builder_proxy,
+    state::{
+        fetcher::{StateClient, StateFetcher},
+        ExecutionState,
+    },
+    BuilderProxyConfig, MevBoostClient,
 };
 
 use clap::Parser;
+use tokio::sync::mpsc;
 use tracing::info;
 
 #[tokio::main]
@@ -16,26 +28,72 @@ async fn main() -> eyre::Result<()> {
     let opts = Opts::parse();
     let config = Config::try_from(opts)?;
 
-    let shutdown_tx = start_server(config).await?;
+    let (api_events, mut api_events_rx) = mpsc::channel(1024);
+
+    let signer = BLSSigner::new(config.private_key.clone());
+
+    let state_client = StateClient::new(&config.execution_api, 8);
+
+    let head = state_client.get_head().await?;
+
+    let mut execution_state = ExecutionState::new(state_client, ChainHead::new(0, head)).await?;
+
+    let mevboost_client = MevBoostClient::new(config.mevboost_url.clone());
+
+    let shutdown_tx = start_server(config, api_events).await?;
 
     let builder_proxy_config = BuilderProxyConfig::default();
 
-    let builder_proxy = tokio::spawn(async move {
+    let _builder_proxy = tokio::spawn(async move {
         if let Err(e) = start_builder_proxy(NoopPayloadFetcher, builder_proxy_config).await {
             tracing::error!("Builder proxy failed: {:?}", e);
         }
     });
 
+    // TODO: parallelize this
+    while let Some(event) = api_events_rx.recv().await {
+        tracing::info!("Received commitment request: {:?}", event.request);
+        let request = event.request;
+
+        if let Err(e) = execution_state
+            .try_commit(&CommitmentRequest::Inclusion(request.clone()))
+            .await
+        {
+            tracing::error!("Failed to commit request: {:?}", e);
+            let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
+            continue;
+        }
+
+        tracing::info!(
+            tx_hash = %request.tx.tx_hash(),
+            "Validation against execution state passed"
+        );
+
+        // parse the request into constraints and sign them with the sidecar signer
+        // TODO: get the validator index from somewhere
+        let Ok(message) = ConstraintsMessage::build(0, request.slot, request.clone()) else {
+            tracing::error!("Failed to build constraints message, parsing error");
+            let _ = event
+                .response
+                .send(Err(ApiError::Custom("Internal server error".to_string())));
+            continue;
+        };
+
+        let signature = from_bls_signature_to_consensus_signature(signer.sign(&message));
+        let signed_constraints: BatchedSignedConstraints =
+            vec![SignedConstraints { message, signature }];
+
+        // TODO: fix retry logic
+        while let Err(e) = mevboost_client
+            .submit_constraints(&signed_constraints)
+            .await
+        {
+            tracing::error!(error = ?e, "Error submitting constraints, retrying...");
+        }
+    }
+
     tokio::signal::ctrl_c().await?;
     shutdown_tx.send(()).await.ok();
-
-    // High-level flow:
-    // - Create block template
-    // - Create state with client
-    // - Subscribe to new blocks
-    // - Update state on every new block
-    // - Run template through state to invalidate commitments
-    // - Accept new preconfs etc.
 
     Ok(())
 }
