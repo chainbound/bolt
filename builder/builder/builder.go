@@ -302,57 +302,46 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 
 	var resp *http.Response
 
-BEGIN:
 	for {
-		select {
-		case <-b.stop:
-			return nil
-		default:
-			if attempts >= maxAttempts {
-				log.Error(fmt.Sprintf("Failed to subscribe to constraints after %d attempts", maxAttempts))
-				return errors.New("failed to subscribe to constraints")
-			}
+		log.Info("Attempting to subscribe to constraints...")
 
-			// try to subscribe to constraints by making an initial HTTP request
-			req, err := http.NewRequest(http.MethodGet, relayBaseEndpoint+SubscribeConstraintsPath, nil)
-			if err != nil {
-				log.Error(fmt.Sprintf("Failed to create new http request: %v", err))
-				return err
-			}
-			req.Header.Set("Accept-Encoding", "gzip")
-			req.Header.Set("Authorization", authHeader)
-
-			client := http.Client{}
-			resp, err = client.Do(req)
-			if err != nil {
-				log.Error(fmt.Sprintf("Failed to connect to SSE server: %v", err))
-				time.Sleep(retryInterval)
-				attempts++
-				continue
-			}
-
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				log.Error(fmt.Sprintf("Non-OK HTTP status: %s", resp.Status))
-				if resp.StatusCode == http.StatusUnauthorized {
-					log.Error("Unauthorized to subscribe to constraints, retrying...")
-					time.Sleep(retryInterval)
-					attempts++
-					continue
-				}
-				return err
-			}
-			break BEGIN
+		if attempts >= maxAttempts {
+			log.Error(fmt.Sprintf("Failed to subscribe to constraints after %d attempts", maxAttempts))
+			return errors.New("failed to subscribe to constraints")
 		}
+
+		req, err := http.NewRequest(http.MethodGet, relayBaseEndpoint+SubscribeConstraintsPath, nil)
+		if err != nil {
+			log.Error(fmt.Sprintf("Failed to create new http request: %v", err))
+			return err
+		}
+		req.Header.Set("Accept-Encoding", "gzip")
+		req.Header.Set("Authorization", authHeader)
+
+		client := http.Client{}
+		resp, err = client.Do(req)
+		if err != nil {
+			log.Error(fmt.Sprintf("Failed to connect to SSE server: %v", err))
+			time.Sleep(retryInterval)
+			attempts++
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			log.Error(fmt.Sprintf("Error subscribing to constraints via SSE: %s, %v", resp.Status, err))
+			return err
+		}
+		break
 	}
 
+	defer resp.Body.Close()
 	log.Info(fmt.Sprintf("Connected to SSE server: %s", relayBaseEndpoint))
 
 	var reader io.Reader
 
-	// Step 2: Check if the response is gzipped
+	// Check if the response is gzipped
 	if resp.Header.Get("Content-Encoding") == "gzip" {
-		// Step 3: Decompress the response body
+		// Decompress the response body
 		gzipReader, err := gzip.NewReader(resp.Body)
 		if err != nil {
 			return fmt.Errorf("error creating gzip reader: %v", err)
@@ -368,19 +357,26 @@ BEGIN:
 		line, err := bufReader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
-				fmt.Println("End of stream")
+				log.Info("End of stream")
 				break
 			}
-			log.Error("Error reading from response body: %v", err)
+			log.Error(fmt.Sprintf("Error reading from response body: %v", err))
+			continue
 		}
+
 		if !strings.HasPrefix(line, "data: ") {
 			continue
 		}
 		data := strings.TrimPrefix(line, "data: ")
 
+		// Check if this message is a simple ACK from the server
+		if strings.Contains(data, "ACK") {
+			log.Info("Received ACK from server")
+			continue
+		}
+
 		// We assume the data is the JSON representation of the constraints
-		// TODO: downgrade this to debug level
-		log.Info("Received new constraint: %s\n", data)
+		log.Info(fmt.Sprintf("Received new constraint: %s", data))
 		constraintsSigned := make(common.SignedConstraintsList, 0, 8)
 		if err := json.Unmarshal([]byte(data), &constraintsSigned); err != nil {
 			log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))

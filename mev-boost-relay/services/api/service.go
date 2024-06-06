@@ -2880,6 +2880,11 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 	// Monitor client disconnect
 	notify := req.Context().Done()
 
+	// Send an initial event as acknowledgement
+	fmt.Fprintf(gzipWriter, "data: %s\n\n", "ACK")
+	gzipWriter.Flush()
+	flusher.Flush()
+
 	for {
 		select {
 		case <-notify:
