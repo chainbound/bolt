@@ -7,7 +7,6 @@ use serde_json::Value;
 use thiserror::Error;
 use tracing::info;
 
-use super::mevboost::MevBoostClient;
 use crate::{
     crypto::bls::{from_bls_signature_to_consensus_signature, SignerBLSAsync},
     primitives::{
@@ -166,8 +165,9 @@ impl CommitmentsRpc for JsonRpcApi {
 
         // Forward the constraints to mev-boost's builder API
         self.mevboost_client
-            .post_constraints(&signed_constraints)
-            .await?;
+            .submit_constraints(&signed_constraints)
+            .await
+            .map_err(|_| ApiError::Custom("internal server error".to_string()))?;
 
         Ok(serde_json::to_value(signed_constraints)?)
     }

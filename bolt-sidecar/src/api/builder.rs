@@ -113,7 +113,7 @@ impl<T: ConstraintsApi, P: PayloadFetcher + Send + Sync> BuilderProxyServer<T, P
         {
             Ok(Ok(header)) => {
                 tracing::debug!(elapsed = ?start.elapsed(), "Returning signed builder bid: {:?}", header);
-                Ok(Json(header))
+                Ok(Json(header.bid))
             }
             Ok(Err(_)) | Err(_) => {
                 // On ANY error, we fall back to locally built block

@@ -8,7 +8,10 @@ use ethereum_consensus::{
 };
 use serde::{Deserialize, Serialize, Serializer};
 
-use crate::types::{GetPayloadResponse, SignedBuilderBid};
+use crate::types::{
+    constraint::BatchedSignedConstraints, GetPayloadResponse, SignedBuilderBid,
+    SignedBuilderBidWithProofs,
+};
 
 use super::builder::GetHeaderParams;
 
@@ -18,6 +21,7 @@ pub const GET_HEADER_PATH: &str = "/eth/v1/builder/header/:slot/:parent_hash/:pu
 pub const GET_HEADER_WITH_PROOFS_PATH: &str =
     "/eth/v1/builder/header_with_proofs/:slot/:parent_hash/:pubkey";
 pub const GET_PAYLOAD_PATH: &str = "/eth/v1/builder/blinded_blocks";
+pub const CONSTRAINTS_PATH: &str = "/eth/v1/builder/constraints";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ErrorResponse {
@@ -41,6 +45,8 @@ pub enum BuilderApiError {
     FailedGettingHeader(ErrorResponse),
     #[error("Failed getting payload: {0:?}")]
     FailedGettingPayload(ErrorResponse),
+    #[error("Failed submitting constraints: {0:?}")]
+    FailedSubmittingConstraints(ErrorResponse),
     #[error("Failed to fetch local payload for slot {0}")]
     FailedToFetchLocalPayload(u64),
     #[error("Axum error: {0:?}")]
@@ -61,6 +67,9 @@ impl IntoResponse for BuilderApiError {
                 (StatusCode::from_u16(error.code).unwrap(), Json(error)).into_response()
             }
             BuilderApiError::FailedGettingPayload(error) => {
+                (StatusCode::from_u16(error.code).unwrap(), Json(error)).into_response()
+            }
+            BuilderApiError::FailedSubmittingConstraints(error) => {
                 (StatusCode::from_u16(error.code).unwrap(), Json(error)).into_response()
             }
             BuilderApiError::AxumError(err) => {
@@ -106,10 +115,13 @@ pub trait BuilderApi {
 
 #[async_trait::async_trait]
 pub trait ConstraintsApi: BuilderApi {
-    async fn submit_constraints(&self, constraints: String) -> Result<(), BuilderApiError>;
+    async fn submit_constraints(
+        &self,
+        constraints: &BatchedSignedConstraints,
+    ) -> Result<(), BuilderApiError>;
 
     async fn get_header_with_proofs(
         &self,
         params: GetHeaderParams,
-    ) -> Result<SignedBuilderBid, BuilderApiError>;
+    ) -> Result<SignedBuilderBidWithProofs, BuilderApiError>;
 }

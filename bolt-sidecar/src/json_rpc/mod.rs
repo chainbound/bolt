@@ -8,7 +8,6 @@ use tracing::{error, info};
 use warp::{http::Method, reject::Rejection, Filter};
 
 mod api;
-mod mevboost;
 mod spec;
 
 use crate::client::commit_boost::CommitBoostClient;

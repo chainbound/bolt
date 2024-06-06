@@ -12,11 +12,14 @@ use crate::{
     api::{
         builder::GetHeaderParams,
         spec::{
-            BuilderApi, BuilderApiError, ConstraintsApi, ErrorResponse, GET_PAYLOAD_PATH,
-            REGISTER_VALIDATORS_PATH, STATUS_PATH,
+            BuilderApi, BuilderApiError, ConstraintsApi, ErrorResponse, CONSTRAINTS_PATH,
+            GET_PAYLOAD_PATH, REGISTER_VALIDATORS_PATH, STATUS_PATH,
         },
     },
-    types::{constraint::BatchedSignedConstraints, GetPayloadResponse, SignedBuilderBid},
+    types::{
+        constraint::BatchedSignedConstraints, GetPayloadResponse, SignedBuilderBid,
+        SignedBuilderBidWithProofs,
+    },
 };
 
 #[derive(Debug)]
@@ -35,35 +38,6 @@ impl MevBoostClient {
                 .build()
                 .unwrap(),
         }
-    }
-
-    /// Performs an HTTP POST request to the given endpoint with the given body.
-    /// Returns the result of the API request parsed as JSON.
-    async fn post_json(
-        &self,
-        endpoint: &str,
-        body: Vec<u8>,
-    ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-        let res = self
-            .client
-            .post(format!("{}/{}", self.url, endpoint))
-            .header("content-type", "application/json")
-            .body(body)
-            .send()
-            .await?
-            .json::<Value>()
-            .await?;
-
-        Ok(res)
-    }
-
-    /// Posts the given signed constraints to the MEV-Boost API.
-    pub async fn post_constraints(
-        &self,
-        constraints: &BatchedSignedConstraints,
-    ) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-        let body = serde_json::to_vec(constraints)?;
-        self.post_json("/eth/v1/builder/constraints", body).await
     }
 
     fn endpoint(&self, path: &str) -> String {
@@ -110,7 +84,6 @@ impl BuilderApi for MevBoostClient {
         &self,
         params: GetHeaderParams,
     ) -> Result<SignedBuilderBid, BuilderApiError> {
-        // TODO: fix response?
         let response = self
             .client
             .get(self.endpoint(&format!(
@@ -157,14 +130,49 @@ impl BuilderApi for MevBoostClient {
 
 #[async_trait::async_trait]
 impl ConstraintsApi for MevBoostClient {
-    async fn submit_constraints(&self, constraints: String) -> Result<(), BuilderApiError> {
-        todo!()
+    async fn submit_constraints(
+        &self,
+        constraints: &BatchedSignedConstraints,
+    ) -> Result<(), BuilderApiError> {
+        let response = self
+            .client
+            .post(self.endpoint(CONSTRAINTS_PATH))
+            .header("content-type", "application/json")
+            .body(serde_json::to_vec(&constraints)?)
+            .send()
+            .await?;
+
+        if response.status() != StatusCode::OK {
+            let error = response.json::<ErrorResponse>().await?;
+            return Err(BuilderApiError::FailedSubmittingConstraints(error));
+        }
+
+        Ok(())
     }
 
     async fn get_header_with_proofs(
         &self,
         params: GetHeaderParams,
-    ) -> Result<SignedBuilderBid, BuilderApiError> {
-        todo!()
+    ) -> Result<SignedBuilderBidWithProofs, BuilderApiError> {
+        let response = self
+            .client
+            .get(self.endpoint(&format!(
+                "/eth/v1/builder/header_with_proofs/{}/{}/{}",
+                params.slot, params.parent_hash, params.public_key
+            )))
+            .header("content-type", "application/json")
+            .send()
+            .await?;
+
+        if response.status() != StatusCode::OK {
+            let error = response.json::<ErrorResponse>().await?;
+            return Err(BuilderApiError::FailedGettingHeader(error));
+        }
+
+        let header = response.json::<SignedBuilderBidWithProofs>().await?;
+
+        // TODO: verify proofs here?
+
+        Ok(header)
     }
 }

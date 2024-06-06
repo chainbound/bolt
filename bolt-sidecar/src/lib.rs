@@ -18,4 +18,3 @@ pub mod config;
 pub mod json_rpc;
 
 pub use api::builder::{start_builder_proxy, BuilderProxyConfig};
-pub use types::{NoopPayloadFetcher, PayloadFetcher};

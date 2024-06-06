@@ -1,10 +1,9 @@
 use alloy_primitives::U256;
-use axum::body::Body;
 use ethereum_consensus::{
     capella,
     crypto::KzgCommitment,
     deneb::mainnet::{BlobsBundle, ExecutionPayloadHeader, MAX_BLOB_COMMITMENTS_PER_BLOCK},
-    primitives::{BlsPublicKey, BlsSignature},
+    primitives::{BlsPublicKey, BlsSignature, Hash32},
     serde::as_str,
     ssz::prelude::*,
     types::mainnet::ExecutionPayload,
@@ -42,6 +41,35 @@ pub struct BuilderBid {
 pub struct SignedBuilderBid {
     pub message: BuilderBid,
     pub signature: BlsSignature,
+}
+
+#[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
+pub struct SignedBuilderBidWithProofs {
+    pub bid: SignedBuilderBid,
+    pub proofs: List<ConstraintProof, 300>,
+}
+
+#[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
+pub struct MerkleMultiProof {
+    // We use List here for SSZ, TODO: choose max
+    transaction_hashes: List<Hash32, 300>,
+    generalized_indexes: List<u64, 300>,
+    merkle_hashes: List<Hash32, 1000>,
+}
+
+#[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
+pub struct ConstraintProof {
+    #[serde(rename = "txHash")]
+    tx_hash: Hash32,
+    #[serde(rename = "merkleProof")]
+    merkle_proof: MerkleProof,
+}
+
+#[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
+pub struct MerkleProof {
+    index: u64,
+    // TODO: for now, max 1000
+    hashes: List<Hash32, 1000>,
 }
 
 pub struct FetchPayloadRequest {
