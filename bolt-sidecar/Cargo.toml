@@ -12,6 +12,7 @@ warp = "0.3.7"
 futures = "0.3"
 
 # crypto
+blst = "0.3.12"
 secp256k1 = { version = "0.29.0", features = ["hashes", "rand"] }
 
 # alloy
@@ -31,12 +32,16 @@ alloy-transport-http = { git = "https://github.com/alloy-rs/alloy" }
 alloy-transport-ws = { git = "https://github.com/alloy-rs/alloy" }
 alloy-pubsub = { git = "https://github.com/alloy-rs/alloy" }
 alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy" }
-alloy-consensus = { git = "https://github.com/alloy-rs/alloy", features = ["k256"] }
+alloy-rpc-types-beacon = { git = "https://github.com/alloy-rs/alloy" }
+alloy-consensus = { git = "https://github.com/alloy-rs/alloy", features = [
+    "k256",
+] }
 alloy-json-rpc = { git = "https://github.com/alloy-rs/alloy" }
 alloy-primitives = "0.7.1"
 alloy-rlp = "0.3"
 
 reqwest = "0.12"
+ethereum-consensus = { git = "https://github.com/ralexstokes/ethereum-consensus", rev = "cf3c404" }
 
 # types
 serde = { version = "1.0.197", features = ["derive"] }
@@ -50,6 +55,7 @@ hex = "0.4.3"
 # utils
 eyre = "0.6.12"
 thiserror = "1.0"
+rand = "0.8.5"
 
 # tracing
 tracing = "0.1.40"

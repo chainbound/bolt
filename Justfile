@@ -9,7 +9,8 @@ demo:
 
 # spin up the bolt devnet
 up:
-	kurtosis run --enclave bolt-devnet github.com/chainbound/ethereum-package --args-file ./scripts/kurtosis_config.yaml
+	chmod +x ./scripts/start-devnet.sh
+	./scripts/start-devnet.sh
 
 # turn down the bolt devnet and remove the enclave
 down:
@@ -32,19 +33,23 @@ inspect:
 
 # show the logs for the bolt devnet relay
 relay-logs:
-  docker logs -f `docker ps --format "{{{{.ID}}\t{{{{.Names}}" | grep "mev-relay-api" | awk '{print $$1}'`
+    @id=$(docker ps | grep mev-relay-api | awk -F' ' '{print $1}') && \
+    docker logs -f $id
 
 # show the logs for the bolt devnet builder
 builder-logs:
-	docker logs -f `docker ps --format "{{{{.ID}}\t{{{{.Names}}" | grep "el-2-geth-builder-lighthouse" | awk '{print $$1}'`
+    @id=$(docker ps | grep bolt-builder | awk -F' ' '{print $1}') && \
+    docker logs -f $id
 
 # show the logs for the bolt devnet mev-boost sidecar
 boost-logs:
-	docker logs -f `docker ps --format "{{{{.ID}}\t{{{{.Names}}" | grep "mev-boost-1-lighthouse-geth" | awk '{print $$1}'`
+    @id=$(docker ps | grep bolt-mev-boost | awk -F' ' '{print $1}') && \
+    docker logs -f $id
 
 # show the logs for the bolt devnet bolt-sidecar
 sidecar-logs:
-	docker logs -f `docker ps --format "{{{{.ID}}\t{{{{.Names}}" | grep "mev-sidecar-api" | awk '{print $$1}'`
+    @id=$(docker ps | grep sidecar | awk -F' ' '{print $1}') && \
+    docker logs -f $id
 
 # show the dora explorer in the browser. NOTE: works only for Linux and MacOS at the moment
 dora:

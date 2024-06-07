@@ -1,7 +1,7 @@
-use std::str::FromStr;
-
+use blst::min_pk::SecretKey;
 use clap::Parser;
-use secp256k1::{rand, SecretKey};
+
+use crate::crypto::bls::random_bls_secret;
 
 /// Command-line options for the sidecar
 #[derive(Parser, Debug)]
@@ -38,7 +38,7 @@ impl Default for Config {
         Self {
             rpc_port: 8000,
             mevboost_url: "http://localhost:3030".to_string(),
-            private_key: SecretKey::new(&mut rand::thread_rng()),
+            private_key: random_bls_secret(),
             limits: Limits::default(),
         }
     }
@@ -59,7 +59,8 @@ impl TryFrom<Opts> for Config {
         }
 
         config.mevboost_url = opts.mevboost_url;
-        config.private_key = SecretKey::from_str(&opts.private_key)?;
+        config.private_key = SecretKey::from_bytes(&hex::decode(opts.private_key)?)
+            .map_err(|e| eyre::eyre!("Failed decoding BLS secret key: {:?}", e))?;
 
         Ok(config)
     }

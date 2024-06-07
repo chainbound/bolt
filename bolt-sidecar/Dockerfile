@@ -10,6 +10,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM compiler AS builder
 COPY --from=planner /app/recipe.json recipe.json
+RUN apt-get update && apt-get install pkg-config libssl-dev -y
 RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cargo build --release

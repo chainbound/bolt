@@ -5,7 +5,7 @@ use alloy_primitives::{Address, U256, U64};
 use alloy_transport::TransportError;
 use futures::{stream::FuturesOrdered, StreamExt};
 
-use crate::{client::rpc::RpcClient, types::AccountState};
+use crate::{client::rpc::RpcClient, primitives::AccountState};
 
 use super::execution::StateUpdate;
 

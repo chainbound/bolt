@@ -1,19 +1,15 @@
-use std::{num::NonZeroUsize, str::FromStr, sync::Arc};
+use std::{num::NonZeroUsize, sync::Arc};
 
-use alloy_consensus::TxEnvelope;
-use alloy_eips::eip2718::Decodable2718;
-use alloy_primitives::Signature;
 use parking_lot::RwLock;
-use secp256k1::SecretKey;
 use serde_json::Value;
 use thiserror::Error;
 use tracing::info;
 
-use super::{mevboost::MevBoostClient, types::InclusionRequestParams};
+use super::mevboost::MevBoostClient;
 use crate::{
-    crypto::{SignableECDSA, Signer},
+    crypto::{bls::from_bls_signature_to_consensus_signature, BLSSigner},
     json_rpc::types::{BatchedSignedConstraints, ConstraintsMessage, SignedConstraints},
-    types::Slot,
+    primitives::{CommitmentRequest, Slot},
 };
 
 /// Default size of the api request cache (implemented as a LRU).
@@ -34,6 +30,8 @@ pub enum ApiError {
     Rlp(#[from] alloy_rlp::Error),
     #[error("failed during HTTP call: {0}")]
     Http(#[from] reqwest::Error),
+    #[error("downstream error: {0}")]
+    Eyre(#[from] eyre::Report),
     #[error("failed while processing API request: {0}")]
     Custom(String),
 }
@@ -57,22 +55,22 @@ pub trait CommitmentsRpc {
 ///   sidecar's validator identity.
 pub struct JsonRpcApi {
     /// A cache of commitment requests.
-    cache: Arc<RwLock<lru::LruCache<Slot, Vec<InclusionRequestParams>>>>,
+    cache: Arc<RwLock<lru::LruCache<Slot, Vec<CommitmentRequest>>>>,
     /// The signer for this sidecar.
-    signer: Signer,
+    signer: BLSSigner,
     /// The client for the MEV-Boost sidecar.
     mevboost_client: MevBoostClient,
 }
 
 impl JsonRpcApi {
     /// Create a new instance of the JSON-RPC API.
-    pub fn new(private_key: SecretKey, mevboost_url: String) -> Arc<Self> {
+    pub fn new(private_key: blst::min_pk::SecretKey, mevboost_url: String) -> Arc<Self> {
         let cap = NonZeroUsize::new(DEFAULT_API_REQUEST_CACHE_SIZE).unwrap();
 
         Arc::new(Self {
             cache: Arc::new(RwLock::new(lru::LruCache::new(cap))),
             mevboost_client: MevBoostClient::new(mevboost_url),
-            signer: Signer::new(private_key),
+            signer: BLSSigner::new(private_key),
         })
     }
 }
@@ -86,17 +84,16 @@ impl CommitmentsRpc for JsonRpcApi {
             ));
         };
 
-        let params = serde_json::from_value::<InclusionRequestParams>(params)?;
+        let params = serde_json::from_value::<CommitmentRequest>(params)?;
+        let params = params
+            .as_inclusion_request()
+            .ok_or_else(|| ApiError::Custom("request must be an inclusion request".to_string()))?;
         info!(?params, "received inclusion commitment request");
 
-        // parse the raw transaction bytes
-        let hex_decoded_tx = hex::decode(params.message.tx.trim_start_matches("0x"))?;
-        let transaction = TxEnvelope::decode_2718(&mut hex_decoded_tx.as_slice())?;
-        let tx_sender = transaction.recover_signer()?;
+        let tx_sender = params.tx.recover_signer()?;
 
         // validate the user's signature
-        let user_sig = Signature::from_str(params.signature.trim_start_matches("0x"))?;
-        let signer_address = user_sig.recover_address_from_msg(params.message.digest().as_ref())?;
+        let signer_address = params.signature.recover_address_from_msg(params.digest())?;
 
         // TODO: relax this check to allow for external signers to request commitments
         // about transactions that they did not sign themselves
@@ -109,25 +106,27 @@ impl CommitmentsRpc for JsonRpcApi {
         {
             // check for duplicate requests and update the cache if necessary
             let mut cache = self.cache.write();
-            if let Some(commitments) = cache.get_mut(&params.message.slot) {
-                if commitments.iter().any(|p| p == &params) {
+            if let Some(commitments) = cache.get_mut(&params.slot) {
+                if commitments
+                    .iter()
+                    .any(|p| p.as_inclusion_request().is_some_and(|i| i == params))
+                {
                     return Err(ApiError::DuplicateRequest);
                 }
 
-                commitments.push(params.clone());
+                commitments.push(params.clone().into());
             } else {
-                cache.put(params.message.slot, vec![params.clone()]);
+                cache.put(params.slot, vec![params.clone().into()]);
             }
         } // Drop the lock
 
         // parse the request into constraints and sign them with the sidecar signer
         // TODO: get the validator index from somewhere
-        let constraints = ConstraintsMessage::build(0, params.message.slot, params.clone());
-        let constraints_sig = self.signer.sign_ecdsa(&constraints).to_string();
-        let signed_constraints: BatchedSignedConstraints = vec![SignedConstraints {
-            message: constraints,
-            signature: constraints_sig,
-        }];
+        let message = ConstraintsMessage::build(0, params.slot, params.clone())?;
+
+        let signature = from_bls_signature_to_consensus_signature(self.signer.sign(&message));
+        let signed_constraints: BatchedSignedConstraints =
+            vec![SignedConstraints { message, signature }];
 
         // TODO: simulate and check if the transaction can be included in the next block
         // self.block_builder.try_append(params.slot, params.tx)

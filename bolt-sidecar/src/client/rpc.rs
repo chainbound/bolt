@@ -14,7 +14,7 @@ use alloy_transport::TransportResult;
 use alloy_transport_http::Http;
 use reqwest::{Client, Url};
 
-use crate::types::AccountState;
+use crate::primitives::AccountState;
 
 /// An HTTP-based JSON-RPC client that supports batching. Implements all methods that are relevant
 /// to Bolt state.
