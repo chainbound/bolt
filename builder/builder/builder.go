@@ -733,6 +733,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 
 	// fetch constraints here
 	constraints := b.GetConstraintsForSlot(attrs.Slot)
+	log.Info(fmt.Sprintf("[BOLT]: Got %d constraints for slot %d", len(constraints), attrs.Slot))
 
 	submitBestBlock := func() {
 		queueMu.Lock()
