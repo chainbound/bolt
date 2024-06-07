@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use alloy_consensus::TxEnvelope;
-use alloy_eips::eip2718::Decodable2718;
+use alloy_eips::eip2718::{Decodable2718, Encodable2718};
 use alloy_primitives::{keccak256, Signature, B256};
 use serde::{de, Deserialize, Deserializer, Serialize};
 
@@ -21,12 +21,18 @@ pub struct InclusionRequest {
     /// The consensus slot number at which the transaction should be included.
     pub slot: u64,
     /// The transaction to be included.
-    #[serde(deserialize_with = "deserialize_tx_envelope")]
+    #[serde(
+        deserialize_with = "deserialize_tx_envelope",
+        serialize_with = "serialize_tx_envelope"
+    )]
     pub tx: TxEnvelope,
     /// The signature over the "slot" and "tx" fields by the user.
     /// A valid signature is the only proof that the user actually requested
     /// this specific commitment to be included at the given slot.
-    #[serde(deserialize_with = "deserialize_from_str")]
+    #[serde(
+        deserialize_with = "deserialize_from_str",
+        serialize_with = "signature_as_str"
+    )]
     pub signature: Signature,
 }
 
@@ -59,6 +65,15 @@ where
     TxEnvelope::decode_2718(&mut s.as_slice()).map_err(de::Error::custom)
 }
 
+fn serialize_tx_envelope<S>(tx: &TxEnvelope, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let mut data = Vec::new();
+    tx.encode_2718(&mut data);
+    serializer.serialize_str(&format!("0x{}", hex::encode(&data)))
+}
+
 fn deserialize_from_str<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: Deserializer<'de>,
@@ -67,6 +82,13 @@ where
 {
     let s = String::deserialize(deserializer)?;
     T::from_str(&s).map_err(de::Error::custom)
+}
+
+fn signature_as_str<S: serde::Serializer>(
+    sig: &Signature,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    serializer.serialize_str(&format!("0x{}", hex::encode(sig.as_bytes())))
 }
 
 impl InclusionRequest {
@@ -88,7 +110,9 @@ impl From<InclusionRequest> for CommitmentRequest {
 
 #[cfg(test)]
 mod tests {
-    use super::{CommitmentRequest, InclusionRequest};
+    use std::str::FromStr;
+
+    use super::{CommitmentRequest, InclusionRequest, Signature};
 
     #[test]
     fn test_deserialize_inclusion_request() {
@@ -100,6 +124,14 @@ mod tests {
 
         let req: InclusionRequest = serde_json::from_str(json_req).unwrap();
         assert_eq!(req.slot, 1);
+
+        let sig = Signature::from_str("0xb8623aae262785bd31d0cc6e368a9b9ab5361002edd58ece424ef5dde0544b32472d954da3f34ca9c2c2201393f9b83cdc959bd416c0af96fe3e0962a08cb92101").unwrap();
+
+        let deser = serde_json::to_string(&req).unwrap();
+
+        println!("Signature: {sig:?}");
+        println!("Deserialized: {deser}");
+        assert_eq!(deser, json_req);
     }
 
     #[test]
