@@ -11,7 +11,7 @@ use alloy_primitives::{Address, U256};
 
 use crate::{
     common::max_transaction_cost,
-    primitives::{AccountState, TxInfo},
+    primitives::{AccountState, BuilderBid, PayloadAndBid, SignedBuilderBid, TxInfo},
 };
 
 /// A block template that serves as a fallback block, but is also used
@@ -135,4 +135,30 @@ impl StateDiff {
     pub fn get_diff(&self, address: &Address) -> Option<(u64, U256)> {
         self.diffs.get(address).copied()
     }
+}
+
+impl TryFrom<BlockTemplate> for PayloadAndBid {
+    type Error = Box<dyn std::error::Error>;
+
+    fn try_from(value: BlockTemplate) -> Result<Self, Self::Error> {
+        let bid = SignedBuilderBid {
+            message: BuilderBid {
+                header: todo!(),
+                blob_kzg_commitments: todo!(),
+                value: todo!(),
+                public_key: todo!(),
+            },
+            signature: todo!(),
+        };
+    }
+}
+
+pub struct Unsigned<T> {
+    message: T,
+}
+
+pub trait Signable {
+    type Signature;
+
+    fn sign(&self) -> Self::Signature;
 }
