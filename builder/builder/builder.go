@@ -369,12 +369,6 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 		}
 		data := strings.TrimPrefix(line, "data: ")
 
-		// Check if this message is a simple ACK from the server
-		if strings.Contains(data, "ACK") {
-			log.Info("Received ACK from server")
-			continue
-		}
-
 		// We assume the data is the JSON representation of the constraints
 		log.Info(fmt.Sprintf("Received new constraint: %s", data))
 		constraintsSigned := make(common.SignedConstraintsList, 0, 8)
