@@ -97,8 +97,8 @@ type Builder struct {
 	builderResubmitInterval     time.Duration
 	discardRevertibleTxOnErr    bool
 
-	// constraintsCache is a map from slot to the constraints made by proposers
-	constraintsCache *shardmap.FIFOMap[uint64, common.SignedConstraintsList]
+	// constraintsCache is a map from slot to the decoded constraints made by proposers
+	constraintsCache *shardmap.FIFOMap[uint64, types.HashToConstraintDecoded]
 
 	limiter                       *rate.Limiter
 	submissionOffsetFromEndOfSlot time.Duration
@@ -196,7 +196,7 @@ func NewBuilder(args BuilderArgs) (*Builder, error) {
 		discardRevertibleTxOnErr:      args.discardRevertibleTxOnErr,
 		submissionOffsetFromEndOfSlot: args.submissionOffsetFromEndOfSlot,
 
-		constraintsCache: shardmap.NewFIFOMap[uint64, common.SignedConstraintsList](64, 16, shardmap.HashUint64),
+		constraintsCache: shardmap.NewFIFOMap[uint64, types.HashToConstraintDecoded](64, 16, shardmap.HashUint64),
 
 		limiter:       args.limiter,
 		slotCtx:       slotCtx,
@@ -343,9 +343,11 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 			}
 			log.Error("Error reading from response body: %v", err)
 		}
+
 		if !strings.HasPrefix(line, "data: ") {
 			continue
 		}
+
 		data := strings.TrimPrefix(line, "data: ")
 
 		// We assume the data is the JSON representation of the constraints
@@ -355,50 +357,46 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 			log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))
 			continue
 		}
+
 		if len(constraintsSigned) == 0 {
 			log.Warn("Received 0 length list of constraints")
 			continue
 		}
 
-	OUTER:
 		for _, constraint := range constraintsSigned {
+			decodedConstraints, err := DecodeConstraint(constraint)
+			if err != nil {
+				log.Error("Failed to decode transaction RLP: ", err)
+				continue
+			}
+
 			// For every constraint, we need to check if it has already been seen for the associated slot
 			slotConstraints, _ := b.constraintsCache.Get(constraint.Message.Slot)
 			if len(slotConstraints) == 0 {
 				// New constraint for this slot, add it in the map and continue with the next constraint
-				b.constraintsCache.Put(constraint.Message.Slot, common.SignedConstraintsList{constraint})
+				b.constraintsCache.Put(constraint.Message.Slot, decodedConstraints)
 				continue
 			}
-			for _, slotConstraint := range slotConstraints {
-				if slotConstraint.Signature == constraint.Signature {
-					// The constraint has already been seen, we can continue with the next one
-					continue OUTER
+
+			// Temporary map to keep track of the constraints that are already in the slot
+			seenTx := make(map[common.Hash]bool)
+			for hash := range slotConstraints {
+				seenTx[hash] = true
+			}
+
+			for hash := range decodedConstraints {
+				if !seenTx[hash] {
+					// The constraint is new, we will add this to the slot constraints
+					slotConstraints[hash] = decodedConstraints[hash]
 				}
 			}
-			// The constraint is new, we need to append it to the current list
-			b.constraintsCache.Put(constraint.Message.Slot, append(slotConstraints, constraint))
+
+			// Update the slot constraints
+			b.constraintsCache.Put(constraint.Message.Slot, slotConstraints)
 		}
 	}
 
 	return nil
-}
-
-func (b *Builder) GetConstraintsForSlot(slot uint64) types.HashToConstraintDecoded {
-	constraintsDecoded := make(types.HashToConstraintDecoded)
-	constraintsSigned, _ := b.constraintsCache.Get(slot)
-
-	for _, constraintSigned := range constraintsSigned {
-		constraints := constraintSigned.Message.Constraints
-		for _, constraint := range constraints {
-			decoded := new(types.Transaction)
-			if err := decoded.UnmarshalBinary(constraint.Tx); err != nil {
-				log.Error("Failed to decode preconfirmation transaction RLP: ", err)
-				continue
-			}
-			constraintsDecoded[decoded.Hash()] = &types.ConstraintDecoded{Index: constraint.Index, Tx: decoded}
-		}
-	}
-	return constraintsDecoded
 }
 
 func (b *Builder) Stop() error {
@@ -712,7 +710,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 	log.Debug("runBuildingJob", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp))
 
 	// fetch constraints here
-	constraints := b.GetConstraintsForSlot(attrs.Slot)
+	constraints, _ := b.constraintsCache.Get(attrs.Slot)
 
 	submitBestBlock := func() {
 		queueMu.Lock()

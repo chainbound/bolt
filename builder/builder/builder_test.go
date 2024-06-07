@@ -627,13 +627,25 @@ func TestSubscribeProposerConstraints(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	slots := []uint64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	for slot := range slots {
-		slot := uint64(slot)
-		constraints, ok := builder.constraintsCache.Get(slot)
-		expected := generateMockConstraintsForSlot(slot)[0].Message.Constraints[0].Tx
-		actual := constraints[0].Message.Constraints[0].Tx
-		require.Equal(t, expected, actual)
+	for _, slot := range slots {
+		cachedConstraints, ok := builder.constraintsCache.Get(slot)
 		require.Equal(t, true, ok)
+
+		expectedConstraint := generateMockConstraintsForSlot(slot)[0]
+		decodedConstraint, err := DecodeConstraint(expectedConstraint)
+		require.NoError(t, err)
+
+		// Compare the keys of the cachedConstraints and decodedConstraint maps
+		require.Equal(t, len(cachedConstraints), len(decodedConstraint), "The number of keys in both maps should be the same")
+		for key := range cachedConstraints {
+			_, ok := decodedConstraint[key]
+			require.True(t, ok, fmt.Sprintf("Key %s found in cachedConstraints but not in decodedConstraint", key.String()))
+			require.Equal(t, cachedConstraints[key].Tx.Data(), decodedConstraint[key].Tx.Data(), "The decodedConstraint Tx should be equal to the cachedConstraints Tx")
+		}
+		for key := range decodedConstraint {
+			_, ok := cachedConstraints[key]
+			require.True(t, ok, fmt.Sprintf("Key %s found in decodedConstraint but not in cachedConstraints", key.String()))
+		}
 	}
 }
 
