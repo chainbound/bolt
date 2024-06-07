@@ -3,7 +3,7 @@ demo:
 	./start-demo.sh
 
 up:
-	kurtosis run --enclave bolt-devnet github.com/chainbound/ethereum-package --args-file kurtosis_config.yaml
+	kurtosis run --enclave bolt-devnet github.com/chainbound/ethereum-package@8a708e19d761ee4c939280dfb4efb860ee3588cc --args-file kurtosis_config.yaml
 
 down:
 	kurtosis enclave rm -f bolt-devnet
