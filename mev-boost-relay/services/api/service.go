@@ -2836,9 +2836,6 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	// NOTE: This http.ResponseWriter uses gzip and we need this otherwise we're not able
-	// to flush data properly
-	w.Header().Set("Content-Encoding", "gzip")
 
 	// TODO: Docs regarding this autorization schema
 	// NOTE: This authorization schema is not final, but works for now.
@@ -2868,9 +2865,6 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 		close(constraintsCh)
 	}()
 
-	gzipWriter := gzip.NewWriter(w)
-	defer gzipWriter.Close()
-
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
@@ -2884,6 +2878,7 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 		select {
 		case <-notify:
 			// Client disconnected
+			api.log.Info("Client disconnected from constraints stream")
 			return
 		case constraint := <-constraintsCh:
 			constraintJSON, err := json.Marshal([]*SignedConstraints{constraint})
@@ -2893,13 +2888,12 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 				api.log.Printf("failed to marshal constraint to json: %v", err)
 				continue
 			}
-			fmt.Fprintf(gzipWriter, "data: %s\n\n", string(constraintJSON))
+			fmt.Fprintf(w, "data: %s\n\n", string(constraintJSON))
 
 			// NOTE: Flushing the gzip.Writer ensures that any compressed data in the buffer is
 			// written out to the underlying http.ResponseWriter. The http.ResponseWriter
 			// itself may also buffer data. Calling Flush on the http.ResponseWriter ensures
 			// that any data buffered by the HTTP server is sent to the client immediately.
-			gzipWriter.Flush()
 			flusher.Flush()
 		}
 	}

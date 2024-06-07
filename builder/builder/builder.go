@@ -315,7 +315,6 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 			log.Error(fmt.Sprintf("Failed to create new http request: %v", err))
 			return err
 		}
-		req.Header.Set("Accept-Encoding", "gzip")
 		req.Header.Set("Authorization", authHeader)
 
 		client := http.Client{}
