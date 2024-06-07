@@ -95,6 +95,17 @@ fn signature_as_str<S: serde::Serializer>(
     serializer.serialize_str(&format!("0x{}", hex::encode(bytes)))
 }
 
+fn signature_as_str<S: serde::Serializer>(
+    sig: &Signature,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    let parity = sig.v();
+    // As bytes encodes the parity as 27/28, need to change that.
+    let mut bytes = sig.as_bytes();
+    bytes[bytes.len() - 1] = if parity.y_parity() { 1 } else { 0 };
+    serializer.serialize_str(&format!("0x{}", hex::encode(bytes)))
+}
+
 impl InclusionRequest {
     // TODO: actually use SSZ encoding here
     pub fn digest(&self) -> B256 {

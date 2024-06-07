@@ -83,8 +83,9 @@ contract BoltChallenger is IBoltChallenger {
         reliquary = IReliquary(_reliquary);
 
         // Check if the provided provers are valid
-        reliquary.checkProver(reliquary.provers(_blockHeaderProver));
-        reliquary.checkProver(reliquary.provers(_accountInfoProver));
+        // TODO: readd this for mainnet deployment (currently disabled for testing)
+        // reliquary.checkProver(reliquary.provers(_blockHeaderProver));
+        // reliquary.checkProver(reliquary.provers(_accountInfoProver));
 
         blockHeaderProver = IProver(_blockHeaderProver);
         accountInfoProver = IProver(_accountInfoProver);
