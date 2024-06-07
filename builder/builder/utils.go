@@ -16,9 +16,9 @@ import (
 
 var errHTTPErrorResponse = errors.New("HTTP error response")
 
-func DecodeConstraint(constraint *common.SignedConstraints) (types.HashToConstraintDecoded, error) {
+func DecodeConstraints(constraints *common.SignedConstraints) (types.HashToConstraintDecoded, error) {
 	decodedConstraints := make(types.HashToConstraintDecoded)
-	for _, tx := range constraint.Message.Constraints {
+	for _, tx := range constraints.Message.Constraints {
 		decoded := new(types.Transaction)
 		if err := decoded.UnmarshalBinary(tx.Tx); err != nil {
 			return nil, err

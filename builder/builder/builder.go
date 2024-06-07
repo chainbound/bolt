@@ -364,9 +364,9 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 		}
 
 		for _, constraint := range constraintsSigned {
-			decodedConstraints, err := DecodeConstraint(constraint)
+			decodedConstraints, err := DecodeConstraints(constraint)
 			if err != nil {
-				log.Error("Failed to decode transaction RLP: ", err)
+				log.Error("Failed to decode constraint: ", err)
 				continue
 			}
 
@@ -378,20 +378,12 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 				continue
 			}
 
-			// Temporary map to keep track of the constraints that are already in the slot
-			seenTx := make(map[common.Hash]bool)
-			for hash := range slotConstraints {
-				seenTx[hash] = true
-			}
-
 			for hash := range decodedConstraints {
-				if !seenTx[hash] {
-					// The constraint is new, we will add this to the slot constraints
-					slotConstraints[hash] = decodedConstraints[hash]
-				}
+				// Update the slot constraints
+				slotConstraints[hash] = decodedConstraints[hash]
 			}
 
-			// Update the slot constraints
+			// Update the slot constraints in the cache
 			b.constraintsCache.Put(constraint.Message.Slot, slotConstraints)
 		}
 	}
