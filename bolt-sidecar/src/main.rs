@@ -12,6 +12,10 @@ struct Opts {
     /// Port to listen on for incoming JSON-RPC requests.
     #[clap(short = 'p', long, default_value = "8000")]
     port: u16,
+    #[clap(short = 'u', long)]
+    mevboost_url: Option<u16>,
+    #[clap(short = 'u', long)]
+    beacon_client_url: Option<u16>,
     /// Private key to use for signing preconfirmation requests.
     #[clap(short = 'k', long)]
     private_key: Option<String>,
