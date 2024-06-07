@@ -88,7 +88,11 @@ fn signature_as_str<S: serde::Serializer>(
     sig: &Signature,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    serializer.serialize_str(&format!("0x{}", hex::encode(sig.as_bytes())))
+    let parity = sig.v();
+    // As bytes encodes the parity as 27/28, need to change that.
+    let mut bytes = sig.as_bytes();
+    bytes[bytes.len() - 1] = if parity.y_parity() { 1 } else { 0 };
+    serializer.serialize_str(&format!("0x{}", hex::encode(bytes)))
 }
 
 impl InclusionRequest {
@@ -110,9 +114,7 @@ impl From<InclusionRequest> for CommitmentRequest {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
-    use super::{CommitmentRequest, InclusionRequest, Signature};
+    use super::{CommitmentRequest, InclusionRequest};
 
     #[test]
     fn test_deserialize_inclusion_request() {
@@ -125,13 +127,12 @@ mod tests {
         let req: InclusionRequest = serde_json::from_str(json_req).unwrap();
         assert_eq!(req.slot, 1);
 
-        let sig = Signature::from_str("0xb8623aae262785bd31d0cc6e368a9b9ab5361002edd58ece424ef5dde0544b32472d954da3f34ca9c2c2201393f9b83cdc959bd416c0af96fe3e0962a08cb92101").unwrap();
-
         let deser = serde_json::to_string(&req).unwrap();
 
-        println!("Signature: {sig:?}");
-        println!("Deserialized: {deser}");
-        assert_eq!(deser, json_req);
+        assert_eq!(
+            deser.parse::<serde_json::Value>().unwrap(),
+            json_req.parse::<serde_json::Value>().unwrap()
+        );
     }
 
     #[test]
