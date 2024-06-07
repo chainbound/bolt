@@ -81,7 +81,7 @@ where
     T::Err: std::fmt::Display,
 {
     let s = String::deserialize(deserializer)?;
-    T::from_str(&s).map_err(de::Error::custom)
+    T::from_str(s.trim_start_matches("0x")).map_err(de::Error::custom)
 }
 
 fn signature_as_str<S: serde::Serializer>(
