@@ -1753,7 +1753,7 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 	receivedAt := time.Now().UTC()
 
 	log := api.log.WithFields(logrus.Fields{
-		"method":                "getPayload",
+		"method":                "handleSubmitConstraints",
 		"ua":                    ua,
 		"mevBoostV":             common.GetMevBoostVersionFromUserAgent(ua),
 		"contentLength":         req.ContentLength,
@@ -1776,7 +1776,7 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		if strings.Contains(err.Error(), "i/o timeout") {
-			log.WithError(err).Error("getPayload request failed to decode (i/o timeout)")
+			log.WithError(err).Error("handleSubmitConstraints request failed to decode (i/o timeout)")
 			api.RespondError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -2642,9 +2642,6 @@ func (api *RelayAPI) handleSubmitNewBlockWithProofs(w http.ResponseWriter, req *
 		}
 	}
 
-	num, _ := payload.Inner.BlockNumber()
-	bhash, _ := payload.Inner.BlockHash()
-	api.boltLog.Infof("Got decoded payload from builder: \nPayload: %v\nBlock hash: %s\nBlockNum: %d\n", payload.Inner.String(), bhash, num)
 	api.boltLog.Infof("Headslot: %d\n", headSlot)
 
 	nextTime = time.Now().UTC()

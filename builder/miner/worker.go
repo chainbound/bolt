@@ -644,7 +644,6 @@ func (w *worker) mainLoop() {
 				blobTxs := newTransactionsByPriceAndNonce(w.current.signer, nil, nil, nil, w.current.header.BaseFee)  // Empty bag, don't bother optimising
 
 				tcount := w.current.tcount
-				log.Info("About to commit transactions but with nil constraints")
 				w.commitTransactions(w.current, plainTxs, blobTxs, nil, nil)
 
 				// Only update the snapshot if any new transactions were added
@@ -1025,7 +1024,6 @@ func (w *worker) commitBundle(env *environment, txs []*types.Transaction, interr
 //   - there are no nonce-conflicting transactions between `plainTxs`, `blobTxs` and the constraints
 //   - all transaction are correctly signed
 func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, constraints types.HashToConstraintDecoded, interrupt *atomic.Int32) error {
-	log.Info(fmt.Sprintf("Committing transactions with %d constraints:", len(constraints)))
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)

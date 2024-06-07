@@ -86,7 +86,7 @@ async fn main() -> Result<()> {
 }
 
 fn generate_random_tx(nonce: Option<u16>) -> TypedTransaction {
-    let mut tx = TransactionRequest::new()
+    let mut tx = Eip1559TransactionRequest::new()
         .to("0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD")
         .value("0x69420")
         .chain_id(3151908)

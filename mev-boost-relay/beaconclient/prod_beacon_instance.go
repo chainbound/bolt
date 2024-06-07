@@ -258,36 +258,39 @@ func (c *ProdBeaconInstance) PublishBlock(block *common.VersionedSignedProposal,
 	headers := http.Header{}
 	headers.Add("Eth-Consensus-Version", strings.ToLower(block.Version.String())) // optional in v1, required in v2
 
-	slot, err := block.Slot()
-	if err != nil {
-		slot = 0
-	}
+	// FIXME: using SSZ fails for now, let's skip this and just use fetchBeacon directly
+	// slot, err := block.Slot()
+	// if err != nil {
+	// 	slot = 0
+	// }
+	//
+	// var payloadBytes []byte
+	// useSSZ := c.ffUseSSZEncodingPublishBlock
+	// log := c.log
+	// encodeStartTime := time.Now().UTC()
+	// if useSSZ {
+	// 	log = log.WithField("publishContentType", "ssz")
+	// 	payloadBytes, err = block.MarshalSSZ()
+	// } else {
+	// 	log = log.WithField("publishContentType", "json")
+	// 	payloadBytes, err = json.Marshal(block)
+	// }
+	// if err != nil {
+	// 	return 0, fmt.Errorf("could not marshal request: %w", err)
+	// }
+	// publishingStartTime := time.Now().UTC()
+	// encodeDurationMs := publishingStartTime.Sub(encodeStartTime).Milliseconds()
+	// code, err = fetchBeacon(http.MethodPost, uri, payloadBytes, nil, nil, headers, useSSZ)
+	// publishDurationMs := time.Now().UTC().Sub(publishingStartTime).Milliseconds()
+	// log.WithFields(logrus.Fields{
+	// 	"slot":              slot,
+	// 	"encodeDurationMs":  encodeDurationMs,
+	// 	"publishDurationMs": publishDurationMs,
+	// 	"payloadBytes":      len(payloadBytes),
+	// }).Info("finished publish block request")
+	// return code, err
 
-	var payloadBytes []byte
-	useSSZ := c.ffUseSSZEncodingPublishBlock
-	log := c.log
-	encodeStartTime := time.Now().UTC()
-	if useSSZ {
-		log = log.WithField("publishContentType", "ssz")
-		payloadBytes, err = block.MarshalSSZ()
-	} else {
-		log = log.WithField("publishContentType", "json")
-		payloadBytes, err = json.Marshal(block)
-	}
-	if err != nil {
-		return 0, fmt.Errorf("could not marshal request: %w", err)
-	}
-	publishingStartTime := time.Now().UTC()
-	encodeDurationMs := publishingStartTime.Sub(encodeStartTime).Milliseconds()
-	code, err = fetchBeacon(http.MethodPost, uri, payloadBytes, nil, nil, headers, useSSZ)
-	publishDurationMs := time.Now().UTC().Sub(publishingStartTime).Milliseconds()
-	log.WithFields(logrus.Fields{
-		"slot":              slot,
-		"encodeDurationMs":  encodeDurationMs,
-		"publishDurationMs": publishDurationMs,
-		"payloadBytes":      len(payloadBytes),
-	}).Info("finished publish block request")
-	return code, err
+	return fetchBeacon(http.MethodPost, uri, block, nil, nil, headers, false)
 }
 
 type GetGenesisResponse struct {
