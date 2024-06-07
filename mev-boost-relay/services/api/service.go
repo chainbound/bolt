@@ -26,6 +26,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
 	"github.com/chainbound/shardmap"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/utils"
@@ -41,7 +42,6 @@ import (
 	"github.com/thedevbirb/flashbots-go-utils/cli"
 	"github.com/thedevbirb/flashbots-go-utils/httplogger"
 	uberatomic "go.uber.org/atomic"
-	"golang.org/x/crypto/sha3"
 	"golang.org/x/exp/slices"
 )
 
@@ -65,9 +65,10 @@ var (
 	// Proposer API (builder-specs)
 	pathStatus            = "/eth/v1/builder/status"
 	pathRegisterValidator = "/eth/v1/builder/validators"
-	// BOLT: this endpoint will return also ship preconfirmation proofs
-	pathGetHeader  = "/eth/v1/builder/header/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
-	pathGetPayload = "/eth/v1/builder/blinded_blocks"
+	pathGetHeader         = "/eth/v1/builder/header/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
+	// BOLT: this endpoint will also return constraint proofs if there are any
+	pathGetHeaderWithProofs = "/eth/v1/builder/header_with_proofs/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
+	pathGetPayload          = "/eth/v1/builder/blinded_blocks"
 	// BOLT: allow relay to receive constraints from the proposer
 	pathSubmitContraints = "/eth/v1/builder/constraints"
 
@@ -355,6 +356,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 		r.HandleFunc(pathStatus, api.handleStatus).Methods(http.MethodGet)
 		r.HandleFunc(pathRegisterValidator, api.handleRegisterValidator).Methods(http.MethodPost)
 		r.HandleFunc(pathGetHeader, api.handleGetHeader).Methods(http.MethodGet)
+		r.HandleFunc(pathGetHeaderWithProofs, api.handleGetHeaderWithProofs).Methods(http.MethodGet)
 		r.HandleFunc(pathGetPayload, api.handleGetPayload).Methods(http.MethodPost)
 		r.HandleFunc(pathSubmitContraints, api.handleSubmitConstraints).Methods(http.MethodPost)
 	}
@@ -1218,6 +1220,112 @@ func (api *RelayAPI) handleGetHeader(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	if bid == nil || bid.IsEmpty() {
+		api.boltLog.Info("Bid is nill or is empty")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	value, err := bid.Value()
+	if err != nil {
+		log.WithError(err).Info("could not get bid value")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+	}
+	blockHash, err := bid.BlockHash()
+	if err != nil {
+		log.WithError(err).Info("could not get bid block hash")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+	}
+
+	// Error on bid without value
+	if value.Cmp(uint256.NewInt(0)) == 0 {
+		api.boltLog.Info("Bid has 0 value")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	log.WithFields(logrus.Fields{
+		"value":     value.String(),
+		"blockHash": blockHash.String(),
+	}).Info("bid delivered")
+
+	api.RespondOK(w, bid)
+}
+
+func (api *RelayAPI) handleGetHeaderWithProofs(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	slotStr := vars["slot"]
+	parentHashHex := vars["parent_hash"]
+	proposerPubkeyHex := vars["pubkey"]
+	ua := req.UserAgent()
+	headSlot := api.headSlot.Load()
+
+	slot, err := strconv.ParseUint(slotStr, 10, 64)
+	if err != nil {
+		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidSlot.Error())
+		return
+	}
+
+	requestTime := time.Now().UTC()
+	slotStartTimestamp := api.genesisInfo.Data.GenesisTime + (slot * common.SecondsPerSlot)
+	msIntoSlot := requestTime.UnixMilli() - int64((slotStartTimestamp * 1000))
+
+	log := api.log.WithFields(logrus.Fields{
+		"method":           "getHeader",
+		"headSlot":         headSlot,
+		"slot":             slotStr,
+		"parentHash":       parentHashHex,
+		"pubkey":           proposerPubkeyHex,
+		"ua":               ua,
+		"mevBoostV":        common.GetMevBoostVersionFromUserAgent(ua),
+		"requestTimestamp": requestTime.Unix(),
+		"slotStartSec":     slotStartTimestamp,
+		"msIntoSlot":       msIntoSlot,
+	})
+
+	if len(proposerPubkeyHex) != 98 {
+		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidPubkey.Error())
+		return
+	}
+
+	if len(parentHashHex) != 66 {
+		api.RespondError(w, http.StatusBadRequest, common.ErrInvalidHash.Error())
+		return
+	}
+
+	if slot < headSlot {
+		api.RespondError(w, http.StatusBadRequest, "slot is too old")
+		return
+	}
+
+	api.boltLog.Info("getHeader request received")
+
+	if slices.Contains(apiNoHeaderUserAgents, ua) {
+		log.Info("rejecting getHeader by user agent")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	if api.ffForceGetHeader204 {
+		log.Info("forced getHeader 204 response")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	// Only allow requests for the current slot until a certain cutoff time
+	if getHeaderRequestCutoffMs > 0 && msIntoSlot > 0 && msIntoSlot > int64(getHeaderRequestCutoffMs) {
+		log.Info("getHeader sent too late")
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	bid, err := api.redis.GetBestBid(slot, parentHashHex, proposerPubkeyHex)
+	if err != nil {
+		log.WithError(err).Error("could not get bid")
+		api.RespondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
 	bidBlockHash, err := bid.BlockHash()
 	if err != nil {
 		api.boltLog.WithError(err).Error("could not get bid block hash")
@@ -1985,17 +2093,30 @@ func (api *RelayAPI) updateRedisBid(
 		constraints := make(map[phase0.Hash32]*Constraint)
 		for _, signedConstraints := range *slotConstraints {
 			for _, constraint := range signedConstraints.Message.Constraints {
-				hasher := sha3.New256()
-				hasher.Write(constraint.Tx)
-				hash := phase0.Hash32(hasher.Sum(nil))
-				constraints[hash] = constraint
+				// TODO: just compute the hash instead of decoding the entire tx just for this.
+				decoded := new(types.Transaction)
+				if err := decoded.UnmarshalBinary(constraint.Tx); err != nil {
+					api.log.WithError(err).Error("could not decode transaction")
+					api.RespondError(opts.w, http.StatusBadRequest, "could not decode transaction")
+					return nil, nil, false
+				}
+				api.log.Infof("Decoded tx hash %s", decoded.Hash().String())
+				constraints[phase0.Hash32(decoded.Hash().Bytes())] = constraint
 			}
+		}
+
+		if len(constraints) > len(proofs) {
+			api.log.Warnf("Constraints and proofs length mismatch: %d > %d", len(constraints), len(proofs))
+			api.RespondError(opts.w, http.StatusBadRequest, "constraints and proofs length mismatch")
+			return nil, nil, false
 		}
 
 		err = verifyConstraintProofs(api.log, transactionsRoot, proofs, constraints)
 		if err != nil {
 			api.RespondError(opts.w, http.StatusBadRequest, err.Error())
 			return nil, nil, false
+		} else {
+			api.log.Infof("Constraints proofs verified for slot %d, proofs = %s", api.headSlot.Load(), proofs)
 		}
 	}
 
@@ -2513,7 +2634,7 @@ func (api *RelayAPI) handleSubmitNewBlockWithProofs(w http.ResponseWriter, req *
 		event := strings.NewReader(fmt.Sprintf("{ \"message\": \"%s\"}", message))
 		eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
 		if err != nil {
-			log.Error("Failed to log preconfirms event: ", err)
+			log.Errorf("Failed to log preconfirms event: %s", err)
 		}
 		if eventRes != nil {
 			defer eventRes.Body.Close()

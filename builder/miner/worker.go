@@ -644,6 +644,7 @@ func (w *worker) mainLoop() {
 				blobTxs := newTransactionsByPriceAndNonce(w.current.signer, nil, nil, nil, w.current.header.BaseFee)  // Empty bag, don't bother optimising
 
 				tcount := w.current.tcount
+				log.Info("About to commit transactions but with nil constraints")
 				w.commitTransactions(w.current, plainTxs, blobTxs, nil, nil)
 
 				// Only update the snapshot if any new transactions were added
@@ -1024,6 +1025,7 @@ func (w *worker) commitBundle(env *environment, txs []*types.Transaction, interr
 //   - there are no nonce-conflicting transactions between `plainTxs`, `blobTxs` and the constraints
 //   - all transaction are correctly signed
 func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transactionsByPriceAndNonce, constraints types.HashToConstraintDecoded, interrupt *atomic.Int32) error {
+	log.Info(fmt.Sprintf("Committing transactions with %d constraints:", len(constraints)))
 	gasLimit := env.header.GasLimit
 	if env.gasPool == nil {
 		env.gasPool = new(core.GasPool).AddGas(gasLimit)
@@ -1210,6 +1212,7 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 				// Update the amount of gas left for the constraints
 				constraintsTotalGasLeft -= candidate.tx.Gas()
 				constraintsTotalBlobGasLeft -= candidate.tx.BlobGas()
+				log.Info(fmt.Sprintf("Executed constraint %s at index %d", candidate.tx.Hash().String(), currentTxIndex))
 			} else {
 				txs.Shift()
 			}
@@ -1385,6 +1388,7 @@ func (w *worker) fillTransactionsSelectAlgo(interrupt *atomic.Int32, env *enviro
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
 func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, constraints types.HashToConstraintDecoded) ([]types.SimulatedBundle, []types.SimulatedBundle, map[common.Hash]struct{}, error) {
+	log.Info(fmt.Sprintf("Filling transactions with %d constraints:", len(constraints)))
 	w.mu.RLock()
 	tip := w.tip
 	w.mu.RUnlock()
@@ -1417,6 +1421,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 
 	for _, constraint := range constraints {
 		from, err := types.Sender(env.signer, constraint.Tx)
+		log.Info(fmt.Sprintf("Inside fillTransactions, constraint %s from %s", constraint.Tx.Hash().String(), from.String()))
 		if err != nil {
 			// NOTE: is this the right behaviour? If this happens the builder is not able to
 			// produce a valid bid
@@ -1467,33 +1472,34 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 
 	var blockBundles []types.SimulatedBundle
 	var allBundles []types.SimulatedBundle
-	if w.flashbots.isFlashbots {
-		bundles, ccBundleCh := w.eth.TxPool().MevBundles(env.header.Number, env.header.Time)
-		bundles = append(bundles, <-ccBundleCh...)
-
-		var (
-			bundleTxs       []*types.Transaction
-			resultingBundle simulatedBundle
-			mergedBundles   []types.SimulatedBundle
-			numBundles      int
-			err             error
-		)
-		// Sets allBundles in outer scope
-		bundleTxs, resultingBundle, mergedBundles, numBundles, allBundles, err = w.generateFlashbotsBundle(env, bundles, pending)
-		if err != nil {
-			log.Error("Failed to generate flashbots bundle", "err", err)
-			return nil, nil, nil, err
-		}
-		log.Info("Flashbots bundle", "ethToCoinbase", ethIntToFloat(resultingBundle.TotalEth), "gasUsed", resultingBundle.TotalGasUsed, "bundleScore", resultingBundle.MevGasPrice, "bundleLength", len(bundleTxs), "numBundles", numBundles, "worker", w.flashbots.maxMergedBundles)
-		if len(bundleTxs) == 0 {
-			return nil, nil, nil, errors.New("no bundles to apply")
-		}
-		if err := w.commitBundle(env, bundleTxs, interrupt); err != nil {
-			return nil, nil, nil, err
-		}
-		blockBundles = mergedBundles
-		env.profit.Add(env.profit, resultingBundle.EthSentToCoinbase)
-	}
+	// if w.flashbots.isFlashbots {
+	// 	bundles, ccBundleCh := w.eth.TxPool().MevBundles(env.header.Number, env.header.Time)
+	// 	bundles = append(bundles, <-ccBundleCh...)
+	//
+	// 	var (
+	// 		bundleTxs       []*types.Transaction
+	// 		resultingBundle simulatedBundle
+	// 		mergedBundles   []types.SimulatedBundle
+	// 		numBundles      int
+	// 		err             error
+	// 	)
+	// 	// Sets allBundles in outer scope
+	// 	bundleTxs, resultingBundle, mergedBundles, numBundles, allBundles, err = w.generateFlashbotsBundle(env, bundles, pending)
+	// 	if err != nil {
+	// 		log.Error("Failed to generate flashbots bundle", "err", err)
+	// 		return nil, nil, nil, err
+	// 	}
+	// 	log.Info("Flashbots bundle", "ethToCoinbase", ethIntToFloat(resultingBundle.TotalEth), "gasUsed", resultingBundle.TotalGasUsed, "bundleScore", resultingBundle.MevGasPrice, "bundleLength", len(bundleTxs), "numBundles", numBundles, "worker", w.flashbots.maxMergedBundles)
+	// 	if len(bundleTxs) == 0 {
+	// 		log.Info("No bundles to apply")
+	// 		return nil, nil, nil, errors.New("no bundles to apply")
+	// 	}
+	// 	if err := w.commitBundle(env, bundleTxs, interrupt); err != nil {
+	// 		return nil, nil, nil, err
+	// 	}
+	// 	blockBundles = mergedBundles
+	// 	env.profit.Add(env.profit, resultingBundle.EthSentToCoinbase)
+	// }
 
 	// Fill the block with all available pending transactions.
 	if len(localPlainTxs) > 0 || len(localBlobTxs) > 0 {

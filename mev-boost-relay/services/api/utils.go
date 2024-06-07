@@ -212,3 +212,12 @@ func JSONStringify[T any](obj T) string {
 	}
 	return string(out)
 }
+
+func Find[T any](slice []*T, predicate func(arg *T) bool) *T {
+	for _, item := range slice {
+		if predicate(item) {
+			return item
+		}
+	}
+	return nil
+}

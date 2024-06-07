@@ -192,7 +192,10 @@ func (m *BoostService) getRouter() http.Handler {
 	r.HandleFunc(pathStatus, m.handleStatus).Methods(http.MethodGet)
 	r.HandleFunc(pathRegisterValidator, m.handleRegisterValidator).Methods(http.MethodPost)
 	r.HandleFunc(pathSubmitConstraint, m.handleSubmitConstraint).Methods(http.MethodPost)
-	r.HandleFunc(pathGetHeader, m.handleGetHeader).Methods(http.MethodGet)
+	// TODO: manage the switch between the endpoint with and without proofs
+	// with the bolt sidecar proxy instead of using the same response here.
+	// TODO: revert this to m.handleGetHeader
+	r.HandleFunc(pathGetHeader, m.handleGetHeaderWithProofs).Methods(http.MethodGet)
 	r.HandleFunc(pathGetHeaderWithProofs, m.handleGetHeaderWithProofs).Methods(http.MethodGet)
 	r.HandleFunc(pathGetPayload, m.handleGetPayload).Methods(http.MethodPost)
 
