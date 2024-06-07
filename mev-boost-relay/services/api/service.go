@@ -101,7 +101,7 @@ var (
 	apiReadTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_READ_MS", 1500)
 	apiReadHeaderTimeoutMs = cli.GetEnvInt("API_TIMEOUT_READHEADER_MS", 600)
 	apiIdleTimeoutMs       = cli.GetEnvInt("API_TIMEOUT_IDLE_MS", 3_000)
-	apiWriteTimeoutMs      = cli.GetEnvInt("API_TIMEOUT_WRITE_MS", 10_000)
+	apiWriteTimeoutMs      = cli.GetEnvInt("API_TIMEOUT_WRITE_MS", 0)
 	apiMaxHeaderBytes      = cli.GetEnvInt("API_MAX_HEADER_BYTES", 60_000)
 
 	// api shutdown: wait time (to allow removal from load balancer before stopping http server)
@@ -2880,18 +2880,13 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 	// Monitor client disconnect
 	notify := req.Context().Done()
 
-	// Send an initial event as acknowledgement
-	fmt.Fprintf(gzipWriter, "data: %s\n\n", "ACK")
-	gzipWriter.Flush()
-	flusher.Flush()
-
 	for {
 		select {
 		case <-notify:
 			// Client disconnected
 			return
 		case constraint := <-constraintsCh:
-			constraintJSON, err := json.Marshal(constraint)
+			constraintJSON, err := json.Marshal([]*SignedConstraints{constraint})
 			api.log.Infof("New constraint received: %s", constraint)
 
 			if err != nil {
