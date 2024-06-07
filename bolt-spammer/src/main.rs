@@ -3,6 +3,7 @@ use std::{str::FromStr, sync::Arc};
 use clap::Parser;
 use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction, utils::hex};
 use eyre::{Context, OptionExt, Result};
+use rand::{thread_rng, Rng};
 use serde_json::Value;
 use tracing::info;
 
@@ -33,7 +34,7 @@ async fn main() -> Result<()> {
     let transaction_signer = SignerMiddleware::new(eth_provider.clone(), wallet);
 
     let mut tx = generate_random_tx(opts.nonce);
-    tx.set_gas_price(1_000_000_000_000u128); // 1000 gwei
+    tx.set_gas_price(69_420_000_000_000u128); // 69_420 gwei
     transaction_signer.fill_transaction(&mut tx, None).await?;
 
     let slot_number = match opts.slot.parse::<u64>() {
@@ -85,10 +86,11 @@ async fn main() -> Result<()> {
 }
 
 fn generate_random_tx(nonce: Option<u16>) -> TypedTransaction {
-    let mut tx = Eip1559TransactionRequest::new()
+    let mut tx = TransactionRequest::new()
         .to("0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD")
         .value("0x69420")
-        .chain_id(3151908);
+        .chain_id(3151908)
+        .data(vec![thread_rng().gen::<u8>(); 32]);
 
     tx = if let Some(nonce) = nonce {
         tx.nonce(nonce)

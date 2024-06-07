@@ -51,6 +51,11 @@ sidecar-logs:
     @id=$(docker ps | grep sidecar | awk -F' ' '{print $1}') && \
     docker logs -f $id
 
+# show the logs for the bolt devnet for beacon node
+beacon-logs:
+    @id=$(docker ps | grep 'cl-1-lighthouse-geth' | awk -F' ' '{print $1}') && \
+    docker logs -f $id
+
 # show the dora explorer in the browser. NOTE: works only for Linux and MacOS at the moment
 dora:
   @url=$(just inspect | grep 'dora\s*http' | awk -F'-> ' '{print $2}' | awk '{print $1}') && \

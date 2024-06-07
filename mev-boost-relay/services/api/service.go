@@ -1271,7 +1271,7 @@ func (api *RelayAPI) handleGetHeaderWithProofs(w http.ResponseWriter, req *http.
 	msIntoSlot := requestTime.UnixMilli() - int64((slotStartTimestamp * 1000))
 
 	log := api.log.WithFields(logrus.Fields{
-		"method":           "getHeader",
+		"method":           "getHeaderWithProofs",
 		"headSlot":         headSlot,
 		"slot":             slotStr,
 		"parentHash":       parentHashHex,
@@ -1708,6 +1708,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 	code, err := api.beaconClient.PublishBlock(signedBeaconBlock) // errors are logged inside
 	if err != nil || (code != http.StatusOK && code != http.StatusAccepted) {
+		log.Infof("failed to publish block: %s", signedBeaconBlock)
 		log.WithError(err).WithField("code", code).Error("failed to publish block")
 		api.RespondError(w, http.StatusBadRequest, "failed to publish block")
 		return

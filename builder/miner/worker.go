@@ -1163,11 +1163,11 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 				// since by assumption it is not nonce-conflicting
 				tx := lazyTx.Resolve()
 				if tx == nil {
-					log.Trace("Ignoring evicted transaction", "hash", lazyTx.Hash)
+					log.Trace("Ignoring evicted transaction", "hash", candidate.tx.Hash())
 					txs.Pop()
 					continue
 				}
-				candidate = candidateTx{tx: lazyTx.Resolve(), isConstraint: false}
+				candidate = candidateTx{tx: tx, isConstraint: false}
 			} else {
 				// No more pool tx left, we can add the unindexed ones if available
 				if len(constraintsWithoutIndex) == 0 {
@@ -1188,7 +1188,7 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
 		if candidate.tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number) {
-			log.Trace("Ignoring replay protected transaction", "hash", lazyTx.Hash, "eip155", w.chainConfig.EIP155Block)
+			log.Trace("Ignoring replay protected transaction", "hash", candidate.tx.Hash(), "eip155", w.chainConfig.EIP155Block)
 			txs.Pop()
 			continue
 		}
@@ -1199,7 +1199,7 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
-			log.Trace("Skipping transaction with low nonce", "hash", lazyTx.Hash, "sender", from, "nonce", candidate.tx.Nonce())
+			log.Trace("Skipping transaction with low nonce", "hash", candidate.tx.Hash(), "sender", from, "nonce", candidate.tx.Nonce())
 			if !candidate.isConstraint {
 				txs.Shift()
 			}
@@ -1212,7 +1212,7 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 				// Update the amount of gas left for the constraints
 				constraintsTotalGasLeft -= candidate.tx.Gas()
 				constraintsTotalBlobGasLeft -= candidate.tx.BlobGas()
-				log.Info(fmt.Sprintf("Executed constraint %s at index %d", candidate.tx.Hash().String(), currentTxIndex))
+				log.Info(fmt.Sprintf("Executed constraint %s at index %d with gas*price %d", candidate.tx.Hash().String(), currentTxIndex, candidate.tx.Gas()*candidate.tx.GasPrice().Uint64()))
 			} else {
 				txs.Shift()
 			}
@@ -1220,7 +1220,7 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.
-			log.Debug("Transaction failed, account skipped", "hash", lazyTx.Hash, "err", err)
+			log.Debug("Transaction failed, account skipped", "hash", candidate.tx.Hash(), "err", err)
 			if !candidate.isConstraint {
 				txs.Pop()
 			}
@@ -1368,19 +1368,26 @@ func (w *worker) fillTransactionsSelectAlgo(interrupt *atomic.Int32, env *enviro
 		err             error
 	)
 
-	switch w.flashbots.algoType {
+	// switch w.flashbots.algoType {
+	//
+	// case ALGO_GREEDY, ALGO_GREEDY_BUCKETS, ALGO_GREEDY_MULTISNAP, ALGO_GREEDY_BUCKETS_MULTISNAP:
+	//
+	// 	blockBundles, allBundles, usedSbundles, mempoolTxHashes, err = w.fillTransactionsAlgoWorker(interrupt, env)
+	// 	blockBundles, allBundles, mempoolTxHashes, err = w.fillTransactions(interrupt, env, constraints)
+	// case ALGO_MEV_GETH:
+	// 	blockBundles, allBundles, mempoolTxHashes, err = w.fillTransactions(interrupt, env, constraints)
+	// default:
+	// 	blockBundles, allBundles, mempoolTxHashes, err = w.fillTransactions(interrupt, env, constraints)
+	// }
 
-	case ALGO_GREEDY, ALGO_GREEDY_BUCKETS, ALGO_GREEDY_MULTISNAP, ALGO_GREEDY_BUCKETS_MULTISNAP:
-		// FIXME: (BOLT) the greedy algorithms do not support the constraints interface at the moment.
-		// As such for this PoC we will be always using the MEV GETH algorithm regardless of the worker configuration.
-
-		// 	blockBundles, allBundles, usedSbundles, mempoolTxHashes, err = w.fillTransactionsAlgoWorker(interrupt, env)
+	// 	// FIXME: (BOLT) the greedy algorithms do not support the constraints interface at the moment.
+	// 	// As such for this PoC we will be always using the MEV GETH algorithm regardless of the worker configuration.
+	if len(constraints) > 0 {
 		blockBundles, allBundles, mempoolTxHashes, err = w.fillTransactions(interrupt, env, constraints)
-	case ALGO_MEV_GETH:
-		blockBundles, allBundles, mempoolTxHashes, err = w.fillTransactions(interrupt, env, constraints)
-	default:
-		blockBundles, allBundles, mempoolTxHashes, err = w.fillTransactions(interrupt, env, constraints)
+	} else {
+		blockBundles, allBundles, usedSbundles, mempoolTxHashes, err = w.fillTransactionsAlgoWorker(interrupt, env)
 	}
+
 	return blockBundles, allBundles, usedSbundles, mempoolTxHashes, err
 }
 
