@@ -632,7 +632,7 @@ func TestSubscribeProposerConstraints(t *testing.T) {
 		require.Equal(t, true, ok)
 
 		expectedConstraint := generateMockConstraintsForSlot(slot)[0]
-		decodedConstraint, err := DecodeConstraint(expectedConstraint)
+		decodedConstraint, err := DecodeConstraints(expectedConstraint)
 		require.NoError(t, err)
 
 		// Compare the keys of the cachedConstraints and decodedConstraint maps
