@@ -399,11 +399,6 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 	return nil
 }
 
-func (b *Builder) GetConstraintsForSlot(slot uint64) types.HashToConstraintDecoded {
-	constraintsDecoded, _ := b.constraintsCache.Get(slot)
-	return constraintsDecoded
-}
-
 func (b *Builder) Stop() error {
 	close(b.stop)
 	return nil
@@ -715,7 +710,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 	log.Debug("runBuildingJob", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp))
 
 	// fetch constraints here
-	constraints := b.GetConstraintsForSlot(attrs.Slot)
+	constraints, _ := b.constraintsCache.Get(attrs.Slot)
 
 	submitBestBlock := func() {
 		queueMu.Lock()
