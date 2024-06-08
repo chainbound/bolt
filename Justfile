@@ -33,28 +33,48 @@ inspect:
 
 # show the logs for the bolt devnet relay
 relay-logs:
-    @id=$(docker ps | grep mev-relay-api | awk -F' ' '{print $1}') && \
+    @id=$(docker ps -n 100 | grep mev-relay-api | awk -F' ' '{print $1}') && \
     docker logs -f $id
 
 # show the logs for the bolt devnet builder
 builder-logs:
-    @id=$(docker ps | grep bolt-builder | awk -F' ' '{print $1}') && \
+    @id=$(docker ps -n 100 | grep bolt-builder | awk -F' ' '{print $1}') && \
     docker logs -f $id
 
 # show the logs for the bolt devnet mev-boost sidecar
 boost-logs:
-    @id=$(docker ps | grep bolt-mev-boost | awk -F' ' '{print $1}') && \
+    @id=$(docker ps -n 100 | grep bolt-mev-boost | awk -F' ' '{print $1}') && \
     docker logs -f $id
 
 # show the logs for the bolt devnet bolt-sidecar
 sidecar-logs:
-    @id=$(docker ps | grep sidecar | awk -F' ' '{print $1}') && \
+    @id=$(docker ps -n 100 | grep sidecar | awk -F' ' '{print $1}') && \
     docker logs -f $id
 
 # show the logs for the bolt devnet for beacon node
-beacon-logs:
-    @id=$(docker ps | grep 'cl-1-lighthouse-geth' | awk -F' ' '{print $1}') && \
-    docker logs -f $id
+beacon-dump:
+    @id=$(docker ps -n 100 | grep 'cl-1-lighthouse-geth' | awk -F' ' '{print $1}') && \
+    docker logs $id 2>&1 | tee -a beacon_dump.log
+
+# show the logs for the bolt devnet relay
+relay-dump:
+    @id=$(docker ps -n 100 | grep mev-relay-api | awk -F' ' '{print $1}') && \
+    docker logs $id 2>&1 | tee -a relay_dump.log
+
+# show the logs for the bolt devnet builder
+builder-dump:
+    @id=$(docker ps -n 100 | grep bolt-builder | awk -F' ' '{print $1}') && \
+    docker logs $id 2>&1 | tee -a builder_dump.log
+
+# show the logs for the bolt devnet mev-boost sidecar
+boost-dump:
+    @id=$(docker ps -n 100 | grep bolt-mev-boost | awk -F' ' '{print $1}') && \
+    docker logs $id 2>&1 | tee -a boost_dump.log
+
+# show the logs for the bolt devnet bolt-sidecar
+sidecar-dump:
+    @id=$(docker ps -n 100 | grep sidecar | awk -F' ' '{print $1}') && \
+    docker logs $id 2>&1 | tee -a sidecar_dump.log
 
 # show the dora explorer in the browser. NOTE: works only for Linux and MacOS at the moment
 dora:
