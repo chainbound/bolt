@@ -9,9 +9,24 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 var errHTTPErrorResponse = errors.New("HTTP error response")
+
+func DecodeConstraints(constraints *common.SignedConstraints) (types.HashToConstraintDecoded, error) {
+	decodedConstraints := make(types.HashToConstraintDecoded)
+	for _, tx := range constraints.Message.Constraints {
+		decoded := new(types.Transaction)
+		if err := decoded.UnmarshalBinary(tx.Tx); err != nil {
+			return nil, err
+		}
+		decodedConstraints[decoded.Hash()] = &types.ConstraintDecoded{Index: tx.Index, Tx: decoded}
+	}
+	return decodedConstraints, nil
+}
 
 // SendSSZRequest is a request to send SSZ data to a remote relay.
 func SendSSZRequest(ctx context.Context, client http.Client, method, url string, payload []byte, useGzip bool) (code int, err error) {
