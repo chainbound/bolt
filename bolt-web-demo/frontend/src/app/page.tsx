@@ -1,6 +1,7 @@
 "use client";
 
 import io from "socket.io-client";
+import Image from "next/image";
 import { useState, useEffect, useCallback } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
@@ -75,7 +76,7 @@ export default function Home() {
               timestamp: new Date().toISOString(),
             };
             setEvents((prev) => [event, ...prev]);
-          }, 1000),
+          }, 1000)
         );
       }
 
@@ -106,8 +107,9 @@ export default function Home() {
       setEvents([]);
       setPreconfSent(true);
       try {
-        const { signedTx, txHash } =
-          await createAndSignTransaction(providerUrl);
+        const { signedTx, txHash } = await createAndSignTransaction(
+          providerUrl
+        );
 
         // 1. POST preconfirmation.
         // The preconfirmation is considered valid as soon as the server responds with a 200 status code.
@@ -126,13 +128,13 @@ export default function Home() {
         console.error(e);
       }
     },
-    [providerUrl],
+    [providerUrl]
   );
 
   return (
     <main className="flex min-h-screen flex-col items-center p-24">
       <div className="w-full max-w-5xl items-center justify-between lg:flex">
-        <h1 className="font-mono text-2xl font-bold">BOLT</h1>
+        <Image src="/bolt-logo.png" alt="BOLT" width={100} height={100} />
 
         <p>Your friendly preconfirmation companion.</p>
       </div>
