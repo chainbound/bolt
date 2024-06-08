@@ -1,9 +1,9 @@
 package server
 
 import (
-	"github.com/chainbound/shardmap"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
 type BatchedSignedConstraints = []*SignedConstraints
@@ -27,21 +27,22 @@ type Constraint struct {
 // ConstraintCache is a cache for constraints.
 type ConstraintCache struct {
 	// map of slots to all constraints for that slot
-	constraints shardmap.FIFOMap[uint64, map[common.Hash]*Constraint]
+	constraints *lru.Cache[uint64, map[common.Hash]*Constraint]
 }
 
 // NewConstraintCache creates a new constraint cache.
 // cap is the maximum number of slots to store constraints for.
 func NewConstraintCache(cap int) *ConstraintCache {
+	constraints, _ := lru.New[uint64, map[common.Hash]*Constraint](cap)
 	return &ConstraintCache{
-		constraints: *shardmap.NewFIFOMap[uint64, map[common.Hash]*Constraint](int(cap), 1, shardmap.HashUint64),
+		constraints: constraints,
 	}
 }
 
 // AddInclusionConstraint adds an inclusion constraint to the cache at the given slot for the given transaction.
 func (c *ConstraintCache) AddInclusionConstraint(slot uint64, tx Transaction, index *uint64) error {
 	if _, exists := c.constraints.Get(slot); !exists {
-		c.constraints.Put(slot, make(map[common.Hash]*Constraint))
+		c.constraints.Add(slot, make(map[common.Hash]*Constraint))
 	}
 
 	// parse transaction to get its hash and store it in the cache
@@ -64,7 +65,7 @@ func (c *ConstraintCache) AddInclusionConstraint(slot uint64, tx Transaction, in
 // AddInclusionConstraints adds multiple inclusion constraints to the cache at the given slot
 func (c *ConstraintCache) AddInclusionConstraints(slot uint64, constraints []*Constraint) error {
 	if _, exists := c.constraints.Get(slot); !exists {
-		c.constraints.Put(slot, make(map[common.Hash]*Constraint))
+		c.constraints.Add(slot, make(map[common.Hash]*Constraint))
 	}
 
 	m, _ := c.constraints.Get(slot)
@@ -87,8 +88,8 @@ func (c *ConstraintCache) Get(slot uint64) (map[common.Hash]*Constraint, bool) {
 
 // FindTransactionByHash finds the constraint for the given transaction hash and returns it.
 func (c *ConstraintCache) FindTransactionByHash(txHash common.Hash) (*Constraint, bool) {
-	for kv := range c.constraints.Iter() {
-		if constraint, exists := kv.Value[txHash]; exists {
+	for _, hashToConstraint := range c.constraints.Values() {
+		if constraint, exists := hashToConstraint[txHash]; exists {
 			return constraint, true
 		}
 	}

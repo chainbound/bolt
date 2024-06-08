@@ -473,7 +473,8 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 		// BOLT: sanity check: verify that the block actually contains the preconfirmed transactions
 		for hash, constraint := range constraints {
 			if !slices.Contains(payloadTransactions, constraint.Tx) {
-				log.Error(fmt.Sprintf("[BOLT]: Preconfirmed transaction %s not found in block %s", hash, opts.Block.Hash()))
+				log.Error(fmt.Sprintf("[BOLT]: Preconfirmed transaction %s not found in block %s. Block can't be sent", hash, opts.Block.Hash()))
+				return nil
 			}
 		}
 
@@ -571,7 +572,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 		// NOTE: we can ignore preconfs for `processBuiltBlock`
 		go b.processBuiltBlock(opts.Block, opts.BlockValue, opts.OrdersClosedAt, opts.SealedAt, opts.CommitedBundles, opts.AllBundles, opts.UsedSbundles, &blockBidMsg)
 		if versionedBlockRequestWithPreconfsProofs != nil {
-			log.Info(fmt.Sprintf("[BOLT]: Sending block with proofs to relay %s", versionedBlockRequestWithPreconfsProofs.String()))
+			log.Info(fmt.Sprintf("[BOLT]: Sending block with %d proofs to relay %s", len(versionedBlockRequestWithPreconfsProofs.Proofs), versionedBlockRequestWithPreconfsProofs.String()))
 			err = b.relay.SubmitBlockWithProofs(versionedBlockRequestWithPreconfsProofs, opts.ValidatorData)
 		} else if len(constraints) == 0 {
 			// If versionedBlockRequestWithPreconfsProofs is nil and no constraints, then we don't have proofs to send

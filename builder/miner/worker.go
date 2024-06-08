@@ -1415,6 +1415,12 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 		}
 	}
 
+	// NOTE: as done with builder txs, we need to fill mempoolTxHashes with the constraints hashes
+	// in order to pass block validation
+	for hash := range constraints {
+		mempoolTxHashes[hash] = struct{}{}
+	}
+
 	if env.header.BaseFee != nil {
 		filter.BaseFee = uint256.MustFromBig(env.header.BaseFee)
 	}

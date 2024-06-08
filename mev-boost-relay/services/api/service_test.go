@@ -1320,7 +1320,7 @@ func TestUpdateRedis(t *testing.T) {
 				floorBidValue:        floorValue,
 				payload:              tc.payload,
 			}
-			updateResp, getPayloadResp, ok := backend.relay.updateRedisBid(rOpts, nil)
+			updateResp, getPayloadResp, ok := backend.relay.updateRedisBid(rOpts)
 			require.Equal(t, tc.expectOk, ok)
 			if ok {
 				require.NotNil(t, updateResp)

@@ -12,14 +12,14 @@ PK="bcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31"
 echo "RPC endpoint: $RPC"
 
 # wait for the rpc to be available
-while ! curl -s -X POST --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' "$RPC" > /dev/null; do
-    sleep 1
+while ! curl -s -X POST --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' "$RPC" >/dev/null; do
+	sleep 1
 done
 
 # deploy the contracts
 (
-    cd ./bolt-contracts || exit 
-    forge build # make sure the contracts are compiled before deploying
-    forge script script/DeployOnDevnet.s.sol --broadcast --rpc-url "$RPC" --private-key "$PK"
+	cd ./bolt-contracts || exit
+	forge build # make sure the contracts are compiled before deploying
+	forge script script/DeployOnDevnet.s.sol --broadcast --rpc-url "$RPC" --private-key "$PK"
 )
 echo "Contracts deployed!"
