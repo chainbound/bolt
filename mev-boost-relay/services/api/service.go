@@ -2979,6 +2979,8 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 		return
 	}
 
+	api.log.Infof("New constraints consumer with builder pubkey: %s", builderPublicKey)
+
 	// Add the new consumer
 	constraintsCh := make(chan *SignedConstraints, 256)
 	api.constraintsConsumers = append(api.constraintsConsumers, constraintsCh)
@@ -2995,8 +2997,12 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 		return
 	}
 
+	w.WriteHeader(http.StatusOK)
+
 	// Monitor client disconnect
 	notify := req.Context().Done()
+
+	ticker := time.NewTicker(3 * time.Second)
 
 	for {
 		select {
@@ -3004,6 +3010,10 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 			// Client disconnected
 			api.log.Info("Client disconnected from constraints stream")
 			return
+		case <-ticker.C:
+			// Send a keepalive to the client
+			fmt.Fprint(w, ": keepaliveeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n\n")
+			flusher.Flush()
 		case constraint := <-constraintsCh:
 			constraintJSON, err := json.Marshal([]*SignedConstraints{constraint})
 			api.log.Infof("New constraint received: %s", constraint)

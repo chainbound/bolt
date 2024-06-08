@@ -1212,7 +1212,9 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 				// Update the amount of gas left for the constraints
 				constraintsTotalGasLeft -= candidate.tx.Gas()
 				constraintsTotalBlobGasLeft -= candidate.tx.BlobGas()
-				log.Info(fmt.Sprintf("Executed constraint %s at index %d with gas*price %d", candidate.tx.Hash().String(), currentTxIndex, candidate.tx.Gas()*candidate.tx.GasPrice().Uint64()))
+
+				constraintTip, _ := candidate.tx.EffectiveGasTip(env.header.BaseFee)
+				log.Info(fmt.Sprintf("Executed constraint %s at index %d with effective gas tip %d", candidate.tx.Hash().String(), currentTxIndex, constraintTip))
 			} else {
 				txs.Shift()
 			}
@@ -1740,6 +1742,11 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 	blockBundles, allBundles, usedSbundles, mempoolTxHashes, err := w.fillTransactionsSelectAlgo(nil, work, params.constraints)
 	if err != nil {
 		return &newPayloadResult{err: err}
+	}
+
+	// Mark constraints as mempool txs so shit doesn't fail
+	for hash := range params.constraints {
+		mempoolTxHashes[hash] = struct{}{}
 	}
 
 	// We mark transactions created by the builder as mempool transactions so code validating bundles will not fail

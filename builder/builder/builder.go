@@ -318,6 +318,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 		req.Header.Set("Authorization", authHeader)
 
 		client := http.Client{}
+
 		resp, err = client.Do(req)
 		if err != nil {
 			log.Error(fmt.Sprintf("Failed to connect to SSE server: %v", err))
