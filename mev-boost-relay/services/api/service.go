@@ -3072,10 +3072,6 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 			}
 			fmt.Fprintf(w, "data: %s\n\n", string(constraintJSON))
 
-			// NOTE: Flushing the gzip.Writer ensures that any compressed data in the buffer is
-			// written out to the underlying http.ResponseWriter. The http.ResponseWriter
-			// itself may also buffer data. Calling Flush on the http.ResponseWriter ensures
-			// that any data buffered by the HTTP server is sent to the client immediately.
 			flusher.Flush()
 			api.log.Infof("Flushed constraints to builders")
 		}

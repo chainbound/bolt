@@ -454,7 +454,13 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 
 		// Add the constraints to the cache.
 		// They will be cleared when we receive a payload for the slot in `handleGetPayload`
-		m.constraints.AddInclusionConstraints(constraintMessage.Slot, constraintMessage.Constraints)
+		err := m.constraints.AddInclusionConstraints(constraintMessage.Slot, constraintMessage.Constraints)
+		if err != nil {
+			log.WithError(err).Errorf("error adding inclusion constraints to cache")
+			continue
+		}
+
+		log.Infof("[BOLT]: added inclusion constraints to cache. slot = %d, validatorIndex = %d, number of relays = %d", constraintMessage.Slot, constraintMessage.ValidatorIndex, len(m.relays))
 	}
 
 	relayRespCh := make(chan error, len(m.relays))
