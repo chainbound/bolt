@@ -54,27 +54,27 @@ sidecar-logs:
 # show the logs for the bolt devnet for beacon node
 beacon-dump:
     @id=$(docker ps -n 100 | grep 'cl-1-lighthouse-geth' | awk -F' ' '{print $1}') && \
-    docker logs $id 2>&1 | tee -a beacon_dump.log
+    docker logs $id 2>&1 | tee beacon_dump.log
 
 # show the logs for the bolt devnet relay
 relay-dump:
     @id=$(docker ps -n 100 | grep mev-relay-api | awk -F' ' '{print $1}') && \
-    docker logs $id 2>&1 | tee -a relay_dump.log
+    docker logs $id 2>&1 | tee relay_dump.log
 
 # show the logs for the bolt devnet builder
 builder-dump:
     @id=$(docker ps -n 100 | grep bolt-builder | awk -F' ' '{print $1}') && \
-    docker logs $id 2>&1 | tee -a builder_dump.log
+    docker logs $id 2>&1 | tee builder_dump.log
 
 # show the logs for the bolt devnet mev-boost sidecar
 boost-dump:
     @id=$(docker ps -n 100 | grep bolt-mev-boost | awk -F' ' '{print $1}') && \
-    docker logs $id 2>&1 | tee -a boost_dump.log
+    docker logs $id 2>&1 | tee boost_dump.log
 
 # show the logs for the bolt devnet bolt-sidecar
 sidecar-dump:
     @id=$(docker ps -n 100 | grep sidecar | awk -F' ' '{print $1}') && \
-    docker logs $id 2>&1 | tee -a sidecar_dump.log
+    docker logs $id 2>&1 | tee sidecar_dump.log
 
 # show the dora explorer in the browser. NOTE: works only for Linux and MacOS at the moment
 dora:
@@ -91,7 +91,7 @@ send-preconf:
 		--provider-url $(kurtosis port print bolt-devnet el-1-geth-lighthouse rpc) \
 		--beacon-client-url $(kurtosis port print bolt-devnet cl-1-lighthouse-geth http) \
 		--bolt-sidecar-url http://$(kurtosis port print bolt-devnet mev-sidecar-api api)  \
-		--private-key bcdf20249abf0ed6d944c0288fad489e33f66b3960d9e6229c1cd214ed3bbe31 \
+		--private-key 53321db7c1e331d93a11a41d16f004d7ff63972ec8ec7c25db329728ceeb1710 \
 		--slot head
 
 # build all the docker images locally
