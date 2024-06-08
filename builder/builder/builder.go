@@ -730,12 +730,8 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 	log.Debug("runBuildingJob", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp))
 
 	// fetch constraints here
-<<<<<<< fix/devnet -- Incoming Change
-	constraints := b.GetConstraintsForSlot(attrs.Slot)
-	log.Info(fmt.Sprintf("[BOLT]: Got %d constraints for slot %d", len(constraints), attrs.Slot))
-=======
 	constraints, _ := b.constraintsCache.Get(attrs.Slot)
->>>>>>> unstable -- Current Change
+	log.Info(fmt.Sprintf("[BOLT]: Got %d constraints for slot %d", len(constraints), attrs.Slot))
 
 	submitBestBlock := func() {
 		queueMu.Lock()
