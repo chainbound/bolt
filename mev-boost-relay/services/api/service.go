@@ -1867,7 +1867,7 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 		} else {
 			*slotConstraints = append(*slotConstraints, signedConstraints)
 		}
-		log.Infof("Added %d constraints for slot %d and broadcasted to channels", message.Slot, len(*payload))
+		log.Infof("Added %d constraints for slot %d and broadcasted %d to channels", len(*payload), message.Slot, len(api.constraintsConsumers))
 	}
 
 	// respond to the HTTP request
@@ -2074,12 +2074,70 @@ type redisUpdateBidOpts struct {
 }
 
 func (api *RelayAPI) updateRedisBid(
+	opts redisUpdateBidOpts) (
+	*datastore.SaveBidAndUpdateTopBidResponse,
+	*builderApi.VersionedSubmitBlindedBlockResponse, bool,
+) {
+	// Prepare the response data
+	getHeaderResponse, err := common.BuildGetHeaderResponse(opts.payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
+	if err != nil {
+		opts.log.WithError(err).Error("could not sign builder bid")
+		api.RespondError(opts.w, http.StatusBadRequest, err.Error())
+		return nil, nil, false
+	}
+
+	getPayloadResponse, err := common.BuildGetPayloadResponse(opts.payload)
+	if err != nil {
+		opts.log.WithError(err).Error("could not build getPayload response")
+		api.RespondError(opts.w, http.StatusBadRequest, err.Error())
+		return nil, nil, false
+	}
+
+	submission, err := common.GetBlockSubmissionInfo(opts.payload)
+	if err != nil {
+		opts.log.WithError(err).Error("could not get block submission info")
+		api.RespondError(opts.w, http.StatusBadRequest, err.Error())
+		return nil, nil, false
+	}
+
+	bidTrace := common.BidTraceV2WithBlobFields{
+		BidTrace:      *submission.BidTrace,
+		BlockNumber:   submission.BlockNumber,
+		NumTx:         uint64(len(submission.Transactions)),
+		NumBlobs:      uint64(len(submission.Blobs)),
+		BlobGasUsed:   submission.BlobGasUsed,
+		ExcessBlobGas: submission.ExcessBlobGas,
+	}
+
+	//
+	// Save to Redis
+	//
+	updateBidResult, err := api.redis.SaveBidAndUpdateTopBid(
+		context.Background(),
+		opts.tx,
+		&bidTrace,
+		opts.payload,
+		getPayloadResponse,
+		getHeaderResponse,
+		opts.receivedAt,
+		opts.cancellationsEnabled,
+		opts.floorBidValue,
+		nil)
+	if err != nil {
+		opts.log.WithError(err).Error("could not save bid and update top bids")
+		api.RespondError(opts.w, http.StatusInternalServerError, "failed saving and updating bid")
+		return nil, nil, false
+	}
+	return &updateBidResult, getPayloadResponse, true
+}
+
+func (api *RelayAPI) updateRedisBidWithProofs(
 	opts redisUpdateBidOpts,
 	proofs []*common.PreconfirmationWithProof) (
 	*datastore.SaveBidAndUpdateTopBidResponse,
 	*builderApi.VersionedSubmitBlindedBlockResponse, bool,
 ) {
-	api.boltLog.Infof("Updating Redis bid with proofs %v", proofs)
+	api.boltLog.Infof("Updating Redis bid with %d proofs", len(proofs))
 
 	// Prepare the response data
 	getHeaderResponse, err := common.BuildGetHeaderResponse(opts.payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
@@ -2509,7 +2567,7 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		floorBidValue:        floorBidValue,
 		payload:              payload,
 	}
-	updateBidResult, getPayloadResponse, ok := api.updateRedisBid(redisOpts, nil)
+	updateBidResult, getPayloadResponse, ok := api.updateRedisBid(redisOpts)
 	if !ok {
 		return
 	}
@@ -2908,7 +2966,7 @@ func (api *RelayAPI) handleSubmitNewBlockWithProofs(w http.ResponseWriter, req *
 		floorBidValue:        floorBidValue,
 		payload:              payload.Inner,
 	}
-	updateBidResult, getPayloadResponse, ok := api.updateRedisBid(redisOpts, payload.Proofs)
+	updateBidResult, getPayloadResponse, ok := api.updateRedisBidWithProofs(redisOpts, payload.Proofs)
 	if !ok {
 		return
 	}
@@ -3006,7 +3064,7 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 			return
 		case constraint := <-constraintsCh:
 			constraintJSON, err := json.Marshal([]*SignedConstraints{constraint})
-			api.log.Infof("New constraint received: %s", constraint)
+			api.log.Infof("New constraint received from channel and ready to be sent to builders: %s", constraint)
 
 			if err != nil {
 				api.log.Printf("failed to marshal constraint to json: %v", err)
@@ -3019,6 +3077,7 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 			// itself may also buffer data. Calling Flush on the http.ResponseWriter ensures
 			// that any data buffered by the HTTP server is sent to the client immediately.
 			flusher.Flush()
+			api.log.Infof("Flushed constraints to builders")
 		}
 	}
 }
