@@ -469,6 +469,7 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 			log := log.WithField("url", url)
 
 			_, err := SendHTTPRequest(context.Background(), m.httpClientSubmitConstraint, http.MethodPost, url, ua, nil, payload, nil)
+			log.Infof("sent request for %d constraint to relay. err = %v", len(payload), err)
 			relayRespCh <- err
 			if err != nil {
 				log.WithError(err).Warn("error calling submitConstraint on relay")

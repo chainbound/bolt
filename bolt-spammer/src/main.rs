@@ -37,14 +37,18 @@ async fn main() -> Result<()> {
     tx.set_gas_price(69_420_000_000_000u128); // 69_420 gwei
     transaction_signer.fill_transaction(&mut tx, None).await?;
 
+    let current_slot = get_slot(&opts.beacon_client_url, &opts.slot).await?;
+
     let slot_number = match opts.slot.parse::<u64>() {
         Ok(num) => num,
         Err(_) => {
             // Attempt to fetch slot number from the beacon API.
             // This works with notable slots: "head", "genesis", "finalized"
-            get_slot(&opts.beacon_client_url, &opts.slot).await? + 3
+            current_slot + 4
         }
     };
+
+    tracing::info!(?current_slot, ?slot_number);
 
     let (tx_hash, tx_rlp) = sign_transaction(transaction_signer.signer(), tx).await?;
 

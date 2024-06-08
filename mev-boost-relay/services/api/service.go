@@ -1298,23 +1298,23 @@ func (api *RelayAPI) handleGetHeaderWithProofs(w http.ResponseWriter, req *http.
 		return
 	}
 
-	api.boltLog.Info("getHeader request received")
+	api.boltLog.Info("getHeaderWithProofs request received")
 
 	if slices.Contains(apiNoHeaderUserAgents, ua) {
-		log.Info("rejecting getHeader by user agent")
+		log.Info("rejecting getHeaderWithProofs by user agent")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
 	if api.ffForceGetHeader204 {
-		log.Info("forced getHeader 204 response")
+		log.Info("forced getHeaderWithProofs 204 response")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
 	// Only allow requests for the current slot until a certain cutoff time
 	if getHeaderRequestCutoffMs > 0 && msIntoSlot > 0 && msIntoSlot > int64(getHeaderRequestCutoffMs) {
-		log.Info("getHeader sent too late")
+		log.Info("getHeaderWithProofs sent too late")
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -1340,7 +1340,9 @@ func (api *RelayAPI) handleGetHeaderWithProofs(w http.ResponseWriter, req *http.
 		// We don't respond with an error and early return since proofs might be missing
 	}
 
-	api.boltLog.Infof("Got %d preconfirmations proofs from cache", len(proofs))
+	if len(proofs) > 0 {
+		api.boltLog.Infof("Got %d preconfirmations proofs from cache", len(proofs))
+	}
 
 	if bid == nil || bid.IsEmpty() {
 		api.boltLog.Info("Bid is nill or is empty")
@@ -1797,6 +1799,8 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 	if len(*payload) == 0 {
 		api.RespondError(w, http.StatusBadRequest, "No constraints submitted")
 		return
+	} else {
+		log.Infof("Received %d constraints", len(*payload))
 	}
 
 	// Add all constraints to the cache
@@ -1863,6 +1867,7 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 		} else {
 			*slotConstraints = append(*slotConstraints, signedConstraints)
 		}
+		log.Infof("Added %d constraints for slot %d and broadcasted to channels", message.Slot, len(*payload))
 	}
 
 	// respond to the HTTP request
@@ -2088,6 +2093,7 @@ func (api *RelayAPI) updateRedisBid(
 	if slotConstraints != nil {
 		transactionsRoot, err := getHeaderResponse.TransactionsRoot()
 		if err != nil {
+			api.log.WithError(err).Errorf("Failed to calculate transactions root for slot %d", api.headSlot.Load())
 			api.RespondError(opts.w, http.StatusBadRequest, err.Error())
 			return nil, nil, false
 		}
@@ -2107,7 +2113,7 @@ func (api *RelayAPI) updateRedisBid(
 		}
 
 		if len(constraints) > len(proofs) {
-			api.log.Warnf("Constraints and proofs length mismatch: %d > %d", len(constraints), len(proofs))
+			api.log.Warnf("Constraints and proofs length mismatch for slot %d: %d > %d", api.headSlot.Load(), len(constraints), len(proofs))
 			api.RespondError(opts.w, http.StatusBadRequest, "constraints and proofs length mismatch")
 			return nil, nil, false
 		}
@@ -2629,17 +2635,16 @@ func (api *RelayAPI) handleSubmitNewBlockWithProofs(w http.ResponseWriter, req *
 	}
 
 	// BOLT: Send an event to the web demo
-	if len(payload.Proofs) > 0 {
-		slot, _ := payload.Inner.Slot()
-		message := fmt.Sprintf("BOLT-RELAY: received block bid with %d preconfirmations for slot %d", len(payload.Proofs), slot)
-		event := strings.NewReader(fmt.Sprintf("{ \"message\": \"%s\"}", message))
-		eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
-		if err != nil {
-			log.Errorf("Failed to log preconfirms event: %s", err)
-		}
-		if eventRes != nil {
-			defer eventRes.Body.Close()
-		}
+	slot, _ := payload.Inner.Slot()
+	message := fmt.Sprintf("BOLT-RELAY: received block bid with %d preconfirmations for slot %d", len(payload.Proofs), slot)
+	api.log.Infof(message)
+	event := strings.NewReader(fmt.Sprintf("{ \"message\": \"%s\"}", message))
+	eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
+	if err != nil {
+		log.Errorf("Failed to log preconfirms event: %s", err)
+	}
+	if eventRes != nil {
+		defer eventRes.Body.Close()
 	}
 
 	api.boltLog.Infof("Headslot: %d\n", headSlot)

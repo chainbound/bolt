@@ -1198,7 +1198,9 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
 			log.Trace("Skipping transaction with low nonce", "hash", candidate.tx.Hash(), "sender", from, "nonce", candidate.tx.Nonce())
-			if !candidate.isConstraint {
+			if candidate.isConstraint {
+				log.Warn(fmt.Sprintf("Skipping constraint with low nonce, hash %s, sender %s, nonce %d", candidate.tx.Hash(), from, candidate.tx.Nonce()))
+			} else {
 				txs.Shift()
 			}
 
@@ -1219,7 +1221,9 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.
 			log.Debug("Transaction failed, account skipped", "hash", candidate.tx.Hash(), "err", err)
-			if !candidate.isConstraint {
+			if candidate.isConstraint {
+				log.Warn("Constraint failed, account skipped", "hash", candidate.tx.Hash(), "err", err)
+			} else {
 				txs.Pop()
 			}
 		}
@@ -1507,7 +1511,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 	// }
 
 	// Fill the block with all available pending transactions.
-	if len(localPlainTxs) > 0 || len(localBlobTxs) > 0 {
+	if len(localPlainTxs) > 0 || len(localBlobTxs) > 0 || len(constraints) > 0 {
 		plainTxs := newTransactionsByPriceAndNonce(env.signer, localPlainTxs, nil, nil, env.header.BaseFee)
 		blobTxs := newTransactionsByPriceAndNonce(env.signer, localBlobTxs, nil, nil, env.header.BaseFee)
 
@@ -1515,7 +1519,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 			return nil, nil, nil, err
 		}
 	}
-	if len(remotePlainTxs) > 0 || len(remoteBlobTxs) > 0 {
+	if len(remotePlainTxs) > 0 || len(remoteBlobTxs) > 0 || len(constraints) > 0 {
 		plainTxs := newTransactionsByPriceAndNonce(env.signer, remotePlainTxs, nil, nil, env.header.BaseFee)
 		blobTxs := newTransactionsByPriceAndNonce(env.signer, remoteBlobTxs, nil, nil, env.header.BaseFee)
 
