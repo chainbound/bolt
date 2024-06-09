@@ -276,7 +276,8 @@ export default function Home() {
             Real-world deployments should consider the following missing
             components and features for a complete implementation:
             <ul className="list-disc list-inside ml-3 mt-1">
-              <li>Safety & Liveness Fault detection & on-chain dispute</li>
+              <li>Safety & Liveness Fault detection</li>
+              <li>On-chain fault dispute logic</li>
               <li>BOLT RPC server proxy integration</li>
             </ul>
           </small>
