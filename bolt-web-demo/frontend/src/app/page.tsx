@@ -223,7 +223,7 @@ export default function Home() {
             width={20}
             height={20}
           />
-          <p>– v0.1.0</p>
+          <p>– v0.1.0-alpha</p>
         </div>
       </div>
 

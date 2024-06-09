@@ -405,7 +405,10 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 
 			// Update the slot constraints in the cache
 			b.constraintsCache.Put(constraint.Message.Slot, slotConstraints)
+
+			EmitBoltDemoEvent(fmt.Sprintf("Received constraint from relay for slot %d, stored in cache (path: %s)", constraint.Message.Slot, SubscribeConstraintsPath))
 		}
+
 	}
 
 	return nil
@@ -456,6 +459,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 	var versionedBlockRequestWithPreconfsProofs *common.VersionedSubmitBlockRequestWithProofs
 
 	if len(constraints) > 0 {
+		EmitBoltDemoEvent(fmt.Sprintf("sealing block %d with %d constraints", opts.Block.Number(), len(constraints)))
 		log.Info(fmt.Sprintf("[BOLT]: Sealing block with %d preconfirmed transactions for block %d", len(constraints), opts.Block.Number()))
 		payloadTransactions := opts.Block.Transactions()
 
@@ -529,8 +533,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 		timeForProofs := time.Since(timeStart)
 
 		// BOLT: send event to web demo
-		message := fmt.Sprintf("created %d merkle proofs for block %d in %v", len(constraints), opts.Block.Number(), timeForProofs)
-		EmitBoltDemoEvent(message)
+		EmitBoltDemoEvent(fmt.Sprintf("created %d merkle proofs for block %d in %v", len(constraints), opts.Block.Number(), timeForProofs))
 
 		versionedBlockRequestWithPreconfsProofs = &common.VersionedSubmitBlockRequestWithProofs{
 			Inner:  versionedBlockRequest,

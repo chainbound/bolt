@@ -1870,6 +1870,8 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 		log.Infof("Added %d constraints for slot %d and broadcasted %d to channels", len(*payload), message.Slot, len(api.constraintsConsumers))
 	}
 
+	EmitBoltDemoEvent(fmt.Sprintf("received %d valid constraints, sending to builders... (path: %s)", len(*payload), req.URL.Path))
+
 	// respond to the HTTP request
 	api.RespondOK(w, nil)
 }

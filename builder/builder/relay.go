@@ -199,9 +199,8 @@ func (r *RemoteRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequ
 
 		// BOLT: send event to web demo
 		if len(msg.Proofs) > 0 {
-			slot, _ := msg.Inner.Slot()
-			message := fmt.Sprintf("sending bid to relay with %d constraints for slot %d", len(msg.Proofs), slot)
-			EmitBoltDemoEvent(message)
+			number, _ := msg.Inner.BlockNumber()
+			EmitBoltDemoEvent(fmt.Sprintf("sending block %d with proofs to relay (path: %s)", number, "/relay/v1/builder/blocks_with_proofs"))
 		}
 
 		switch msg.Inner.Version {
