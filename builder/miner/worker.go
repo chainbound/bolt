@@ -1750,7 +1750,9 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 		return &newPayloadResult{err: err}
 	}
 
-	// Mark constraints as mempool txs so shit doesn't fail
+	// NOTE: as done with builder txs, we need to fill mempoolTxHashes with the constraints hashes
+	// in order to pass block validation. Otherwise the constraints will be rejected as unknown
+	// because they not part of the mempool and not part of the known bundles
 	for hash := range params.constraints {
 		mempoolTxHashes[hash] = struct{}{}
 	}

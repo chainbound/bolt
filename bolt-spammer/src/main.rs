@@ -44,7 +44,7 @@ async fn main() -> Result<()> {
         Err(_) => {
             // Attempt to fetch slot number from the beacon API.
             // This works with notable slots: "head", "genesis", "finalized"
-            current_slot + 4
+            current_slot + 2
         }
     };
 
