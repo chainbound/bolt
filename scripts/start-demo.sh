@@ -28,5 +28,12 @@ for command in "${commands[@]}"; do
   eval "$command" &  # Use eval to handle complex commands with CD and chaining
 done
 
+# Open the browser 
+if [ "$(uname)" = "Darwin" ]; then
+  open "http://localhost:3000"
+elif [ "$(expr substr $(uname -s) 1 5)" = "Linux" ]; then
+  xdg-open "http://localhost:3000"
+fi
+
 # Wait for all background processes to finish
 wait

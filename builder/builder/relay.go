@@ -200,15 +200,8 @@ func (r *RemoteRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequ
 		// BOLT: send event to web demo
 		if len(msg.Proofs) > 0 {
 			slot, _ := msg.Inner.Slot()
-			event := strings.NewReader(
-				fmt.Sprintf("{ \"message\": \"BOLT-BUILDER: sending bid to relay with %d preconfirmations for slot %d\"}", len(msg.Proofs), slot))
-			eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
-			if err != nil {
-				log.Error("Failed to log preconfirms event: ", err)
-			}
-			if eventRes != nil {
-				defer eventRes.Body.Close()
-			}
+			message := fmt.Sprintf("sending bid to relay with %d constraints for slot %d", len(msg.Proofs), slot)
+			EmitBoltDemoEvent(message)
 		}
 
 		switch msg.Inner.Version {

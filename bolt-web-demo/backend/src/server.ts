@@ -55,7 +55,18 @@ app.get("/retry-port-events", (req, res) => {
 });
 
 app.get("/latest-slot", (req, res) => {
-  res.send({ slot: LATEST_SLOT });
+  if (!DEVNET_ENDPOINTS[EventType.BEACON_CLIENT_URL_FOUND]) {
+    res.status(500).send({ message: "No beacon client URL found" });
+    return;
+  }
+
+  getSlot(DEVNET_ENDPOINTS[EventType.BEACON_CLIENT_URL_FOUND]).then((slot) => {
+    if (slot !== undefined) {
+      res.send({ slot });
+    } else {
+      res.status(500).send("Could not fetch the latest slot");
+    }
+  });
 });
 
 // Endpoint to send a signed preconfirmation transaction to the BOLT MEV sidecar
@@ -70,13 +81,11 @@ app.post("/preconfirmation", async (req, res) => {
     return;
   }
 
-  const { signedTx, txHash } = req.body;
-  if (!signedTx || !txHash) {
-    res.status(400).send("No signedTx or txHash provided");
+  const { slot, tx, signature } = req.body;
+  if (!tx || !signature) {
+    res.status(400).send("No tx or signature provided");
     return;
   }
-
-  const slot = await getSlot(beaconClientUrl);
 
   const preconfirmationResponse = await fetch(`http://${mevSidecarUrl}`, {
     method: "POST",
@@ -84,14 +93,8 @@ app.post("/preconfirmation", async (req, res) => {
     body: JSON.stringify({
       id: "1",
       jsonrpc: "2.0",
-      method: "eth_requestPreconfirmation",
-      params: [
-        {
-          slot: slot + 2,
-          txHash,
-          rawTx: signedTx,
-        },
-      ],
+      method: "bolt_inclusionPreconfirmation",
+      params: [{ slot, tx, signature }],
     }),
   }).then((response) => response.json());
 
@@ -106,12 +109,12 @@ server.listen(SERVER_PORT, () => {
 async function sendDevnetEvents() {
   waitForPort(
     ["cl-1-lighthouse-geth", "http"],
-    EventType.BEACON_CLIENT_URL_FOUND,
+    EventType.BEACON_CLIENT_URL_FOUND
   );
 
   waitForPort(
     ["el-1-geth-lighthouse", "rpc"],
-    EventType.JSONRPC_PROVIDER_URL_FOUND,
+    EventType.JSONRPC_PROVIDER_URL_FOUND
   );
 
   waitForPort(["mev-sidecar-api", "api"], EventType.MEV_SIDECAR_URL_FOUND);

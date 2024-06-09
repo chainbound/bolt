@@ -153,6 +153,9 @@ impl CommitmentsRpc for JsonRpcApi {
 
         // TODO: check if there is enough time left in the current slot
 
+        // Web demo: push an event to the demo server to notify the frontend
+        emit_bolt_demo_event("commitment request accepted");
+
         // Forward the constraints to mev-boost's builder API
         self.mevboost_client
             .post_constraints(&signed_constraints)
@@ -160,6 +163,25 @@ impl CommitmentsRpc for JsonRpcApi {
 
         Ok(serde_json::to_value(signed_constraints)?)
     }
+}
+
+fn emit_bolt_demo_event<T: Into<String>>(message: T) {
+    let msg = message.into();
+    tokio::spawn(async move {
+        let client = reqwest::Client::new();
+        client
+            .post("http://host.docker.internal:3001/events")
+            .header("Content-Type", "application/json")
+            .body(
+                serde_json::to_string(
+                    &serde_json::json!({"message": format!("BOLT-SIDECAR: {}", msg)}),
+                )
+                .unwrap(),
+            )
+            .send()
+            .await
+            .expect("failed to send event to demo server");
+    });
 }
 
 #[cfg(test)]
