@@ -140,6 +140,10 @@ export default function Home() {
     setEvents((prev) => [event, ...prev]);
   }
 
+  const getStatusClass = (status: boolean) => {
+    return status ? 'bg-green-500' : 'bg-yellow-500';
+  };
+
   return (
     <main className="flex min-h-screen flex-col items-center p-24">
       <div className="w-full max-w-6xl items-center justify-between lg:flex">
@@ -232,11 +236,24 @@ export default function Home() {
               )}
 
               <div className="grid gap-3 border p-4 border-gray-800 mt-4">
-                <p className="text-lg">Event logs</p>
+                <p className="text-lg"> Status</p>
                 <small className="text-sm max-w-3xl">
-                  This is the list of events received from the server.
+                  <ul className="font-mono text-sm space-y-2">
+                    <li className="flex items-center">
+                      <span className="w-64">Preconfirmation received:</span>
+                      <span className={`h-4 w-4 rounded-full ${getStatusClass(preconfSent)}`}></span>
+                    </li>
+                    <li className="flex items-center">
+                      <span className="w-64">Preconfirmation included:</span>
+                      <span className={`h-4 w-4 rounded-full ${getStatusClass(preconfIncluded)}`}></span>
+                    </li>
+                    <li> Preconfirmation finalized  : {time === 0 ? "false" : "true"}</li>
+                  </ul>
                 </small>
+              </div>
 
+              <div className="grid gap-3 border p-4 border-gray-800 mt-4">
+                <p className="text-lg">Event logs</p>
                 <ScrollArea className="max-h-80">
                   <ul className="font-mono text-sm">
                     {events.map((message, index) => (
