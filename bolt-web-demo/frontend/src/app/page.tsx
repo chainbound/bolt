@@ -9,7 +9,12 @@ import { createPreconfPayload } from "@/lib/wallet";
 import { EventType } from "@/lib/types";
 import { Progress } from "@/components/ui/progress";
 
-type Event = { message: string; type?: EventType; timestamp: string };
+type Event = {
+  message: string;
+  type?: EventType;
+  timestamp: string;
+  link?: string;
+};
 
 export const SERVER_URL = "http://localhost:3001";
 
@@ -64,6 +69,8 @@ export default function Home() {
           break;
       }
 
+      setEvents((prev) => [event, ...prev]);
+
       // If the event is a preconfirmation, extract the tx hash and slot number
       // and display a message with the explorer URL
       if (
@@ -73,18 +80,17 @@ export default function Home() {
       ) {
         setPreconfIncluded(true);
         dispatchEvent({
-          message: `Preconfirmation included. Explorer URL: ${explorerUrl}/slot/${preconfSlot}`,
+          message: `Preconfirmation included`,
+          link: `${explorerUrl}/slot/${preconfSlot}`,
           timestamp: new Date().toISOString(),
         });
       }
-
-      setEvents((prev) => [event, ...prev]);
     });
 
     return () => {
       newSocket.close();
     };
-  }, [explorerUrl]);
+  }, [explorerUrl, preconfSlot]);
 
   useEffect(() => {
     let interval: any = null;
@@ -108,6 +114,7 @@ export default function Home() {
 
     try {
       const { payload, txHash } = await createPreconfPayload(providerUrl);
+      setPreconfSlot(payload.slot);
       dispatchEvent({
         message: `Preconfirmation request sent for tx: ${txHash} at slot ${payload.slot}`,
         timestamp: new Date().toISOString(),
@@ -219,6 +226,17 @@ export default function Home() {
                         <span>{parseDateToMs(message.timestamp)}</span>
                         {" | "}
                         {message.message.toString()}
+                        {message.link && (
+                          <a
+                            href={message.link}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-blue-500"
+                          >
+                            {" "}
+                            [link]
+                          </a>
+                        )}
                       </li>
                     ))}
                   </ul>
