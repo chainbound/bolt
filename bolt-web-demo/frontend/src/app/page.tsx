@@ -144,7 +144,7 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col items-center p-24">
-      <div className="w-full max-w-5xl items-center justify-between lg:flex">
+      <div className="w-full max-w-6xl items-center justify-between lg:flex">
         <Image src="/bolt-logo.png" alt="BOLT" width={100} height={100} />
 
         <p>Your friendly preconfirmation companion.</p>
@@ -173,7 +173,7 @@ export default function Home() {
           )}
         </>
       ) : (
-        <div className="w-full max-w-5xl pt-4">
+        <div className="w-full max-w-6xl pt-4">
           {beaconClientUrl && providerUrl ? (
             <div className="w-full">
               <div className="grid gap-3 border p-4 border-gray-800">
@@ -244,7 +244,7 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            <div className="w-full max-w-5xl pt-4">
+            <div className="w-full max-w-6xl pt-4">
               <div className="grid gap-3 border p-4 border-gray-800">
                 <p className="text-lg">
                   Waiting for the devnet servers to start...
@@ -267,6 +267,21 @@ export default function Home() {
           )}
         </div>
       )}
+
+      <div className="w-full max-w-6xl pt-4">
+        <div className="grid gap-3 p-4 border border-gray-800">
+          <p className="text-lg">Disclaimer</p>
+          <small className="text-sm max-w-3xl">
+            This demo application showcases the BOLT protocol happy-case.
+            Real-world deployments should consider the following missing
+            components and features for a complete implementation:
+            <ul className="list-disc list-inside ml-3 mt-1">
+              <li>Safety & Liveness Fault detection & on-chain dispute</li>
+              <li>BOLT RPC server proxy integration</li>
+            </ul>
+          </small>
+        </div>
+      </div>
     </main>
   );
 }
