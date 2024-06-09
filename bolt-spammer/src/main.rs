@@ -3,6 +3,7 @@ use std::{str::FromStr, sync::Arc};
 use clap::Parser;
 use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction, utils::hex};
 use eyre::{Context, OptionExt, Result};
+use rand::{thread_rng, Rng};
 use serde_json::Value;
 use tracing::info;
 
@@ -33,25 +34,42 @@ async fn main() -> Result<()> {
     let transaction_signer = SignerMiddleware::new(eth_provider.clone(), wallet);
 
     let mut tx = generate_random_tx(opts.nonce);
-    tx.set_gas_price(1_000_000_000_000u128); // 1000 gwei
+    tx.set_gas_price(69_420_000_000_000u128); // 69_420 gwei
     transaction_signer.fill_transaction(&mut tx, None).await?;
+
+    let current_slot = get_slot(&opts.beacon_client_url, &opts.slot).await?;
 
     let slot_number = match opts.slot.parse::<u64>() {
         Ok(num) => num,
         Err(_) => {
             // Attempt to fetch slot number from the beacon API.
             // This works with notable slots: "head", "genesis", "finalized"
-            get_slot(&opts.beacon_client_url, &opts.slot).await? + 3
+            current_slot + 2
         }
     };
 
+    tracing::info!(?current_slot, ?slot_number);
+
     let (tx_hash, tx_rlp) = sign_transaction(transaction_signer.signer(), tx).await?;
+
+    let message_digest = {
+        let mut data = Vec::new();
+        data.extend_from_slice(&slot_number.to_le_bytes());
+        data.extend_from_slice(hex::decode(tx_hash.trim_start_matches("0x"))?.as_slice());
+        H256::from(ethers::utils::keccak256(data))
+    };
+
+    let signature = transaction_signer
+        .signer()
+        .sign_hash(message_digest)?
+        .to_string();
+
     let request = prepare_rpc_request(
-        "eth_requestPreconfirmation",
+        "bolt_inclusionPreconfirmation",
         vec![serde_json::json!({
-            "txHash": tx_hash,
-            "rawTx": tx_rlp,
             "slot": slot_number,
+            "tx": tx_rlp,
+            "signature": signature,
         })],
     );
 
@@ -75,7 +93,8 @@ fn generate_random_tx(nonce: Option<u16>) -> TypedTransaction {
     let mut tx = Eip1559TransactionRequest::new()
         .to("0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD")
         .value("0x69420")
-        .chain_id(3151908);
+        .chain_id(3151908)
+        .data(vec![thread_rng().gen::<u8>(); 32]);
 
     tx = if let Some(nonce) = nonce {
         tx.nonce(nonce)

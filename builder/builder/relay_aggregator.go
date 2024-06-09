@@ -73,7 +73,7 @@ func (r *RemoteRelayAggregator) SubmitBlockWithProofs(msg *common.VersionedSubmi
 		go func(relay IRelay) {
 			err := relay.SubmitBlockWithProofs(msg, registration)
 			if err != nil {
-				log.Error("could not submit block", "err", err)
+				log.Error("could not submit block with proofs", "err", err)
 			}
 		}(relay)
 	}

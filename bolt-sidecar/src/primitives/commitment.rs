@@ -1,8 +1,8 @@
 use std::str::FromStr;
 
 use alloy_consensus::TxEnvelope;
-use alloy_eips::eip2718::Decodable2718;
-use alloy_primitives::Signature;
+use alloy_eips::eip2718::{Decodable2718, Encodable2718};
+use alloy_primitives::{keccak256, Signature, B256};
 use serde::{de, Deserialize, Deserializer, Serialize};
 
 use super::transaction::TxInfo;
@@ -15,29 +15,24 @@ pub enum CommitmentRequest {
     Inclusion(InclusionRequest),
 }
 
-impl CommitmentRequest {
-    pub fn as_inclusion_request(&self) -> Option<&InclusionRequest> {
-        #[allow(irrefutable_let_patterns)] // TODO: remove when we add more variants
-        if let CommitmentRequest::Inclusion(req) = self {
-            Some(req)
-        } else {
-            None
-        }
-    }
-}
-
 /// Request to include a transaction at a specific slot.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InclusionRequest {
     /// The consensus slot number at which the transaction should be included.
     pub slot: u64,
     /// The transaction to be included.
-    #[serde(deserialize_with = "deserialize_tx_envelope")]
+    #[serde(
+        deserialize_with = "deserialize_tx_envelope",
+        serialize_with = "serialize_tx_envelope"
+    )]
     pub tx: TxEnvelope,
     /// The signature over the "slot" and "tx" fields by the user.
     /// A valid signature is the only proof that the user actually requested
     /// this specific commitment to be included at the given slot.
-    #[serde(deserialize_with = "deserialize_from_str")]
+    #[serde(
+        deserialize_with = "deserialize_from_str",
+        serialize_with = "signature_as_str"
+    )]
     pub signature: Signature,
 }
 
@@ -70,6 +65,15 @@ where
     TxEnvelope::decode_2718(&mut s.as_slice()).map_err(de::Error::custom)
 }
 
+fn serialize_tx_envelope<S>(tx: &TxEnvelope, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let mut data = Vec::new();
+    tx.encode_2718(&mut data);
+    serializer.serialize_str(&format!("0x{}", hex::encode(&data)))
+}
+
 fn deserialize_from_str<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: Deserializer<'de>,
@@ -77,16 +81,28 @@ where
     T::Err: std::fmt::Display,
 {
     let s = String::deserialize(deserializer)?;
-    T::from_str(&s).map_err(de::Error::custom)
+    T::from_str(s.trim_start_matches("0x")).map_err(de::Error::custom)
+}
+
+fn signature_as_str<S: serde::Serializer>(
+    sig: &Signature,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    let parity = sig.v();
+    // As bytes encodes the parity as 27/28, need to change that.
+    let mut bytes = sig.as_bytes();
+    bytes[bytes.len() - 1] = if parity.y_parity() { 1 } else { 0 };
+    serializer.serialize_str(&format!("0x{}", hex::encode(bytes)))
 }
 
 impl InclusionRequest {
     // TODO: actually use SSZ encoding here
-    pub fn digest(&self) -> Vec<u8> {
+    pub fn digest(&self) -> B256 {
         let mut data = Vec::new();
         data.extend_from_slice(&self.slot.to_le_bytes());
         data.extend_from_slice(self.tx.tx_hash().as_slice());
-        data
+
+        keccak256(&data)
     }
 }
 
@@ -110,6 +126,13 @@ mod tests {
 
         let req: InclusionRequest = serde_json::from_str(json_req).unwrap();
         assert_eq!(req.slot, 1);
+
+        let deser = serde_json::to_string(&req).unwrap();
+
+        assert_eq!(
+            deser.parse::<serde_json::Value>().unwrap(),
+            json_req.parse::<serde_json::Value>().unwrap()
+        );
     }
 
     #[test]

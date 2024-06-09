@@ -1,5 +1,6 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
+use beacon_api_client::mainnet::Client as BeaconApiClient;
 use parking_lot::RwLock;
 use serde_json::Value;
 use thiserror::Error;
@@ -7,7 +8,10 @@ use tracing::info;
 
 use super::mevboost::MevBoostClient;
 use crate::{
-    crypto::{bls::from_bls_signature_to_consensus_signature, BLSSigner},
+    crypto::{
+        bls::{from_bls_signature_to_consensus_signature, BlsSecretKey},
+        BLSSigner,
+    },
     json_rpc::types::{BatchedSignedConstraints, ConstraintsMessage, SignedConstraints},
     primitives::{CommitmentRequest, Slot},
 };
@@ -26,6 +30,8 @@ pub enum ApiError {
     DuplicateRequest,
     #[error("signature error: {0}")]
     Signature(#[from] alloy_primitives::SignatureError),
+    #[error("signature pubkey mismatch. expected: {expected}, got: {got}")]
+    SignaturePubkeyMismatch { expected: String, got: String },
     #[error("failed to decode RLP: {0}")]
     Rlp(#[from] alloy_rlp::Error),
     #[error("failed during HTTP call: {0}")]
@@ -60,16 +66,21 @@ pub struct JsonRpcApi {
     signer: BLSSigner,
     /// The client for the MEV-Boost sidecar.
     mevboost_client: MevBoostClient,
+    /// The client for the beacon node API.
+    #[allow(dead_code)]
+    beacon_api_client: BeaconApiClient,
 }
 
 impl JsonRpcApi {
     /// Create a new instance of the JSON-RPC API.
-    pub fn new(private_key: blst::min_pk::SecretKey, mevboost_url: String) -> Arc<Self> {
+    pub fn new(private_key: BlsSecretKey, mevboost_url: String, beacon_url: String) -> Arc<Self> {
         let cap = NonZeroUsize::new(DEFAULT_API_REQUEST_CACHE_SIZE).unwrap();
+        let beacon_url = reqwest::Url::parse(&beacon_url).expect("failed to parse beacon node URL");
 
         Arc::new(Self {
             cache: Arc::new(RwLock::new(lru::LruCache::new(cap))),
             mevboost_client: MevBoostClient::new(mevboost_url),
+            beacon_api_client: BeaconApiClient::new(beacon_url),
             signer: BLSSigner::new(private_key),
         })
     }
@@ -85,22 +96,30 @@ impl CommitmentsRpc for JsonRpcApi {
         };
 
         let params = serde_json::from_value::<CommitmentRequest>(params)?;
-        let params = params
-            .as_inclusion_request()
-            .ok_or_else(|| ApiError::Custom("request must be an inclusion request".to_string()))?;
+        #[allow(irrefutable_let_patterns)] // TODO: remove this when we have more request types
+        let CommitmentRequest::Inclusion(params) = params
+        else {
+            return Err(ApiError::Custom(
+                "request must be an inclusion request".to_string(),
+            ));
+        };
+
         info!(?params, "received inclusion commitment request");
 
         let tx_sender = params.tx.recover_signer()?;
 
         // validate the user's signature
-        let signer_address = params.signature.recover_address_from_msg(params.digest())?;
+        let signer_address = params
+            .signature
+            .recover_address_from_prehash(&params.digest())?;
 
         // TODO: relax this check to allow for external signers to request commitments
         // about transactions that they did not sign themselves
         if signer_address != tx_sender {
-            return Err(ApiError::Custom(
-                "commitment signature does not match the transaction sender".to_string(),
-            ));
+            return Err(ApiError::SignaturePubkeyMismatch {
+                expected: tx_sender.to_string(),
+                got: signer_address.to_string(),
+            });
         }
 
         {
@@ -109,7 +128,7 @@ impl CommitmentsRpc for JsonRpcApi {
             if let Some(commitments) = cache.get_mut(&params.slot) {
                 if commitments
                     .iter()
-                    .any(|p| p.as_inclusion_request().is_some_and(|i| i == params))
+                    .any(|p| matches!(p, CommitmentRequest::Inclusion(req) if req == &params))
                 {
                     return Err(ApiError::DuplicateRequest);
                 }
@@ -122,6 +141,7 @@ impl CommitmentsRpc for JsonRpcApi {
 
         // parse the request into constraints and sign them with the sidecar signer
         // TODO: get the validator index from somewhere
+        // let validator_index = self.beacon_api_client.get_proposer_duties(get_epoch_from_slot(params.slot)).await?;
         let message = ConstraintsMessage::build(0, params.slot, params.clone())?;
 
         let signature = from_bls_signature_to_consensus_signature(self.signer.sign(&message));

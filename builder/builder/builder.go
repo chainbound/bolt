@@ -56,7 +56,7 @@ const (
 )
 
 const (
-	SubscribeConstraintsPath = "/eth/v1/builder/constraints"
+	SubscribeConstraintsPath = "/relay/v1/builder/constraints"
 )
 
 type PubkeyHex string
@@ -296,33 +296,52 @@ func (b *Builder) SubscribeProposerConstraints() error {
 }
 
 func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader string) error {
-	// Subscribe to constraints
-	req, err := http.NewRequest(http.MethodGet, relayBaseEndpoint+SubscribeConstraintsPath, nil)
-	if err != nil {
-		log.Error(fmt.Sprintf("Failed to create new http request: %v", err))
-		return err
-	}
-	req.Header.Set("Accept-Encoding", "gzip")
-	req.Header.Set("Authorization", authHeader)
+	attempts := 0
+	maxAttempts := 60 // Max 10 minutes of retries
+	retryInterval := 10 * time.Second
 
-	client := http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Error(fmt.Sprintf("Failed to connect to SSE server: %v", err))
-		return err
+	var resp *http.Response
+
+	for {
+		log.Info("Attempting to subscribe to constraints...")
+
+		if attempts >= maxAttempts {
+			log.Error(fmt.Sprintf("Failed to subscribe to constraints after %d attempts", maxAttempts))
+			return errors.New("failed to subscribe to constraints")
+		}
+
+		req, err := http.NewRequest(http.MethodGet, relayBaseEndpoint+SubscribeConstraintsPath, nil)
+		if err != nil {
+			log.Error(fmt.Sprintf("Failed to create new http request: %v", err))
+			return err
+		}
+		req.Header.Set("Authorization", authHeader)
+
+		client := http.Client{}
+
+		resp, err = client.Do(req)
+		if err != nil {
+			log.Error(fmt.Sprintf("Failed to connect to SSE server: %v", err))
+			time.Sleep(retryInterval)
+			attempts++
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			log.Error(fmt.Sprintf("Error subscribing to constraints via SSE: %s, %v", resp.Status, err))
+			return err
+		}
+		break
 	}
+
 	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		log.Error(fmt.Sprintf("Non-OK HTTP status: %s", resp.Status))
-		return err
-	}
+	log.Info(fmt.Sprintf("Connected to SSE server: %s", relayBaseEndpoint))
 
 	var reader io.Reader
 
-	// Step 2: Check if the response is gzipped
+	// Check if the response is gzipped
 	if resp.Header.Get("Content-Encoding") == "gzip" {
-		// Step 3: Decompress the response body
+		// Decompress the response body
 		gzipReader, err := gzip.NewReader(resp.Body)
 		if err != nil {
 			return fmt.Errorf("error creating gzip reader: %v", err)
@@ -338,10 +357,11 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 		line, err := bufReader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
-				fmt.Println("End of stream")
+				log.Info("End of stream")
 				break
 			}
-			log.Error("Error reading from response body: %v", err)
+			log.Error(fmt.Sprintf("Error reading from response body: %v", err))
+			continue
 		}
 
 		if !strings.HasPrefix(line, "data: ") {
@@ -351,7 +371,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 		data := strings.TrimPrefix(line, "data: ")
 
 		// We assume the data is the JSON representation of the constraints
-		log.Debug("Received new constraint: %s\n", data)
+		log.Info(fmt.Sprintf("Received new constraint: %s", data))
 		constraintsSigned := make(common.SignedConstraintsList, 0, 8)
 		if err := json.Unmarshal([]byte(data), &constraintsSigned); err != nil {
 			log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))
@@ -427,80 +447,87 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 		Value:                value,
 	}
 
-	payloadTransactions := opts.Block.Transactions()
-
-	// BOLT: sanity check: verify that the block actually contains the preconfirmed transactions
-	for hash, constraint := range constraints {
-		if !slices.Contains(payloadTransactions, constraint.Tx) {
-			log.Error(fmt.Sprintf("[BOLT]: Preconfirmed transaction %s not found in block %s", hash, opts.Block.Hash()))
-			continue
-		}
-	}
-
-	// BOLT: generate merkle tree from payload transactions (we need raw RLP bytes for this)
-	rawTxs := make([]bellatrix.Transaction, len(payloadTransactions))
-	for i, tx := range payloadTransactions {
-		raw, err := tx.MarshalBinary()
-		if err != nil {
-			log.Error("[BOLT]: could not marshal transaction", "txHash", tx.Hash(), "err", err)
-			continue
-		}
-		rawTxs[i] = bellatrix.Transaction(raw)
-	}
-
-	log.Info(fmt.Sprintf("[BOLT]: Generated %d raw transactions for merkle tree", len(rawTxs)))
-	bellatrixPayloadTxs := utilbellatrix.ExecutionPayloadTransactions{Transactions: rawTxs}
-
-	rootNode, err := bellatrixPayloadTxs.GetTree()
+	versionedBlockRequest, err := b.getBlockRequest(executableData, dataVersion, &blockBidMsg)
 	if err != nil {
-		log.Error("[BOLT]: could not get tree from transactions", "err", err)
+		log.Error("could not get block request", "err", err)
+		return err
 	}
 
-	// BOLT: Set the value of nodes. This is MANDATORY for the proof calculation
-	// to output the leaf correctly. This is also never documented in fastssz. -__-
-	rootNode.Hash()
-
-	// BOLT: calculate merkle proofs for preconfirmed transactions
-	preconfirmationsProofs := make([]*common.PreconfirmationWithProof, 0, len(constraints))
-
-	timeStart := time.Now()
-	for hash := range constraints {
-		// get the index of the preconfirmed transaction in the block
-		preconfIndex := slices.IndexFunc(payloadTransactions, func(tx *types.Transaction) bool { return tx.Hash() == hash })
-		if preconfIndex == -1 {
-			log.Error(fmt.Sprintf("Preconfirmed transaction %s not found in block %s", hash, opts.Block.Hash()))
-			log.Error(fmt.Sprintf("block has %v transactions", len(payloadTransactions)))
-			continue
-		}
-
-		// using our gen index formula: 2 * 2^20 + preconfIndex
-		generalizedIndex := int(math.Pow(float64(2), float64(21))) + preconfIndex
-
-		log.Info(fmt.Sprintf("[BOLT]: Calculating merkle proof for preconfirmed transaction %s with index %d. Preconf index: %d",
-			hash, generalizedIndex, preconfIndex))
-
-		timeStartInner := time.Now()
-		proof, err := rootNode.Prove(generalizedIndex)
-		if err != nil {
-			log.Error("[BOLT]: could not calculate merkle proof for preconfirmed transaction", "txHash", hash, "err", err)
-			continue
-		}
-		log.Info(fmt.Sprintf("[BOLT]: Calculated merkle proof for preconf %s in %s", hash, time.Since(timeStartInner)))
-		log.Info(fmt.Sprintf("[BOLT]: LEAF: %x, Is leaf nil? %v", proof.Leaf, proof.Leaf == nil))
-
-		merkleProof := new(common.SerializedMerkleProof)
-		merkleProof.FromFastSszProof(proof)
-
-		preconfirmationsProofs = append(preconfirmationsProofs, &common.PreconfirmationWithProof{
-			TxHash:      phase0.Hash32(hash),
-			MerkleProof: merkleProof,
-		})
-
-		// log.Info(fmt.Sprintf("[BOLT]: Added merkle proof for preconfirmed transaction %s", preconfirmationsProofs[i]))
-	}
-	timeForProofs := time.Since(timeStart)
+	var versionedBlockRequestWithPreconfsProofs *common.VersionedSubmitBlockRequestWithProofs
 
 	if len(constraints) > 0 {
+		log.Info(fmt.Sprintf("[BOLT]: Sealing block with %d preconfirmed transactions for block %d", len(constraints), opts.Block.Number()))
+		payloadTransactions := opts.Block.Transactions()
+
+		// BOLT: sanity check: verify that the block actually contains the preconfirmed transactions
+		for hash, constraint := range constraints {
+			if !slices.Contains(payloadTransactions, constraint.Tx) {
+				log.Error(fmt.Sprintf("[BOLT]: Preconfirmed transaction %s not found in block %s. Block can't be sent", hash, opts.Block.Hash()))
+				return nil
+			}
+		}
+
+		// BOLT: generate merkle tree from payload transactions (we need raw RLP bytes for this)
+		rawTxs := make([]bellatrix.Transaction, len(payloadTransactions))
+		for i, tx := range payloadTransactions {
+			raw, err := tx.MarshalBinary()
+			if err != nil {
+				log.Error("[BOLT]: could not marshal transaction", "txHash", tx.Hash(), "err", err)
+				continue
+			}
+			rawTxs[i] = bellatrix.Transaction(raw)
+		}
+
+		log.Info(fmt.Sprintf("[BOLT]: Generated %d raw transactions for merkle tree", len(rawTxs)))
+		bellatrixPayloadTxs := utilbellatrix.ExecutionPayloadTransactions{Transactions: rawTxs}
+
+		rootNode, err := bellatrixPayloadTxs.GetTree()
+		if err != nil {
+			log.Error("[BOLT]: could not get tree from transactions", "err", err)
+		}
+
+		// BOLT: Set the value of nodes. This is MANDATORY for the proof calculation
+		// to output the leaf correctly. This is also never documented in fastssz. -__-
+		rootNode.Hash()
+
+		// BOLT: calculate merkle proofs for preconfirmed transactions
+		preconfirmationsProofs := make([]*common.PreconfirmationWithProof, 0, len(constraints))
+
+		timeStart := time.Now()
+		for hash := range constraints {
+			// get the index of the preconfirmed transaction in the block
+			preconfIndex := slices.IndexFunc(payloadTransactions, func(tx *types.Transaction) bool { return tx.Hash() == hash })
+			if preconfIndex == -1 {
+				log.Error(fmt.Sprintf("Preconfirmed transaction %s not found in block %s", hash, opts.Block.Hash()))
+				log.Error(fmt.Sprintf("block has %v transactions", len(payloadTransactions)))
+				continue
+			}
+
+			// using our gen index formula: 2 * 2^20 + preconfIndex
+			generalizedIndex := int(math.Pow(float64(2), float64(21))) + preconfIndex
+
+			log.Info(fmt.Sprintf("[BOLT]: Calculating merkle proof for preconfirmed transaction %s with index %d. Preconf index: %d",
+				hash, generalizedIndex, preconfIndex))
+
+			timeStartInner := time.Now()
+			proof, err := rootNode.Prove(generalizedIndex)
+			if err != nil {
+				log.Error("[BOLT]: could not calculate merkle proof for preconfirmed transaction", "txHash", hash, "err", err)
+				continue
+			}
+			log.Info(fmt.Sprintf("[BOLT]: Calculated merkle proof for preconf %s in %s", hash, time.Since(timeStartInner)))
+			log.Info(fmt.Sprintf("[BOLT]: LEAF: %x, Is leaf nil? %v", proof.Leaf, proof.Leaf == nil))
+
+			merkleProof := new(common.SerializedMerkleProof)
+			merkleProof.FromFastSszProof(proof)
+
+			preconfirmationsProofs = append(preconfirmationsProofs, &common.PreconfirmationWithProof{
+				TxHash:      phase0.Hash32(hash),
+				MerkleProof: merkleProof,
+			})
+		}
+		timeForProofs := time.Since(timeStart)
+
 		event := strings.NewReader(
 			fmt.Sprintf("{ \"message\": \"BOLT-BUILDER: Created %d merkle proofs for block %d in %v\"}",
 				len(constraints), opts.Block.Number(), timeForProofs))
@@ -511,17 +538,11 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 		if eventRes != nil {
 			defer eventRes.Body.Close()
 		}
-	}
 
-	versionedBlockRequest, err := b.getBlockRequest(executableData, dataVersion, &blockBidMsg)
-	if err != nil {
-		log.Error("could not get block request", "err", err)
-		return err
-	}
-
-	versionedBlockRequestWithPreconfsProofs := &common.VersionedSubmitBlockRequestWithProofs{
-		Inner:  versionedBlockRequest,
-		Proofs: preconfirmationsProofs,
+		versionedBlockRequestWithPreconfsProofs = &common.VersionedSubmitBlockRequestWithProofs{
+			Inner:  versionedBlockRequest,
+			Proofs: preconfirmationsProofs,
+		}
 	}
 
 	if b.dryRun {
@@ -539,14 +560,21 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 	} else {
 		// NOTE: we can ignore preconfs for `processBuiltBlock`
 		go b.processBuiltBlock(opts.Block, opts.BlockValue, opts.OrdersClosedAt, opts.SealedAt, opts.CommitedBundles, opts.AllBundles, opts.UsedSbundles, &blockBidMsg)
-		err = b.relay.SubmitBlockWithProofs(versionedBlockRequestWithPreconfsProofs, opts.ValidatorData)
+		if versionedBlockRequestWithPreconfsProofs != nil {
+			log.Info(fmt.Sprintf("[BOLT]: Sending block with %d proofs to relay %s", len(versionedBlockRequestWithPreconfsProofs.Proofs), versionedBlockRequestWithPreconfsProofs.String()))
+			err = b.relay.SubmitBlockWithProofs(versionedBlockRequestWithPreconfsProofs, opts.ValidatorData)
+		} else if len(constraints) == 0 {
+			// If versionedBlockRequestWithPreconfsProofs is nil and no constraints, then we don't have proofs to send
+			err = b.relay.SubmitBlock(versionedBlockRequest, opts.ValidatorData)
+		} else {
+			log.Warn(fmt.Sprintf("[BOLT]: Could not send sealed block this time because we have %d constraints but no proofs", len(constraints)))
+			return nil
+		}
 		if err != nil {
 			log.Error("could not submit block", "err", err, "verion", dataVersion, "#commitedBundles", len(opts.CommitedBundles))
 			return err
 		}
 	}
-
-	log.Info(fmt.Sprintf("[BOLT]: Sending block to relay %s", versionedBlockRequestWithPreconfsProofs.String()))
 
 	return nil
 }
@@ -703,6 +731,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 
 	// fetch constraints here
 	constraints, _ := b.constraintsCache.Get(attrs.Slot)
+	log.Info(fmt.Sprintf("[BOLT]: Got %d constraints for slot %d", len(constraints), attrs.Slot))
 
 	submitBestBlock := func() {
 		queueMu.Lock()

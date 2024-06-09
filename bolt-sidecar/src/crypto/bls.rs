@@ -1,9 +1,9 @@
-use blst::{
-    min_pk::{PublicKey, SecretKey, Signature},
-    BLST_ERROR,
-};
-use ethereum_consensus::deneb::BlsSignature;
+use blst::{min_pk::Signature, BLST_ERROR};
 use rand::RngCore;
+
+pub use blst::min_pk::PublicKey as BlsPublicKey;
+pub use blst::min_pk::SecretKey as BlsSecretKey;
+pub use ethereum_consensus::deneb::BlsSignature;
 
 /// The BLS Domain Separator used in Ethereum 2.0.
 pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_";
@@ -18,14 +18,14 @@ pub trait SignableBLS {
     /// Sign the object with the given key. Returns the signature.
     ///
     /// Note: The default implementation should be used where possible.
-    fn sign(&self, key: &SecretKey) -> Signature {
+    fn sign(&self, key: &BlsSecretKey) -> Signature {
         key.sign(&self.digest(), BLS_DST_PREFIX, &[])
     }
 
     /// Verify the signature of the object with the given public key.
     ///
     /// Note: The default implementation should be used where possible.
-    fn verify(&self, signature: &Signature, pubkey: &PublicKey) -> bool {
+    fn verify(&self, signature: &Signature, pubkey: &BlsPublicKey) -> bool {
         signature.verify(false, &self.digest(), BLS_DST_PREFIX, &[], pubkey, true)
             == BLST_ERROR::BLST_SUCCESS
     }
@@ -33,11 +33,11 @@ pub trait SignableBLS {
 
 /// A BLS signer that can sign any type that implements the `Signable` trait.
 pub struct BLSSigner {
-    key: SecretKey,
+    key: BlsSecretKey,
 }
 
 impl BLSSigner {
-    pub fn new(key: SecretKey) -> Self {
+    pub fn new(key: BlsSecretKey) -> Self {
         Self { key }
     }
 
@@ -50,7 +50,7 @@ impl BLSSigner {
         &self,
         obj: &T,
         signature: &Signature,
-        pubkey: &PublicKey,
+        pubkey: &BlsPublicKey,
     ) -> bool {
         obj.verify(signature, pubkey)
     }
@@ -61,11 +61,11 @@ pub fn from_bls_signature_to_consensus_signature(sig: Signature) -> BlsSignature
     BlsSignature::try_from(bytes.as_slice()).unwrap()
 }
 
-pub fn random_bls_secret() -> SecretKey {
+pub fn random_bls_secret() -> BlsSecretKey {
     let mut rng = rand::thread_rng();
     let mut ikm = [0u8; 32];
     rng.fill_bytes(&mut ikm);
-    SecretKey::key_gen(&ikm, &[]).unwrap()
+    BlsSecretKey::key_gen(&ikm, &[]).unwrap()
 }
 
 #[cfg(test)]

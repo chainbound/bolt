@@ -185,7 +185,7 @@ func (r *RemoteRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, 
 }
 
 func (r *RemoteRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequestWithProofs, _ ValidatorData) error {
-	log.Info("submitting block to remote relay", "endpoint", r.config.Endpoint)
+	log.Info("submitting block with proofs to remote relay", "endpoint", r.config.Endpoint)
 	endpoint := r.config.Endpoint + "/relay/v1/builder/blocks_with_proofs"
 	if r.cancellationsEnabled {
 		endpoint = endpoint + "?cancellations=1"
@@ -224,10 +224,10 @@ func (r *RemoteRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequ
 	}
 
 	if err != nil {
-		return fmt.Errorf("error sending http request to relay %s. err: %w", r.config.Endpoint, err)
+		return fmt.Errorf("error sending http request block with proofs to relay %s. err: %w", r.config.Endpoint, err)
 	}
 	if code > 299 {
-		return fmt.Errorf("non-ok response code %d from relay %s", code, r.config.Endpoint)
+		return fmt.Errorf("non-ok response code %d from relay for block with proofs %s", code, r.config.Endpoint)
 	}
 
 	return nil

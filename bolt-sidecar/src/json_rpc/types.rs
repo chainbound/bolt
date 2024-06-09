@@ -1,4 +1,4 @@
-use alloy_rlp::Encodable;
+use alloy_eips::eip2718::Encodable2718;
 use ethereum_consensus::deneb::{mainnet::MAX_BYTES_PER_TRANSACTION, BlsSignature, Transaction};
 use ethereum_consensus::ssz::prelude::*;
 
@@ -53,7 +53,7 @@ impl TryFrom<InclusionRequest> for Constraint {
 
     fn try_from(params: InclusionRequest) -> Result<Self, Self::Error> {
         let mut buf: Vec<u8> = Vec::new();
-        params.tx.encode(&mut buf);
+        params.tx.encode_2718(&mut buf);
 
         let tx = Transaction::try_from(buf.as_slice())?;
 

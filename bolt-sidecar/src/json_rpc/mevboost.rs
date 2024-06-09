@@ -3,6 +3,7 @@
 //! so most requests are simply proxied to its API.
 
 use serde_json::Value;
+use std::time::Duration;
 
 use super::{api::JsonApiResult, types::BatchedSignedConstraints};
 
@@ -29,7 +30,8 @@ impl MevBoostClient {
     async fn post_json(&self, endpoint: &str, body: Vec<u8>) -> JsonApiResult {
         let res = self
             .client
-            .post(format!("{}/{}", self.url, endpoint))
+            .post(format!("{}{}", self.url, endpoint))
+            .timeout(Duration::from_secs(5))
             .header("content-type", "application/json")
             .body(body)
             .send()

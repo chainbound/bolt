@@ -37,9 +37,7 @@ import (
 	"github.com/holiman/uint256"
 )
 
-var (
-	maxBlobsPerTransaction = params.MaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
-)
+var maxBlobsPerTransaction = params.MaxBlobGasPerBlock / params.BlobTxBlobGasPerBlob
 
 // TransactionArgs represents the arguments to construct a new transaction
 // or a message call.
@@ -384,7 +382,8 @@ func (args *TransactionArgs) ToMessage(globalGasCap uint64, baseFee *big.Int) (*
 		gas = uint64(*args.Gas)
 	}
 	if globalGasCap != 0 && globalGasCap < gas {
-		log.Warn("Caller gas above allowance, capping", "requested", gas, "cap", globalGasCap)
+		// TODO: remove this, but for now it's too noisy
+		// log.Warn("Caller gas above allowance, capping", "requested", gas, "cap", globalGasCap)
 		gas = globalGasCap
 	}
 	var (

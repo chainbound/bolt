@@ -192,7 +192,10 @@ func (m *BoostService) getRouter() http.Handler {
 	r.HandleFunc(pathStatus, m.handleStatus).Methods(http.MethodGet)
 	r.HandleFunc(pathRegisterValidator, m.handleRegisterValidator).Methods(http.MethodPost)
 	r.HandleFunc(pathSubmitConstraint, m.handleSubmitConstraint).Methods(http.MethodPost)
-	r.HandleFunc(pathGetHeader, m.handleGetHeader).Methods(http.MethodGet)
+	// TODO: manage the switch between the endpoint with and without proofs
+	// with the bolt sidecar proxy instead of using the same response here.
+	// TODO: revert this to m.handleGetHeader
+	r.HandleFunc(pathGetHeader, m.handleGetHeaderWithProofs).Methods(http.MethodGet)
 	r.HandleFunc(pathGetHeaderWithProofs, m.handleGetHeaderWithProofs).Methods(http.MethodGet)
 	r.HandleFunc(pathGetPayload, m.handleGetPayload).Methods(http.MethodPost)
 
@@ -447,15 +450,17 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 	for _, signedConstraints := range payload {
 		constraintMessage := signedConstraints.Message
 
-		log.WithFields(logrus.Fields{
-			"slot":           constraintMessage.Slot,
-			"validatorIndex": constraintMessage.ValidatorIndex,
-			"count":          len(constraintMessage.Constraints),
-		}).Info("[BOLT]: adding inclusion constraints to cache")
+		log.Infof("[BOLT]: adding inclusion constraints to cache. slot = %d, validatorIndex = %d, number of relays = %d", constraintMessage.Slot, constraintMessage.ValidatorIndex, len(m.relays))
 
 		// Add the constraints to the cache.
 		// They will be cleared when we receive a payload for the slot in `handleGetPayload`
-		m.constraints.AddInclusionConstraints(constraintMessage.Slot, constraintMessage.Constraints)
+		err := m.constraints.AddInclusionConstraints(constraintMessage.Slot, constraintMessage.Constraints)
+		if err != nil {
+			log.WithError(err).Errorf("error adding inclusion constraints to cache")
+			continue
+		}
+
+		log.Infof("[BOLT]: added inclusion constraints to cache. slot = %d, validatorIndex = %d, number of relays = %d", constraintMessage.Slot, constraintMessage.ValidatorIndex, len(m.relays))
 	}
 
 	relayRespCh := make(chan error, len(m.relays))
@@ -465,7 +470,9 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 			url := relay.GetURI(pathSubmitConstraint)
 			log := log.WithField("url", url)
 
+			log.Infof("sending request for %d constraint to relay", len(payload))
 			_, err := SendHTTPRequest(context.Background(), m.httpClientSubmitConstraint, http.MethodPost, url, ua, nil, payload, nil)
+			log.Infof("sent request for %d constraint to relay. err = %v", len(payload), err)
 			relayRespCh <- err
 			if err != nil {
 				log.WithError(err).Warn("error calling submitConstraint on relay")
@@ -771,7 +778,9 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 				return
 			}
 
-			log.Infof("[BOLT]: DECODED RESPONSE PAYLOAD FROM RELAY: %s", responsePayload)
+			if responsePayload.Proofs != nil {
+				log.Infof("[BOLT]: get header with proofs at slot %s, received payload with proofs: %s", slot, responsePayload)
+			}
 
 			if code == http.StatusNoContent {
 				log.Warn("no-content response")
@@ -785,6 +794,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 
 			// Skip if payload is empty
 			if responsePayload.Bid.IsEmpty() {
+				log.Warn("Bid is empty")
 				return
 			}
 
@@ -845,7 +855,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 
 			// Skip if value (fee) is lower than the minimum bid
 			if bidInfo.value.CmpBig(m.relayMinBid.BigInt()) == -1 {
-				log.Debug("ignoring bid below min-bid value")
+				log.Warn("ignoring bid below min-bid value")
 				return
 			}
 
@@ -878,7 +888,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 			}
 
 			// Use this relay's response as mev-boost response because it's most profitable
-			log.Debug("new best bid")
+			log.Infof("new best bid. Has proofs: %v", responsePayload.Proofs != nil)
 			result.response = *responsePayload.Bid
 			result.bidInfo = bidInfo
 			result.t = time.Now()
@@ -903,7 +913,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 		"txRoot":      result.bidInfo.txRoot.String(),
 		"value":       valueEth.Text('f', 18),
 		"relays":      strings.Join(RelayEntriesToStrings(result.relays), ", "),
-	}).Info("best bid")
+	}).Infof("best bid")
 
 	// Remember the bid, for future logging in case of withholding
 	bidKey := bidRespKey{slot: slotUint, blockHash: result.bidInfo.blockHash.String()}
@@ -913,6 +923,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 
 	// Return the bid
 	m.respondOK(w, &result.response)
+	log.Infof("responded with best bid to beacon client")
 }
 
 func (m *BoostService) processCapellaPayload(w http.ResponseWriter, req *http.Request, log *logrus.Entry, payload *eth2ApiV1Capella.SignedBlindedBeaconBlock, body []byte) {

@@ -1161,11 +1161,11 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 				// since by assumption it is not nonce-conflicting
 				tx := lazyTx.Resolve()
 				if tx == nil {
-					log.Trace("Ignoring evicted transaction", "hash", lazyTx.Hash)
+					log.Trace("Ignoring evicted transaction", "hash", candidate.tx.Hash())
 					txs.Pop()
 					continue
 				}
-				candidate = candidateTx{tx: lazyTx.Resolve(), isConstraint: false}
+				candidate = candidateTx{tx: tx, isConstraint: false}
 			} else {
 				// No more pool tx left, we can add the unindexed ones if available
 				if len(constraintsWithoutIndex) == 0 {
@@ -1186,7 +1186,7 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
 		if candidate.tx.Protected() && !w.chainConfig.IsEIP155(env.header.Number) {
-			log.Trace("Ignoring replay protected transaction", "hash", lazyTx.Hash, "eip155", w.chainConfig.EIP155Block)
+			log.Trace("Ignoring replay protected transaction", "hash", candidate.tx.Hash(), "eip155", w.chainConfig.EIP155Block)
 			txs.Pop()
 			continue
 		}
@@ -1197,8 +1197,10 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 		switch {
 		case errors.Is(err, core.ErrNonceTooLow):
 			// New head notification data race between the transaction pool and miner, shift
-			log.Trace("Skipping transaction with low nonce", "hash", lazyTx.Hash, "sender", from, "nonce", candidate.tx.Nonce())
-			if !candidate.isConstraint {
+			log.Trace("Skipping transaction with low nonce", "hash", candidate.tx.Hash(), "sender", from, "nonce", candidate.tx.Nonce())
+			if candidate.isConstraint {
+				log.Warn(fmt.Sprintf("Skipping constraint with low nonce, hash %s, sender %s, nonce %d", candidate.tx.Hash(), from, candidate.tx.Nonce()))
+			} else {
 				txs.Shift()
 			}
 
@@ -1210,6 +1212,9 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 				// Update the amount of gas left for the constraints
 				constraintsTotalGasLeft -= candidate.tx.Gas()
 				constraintsTotalBlobGasLeft -= candidate.tx.BlobGas()
+
+				constraintTip, _ := candidate.tx.EffectiveGasTip(env.header.BaseFee)
+				log.Info(fmt.Sprintf("Executed constraint %s at index %d with effective gas tip %d", candidate.tx.Hash().String(), currentTxIndex, constraintTip))
 			} else {
 				txs.Shift()
 			}
@@ -1217,8 +1222,10 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 		default:
 			// Transaction is regarded as invalid, drop all consecutive transactions from
 			// the same sender because of `nonce-too-high` clause.
-			log.Debug("Transaction failed, account skipped", "hash", lazyTx.Hash, "err", err)
-			if !candidate.isConstraint {
+			log.Debug("Transaction failed, account skipped", "hash", candidate.tx.Hash(), "err", err)
+			if candidate.isConstraint {
+				log.Warn("Constraint failed, account skipped", "hash", candidate.tx.Hash(), "err", err)
+			} else {
 				txs.Pop()
 			}
 		}
@@ -1365,19 +1372,26 @@ func (w *worker) fillTransactionsSelectAlgo(interrupt *atomic.Int32, env *enviro
 		err             error
 	)
 
-	switch w.flashbots.algoType {
+	// switch w.flashbots.algoType {
+	//
+	// case ALGO_GREEDY, ALGO_GREEDY_BUCKETS, ALGO_GREEDY_MULTISNAP, ALGO_GREEDY_BUCKETS_MULTISNAP:
+	//
+	// 	blockBundles, allBundles, usedSbundles, mempoolTxHashes, err = w.fillTransactionsAlgoWorker(interrupt, env)
+	// 	blockBundles, allBundles, mempoolTxHashes, err = w.fillTransactions(interrupt, env, constraints)
+	// case ALGO_MEV_GETH:
+	// 	blockBundles, allBundles, mempoolTxHashes, err = w.fillTransactions(interrupt, env, constraints)
+	// default:
+	// 	blockBundles, allBundles, mempoolTxHashes, err = w.fillTransactions(interrupt, env, constraints)
+	// }
 
-	case ALGO_GREEDY, ALGO_GREEDY_BUCKETS, ALGO_GREEDY_MULTISNAP, ALGO_GREEDY_BUCKETS_MULTISNAP:
-		// FIXME: (BOLT) the greedy algorithms do not support the constraints interface at the moment.
-		// As such for this PoC we will be always using the MEV GETH algorithm regardless of the worker configuration.
-
-		// 	blockBundles, allBundles, usedSbundles, mempoolTxHashes, err = w.fillTransactionsAlgoWorker(interrupt, env)
+	// 	// FIXME: (BOLT) the greedy algorithms do not support the constraints interface at the moment.
+	// 	// As such for this PoC we will be always using the MEV GETH algorithm regardless of the worker configuration.
+	if len(constraints) > 0 {
 		blockBundles, allBundles, mempoolTxHashes, err = w.fillTransactions(interrupt, env, constraints)
-	case ALGO_MEV_GETH:
-		blockBundles, allBundles, mempoolTxHashes, err = w.fillTransactions(interrupt, env, constraints)
-	default:
-		blockBundles, allBundles, mempoolTxHashes, err = w.fillTransactions(interrupt, env, constraints)
+	} else {
+		blockBundles, allBundles, usedSbundles, mempoolTxHashes, err = w.fillTransactionsAlgoWorker(interrupt, env)
 	}
+
 	return blockBundles, allBundles, usedSbundles, mempoolTxHashes, err
 }
 
@@ -1385,6 +1399,7 @@ func (w *worker) fillTransactionsSelectAlgo(interrupt *atomic.Int32, env *enviro
 // into the given sealing block. The transaction selection and ordering strategy can
 // be customized with the plugin in the future.
 func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, constraints types.HashToConstraintDecoded) ([]types.SimulatedBundle, []types.SimulatedBundle, map[common.Hash]struct{}, error) {
+	log.Info(fmt.Sprintf("Filling transactions with %d constraints:", len(constraints)))
 	w.mu.RLock()
 	tip := w.tip
 	w.mu.RUnlock()
@@ -1398,6 +1413,12 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 		for _, tx := range txs {
 			mempoolTxHashes[tx.Hash] = struct{}{}
 		}
+	}
+
+	// NOTE: as done with builder txs, we need to fill mempoolTxHashes with the constraints hashes
+	// in order to pass block validation
+	for hash := range constraints {
+		mempoolTxHashes[hash] = struct{}{}
 	}
 
 	if env.header.BaseFee != nil {
@@ -1417,6 +1438,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 
 	for _, constraint := range constraints {
 		from, err := types.Sender(env.signer, constraint.Tx)
+		log.Info(fmt.Sprintf("Inside fillTransactions, constraint %s from %s", constraint.Tx.Hash().String(), from.String()))
 		if err != nil {
 			// NOTE: is this the right behaviour? If this happens the builder is not able to
 			// produce a valid bid
@@ -1467,36 +1489,37 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 
 	var blockBundles []types.SimulatedBundle
 	var allBundles []types.SimulatedBundle
-	if w.flashbots.isFlashbots {
-		bundles, ccBundleCh := w.eth.TxPool().MevBundles(env.header.Number, env.header.Time)
-		bundles = append(bundles, <-ccBundleCh...)
-
-		var (
-			bundleTxs       []*types.Transaction
-			resultingBundle simulatedBundle
-			mergedBundles   []types.SimulatedBundle
-			numBundles      int
-			err             error
-		)
-		// Sets allBundles in outer scope
-		bundleTxs, resultingBundle, mergedBundles, numBundles, allBundles, err = w.generateFlashbotsBundle(env, bundles, pending)
-		if err != nil {
-			log.Error("Failed to generate flashbots bundle", "err", err)
-			return nil, nil, nil, err
-		}
-		log.Info("Flashbots bundle", "ethToCoinbase", ethIntToFloat(resultingBundle.TotalEth), "gasUsed", resultingBundle.TotalGasUsed, "bundleScore", resultingBundle.MevGasPrice, "bundleLength", len(bundleTxs), "numBundles", numBundles, "worker", w.flashbots.maxMergedBundles)
-		if len(bundleTxs) == 0 {
-			return nil, nil, nil, errors.New("no bundles to apply")
-		}
-		if err := w.commitBundle(env, bundleTxs, interrupt); err != nil {
-			return nil, nil, nil, err
-		}
-		blockBundles = mergedBundles
-		env.profit.Add(env.profit, resultingBundle.EthSentToCoinbase)
-	}
+	// if w.flashbots.isFlashbots {
+	// 	bundles, ccBundleCh := w.eth.TxPool().MevBundles(env.header.Number, env.header.Time)
+	// 	bundles = append(bundles, <-ccBundleCh...)
+	//
+	// 	var (
+	// 		bundleTxs       []*types.Transaction
+	// 		resultingBundle simulatedBundle
+	// 		mergedBundles   []types.SimulatedBundle
+	// 		numBundles      int
+	// 		err             error
+	// 	)
+	// 	// Sets allBundles in outer scope
+	// 	bundleTxs, resultingBundle, mergedBundles, numBundles, allBundles, err = w.generateFlashbotsBundle(env, bundles, pending)
+	// 	if err != nil {
+	// 		log.Error("Failed to generate flashbots bundle", "err", err)
+	// 		return nil, nil, nil, err
+	// 	}
+	// 	log.Info("Flashbots bundle", "ethToCoinbase", ethIntToFloat(resultingBundle.TotalEth), "gasUsed", resultingBundle.TotalGasUsed, "bundleScore", resultingBundle.MevGasPrice, "bundleLength", len(bundleTxs), "numBundles", numBundles, "worker", w.flashbots.maxMergedBundles)
+	// 	if len(bundleTxs) == 0 {
+	// 		log.Info("No bundles to apply")
+	// 		return nil, nil, nil, errors.New("no bundles to apply")
+	// 	}
+	// 	if err := w.commitBundle(env, bundleTxs, interrupt); err != nil {
+	// 		return nil, nil, nil, err
+	// 	}
+	// 	blockBundles = mergedBundles
+	// 	env.profit.Add(env.profit, resultingBundle.EthSentToCoinbase)
+	// }
 
 	// Fill the block with all available pending transactions.
-	if len(localPlainTxs) > 0 || len(localBlobTxs) > 0 {
+	if len(localPlainTxs) > 0 || len(localBlobTxs) > 0 || len(constraints) > 0 {
 		plainTxs := newTransactionsByPriceAndNonce(env.signer, localPlainTxs, nil, nil, env.header.BaseFee)
 		blobTxs := newTransactionsByPriceAndNonce(env.signer, localBlobTxs, nil, nil, env.header.BaseFee)
 
@@ -1504,7 +1527,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 			return nil, nil, nil, err
 		}
 	}
-	if len(remotePlainTxs) > 0 || len(remoteBlobTxs) > 0 {
+	if len(remotePlainTxs) > 0 || len(remoteBlobTxs) > 0 || len(constraints) > 0 {
 		plainTxs := newTransactionsByPriceAndNonce(env.signer, remotePlainTxs, nil, nil, env.header.BaseFee)
 		blobTxs := newTransactionsByPriceAndNonce(env.signer, remoteBlobTxs, nil, nil, env.header.BaseFee)
 
@@ -1725,6 +1748,13 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 	blockBundles, allBundles, usedSbundles, mempoolTxHashes, err := w.fillTransactionsSelectAlgo(nil, work, params.constraints)
 	if err != nil {
 		return &newPayloadResult{err: err}
+	}
+
+	// NOTE: as done with builder txs, we need to fill mempoolTxHashes with the constraints hashes
+	// in order to pass block validation. Otherwise the constraints will be rejected as unknown
+	// because they not part of the mempool and not part of the known bundles
+	for hash := range params.constraints {
+		mempoolTxHashes[hash] = struct{}{}
 	}
 
 	// We mark transactions created by the builder as mempool transactions so code validating bundles will not fail
