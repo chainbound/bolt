@@ -29,16 +29,21 @@ app.post("/events", (req, res) => {
   const { message } = req.body;
 
   if (!message) {
+    console.error("No message provided");
     res.status(400).send("No message provided");
   } else {
-    // Remove time measurements from the message
-    const messageWithoutMeasurements = message.replace(/ in .+$/g, "");
-    // Deduplicate events
-    if (EVENTS_SET.has(messageWithoutMeasurements)) {
-      res.status(200).send("OK");
-      return;
-    }
-    EVENTS_SET.add(messageWithoutMeasurements);
+    // // Remove time measurements from the message
+    // const messageWithoutMeasurements = message.replace(/ in .+$/g, "");
+    // // Deduplicate events
+    // if (EVENTS_SET.has(messageWithoutMeasurements)) {
+    //   console.warn(
+    //     "Duplicate event received, discarding:",
+    //     messageWithoutMeasurements
+    //   );
+    //   res.status(200).send("OK");
+    //   return;
+    // }
+    // EVENTS_SET.add(messageWithoutMeasurements);
 
     // Broadcast the message to all connected WebSocket clients
     io.emit("new-event", { message, timestamp: new Date().toISOString() });
@@ -129,7 +134,7 @@ async function sendDevnetEvents() {
   sendDevnetEvents();
 })();
 
-// Poll for the slot number until we reach slot 128
+// Poll for the latest slot number
 (async () => {
   let beaconClientUrl = DEVNET_ENDPOINTS?.[EventType.BEACON_CLIENT_URL_FOUND];
 
@@ -138,23 +143,14 @@ async function sendDevnetEvents() {
     beaconClientUrl = DEVNET_ENDPOINTS?.[EventType.BEACON_CLIENT_URL_FOUND];
   }
 
-  LATEST_SLOT = await getSlot(beaconClientUrl);
-  while (LATEST_SLOT <= 128) {
+  while (true) {
     LATEST_SLOT = await getSlot(beaconClientUrl);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
     io.emit("new-event", {
       type: EventType.NEW_SLOT,
       message: LATEST_SLOT,
       timestamp: new Date().toISOString(),
     });
-  }
 
-  if (LATEST_SLOT > 128) {
-    io.emit("new-event", {
-      type: EventType.NEW_SLOT,
-      message: 128,
-      timestamp: new Date().toISOString(),
-    });
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 })();

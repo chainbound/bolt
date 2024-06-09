@@ -21,17 +21,22 @@ export const SERVER_URL = "http://localhost:3001";
 export default function Home() {
   const [events, setEvents] = useState<Array<Event>>([]);
 
-  const [preconfSent, setPreconfSent] = useState<boolean>(false);
-  const [preconfSlot, setPreconfSlot] = useState<number>(-1);
-  const [preconfIncluded, setPreconfIncluded] = useState<boolean>(false);
+  const [preconfSent, setPreconfSent] = useState(false);
+  const [preconfSlot, setPreconfSlot] = useState(-1);
+  const [preconfIncluded, setPreconfIncluded] = useState(false);
+  const [preconfFinalized, setPreconfFinalized] = useState(false);
 
-  const [timerActive, setTimerActive] = useState<boolean>(false);
-  const [time, setTime] = useState(0);
+  const [preconfTimerActive, setPreconfTimerActive] = useState(false);
+  const [preconfTime, setPreconfTime] = useState(0);
+  const [inclusionTimerActive, setInclusionTimerActive] = useState(false);
+  const [inclusionTime, setInclusionTime] = useState(0);
+  const [finalizationTimerActive, setFinalizationTimerActive] = useState(false);
+  const [finalizationTime, setFinalizationTime] = useState(0);
 
-  const [newSlotNumber, setNewSlotNumber] = useState<number>(-1);
-  const [beaconClientUrl, setBeaconClientUrl] = useState<string>("");
-  const [providerUrl, setProviderUrl] = useState<string>("");
-  const [explorerUrl, setExplorerUrl] = useState<string>("");
+  const [newSlotNumber, setNewSlotNumber] = useState(-1);
+  const [beaconClientUrl, setBeaconClientUrl] = useState("");
+  const [providerUrl, setProviderUrl] = useState("");
+  const [explorerUrl, setExplorerUrl] = useState("");
 
   useEffect(() => {
     fetch(`${SERVER_URL}/retry-port-events`);
@@ -44,7 +49,19 @@ export default function Home() {
     const newSocket = io(SERVER_URL, { autoConnect: true });
 
     newSocket.on("new-event", (event: Event) => {
-      console.debug("Event from server:", event);
+      console.info("Event from server:", event);
+
+      if (event.type === EventType.NEW_SLOT) {
+        const slot = Number(event.message);
+        if (slot === preconfSlot + 64) {
+          setPreconfFinalized(true);
+          setFinalizationTimerActive(false);
+          dispatchEvent({
+            message: `Preconfirmed transaction finalized at slot ${slot}`,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
 
       // If the event has a special type, handle it differently
       switch (event.type) {
@@ -77,6 +94,7 @@ export default function Home() {
         event.message.toLowerCase().includes("verified merkle proof for tx")
       ) {
         setPreconfIncluded(true);
+        setInclusionTimerActive(false);
         dispatchEvent({
           message: `Preconfirmed transaction included at slot ${preconfSlot}`,
           link: `${explorerUrl}/slot/${preconfSlot}`,
@@ -93,22 +111,54 @@ export default function Home() {
   useEffect(() => {
     let interval: any = null;
 
-    if (timerActive) {
+    if (preconfTimerActive) {
       interval = setInterval(() => {
-        setTime((prev) => prev + 2);
+        setPreconfTime((prev) => prev + 2);
       }, 2);
     } else {
       clearInterval(interval);
     }
 
     return () => clearInterval(interval);
-  }, [timerActive]);
+  }, [preconfTimerActive]);
+
+  useEffect(() => {
+    let interval: any = null;
+
+    if (inclusionTimerActive) {
+      interval = setInterval(() => {
+        setInclusionTime((prev) => prev + 10);
+      }, 10);
+    } else {
+      clearInterval(interval);
+    }
+
+    return () => clearInterval(interval);
+  }, [inclusionTimerActive]);
+
+  useEffect(() => {
+    let interval: any = null;
+
+    if (finalizationTimerActive) {
+      interval = setInterval(() => {
+        setFinalizationTime((prev) => prev + 30);
+      }, 30);
+    } else {
+      clearInterval(interval);
+    }
+
+    return () => clearInterval(interval);
+  }, [finalizationTimerActive]);
 
   async function sendPreconfirmation() {
     // Reset state
     setEvents([]);
     setPreconfSent(true);
     setPreconfIncluded(false);
+    setPreconfFinalized(false);
+    setPreconfTime(0);
+    setInclusionTime(0);
+    setFinalizationTime(0);
 
     try {
       const { payload, txHash } = await createPreconfPayload(providerUrl);
@@ -120,16 +170,18 @@ export default function Home() {
 
       // 1. POST preconfirmation.
       // The preconfirmation is considered valid as soon as the server responds with a 200 status code.
-      setTime(0);
-      setTimerActive(true);
+      setPreconfTimerActive(true);
+      setInclusionTimerActive(true);
+      setFinalizationTimerActive(true);
+
       const res = await fetch(`${SERVER_URL}/preconfirmation`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (res.status === 200) {
-        console.log("Preconfirmation successful");
-        setTimerActive(false);
+        console.log("Preconfirmation response was successful");
+        setPreconfTimerActive(false);
       }
     } catch (e) {
       console.error(e);
@@ -139,6 +191,11 @@ export default function Home() {
   function dispatchEvent(event: Event) {
     setEvents((prev) => [event, ...prev]);
   }
+
+  const getStatusClass = (status: boolean) => {
+    const base = "h-4 w-4 border border-gray-800 rounded-full ";
+    return base + (status ? "bg-green-500" : "bg-yellow-500");
+  };
 
   return (
     <main className="flex min-h-screen flex-col items-center p-24">
@@ -193,8 +250,46 @@ export default function Home() {
         <div className="w-full max-w-6xl pt-4">
           {beaconClientUrl && providerUrl ? (
             <div className="w-full">
+              {preconfSent && (
+                <div className="grid gap-3 border p-4 border-gray-800 mb-4">
+                  <p className="text-lg">Status</p>
+                  <ul className="text-sm space-y-2">
+                    <li className="flex items-center">
+                      <span className="w-96">Transaction preconfirmed:</span>
+                      <span
+                        id="traffic-light-1"
+                        className={getStatusClass(preconfSent)}
+                      />
+                      <span className="pl-3">{preconfTime}ms</span>
+                    </li>
+                    <li className="flex items-center">
+                      <span className="w-96">
+                        Transaction confirmed (included in a block):
+                      </span>
+                      <span
+                        id="traffic-light-2"
+                        className={getStatusClass(preconfIncluded)}
+                      />
+                      <span className="pl-3">{inclusionTime / 1000}s</span>
+                    </li>
+                    <li className="flex items-center">
+                      <span className="w-96">
+                        Transaction finalized (2 epochs after inclusion):
+                      </span>
+                      <span
+                        id="traffic-light-3"
+                        className={getStatusClass(preconfFinalized)}
+                      />
+                      <span className="pl-3">{finalizationTime / 1000}s</span>
+                    </li>
+                  </ul>
+                </div>
+              )}
+
               <div className="grid gap-3 border p-4 border-gray-800">
-                <p className="text-lg">Step 1: send a transactions eligible for pre-confirmation</p>
+                <p className="text-lg">
+                  Step 1: Send a transaction eligible for preconfirmation
+                </p>
                 <small className="text-sm">
                   By clicking this button you will create a transaction and send
                   it as a preconfirmation request to the BOLT sidecar of the
@@ -214,52 +309,45 @@ export default function Home() {
               </div>
 
               {preconfSent && (
-                <div className="grid gap-3 border p-4 border-gray-800 mt-4">
-                  <p className="text-lg">
-                    Step 2: wait for proposers to issue the preconfirmation response
-                  </p>
-                  <small className="text-sm max-w-3xl">
-                    The transaction will be processed by BOLT and you will
-                    receive a preconfirmation for inclusion in the next block.
-                  </small>
-
-                  <div>
-                    <p>
-                      Waiting for preconfirmation. Time elapsed: <b>{time}</b>ms
+                <>
+                  <div className="grid gap-3 border p-4 border-gray-800 mt-4">
+                    <p className="text-lg">
+                      Step 2: Wait for proposers to issue the preconfirmation
+                      response
                     </p>
+                    <small className="text-sm max-w-3xl">
+                      The transaction will be processed by BOLT and you will
+                      receive a preconfirmation for inclusion in the next block.
+                    </small>
                   </div>
-                </div>
+
+                  <div className="grid gap-3 border p-4 border-gray-800 mt-4">
+                    <p className="text-lg">Event logs</p>
+                    <ScrollArea className="max-h-80">
+                      <ul className="font-mono" style={{ fontSize: "0.8rem" }}>
+                        {[...events].reverse().map((message, index) => (
+                          <li key={index}>
+                            <span>{parseDateToMs(message.timestamp)}</span>
+                            {" | "}
+                            {message.message.toString()}
+                            {message.link && (
+                              <a
+                                href={message.link}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-blue-500"
+                              >
+                                {" "}
+                                [link]
+                              </a>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </ScrollArea>
+                  </div>
+                </>
               )}
-
-              <div className="grid gap-3 border p-4 border-gray-800 mt-4">
-                <p className="text-lg">Event logs</p>
-                <small className="text-sm max-w-3xl">
-                  This is the list of events received from the server.
-                </small>
-
-                <ScrollArea className="max-h-80">
-                  <ul className="font-mono text-sm">
-                    {events.map((message, index) => (
-                      <li key={index}>
-                        <span>{parseDateToMs(message.timestamp)}</span>
-                        {" | "}
-                        {message.message.toString()}
-                        {message.link && (
-                          <a
-                            href={message.link}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-blue-500"
-                          >
-                            {" "}
-                            [link]
-                          </a>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                </ScrollArea>
-              </div>
             </div>
           ) : (
             <div className="w-full max-w-6xl pt-4">

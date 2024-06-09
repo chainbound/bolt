@@ -446,6 +446,8 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 		"ua":     ua,
 	})
 
+	path := req.URL.Path
+
 	log.Info("submitConstraint")
 
 	payload := BatchedSignedConstraints{}
@@ -473,6 +475,8 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 	}
 
 	relayRespCh := make(chan error, len(m.relays))
+
+	EmitBoltDemoEvent(fmt.Sprintf("received %d constraints, forwarding to Bolt relays... (path: %s)", len(payload), path))
 
 	for _, relay := range m.relays {
 		go func(relay RelayEntry) {
