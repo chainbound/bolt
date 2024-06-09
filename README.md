@@ -1,8 +1,8 @@
-<div align="center" style="max-width: 500px; margin: 0 auto;">
+<div align="center">
   <picture>
     <source srcset="./.github/assets/bolt-logo-wm-dark.png" media="(prefers-color-scheme: dark)">
     <source srcset="./.github/assets/bolt-logo-wm-light.png" media="(prefers-color-scheme: light)">
-    <img src="./.github/assets/bolt-logo-wm-light.png" alt="BOLT" style="max-width: 100%; width: 100%;">
+    <img src="./.github/assets/bolt-logo-wm-light.png" alt="BOLT" width="600px">
   </picture>
 </div>
 
@@ -125,6 +125,10 @@ Make sure you have the following requirements on your machine:
 - [Just](https://github.com/casey/just) installed
 - [Kurtosis CLI](https://docs.kurtosis.com/install/) installed
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) installed
+
+> [!WARNING]
+> The Kurtosis CLI version tested is `0.88.16`. Some issues may arise if you are
+> using a different version. Please make sure to install the correct version.
 
 Then, clone this repository and navigate to the root directory of the project:
 
