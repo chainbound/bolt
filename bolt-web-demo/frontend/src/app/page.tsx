@@ -253,9 +253,45 @@ export default function Home() {
         <div className="w-full max-w-6xl pt-4">
           {beaconClientUrl && providerUrl ? (
             <div className="w-full">
+              {preconfSent && (
+                <div className="grid gap-3 border p-4 border-gray-800 mb-4">
+                  <p className="text-lg">Status</p>
+                  <ul className="text-sm space-y-2">
+                    <li className="flex items-center">
+                      <span className="w-96">Transaction preconfirmed:</span>
+                      <span
+                        id="traffic-light-1"
+                        className={getStatusClass(preconfSent)}
+                      />
+                      <span className="pl-3">{preconfTime}ms</span>
+                    </li>
+                    <li className="flex items-center">
+                      <span className="w-96">
+                        Transaction confirmed (included in a block):
+                      </span>
+                      <span
+                        id="traffic-light-2"
+                        className={getStatusClass(preconfIncluded)}
+                      />
+                      <span className="pl-3">{inclusionTime / 1000}s</span>
+                    </li>
+                    <li className="flex items-center">
+                      <span className="w-96">
+                        Transaction finalized (2 epochs after inclusion):
+                      </span>
+                      <span
+                        id="traffic-light-3"
+                        className={getStatusClass(preconfFinalized)}
+                      />
+                      <span className="pl-3">{finalizationTime / 1000}s</span>
+                    </li>
+                  </ul>
+                </div>
+              )}
+
               <div className="grid gap-3 border p-4 border-gray-800">
                 <p className="text-lg">
-                  Step 1: send a transaction eligible for preconfirmation
+                  Step 1: Send a transaction eligible for preconfirmation
                 </p>
                 <small className="text-sm">
                   By clicking this button you will create a transaction and send
@@ -279,7 +315,7 @@ export default function Home() {
                 <>
                   <div className="grid gap-3 border p-4 border-gray-800 mt-4">
                     <p className="text-lg">
-                      Step 2: wait for proposers to issue the preconfirmation
+                      Step 2: Wait for proposers to issue the preconfirmation
                       response
                     </p>
                     <small className="text-sm max-w-3xl">
@@ -289,44 +325,10 @@ export default function Home() {
                   </div>
 
                   <div className="grid gap-3 border p-4 border-gray-800 mt-4">
-                    <p className="text-lg">Status</p>
-                    <ul className="text-sm space-y-2">
-                      <li className="flex items-center">
-                        <span className="w-96">Preconfirmation received:</span>
-                        <span
-                          id="traffic-light-1"
-                          className={getStatusClass(preconfSent)}
-                        />
-                        <span className="pl-3">{preconfTime}ms</span>
-                      </li>
-                      <li className="flex items-center">
-                        <span className="w-96">
-                          Preconfirmed transaction included in a block :
-                        </span>
-                        <span
-                          id="traffic-light-2"
-                          className={getStatusClass(preconfIncluded)}
-                        />
-                        <span className="pl-3">{inclusionTime}ms</span>
-                      </li>
-                      <li className="flex items-center">
-                        <span className="w-96">
-                          Inclusion block finalized (2 epochs after inclusion):
-                        </span>
-                        <span
-                          id="traffic-light-3"
-                          className={getStatusClass(preconfFinalized)}
-                        />
-                        <span className="pl-3">{finalizationTime}ms</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="grid gap-3 border p-4 border-gray-800 mt-4">
                     <p className="text-lg">Event logs</p>
                     <ScrollArea className="max-h-80">
                       <ul className="font-mono" style={{ fontSize: "0.8rem" }}>
-                        {events.map((message, index) => (
+                        {[...events].reverse().map((message, index) => (
                           <li key={index}>
                             <span>{parseDateToMs(message.timestamp)}</span>
                             {" | "}
