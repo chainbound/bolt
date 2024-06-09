@@ -236,7 +236,7 @@ export default function Home() {
               )}
 
               <div className="grid gap-3 border p-4 border-gray-800 mt-4">
-                <p className="text-lg"> Status</p>
+                <p className="text-lg">Status</p>
                 <small className="text-sm max-w-3xl">
                   <ul className="font-mono text-sm space-y-2">
                     <li className="flex items-center">
@@ -247,7 +247,7 @@ export default function Home() {
                       <span className="w-64">Preconfirmation included:</span>
                       <span className={`h-4 w-4 rounded-full ${getStatusClass(preconfIncluded)}`}></span>
                     </li>
-                    <li> Preconfirmation finalized  : {time === 0 ? "false" : "true"}</li>
+                    <li> Preconfirmation finalized:</li>
                   </ul>
                 </small>
               </div>
