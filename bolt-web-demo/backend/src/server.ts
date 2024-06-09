@@ -29,16 +29,21 @@ app.post("/events", (req, res) => {
   const { message } = req.body;
 
   if (!message) {
+    console.error("No message provided");
     res.status(400).send("No message provided");
   } else {
-    // Remove time measurements from the message
-    const messageWithoutMeasurements = message.replace(/ in .+$/g, "");
-    // Deduplicate events
-    if (EVENTS_SET.has(messageWithoutMeasurements)) {
-      res.status(200).send("OK");
-      return;
-    }
-    EVENTS_SET.add(messageWithoutMeasurements);
+    // // Remove time measurements from the message
+    // const messageWithoutMeasurements = message.replace(/ in .+$/g, "");
+    // // Deduplicate events
+    // if (EVENTS_SET.has(messageWithoutMeasurements)) {
+    //   console.warn(
+    //     "Duplicate event received, discarding:",
+    //     messageWithoutMeasurements
+    //   );
+    //   res.status(200).send("OK");
+    //   return;
+    // }
+    // EVENTS_SET.add(messageWithoutMeasurements);
 
     // Broadcast the message to all connected WebSocket clients
     io.emit("new-event", { message, timestamp: new Date().toISOString() });

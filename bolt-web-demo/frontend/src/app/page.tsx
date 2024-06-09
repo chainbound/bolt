@@ -49,7 +49,7 @@ export default function Home() {
     const newSocket = io(SERVER_URL, { autoConnect: true });
 
     newSocket.on("new-event", (event: Event) => {
-      console.debug("Event from server:", event);
+      console.info("Event from server:", event);
 
       // If the event has a special type, handle it differently
       switch (event.type) {
@@ -159,9 +159,6 @@ export default function Home() {
     setPreconfTime(0);
     setInclusionTime(0);
     setFinalizationTime(0);
-    setPreconfTimerActive(false);
-    setInclusionTimerActive(false);
-    setFinalizationTimerActive(false);
 
     try {
       const { payload, txHash } = await createPreconfPayload(providerUrl);
@@ -223,7 +220,7 @@ export default function Home() {
             width={20}
             height={20}
           />
-          <p>– v0.1.0-alpha</p>
+          <p>– v0.1.0</p>
         </div>
       </div>
 
