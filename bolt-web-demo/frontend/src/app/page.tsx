@@ -74,13 +74,11 @@ export default function Home() {
       // If the event is a preconfirmation, extract the tx hash and slot number
       // and display a message with the explorer URL
       if (
-        event.message
-          .toLowerCase()
-          .includes("verified merkle proof for tx_hash")
+        event.message.toLowerCase().includes("verified merkle proof for tx")
       ) {
         setPreconfIncluded(true);
         dispatchEvent({
-          message: `Preconfirmation included`,
+          message: `Preconfirmed transaction included at slot ${preconfSlot}`,
           link: `${explorerUrl}/slot/${preconfSlot}`,
           timestamp: new Date().toISOString(),
         });
@@ -144,10 +142,29 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col items-center p-24">
-      <div className="w-full max-w-5xl items-center justify-between lg:flex">
+      <div className="w-full max-w-6xl items-center justify-between lg:flex">
         <Image src="/bolt-logo.png" alt="BOLT" width={100} height={100} />
 
-        <p>Your friendly preconfirmation companion.</p>
+        <div className="flex items-center gap-2.5 mt-2">
+          <p>
+            Powered by{" "}
+            <a
+              href="https://www.chainbound.io"
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-1 decoration-dotted decoration-slate-700 cursor-pointer"
+            >
+              Chainbound
+            </a>
+          </p>
+          <Image
+            src="/chainbound-logo.svg"
+            alt="chainbound"
+            width={20}
+            height={20}
+          />
+          <p>– v0.1.0</p>
+        </div>
       </div>
 
       {newSlotNumber < 128 ? (
@@ -173,16 +190,17 @@ export default function Home() {
           )}
         </>
       ) : (
-        <div className="w-full max-w-5xl pt-4">
+        <div className="w-full max-w-6xl pt-4">
           {beaconClientUrl && providerUrl ? (
             <div className="w-full">
               <div className="grid gap-3 border p-4 border-gray-800">
                 <p className="text-lg">Step 1: send a transaction</p>
-                <small className="text-sm max-w-3xl">
+                <small className="text-sm">
                   By clicking this button you will create a transaction and send
                   it as a preconfirmation request to the BOLT sidecar of the
-                  next proposer in line. This transaction is crafted from a
-                  pre-funded account in the devnet for demo purposes.
+                  next proposer in line. <br />
+                  This transaction is crafted from a pre-funded account in the
+                  devnet for demo purposes.
                 </small>
 
                 <div className="flex flex-col items-center">
@@ -244,7 +262,7 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            <div className="w-full max-w-5xl pt-4">
+            <div className="w-full max-w-6xl pt-4">
               <div className="grid gap-3 border p-4 border-gray-800">
                 <p className="text-lg">
                   Waiting for the devnet servers to start...
@@ -267,6 +285,27 @@ export default function Home() {
           )}
         </div>
       )}
+
+      <div className="w-full max-w-6xl pt-4">
+        <div className="grid gap-3 p-4 border border-gray-800">
+          <p className="text-lg">Disclaimer</p>
+          <small className="text-sm">
+            This demo application showcases the BOLT protocol happy-case.
+            <br />
+            Real-world deployments should consider the following missing
+            components and features (which are under development):
+            <ul className="list-disc list-inside ml-3 mt-1">
+              <li>Automatic safety & liveness fault detection</li>
+              <li>On-chain dispute logic to verifiably attribute faults</li>
+              <li>BOLT RPC server proxy integration</li>
+              <li>
+                High network participation (at least 1 proposer opted-in in the
+                lookahead window)
+              </li>
+            </ul>
+          </small>
+        </div>
+      </div>
     </main>
   );
 }
