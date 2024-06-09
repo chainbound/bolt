@@ -216,7 +216,7 @@ export default function Home() {
               {preconfSent && (
                 <div className="grid gap-3 border p-4 border-gray-800 mt-4">
                   <p className="text-lg">
-                    Step 2: wait for a cryptoeconomic preconfirmation
+                    Step 2: wait for proposers to issue the preconfirmation response
                   </p>
                   <small className="text-sm max-w-3xl">
                     The transaction will be processed by BOLT and you will
