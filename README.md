@@ -183,3 +183,6 @@ just clean
 [fb-relay]: https://github.com/flashbots/mev-boost-relay
 [fb-builder]: https://github.com/flashbots/builder
 [kurtosis]: https://www.kurtosis.com/
+
+## License
+MIT. Forked repositories have their own licenses.
