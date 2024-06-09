@@ -528,16 +528,9 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 		}
 		timeForProofs := time.Since(timeStart)
 
-		event := strings.NewReader(
-			fmt.Sprintf("{ \"message\": \"BOLT-BUILDER: Created %d merkle proofs for block %d in %v\"}",
-				len(constraints), opts.Block.Number(), timeForProofs))
-		eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
-		if err != nil {
-			log.Error("Failed to log preconfirms event: ", err)
-		}
-		if eventRes != nil {
-			defer eventRes.Body.Close()
-		}
+		// BOLT: send event to web demo
+		message := fmt.Sprintf("created %d merkle proofs for block %d in %v", len(constraints), opts.Block.Number(), timeForProofs)
+		EmitBoltDemoEvent(message)
 
 		versionedBlockRequestWithPreconfsProofs = &common.VersionedSubmitBlockRequestWithProofs{
 			Inner:  versionedBlockRequest,

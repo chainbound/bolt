@@ -2,19 +2,24 @@
 
 import io from "socket.io-client";
 import Image from "next/image";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { createAndSignTransaction } from "@/lib/wallet";
+import { createPreconfPayload } from "@/lib/wallet";
 import { EventType } from "@/lib/types";
 import { Progress } from "@/components/ui/progress";
 
 type Event = { message: string; type?: EventType; timestamp: string };
 
+export const SERVER_URL = "http://localhost:3001";
+
 export default function Home() {
   const [events, setEvents] = useState<Array<Event>>([]);
 
   const [preconfSent, setPreconfSent] = useState<boolean>(false);
+  const [preconfSlot, setPreconfSlot] = useState<number>(-1);
+  const [preconfIncluded, setPreconfIncluded] = useState<boolean>(false);
+
   const [timerActive, setTimerActive] = useState<boolean>(false);
   const [time, setTime] = useState(0);
 
@@ -22,8 +27,6 @@ export default function Home() {
   const [beaconClientUrl, setBeaconClientUrl] = useState<string>("");
   const [providerUrl, setProviderUrl] = useState<string>("");
   const [explorerUrl, setExplorerUrl] = useState<string>("");
-
-  const SERVER_URL = "http://localhost:3001";
 
   useEffect(() => {
     fetch(`${SERVER_URL}/retry-port-events`);
@@ -36,19 +39,23 @@ export default function Home() {
     const newSocket = io(SERVER_URL, { autoConnect: true });
 
     newSocket.on("new-event", (event: Event) => {
-      console.log("Event from server:", event);
+      console.debug("Event from server:", event);
 
       // If the event has a special type, handle it differently
       switch (event.type) {
         case EventType.BEACON_CLIENT_URL_FOUND:
+          console.info("Beacon client URL found:", event.message);
           setBeaconClientUrl(event.message);
           return;
         case EventType.JSONRPC_PROVIDER_URL_FOUND:
+          console.info("Provider URL found:", event.message);
           setProviderUrl(event.message);
           return;
         case EventType.EXPLORER_URL_FOUND:
+          console.info("Explorer URL found:", event.message);
           setExplorerUrl(event.message);
         case EventType.MEV_SIDECAR_URL_FOUND:
+          console.info("MEV sidecar URL found:", event.message);
           return;
         case EventType.NEW_SLOT:
           setNewSlotNumber(Number(event.message));
@@ -57,27 +64,18 @@ export default function Home() {
           break;
       }
 
+      // If the event is a preconfirmation, extract the tx hash and slot number
+      // and display a message with the explorer URL
       if (
         event.message
           .toLowerCase()
-          .includes("preconfirmation proof verified for tx hash")
+          .includes("verified merkle proof for tx_hash")
       ) {
-        const txHash = event.message.match(/0x[a-fA-F0-9]{64}/g);
-        const slot = event.message
-          .match(/slot \d+/g)
-          ?.toString()
-          .match(/\d+/g)
-          ?.toString();
-
-        new Promise((_) =>
-          setTimeout(() => {
-            const event: Event = {
-              message: `Preconfirmation ${txHash} available here: ${explorerUrl}/slot/${slot}`,
-              timestamp: new Date().toISOString(),
-            };
-            setEvents((prev) => [event, ...prev]);
-          }, 1000)
-        );
+        setPreconfIncluded(true);
+        dispatchEvent({
+          message: `Preconfirmation included. Explorer URL: ${explorerUrl}/slot/${preconfSlot}`,
+          timestamp: new Date().toISOString(),
+        });
       }
 
       setEvents((prev) => [event, ...prev]);
@@ -102,34 +100,40 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [timerActive]);
 
-  const sendPreconfirmation = useCallback(
-    async function () {
-      setEvents([]);
-      setPreconfSent(true);
-      try {
-        const { signedTx, txHash } = await createAndSignTransaction(
-          providerUrl
-        );
+  async function sendPreconfirmation() {
+    // Reset state
+    setEvents([]);
+    setPreconfSent(true);
+    setPreconfIncluded(false);
 
-        // 1. POST preconfirmation.
-        // The preconfirmation is considered valid as soon as the server responds with a 200 status code.
-        setTime(0);
-        setTimerActive(true);
-        const res = await fetch("http://localhost:3001/preconfirmation", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ signedTx, txHash }),
-        });
-        if (res.status === 200) {
-          console.log("Preconfirmation successful");
-          setTimerActive(false);
-        }
-      } catch (e) {
-        console.error(e);
+    try {
+      const { payload, txHash } = await createPreconfPayload(providerUrl);
+      dispatchEvent({
+        message: `Preconfirmation request sent for tx: ${txHash} at slot ${payload.slot}`,
+        timestamp: new Date().toISOString(),
+      });
+
+      // 1. POST preconfirmation.
+      // The preconfirmation is considered valid as soon as the server responds with a 200 status code.
+      setTime(0);
+      setTimerActive(true);
+      const res = await fetch(`${SERVER_URL}/preconfirmation`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (res.status === 200) {
+        console.log("Preconfirmation successful");
+        setTimerActive(false);
       }
-    },
-    [providerUrl]
-  );
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  function dispatchEvent(event: Event) {
+    setEvents((prev) => [event, ...prev]);
+  }
 
   return (
     <main className="flex min-h-screen flex-col items-center p-24">
@@ -142,11 +146,11 @@ export default function Home() {
       {newSlotNumber < 128 ? (
         <>
           {newSlotNumber === -1 ? (
-            <div className="w-full max-w-5xl pt-4">
+            <div className="w-full max-w-6xl pt-4">
               <p className="text-center pt-10">Loading...</p>
             </div>
           ) : (
-            <div className="w-full max-w-5xl pt-4">
+            <div className="w-full max-w-6xl pt-4">
               <div className="grid gap-3 border p-4 border-gray-800">
                 <p className="text-lg">
                   MEV Boost is not active yet, please wait
@@ -214,7 +218,7 @@ export default function Home() {
                       <li key={index}>
                         <span>{parseDateToMs(message.timestamp)}</span>
                         {" | "}
-                        {JSON.stringify(message.message)}
+                        {message.message.toString()}
                       </li>
                     ))}
                   </ul>
