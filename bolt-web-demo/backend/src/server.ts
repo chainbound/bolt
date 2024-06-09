@@ -129,7 +129,7 @@ async function sendDevnetEvents() {
   sendDevnetEvents();
 })();
 
-// Poll for the slot number until we reach slot 128
+// Poll for the latest slot number
 (async () => {
   let beaconClientUrl = DEVNET_ENDPOINTS?.[EventType.BEACON_CLIENT_URL_FOUND];
 
@@ -138,23 +138,14 @@ async function sendDevnetEvents() {
     beaconClientUrl = DEVNET_ENDPOINTS?.[EventType.BEACON_CLIENT_URL_FOUND];
   }
 
-  LATEST_SLOT = await getSlot(beaconClientUrl);
-  while (LATEST_SLOT <= 128) {
+  while (true) {
     LATEST_SLOT = await getSlot(beaconClientUrl);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
     io.emit("new-event", {
       type: EventType.NEW_SLOT,
       message: LATEST_SLOT,
       timestamp: new Date().toISOString(),
     });
-  }
 
-  if (LATEST_SLOT > 128) {
-    io.emit("new-event", {
-      type: EventType.NEW_SLOT,
-      message: 128,
-      timestamp: new Date().toISOString(),
-    });
+    await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 })();
