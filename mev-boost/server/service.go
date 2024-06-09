@@ -428,7 +428,7 @@ func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithInclusionP
 				log.Info(fmt.Sprintf("[BOLT]: Merkle proof verified for tx hash %s in %s", proof.TxHash.String(), elapsed))
 
 				// BOLT: send event to web demo
-				message := fmt.Sprintf("verified merkle proof for tx_hash %s in %v", proof.TxHash.String(), elapsed)
+				message := fmt.Sprintf("verified merkle proof for tx: %s in %v", proof.TxHash.String(), elapsed)
 				EmitBoltDemoEvent(message)
 			}
 		}
