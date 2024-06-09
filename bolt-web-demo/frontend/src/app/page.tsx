@@ -51,6 +51,18 @@ export default function Home() {
     newSocket.on("new-event", (event: Event) => {
       console.info("Event from server:", event);
 
+      if (event.type === EventType.NEW_SLOT) {
+        const slot = Number(event.message);
+        if (slot === preconfSlot + 64) {
+          setPreconfFinalized(true);
+          setFinalizationTimerActive(false);
+          dispatchEvent({
+            message: `Preconfirmed transaction finalized at slot ${slot}`,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+
       // If the event has a special type, handle it differently
       switch (event.type) {
         case EventType.BEACON_CLIENT_URL_FOUND:
@@ -89,18 +101,6 @@ export default function Home() {
           timestamp: new Date().toISOString(),
         });
       }
-
-      if (event.type === EventType.NEW_SLOT) {
-        const slot = Number(event.message);
-        if (slot === preconfSlot + 64) {
-          setPreconfFinalized(true);
-          setFinalizationTimerActive(false);
-          dispatchEvent({
-            message: `Preconfirmed transaction finalized at slot ${slot}`,
-            timestamp: new Date().toISOString(),
-          });
-        }
-      }
     });
 
     return () => {
@@ -127,8 +127,8 @@ export default function Home() {
 
     if (inclusionTimerActive) {
       interval = setInterval(() => {
-        setInclusionTime((prev) => prev + 2);
-      }, 2);
+        setInclusionTime((prev) => prev + 10);
+      }, 10);
     } else {
       clearInterval(interval);
     }
@@ -141,8 +141,8 @@ export default function Home() {
 
     if (finalizationTimerActive) {
       interval = setInterval(() => {
-        setFinalizationTime((prev) => prev + 2);
-      }, 2);
+        setFinalizationTime((prev) => prev + 30);
+      }, 30);
     } else {
       clearInterval(interval);
     }
