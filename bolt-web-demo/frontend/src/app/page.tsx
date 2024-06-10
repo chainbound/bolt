@@ -52,12 +52,11 @@ export default function Home() {
       console.info("Event from server:", event);
 
       if (event.type === EventType.NEW_SLOT) {
-        const slot = Number(event.message);
-        if (slot === preconfSlot + 64) {
+        if (Number(event.message) === preconfSlot + 64) {
           setPreconfFinalized(true);
           setFinalizationTimerActive(false);
           dispatchEvent({
-            message: `Preconfirmed transaction finalized at slot ${slot}`,
+            message: `Preconfirmed transaction finalized at slot ${event.message}`,
             timestamp: new Date().toISOString(),
           });
         }
