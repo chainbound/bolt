@@ -8,11 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"math/big"
 	"net/http"
 	_ "os"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -28,7 +26,6 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/capella"
 	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	utilbellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
 	"github.com/chainbound/shardmap"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
@@ -460,85 +457,25 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 	var versionedBlockRequestWithPreconfsProofs *common.VersionedSubmitBlockRequestWithProofs
 
 	if len(constraints) > 0 {
-		EmitBoltDemoEvent(fmt.Sprintf("sealing block %d with %d constraints", opts.Block.Number(), len(constraints)))
-		log.Info(fmt.Sprintf("[BOLT]: Sealing block with %d preconfirmed transactions for block %d", len(constraints), opts.Block.Number()))
-		payloadTransactions := opts.Block.Transactions()
-
-		// BOLT: sanity check: verify that the block actually contains the preconfirmed transactions
-		for hash, constraint := range constraints {
-			if !slices.Contains(payloadTransactions, constraint.Tx) {
-				log.Error(fmt.Sprintf("[BOLT]: Preconfirmed transaction %s not found in block %s. Block can't be sent", hash, opts.Block.Hash()))
-				return nil
-			}
-		}
-
-		// BOLT: generate merkle tree from payload transactions (we need raw RLP bytes for this)
-		rawTxs := make([]bellatrix.Transaction, len(payloadTransactions))
-		for i, tx := range payloadTransactions {
-			raw, err := tx.MarshalBinary()
-			if err != nil {
-				log.Error("[BOLT]: could not marshal transaction", "txHash", tx.Hash(), "err", err)
-				continue
-			}
-			rawTxs[i] = bellatrix.Transaction(raw)
-		}
-
-		log.Info(fmt.Sprintf("[BOLT]: Generated %d raw transactions for merkle tree", len(rawTxs)))
-		bellatrixPayloadTxs := utilbellatrix.ExecutionPayloadTransactions{Transactions: rawTxs}
-
-		rootNode, err := bellatrixPayloadTxs.GetTree()
-		if err != nil {
-			log.Error("[BOLT]: could not get tree from transactions", "err", err)
-		}
-
-		// BOLT: Set the value of nodes. This is MANDATORY for the proof calculation
-		// to output the leaf correctly. This is also never documented in fastssz. -__-
-		rootNode.Hash()
-
-		// BOLT: calculate merkle proofs for preconfirmed transactions
-		preconfirmationsProofs := make([]*common.PreconfirmationWithProof, 0, len(constraints))
+		message := fmt.Sprintf("sealing block %d with %d constraints", opts.Block.Number(), len(constraints))
+		log.Info(message)
+		EmitBoltDemoEvent(message)
 
 		timeStart := time.Now()
-		for hash := range constraints {
-			// get the index of the preconfirmed transaction in the block
-			preconfIndex := slices.IndexFunc(payloadTransactions, func(tx *types.Transaction) bool { return tx.Hash() == hash })
-			if preconfIndex == -1 {
-				log.Error(fmt.Sprintf("Preconfirmed transaction %s not found in block %s", hash, opts.Block.Hash()))
-				log.Error(fmt.Sprintf("block has %v transactions", len(payloadTransactions)))
-				continue
-			}
-
-			// using our gen index formula: 2 * 2^20 + preconfIndex
-			generalizedIndex := int(math.Pow(float64(2), float64(21))) + preconfIndex
-
-			log.Info(fmt.Sprintf("[BOLT]: Calculating merkle proof for preconfirmed transaction %s with index %d. Preconf index: %d",
-				hash, generalizedIndex, preconfIndex))
-
-			timeStartInner := time.Now()
-			proof, err := rootNode.Prove(generalizedIndex)
-			if err != nil {
-				log.Error("[BOLT]: could not calculate merkle proof for preconfirmed transaction", "txHash", hash, "err", err)
-				continue
-			}
-			log.Info(fmt.Sprintf("[BOLT]: Calculated merkle proof for preconf %s in %s", hash, time.Since(timeStartInner)))
-			log.Info(fmt.Sprintf("[BOLT]: LEAF: %x, Is leaf nil? %v", proof.Leaf, proof.Leaf == nil))
-
-			merkleProof := new(common.SerializedMerkleProof)
-			merkleProof.FromFastSszProof(proof)
-
-			preconfirmationsProofs = append(preconfirmationsProofs, &common.PreconfirmationWithProof{
-				TxHash:      phase0.Hash32(hash),
-				MerkleProof: merkleProof,
-			})
-		}
+		inclusionProof, _, err := CalculateMerkleMultiProofs(opts.Block.Transactions(), constraints)
 		timeForProofs := time.Since(timeStart)
+
+		if err != nil {
+			log.Error("could not calculate merkle multiproofs", "err", err)
+			return err
+		}
 
 		// BOLT: send event to web demo
 		EmitBoltDemoEvent(fmt.Sprintf("created %d merkle proofs for block %d in %v", len(constraints), opts.Block.Number(), timeForProofs))
 
 		versionedBlockRequestWithPreconfsProofs = &common.VersionedSubmitBlockRequestWithProofs{
 			Inner:  versionedBlockRequest,
-			Proofs: preconfirmationsProofs,
+			Proofs: inclusionProof,
 		}
 	}
 
@@ -558,7 +495,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 		// NOTE: we can ignore preconfs for `processBuiltBlock`
 		go b.processBuiltBlock(opts.Block, opts.BlockValue, opts.OrdersClosedAt, opts.SealedAt, opts.CommitedBundles, opts.AllBundles, opts.UsedSbundles, &blockBidMsg)
 		if versionedBlockRequestWithPreconfsProofs != nil {
-			log.Info(fmt.Sprintf("[BOLT]: Sending block with %d proofs to relay %s", len(versionedBlockRequestWithPreconfsProofs.Proofs), versionedBlockRequestWithPreconfsProofs.String()))
+			log.Info(fmt.Sprintf("[BOLT]: Sending block with %d proofs to relay %s", len(versionedBlockRequestWithPreconfsProofs.Proofs.TransactionHashes), versionedBlockRequestWithPreconfsProofs.String()))
 			err = b.relay.SubmitBlockWithProofs(versionedBlockRequestWithPreconfsProofs, opts.ValidatorData)
 		} else if len(constraints) == 0 {
 			// If versionedBlockRequestWithPreconfsProofs is nil and no constraints, then we don't have proofs to send

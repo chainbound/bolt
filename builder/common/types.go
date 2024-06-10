@@ -488,7 +488,7 @@ type HexBytes []byte
 
 // MarshalJSON implements json.Marshaler.
 func (h HexBytes) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf(`"%#x"`, h)), nil
+	return []byte(fmt.Sprintf(`"%#x"`, []byte(h))), nil
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
@@ -515,58 +515,46 @@ func (s *HexBytes) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-// SerializedMerkleProof contains a serialized Merkle proof of transaction inclusion.
-//   - `Index` is the generalized index of the included transaction from the SSZ tree
-//     created from the list of transactions.
-//   - `Hashes` are the other branch hashes needed to reconstruct the Merkle proof.
-//
-// For reference, see https://github.com/ethereum/consensus-specs/blob/dev/ssz/simple-serialize.md
-type SerializedMerkleProof struct {
-	Index  int        `json:"index"`
-	Hashes []HexBytes `ssz-size:"dynamic" json:"hashes"`
+// InclusionProof is a Merkle Multiproof of inclusion of a set of TransactionHashes
+type InclusionProof struct {
+	TransactionHashes  []Hash      `json:"transaction_hashes"`
+	GeneralizedIndexes []uint64    `json:"generalized_indexes"`
+	MerkleHashes       []*HexBytes `json:"merkle_hashes"`
 }
 
-func (s *SerializedMerkleProof) FromFastSszProof(p *fastSsz.Proof) {
-	s.Index = p.Index
-	s.Hashes = make([]HexBytes, len(p.Hashes))
-	for i, h := range p.Hashes {
-		s.Hashes[i] = h
+// InclusionProofFromMultiProof converts a fastssz.Multiproof into an InclusionProof, without
+// filling the TransactionHashes
+func InclusionProofFromMultiProof(mp *fastSsz.Multiproof) *InclusionProof {
+	merkleHashes := make([]*HexBytes, len(mp.Hashes))
+	for i, h := range mp.Hashes {
+		merkleHashes[i] = new(HexBytes)
+		*(merkleHashes[i]) = h
+	}
+
+	leaves := make([]*HexBytes, len(mp.Leaves))
+	for i, h := range mp.Leaves {
+		leaves[i] = new(HexBytes)
+		*(leaves[i]) = h
+	}
+	generalIndexes := make([]uint64, len(mp.Indices))
+	for i, idx := range mp.Indices {
+		generalIndexes[i] = uint64(idx)
+	}
+	return &InclusionProof{
+		MerkleHashes:       merkleHashes,
+		GeneralizedIndexes: generalIndexes,
 	}
 }
 
-func (s *SerializedMerkleProof) ToFastSszProof() *fastSsz.Proof {
-	p := &fastSsz.Proof{
-		Index:  s.Index,
-		Hashes: make([][]byte, len(s.Hashes)),
-	}
-	for i, h := range s.Hashes {
-		p.Hashes[i] = h
-	}
-	return p
-}
-
-// PreconfirmationWithProof is a preconfirmed transaction in the block with
-// proof of inclusion, using Merkle Trees.
-type PreconfirmationWithProof struct {
-	// The transaction hash of the preconfirmation
-	TxHash phase0.Hash32 `ssz-size:"32" json:"txHash"`
-	// The Merkle proof of the preconfirmation
-	MerkleProof *SerializedMerkleProof `json:"merkleProof"`
-}
-
-func (p PreconfirmationWithProof) String() string {
-	out, err := json.Marshal(p)
-	if err != nil {
-		return err.Error()
-	}
-	return string(out)
+func (p *InclusionProof) String() string {
+	return JSONStringify(p)
 }
 
 // A wrapper struct over `builderSpec.VersionedSubmitBlockRequest`
 // to include preconfirmation proofs
 type VersionedSubmitBlockRequestWithProofs struct {
 	Inner  *builderSpec.VersionedSubmitBlockRequest `json:"inner"`
-	Proofs []*PreconfirmationWithProof              `json:"proofs"`
+	Proofs *InclusionProof                          `json:"proofs"`
 }
 
 // this is necessary, because the mev-boost-relay deserialization doesn't expect a "Version" and "Data" wrapper object
@@ -577,7 +565,7 @@ func (v *VersionedSubmitBlockRequestWithProofs) MarshalJSON() ([]byte, error) {
 	case consensusSpec.DataVersionBellatrix:
 		return json.Marshal(struct {
 			Inner  *bellatrix.SubmitBlockRequest `json:"inner"`
-			Proofs []*PreconfirmationWithProof   `json:"proofs"`
+			Proofs *InclusionProof               `json:"proofs"`
 		}{
 			Inner:  v.Inner.Bellatrix,
 			Proofs: v.Proofs,
@@ -585,15 +573,15 @@ func (v *VersionedSubmitBlockRequestWithProofs) MarshalJSON() ([]byte, error) {
 	case consensusSpec.DataVersionCapella:
 		return json.Marshal(struct {
 			Inner  *capella.SubmitBlockRequest `json:"inner"`
-			Proofs []*PreconfirmationWithProof `json:"proofs"`
+			Proofs *InclusionProof             `json:"proofs"`
 		}{
 			Inner:  v.Inner.Capella,
 			Proofs: v.Proofs,
 		})
 	case consensusSpec.DataVersionDeneb:
 		return json.Marshal(struct {
-			Inner  *deneb.SubmitBlockRequest   `json:"inner"`
-			Proofs []*PreconfirmationWithProof `json:"proofs"`
+			Inner  *deneb.SubmitBlockRequest `json:"inner"`
+			Proofs *InclusionProof           `json:"proofs"`
 		}{
 			Inner:  v.Inner.Deneb,
 			Proofs: v.Proofs,
@@ -604,11 +592,7 @@ func (v *VersionedSubmitBlockRequestWithProofs) MarshalJSON() ([]byte, error) {
 }
 
 func (v *VersionedSubmitBlockRequestWithProofs) String() string {
-	out, err := json.Marshal(v)
-	if err != nil {
-		return err.Error()
-	}
-	return string(out)
+	return JSONStringify(v)
 }
 
 // SignedConstraintsList are a list of proposer constraints that a builder must satisfy

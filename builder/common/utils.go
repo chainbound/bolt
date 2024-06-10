@@ -1,5 +1,7 @@
 package common
 
+import "encoding/json"
+
 func Find[T any](slice []*T, predicate func(el *T) bool) *T {
 	for _, el := range slice {
 		if predicate(el) {
@@ -53,4 +55,12 @@ func Map[T any, U any](slice []*T, mapper func(el *T) *U) []*U {
 		result[i] = mapper(el)
 	}
 	return result
+}
+
+func JSONStringify(obj any) string {
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }
