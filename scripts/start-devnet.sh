@@ -3,7 +3,7 @@
 echo "Starting the devnet..."
 
 # spin up the kurtosis devnet
-kurtosis run --enclave bolt-devnet github.com/chainbound/ethereum-package --args-file ./scripts/kurtosis_config.yaml
+kurtosis run --enclave bolt-devnet github.com/chainbound/ethereum-package@infra/zuberlin-devnet --args-file ./scripts/kurtosis_config.yaml
 echo "Devnet online! Waiting for the RPC to be available..."
 sleep 5
 
