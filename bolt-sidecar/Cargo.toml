@@ -62,6 +62,10 @@ rand = "0.8.5"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 
+# commit-boost
+cb-crypto = { git = "https://github.com/Commit-Boost/commit-boost-client" }
+cb-common = { git = "https://github.com/Commit-Boost/commit-boost-client" }
+
 [dev-dependencies]
 alloy-node-bindings = { git = "https://github.com/alloy-rs/alloy" }
 

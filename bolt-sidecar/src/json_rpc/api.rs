@@ -8,12 +8,14 @@ use tracing::info;
 
 use super::mevboost::MevBoostClient;
 use crate::{
+    client::commit_boost::CommitBoostClient,
     crypto::{
         bls::{from_bls_signature_to_consensus_signature, BlsSecretKey},
         BLSSigner,
     },
-    json_rpc::types::{BatchedSignedConstraints, ConstraintsMessage, SignedConstraints},
-    primitives::{CommitmentRequest, Slot},
+    primitives::{
+        BatchedSignedConstraints, CommitmentRequest, ConstraintsMessage, SignedConstraints, Slot,
+    },
 };
 
 /// Default size of the api request cache (implemented as a LRU).
@@ -62,10 +64,10 @@ pub trait CommitmentsRpc {
 pub struct JsonRpcApi {
     /// A cache of commitment requests.
     cache: Arc<RwLock<lru::LruCache<Slot, Vec<CommitmentRequest>>>>,
-    /// The signer for this sidecar.
-    signer: BLSSigner,
     /// The client for the MEV-Boost sidecar.
     mevboost_client: MevBoostClient,
+    /// The commit boost client
+    commit_boost: CommitBoostClient,
     /// The client for the beacon node API.
     #[allow(dead_code)]
     beacon_api_client: BeaconApiClient,
@@ -73,7 +75,11 @@ pub struct JsonRpcApi {
 
 impl JsonRpcApi {
     /// Create a new instance of the JSON-RPC API.
-    pub fn new(private_key: BlsSecretKey, mevboost_url: String, beacon_url: String) -> Arc<Self> {
+    pub fn new(
+        mevboost_url: String,
+        beacon_url: String,
+        commit_boost: CommitBoostClient,
+    ) -> Arc<Self> {
         let cap = NonZeroUsize::new(DEFAULT_API_REQUEST_CACHE_SIZE).unwrap();
         let beacon_url = reqwest::Url::parse(&beacon_url).expect("failed to parse beacon node URL");
 
@@ -81,7 +87,7 @@ impl JsonRpcApi {
             cache: Arc::new(RwLock::new(lru::LruCache::new(cap))),
             mevboost_client: MevBoostClient::new(mevboost_url),
             beacon_api_client: BeaconApiClient::new(beacon_url),
-            signer: BLSSigner::new(private_key),
+            commit_boost,
         })
     }
 }
@@ -144,7 +150,9 @@ impl CommitmentsRpc for JsonRpcApi {
         // let validator_index = self.beacon_api_client.get_proposer_duties(get_epoch_from_slot(params.slot)).await?;
         let message = ConstraintsMessage::build(0, params.slot, params.clone())?;
 
-        let signature = from_bls_signature_to_consensus_signature(self.signer.sign(&message));
+        let bls_signature = self.commit_boost.sign_constraint(&message).await.unwrap();
+
+        let signature = from_bls_signature_to_consensus_signature(bls_signature);
         let signed_constraints: BatchedSignedConstraints =
             vec![SignedConstraints { message, signature }];
 

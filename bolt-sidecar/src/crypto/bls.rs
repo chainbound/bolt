@@ -56,9 +56,8 @@ impl BLSSigner {
     }
 }
 
-pub fn from_bls_signature_to_consensus_signature(sig: Signature) -> BlsSignature {
-    let bytes = sig.to_bytes();
-    BlsSignature::try_from(bytes.as_slice()).unwrap()
+pub fn from_bls_signature_to_consensus_signature(sig_bytes: impl AsRef<[u8]>) -> BlsSignature {
+    BlsSignature::try_from(sig_bytes.as_ref()).unwrap()
 }
 
 pub fn random_bls_secret() -> BlsSecretKey {
