@@ -16,7 +16,7 @@ type Event = {
   link?: string;
 };
 
-export const SERVER_URL = "http://localhost:3001";
+export const SERVER_URL = "http://remotelab:3001";
 
 export default function Home() {
   const [events, setEvents] = useState<Array<Event>>([]);
@@ -66,15 +66,15 @@ export default function Home() {
       switch (event.type) {
         case EventType.BEACON_CLIENT_URL_FOUND:
           console.info("Beacon client URL found:", event.message);
-          setBeaconClientUrl(event.message);
+          setBeaconClientUrl(event.message.replace("127.0.0.1", "remotelab"));
           return;
         case EventType.JSONRPC_PROVIDER_URL_FOUND:
           console.info("Provider URL found:", event.message);
-          setProviderUrl(event.message);
+          setProviderUrl(event.message.replace("127.0.0.1", "remotelab"));
           return;
         case EventType.EXPLORER_URL_FOUND:
           console.info("Explorer URL found:", event.message);
-          setExplorerUrl(event.message);
+          setExplorerUrl(event.message.replace("127.0.0.1", "remotelab"));
         case EventType.MEV_SIDECAR_URL_FOUND:
           console.info("MEV sidecar URL found:", event.message);
           return;

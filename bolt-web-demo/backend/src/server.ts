@@ -92,7 +92,7 @@ app.post("/preconfirmation", async (req, res) => {
     return;
   }
 
-  const preconfirmationResponse = await fetch(`http://${mevSidecarUrl}`, {
+  fetch(`http://${mevSidecarUrl}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -101,10 +101,12 @@ app.post("/preconfirmation", async (req, res) => {
       method: "bolt_inclusionPreconfirmation",
       params: [{ slot, tx, signature }],
     }),
-  }).then((response) => response.json());
-
-  res.setHeader("Content-Type", "application/json");
-  res.send({ result: preconfirmationResponse, slot });
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      res.setHeader("Content-Type", "application/json");
+      res.send({ result: data, slot });
+    });
 });
 
 server.listen(SERVER_PORT, () => {
