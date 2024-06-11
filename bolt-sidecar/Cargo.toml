@@ -37,7 +37,7 @@ alloy-consensus = { git = "https://github.com/alloy-rs/alloy", features = [
     "k256",
 ] }
 alloy-json-rpc = { git = "https://github.com/alloy-rs/alloy" }
-alloy-primitives = "0.7.1"
+alloy-primitives = { version = "0.7.1", features = [ "rand" ] }
 alloy-rlp = "0.3"
 
 reqwest = "0.12"

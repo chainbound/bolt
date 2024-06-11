@@ -187,6 +187,7 @@ dependencies = [
  "const-hex",
  "derive_more",
  "ethereum_ssz",
+ "getrandom 0.2.15",
  "hex-literal",
  "itoa",
  "k256 0.13.3",
