@@ -227,7 +227,7 @@ func Find[T any](slice []*T, predicate func(arg *T) bool) *T {
 // This is only used for demo purposes and should be removed in production.
 func EmitBoltDemoEvent(message string) {
 	event := strings.NewReader(fmt.Sprintf("{ \"message\": \"BOLT-RELAY: %s\"}", message))
-	eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
+	eventRes, err := http.Post("http://172.17.0.1:3001/events", "application/json", event)
 	if err != nil {
 		fmt.Printf("Failed to send web demo event: %v", err)
 	}

@@ -170,7 +170,7 @@ fn emit_bolt_demo_event<T: Into<String>>(message: T) {
     tokio::spawn(async move {
         let client = reqwest::Client::new();
         client
-            .post("http://host.docker.internal:3001/events")
+            .post("http://172.17.0.1:3001/events")
             .header("Content-Type", "application/json")
             .body(
                 serde_json::to_string(
