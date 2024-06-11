@@ -17,12 +17,12 @@ secp256k1 = { version = "0.29.0", features = ["hashes", "rand"] }
 
 # alloy
 alloy-rpc-client = { git = "https://github.com/alloy-rs/alloy", features = [
-    "reqwest",
-    "ws",
-    "pubsub",
+  "reqwest",
+  "ws",
+  "pubsub",
 ] }
 alloy-provider = { git = "https://github.com/alloy-rs/alloy", features = [
-    "ws",
+  "ws",
 ] }
 alloy-signer = { git = "https://github.com/alloy-rs/alloy" }
 alloy-signer-wallet = { git = "https://github.com/alloy-rs/alloy" }
@@ -34,7 +34,7 @@ alloy-pubsub = { git = "https://github.com/alloy-rs/alloy" }
 alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy" }
 alloy-rpc-types-beacon = { git = "https://github.com/alloy-rs/alloy" }
 alloy-consensus = { git = "https://github.com/alloy-rs/alloy", features = [
-    "k256",
+  "k256",
 ] }
 alloy-json-rpc = { git = "https://github.com/alloy-rs/alloy" }
 alloy-primitives = "0.7.1"
@@ -69,3 +69,7 @@ alloy-node-bindings = { git = "https://github.com/alloy-rs/alloy" }
 [[bin]]
 name = "bolt-sidecar"
 path = "bin/sidecar.rs"
+
+[features]
+default = ["demo"]
+demo = []

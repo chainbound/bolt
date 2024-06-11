@@ -62,13 +62,12 @@ pub trait CommitmentsRpc {
 pub struct JsonRpcApi {
     /// A cache of commitment requests.
     cache: Arc<RwLock<lru::LruCache<Slot, Vec<CommitmentRequest>>>>,
-    /// The signer for this sidecar.
-    signer: BLSSigner,
     /// The client for the MEV-Boost sidecar.
     mevboost_client: MevBoostClient,
     /// The client for the beacon node API.
-    #[allow(dead_code)]
     beacon_api_client: BeaconApiClient,
+    /// The signer for this sidecar.
+    signer: BLSSigner,
 }
 
 impl JsonRpcApi {
@@ -139,12 +138,18 @@ impl CommitmentsRpc for JsonRpcApi {
             }
         } // Drop the lock
 
-        // parse the request into constraints and sign them with the sidecar signer
-        // TODO: get the validator index from somewhere
-        // let validator_index = self.beacon_api_client.get_proposer_duties(get_epoch_from_slot(params.slot)).await?;
-        let message = ConstraintsMessage::build(0, params.slot, params.clone())?;
+        #[cfg(feature = "demo")]
+        let (validator_index, signer) =
+            crate::demo::validator_data(&self.beacon_api_client, params.slot).await?;
+        #[cfg(not(feature = "demo"))]
+        let (validator_index, signer) = (0, &self.signer);
 
-        let signature = from_bls_signature_to_consensus_signature(self.signer.sign(&message));
+        // parse the request into constraints and sign them with the sidecar signer
+        let message =
+            ConstraintsMessage::build(validator_index as u64, params.slot, params.clone())?;
+
+        let signature = from_bls_signature_to_consensus_signature(signer.sign(&message));
+
         let signed_constraints: BatchedSignedConstraints =
             vec![SignedConstraints { message, signature }];
 
@@ -180,7 +185,6 @@ fn emit_bolt_demo_event<T: Into<String>>(message: T) {
             )
             .send()
             .await
-            .expect("failed to send event to demo server");
     });
 }
 

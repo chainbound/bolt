@@ -6,7 +6,7 @@ pub use blst::min_pk::SecretKey as BlsSecretKey;
 pub use ethereum_consensus::deneb::BlsSignature;
 
 /// The BLS Domain Separator used in Ethereum 2.0.
-pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_";
+pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
 
 /// Trait for any types that can be signed and verified with BLS.
 /// This trait is used to abstract over the signing and verification of different types.
