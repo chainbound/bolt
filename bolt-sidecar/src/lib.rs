@@ -6,6 +6,8 @@
 mod client;
 mod common;
 mod crypto;
+#[cfg(feature = "demo")]
+mod demo;
 mod primitives;
 mod state;
 mod template;

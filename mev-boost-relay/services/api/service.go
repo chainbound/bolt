@@ -26,6 +26,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
 	"github.com/chainbound/shardmap"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
@@ -1809,28 +1810,16 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 		validatorIndex := signedConstraints.Message.ValidatorIndex
 		proposerPubKeyStr, found := api.datastore.GetKnownValidatorPubkeyByIndex(validatorIndex)
 		if !found {
-			log.Errorf("could not find proposer pubkey for index %d", validatorIndex)
-			api.RespondError(w, http.StatusBadRequest, "could not match proposer index to pubkey")
+			message := fmt.Sprintf("could not find proposer pubkey for index %d", validatorIndex)
+			log.Error(message)
+			api.RespondError(w, http.StatusBadRequest, message)
 			return
 		}
-		proposerPubKey, err := utils.HexToPubkey(proposerPubKeyStr.String())
+		proposerPubKeyBytes, err := hexutil.Decode(proposerPubKeyStr.String())
 		if err != nil {
-			log.WithError(err).Warn("could not convert pubkey to phase0.BLSPubKey")
-			api.RespondError(w, http.StatusBadRequest, "could not convert pubkey to phase0.BLSPubKey")
-			return
-		}
-		blsPublicKey, err := bls.PublicKeyFromBytes(proposerPubKey[:])
-		if err != nil {
-			log.Errorf("could not convert proposer pubkey to bls.PublicKey: %v", err)
-			api.RespondError(w, http.StatusInternalServerError, "could not convert proposer pubkey to bls.PublicKey")
-			return
-		}
-
-		// Verify signature
-		signature, err := bls.SignatureFromBytes(signedConstraints.Signature[:])
-		if err != nil {
-			log.Errorf("could not convert signature to bls.Signature: %v", err)
-			api.RespondError(w, http.StatusBadRequest, "Invalid raw BLS signature")
+			message := "could not decode proposer pubkey hex string into bytes"
+			log.WithError(err).Warn(message)
+			api.RespondError(w, http.StatusInternalServerError, message)
 			return
 		}
 
@@ -1839,24 +1828,27 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 		// NOTE: even if payload is sent with JSON, the signature digest is the SSZ encoding of the message
 		messageSSZ, err := message.MarshalSSZ()
 		if err != nil {
-			log.Errorf("could not marshal constraint message to json: %v", err)
-			api.RespondError(w, http.StatusInternalServerError, "could not marshal constraint message to json")
+			message := fmt.Sprintf("could not marshal constraint message to json: %v", err)
+			log.Error(message)
+			api.RespondError(w, http.StatusInternalServerError, message)
 			return
 		}
-		_, err = bls.VerifySignature(signature, blsPublicKey, messageSSZ)
+
+		ok, err := bls.VerifySignatureBytes(messageSSZ, signedConstraints.Signature[:], proposerPubKeyBytes[:])
 		if err != nil {
-			log.Errorf("error while veryfing signature: %v", err)
-			api.RespondError(w, http.StatusInternalServerError, "error while veryfing signature")
+			message := fmt.Sprintf("error while veryfing signature: %v", err)
+			log.Error(message)
+			api.RespondError(w, http.StatusInternalServerError, message)
 			return
 		}
 
 		// TODO: uncomment this code once we send messages signed with correct validator pubkey on the sidecar.
 		// We can for setup this for the devnet but it's not trivial so we'll skip it for now.
-		// if !ok {
-		// 	log.Error("Invalid BLS signature over constraint message")
-		// 	api.RespondError(w, http.StatusBadRequest, fmt.Sprintf("Invalid BLS signature over constraint message %s", messageSSZ))
-		// 	return
-		// }
+		if !ok {
+			log.Error("Invalid BLS signature over constraint message")
+			api.RespondError(w, http.StatusBadRequest, "Invalid BLS signature over constraint message")
+			return
+		}
 
 		broadcastToChannels(api.constraintsConsumers, signedConstraints)
 
