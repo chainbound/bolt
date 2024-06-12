@@ -124,10 +124,12 @@ async fn main() -> Result<()> {
         tx.set_gas_price(69_420_000_000_000u128); // 69_420 gwei
         transaction_signer.fill_transaction(&mut tx, None).await?;
 
-        let next_proposer = lookahead
-            .iter()
-            .find(|duty| duty.slot == event.slot + 1)
-            .expect("Next proposer known");
+        // TODO: fix panic
+
+        let Some(next_proposer) = lookahead.iter().find(|duty| duty.slot == event.slot + 1) else {
+            tracing::warn!("At end of epoch, waiting");
+            continue;
+        };
 
         // Decide which protocol to use based on the CLI option. If none is provided,
         // use whatever protocol is supported by the next proposer based on the validator range.
@@ -163,12 +165,61 @@ async fn main() -> Result<()> {
                         config.bolt.endpoint.clone(),
                         next_proposer.slot,
                     )
-                } else {
+                } else if config
+                    .titan
+                    .validator_range
+                    .is_in_range(next_proposer.validator_index)
+                {
                     (
                         PreconfProtocol::Titan,
                         config.titan.endpoint.clone(),
                         next_proposer.slot,
                     )
+                } else {
+                    // Next proposer is vanilla
+                    tracing::info!(slot = next_proposer.slot, index = next_proposer.validator_index, "Proposer for next slot is vanilla proposer, looking for next preconf proposer...");
+                    let mut proto = None;
+                    let next_supported = lookahead
+                        .iter()
+                        .skip_while(|duty| duty.slot <= event.slot + 1)
+                        .find(|duty| {
+                            if config
+                                .bolt
+                                .validator_range
+                                .is_in_range(duty.validator_index)
+                            {
+                                proto = Some((PreconfProtocol::Bolt, config.bolt.endpoint.clone()));
+                                true
+                            } else if config
+                                .titan
+                                .validator_range
+                                .is_in_range(duty.validator_index)
+                            {
+                                proto =
+                                    Some((PreconfProtocol::Titan, config.titan.endpoint.clone()));
+                                true
+                            } else {
+                                false
+                            }
+                        });
+
+                    if let Some(proposer) = next_supported {
+                        tracing::info!(
+                            validator_index = proposer.validator_index,
+                            "Found next supported proposer at slot {}",
+                            proposer.slot
+                        );
+
+                        let (protocol, endpoint) = proto.unwrap();
+
+                        (protocol, endpoint, proposer.slot)
+                    } else {
+                        tracing::warn!(
+                            slot = next_proposer.slot,
+                            "No preconf proposer found in lookahead, skipping..."
+                        );
+                        continue;
+                    }
                 }
             }
         };
