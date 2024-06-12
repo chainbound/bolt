@@ -1,5 +1,6 @@
 #!/bin/bash
 
+set -e
 echo "Starting the devnet..."
 
 # spin up the kurtosis devnet
@@ -16,13 +17,18 @@ while ! curl -s -X POST --data '{"jsonrpc":"2.0","method":"eth_blockNumber","par
 	sleep 1
 done
 
+# TODO: readd after onchain registry is used in the client
 # deploy the contracts
-(
-	cd ./bolt-contracts || exit
-	forge build # make sure the contracts are compiled before deploying
-	forge script script/DeployOnDevnet.s.sol --broadcast --rpc-url "$EXECUTION_RPC" --private-key "$PK"
-)
-echo "Contracts deployed!"
+# (
+# 	cd ./bolt-contracts || exit
+# 	forge build # make sure the contracts are compiled before deploying
+# 	forge script script/DeployOnDevnet.s.sol --broadcast --rpc-url "$EXECUTION_RPC" --private-key "$PK"
+# )
+# echo "Contracts deployed!"
 
 # setup the preconf client config
-exec ./scripts/preconf-client-config.sh
+./scripts/preconf-client-config.sh
+
+# start commit-boost client
+./scripts/start-commit-boost.sh
+
