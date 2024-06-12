@@ -39,13 +39,18 @@ impl CommitBoostClient {
 
             tracing::debug!(url, "Loading signatures from commit_boost");
 
-            let response = self.client.get(url).send().await?;
+            let Ok(response) = self.client.get(url).send().await else {
+                tracing::error!("failed to get public keys from commit-boost, retrying...");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                continue;
+            };
+
             let status = response.status();
             let response_bytes = response.bytes().await.expect("failed to get bytes");
 
             if !status.is_success() {
                 let err = String::from_utf8_lossy(&response_bytes).into_owned();
-                tracing::error!(err, ?status, "failed to get public keys");
+                tracing::error!(err, ?status, "failed to get public keys, retrying...");
                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                 continue;
             }
@@ -54,6 +59,7 @@ impl CommitBoostClient {
                 serde_json::from_slice(&response_bytes).expect("failed deser");
 
             self.pubkeys = pubkeys;
+            return Ok(());
         }
     }
 
