@@ -1,9 +1,18 @@
-use std::{fmt, str::FromStr, sync::Arc};
+use std::{
+    collections::HashSet,
+    fmt,
+    str::FromStr,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use beacon_api_client::ProposerDuty;
 use clap::{Parser, ValueEnum};
 use config::ValidatorRange;
 use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction, utils::hex};
+use events_client::{
+    EventsClient, PreconfRequestedEvent, PreconfRespondedEvent, PreconfsConfirmedEvent,
+};
 use eyre::{Context, OptionExt, Result};
 use lookahead::LookaheadProvider;
 use mev_share_sse::EventClient;
@@ -39,6 +48,9 @@ pub enum Error {
 
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
+
+    #[error("Request failed with code: {0}")]
+    RequestFailed(u16),
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -73,6 +85,10 @@ async fn main() -> Result<()> {
     let wallet = LocalWallet::from_str(&opts.private_key)?;
     let eth_provider = Arc::new(Provider::<Http>::try_from(config.execution_api)?);
     let transaction_signer = SignerMiddleware::new(eth_provider.clone(), wallet);
+
+    let events_client = config.events_api.map(EventsClient::new);
+
+    let mut preconf_cache = HashSet::new();
 
     let target = format!("{}/eth/v1/events?topics=head", config.beacon_api);
 
@@ -179,8 +195,82 @@ async fn main() -> Result<()> {
             info!("Transaction hash: {}", tx_hash);
             info!("body: {}", serde_json::to_string(&request)?);
 
+            if let Some(ref events_client) = events_client {
+                if let Err(e) = events_client
+                    .preconf_requested(PreconfRequestedEvent {
+                        protocol_id: proto.to_string(),
+                        tx_hash: tx_hash.clone(),
+                        timestamp: unix_millis(),
+                        slot: target_slot,
+                        validator_index: next_proposer.validator_index as u64,
+                        endpoint: endpoint.clone(),
+                    })
+                    .await
+                {
+                    tracing::error!(error = ?e, "Failed publishing preconf requested event");
+                }
+            }
+
             let response = send_preconf_to(&endpoint, request).await?;
+
             info!("Response: {:?}", response.text().await?);
+
+            if let Some(ref events_client) = events_client {
+                if let Err(e) = events_client
+                    .preconf_responded(PreconfRespondedEvent {
+                        protocol_id: proto.to_string(),
+                        tx_hash: tx_hash.clone(),
+                        timestamp: unix_millis(),
+                        slot: target_slot,
+                        validator_index: next_proposer.validator_index as u64,
+                        endpoint: endpoint.clone(),
+                    })
+                    .await
+                {
+                    tracing::error!(error = ?e, "Failed publishing preconf requested event");
+                }
+            }
+
+            preconf_cache.insert(tx_hash);
+
+            tracing::info!("Checking block for confirmed preconfs...");
+
+            if let Some(block) = eth_provider.get_block(event.block).await? {
+                let mut confirmed = Vec::new();
+
+                for hash in block.transactions {
+                    let hash_str = format!("{:?}", hash);
+                    if preconf_cache.remove(&hash_str) {
+                        tracing::info!(tx_hash = ?hash, "Preconf included in block");
+                        confirmed.push(hash_str);
+                    }
+                }
+
+                if confirmed.is_empty() {
+                    continue;
+                }
+
+                if let Some(ref events_client) = events_client {
+                    if let Err(e) = events_client
+                        .preconfs_confirmed(PreconfsConfirmedEvent {
+                            protocol_id: proto.to_string(),
+                            timestamp: unix_millis(),
+                            slot: target_slot,
+                            validator_index: next_proposer.validator_index as u64,
+                            endpoint: endpoint.clone(),
+                            tx_hashes: confirmed,
+                            block_number: block.number.unwrap().as_u64(),
+                            block_hash: format!("{:?}", block.hash.unwrap()),
+                            graffiti: String::from_utf8_lossy(&block.extra_data).to_string(),
+                        })
+                        .await
+                    {
+                        tracing::error!(error = ?e, "Failed publishing preconf requested event");
+                    }
+                }
+            } else {
+                tracing::error!(hash = ?event.block, "Block not found, skipping...");
+            }
         }
     }
 
@@ -265,4 +355,11 @@ async fn get_slot(beacon_url: &str, slot: &str) -> Result<u64> {
         .wrap_err("failed to parse slot")?;
 
     Ok(slot_num)
+}
+
+fn unix_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_millis() as u64
 }

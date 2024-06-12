@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
+    pub events_api: Option<String>,
     pub execution_api: String,
     pub beacon_api: String,
     pub bolt: ProtocolConfig,

@@ -1,6 +1,7 @@
 # The spammer configuration
 beacon_api = "$BEACON_API"
 execution_api = "$EXECUTION_API"
+events_api = "$EVENTS_API"
 
 # Bolt configuration
 [bolt]
