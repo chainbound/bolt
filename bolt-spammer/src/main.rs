@@ -70,9 +70,18 @@ impl fmt::Display for PreconfProtocol {
 
 #[derive(Debug, Clone, serde::Deserialize)]
 struct HeadEvent {
+    #[serde(deserialize_with = "string_to_u64")]
     slot: u64,
     block: H256,
     epoch_transition: bool,
+}
+
+fn string_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s: String = serde::Deserialize::deserialize(deserializer)?;
+    s.parse::<u64>().map_err(serde::de::Error::custom)
 }
 
 #[tokio::main]
@@ -97,7 +106,7 @@ async fn main() -> Result<()> {
     let mut sub = client.subscribe::<HeadEvent>(&target).await?;
 
     let lookahead_provider = LookaheadProvider::new(&config.beacon_api);
-    let lookahead = lookahead_provider.get_current_lookahead().await?;
+    let mut lookahead = lookahead_provider.get_current_lookahead().await?;
     let lookahead_size = lookahead.len();
     tracing::info!(lookahead_size, "Proposer lookahead fetched");
 
@@ -107,170 +116,170 @@ async fn main() -> Result<()> {
         tracing::info!(block_hash = ?event.block, "New head slot: {}", event.slot);
 
         if event.epoch_transition {
-            let lookahead = lookahead_provider.get_current_lookahead().await?;
+            lookahead = lookahead_provider.get_current_lookahead().await?;
             tracing::info!("Epoch transition, fetched new proposer lookahead...");
+        }
 
-            let mut tx = generate_random_tx(opts.nonce);
-            tx.set_gas_price(69_420_000_000_000u128); // 69_420 gwei
-            transaction_signer.fill_transaction(&mut tx, None).await?;
+        let mut tx = generate_random_tx(opts.nonce);
+        tx.set_gas_price(69_420_000_000_000u128); // 69_420 gwei
+        transaction_signer.fill_transaction(&mut tx, None).await?;
 
-            let next_proposer = lookahead
-                .iter()
-                .find(|duty| duty.slot == event.slot + 1)
-                .expect("Next proposer known");
+        let next_proposer = lookahead
+            .iter()
+            .find(|duty| duty.slot == event.slot + 1)
+            .expect("Next proposer known");
 
-            // Decide which protocol to use based on the CLI option. If none is provided,
-            // use whatever protocol is supported by the next proposer based on the validator range.
-            let (proto, endpoint, target_slot) = match opts.protocol {
-                Some(PreconfProtocol::Bolt) => (
-                    PreconfProtocol::Bolt,
-                    config.bolt.endpoint.clone(),
-                    get_next_slot_for_range(&lookahead, &config.bolt.validator_range).ok_or(
-                        Error::NoProposerInLookahead {
-                            protocol: PreconfProtocol::Bolt,
-                            lookahead_size,
-                        },
-                    )?,
-                ),
-                Some(PreconfProtocol::Titan) => (
-                    PreconfProtocol::Titan,
-                    config.titan.endpoint.clone(),
-                    get_next_slot_for_range(&lookahead, &config.titan.validator_range).ok_or(
-                        Error::NoProposerInLookahead {
-                            protocol: PreconfProtocol::Titan,
-                            lookahead_size,
-                        },
-                    )?,
-                ),
-                None => {
-                    if config
-                        .bolt
-                        .validator_range
-                        .is_in_range(next_proposer.validator_index)
-                    {
-                        (
-                            PreconfProtocol::Bolt,
-                            config.bolt.endpoint.clone(),
-                            next_proposer.slot,
-                        )
-                    } else {
-                        (
-                            PreconfProtocol::Titan,
-                            config.titan.endpoint.clone(),
-                            next_proposer.slot,
-                        )
-                    }
+        // Decide which protocol to use based on the CLI option. If none is provided,
+        // use whatever protocol is supported by the next proposer based on the validator range.
+        let (proto, endpoint, target_slot) = match opts.protocol {
+            Some(PreconfProtocol::Bolt) => (
+                PreconfProtocol::Bolt,
+                config.bolt.endpoint.clone(),
+                get_next_slot_for_range(&lookahead, &config.bolt.validator_range).ok_or(
+                    Error::NoProposerInLookahead {
+                        protocol: PreconfProtocol::Bolt,
+                        lookahead_size,
+                    },
+                )?,
+            ),
+            Some(PreconfProtocol::Titan) => (
+                PreconfProtocol::Titan,
+                config.titan.endpoint.clone(),
+                get_next_slot_for_range(&lookahead, &config.titan.validator_range).ok_or(
+                    Error::NoProposerInLookahead {
+                        protocol: PreconfProtocol::Titan,
+                        lookahead_size,
+                    },
+                )?,
+            ),
+            None => {
+                if config
+                    .bolt
+                    .validator_range
+                    .is_in_range(next_proposer.validator_index)
+                {
+                    (
+                        PreconfProtocol::Bolt,
+                        config.bolt.endpoint.clone(),
+                        next_proposer.slot,
+                    )
+                } else {
+                    (
+                        PreconfProtocol::Titan,
+                        config.titan.endpoint.clone(),
+                        next_proposer.slot,
+                    )
                 }
-            };
+            }
+        };
 
-            tracing::info!(
-                slot = target_slot,
-                supported_protocol = ?proto,
-                "Next proposer found"
-            );
+        tracing::info!(
+            slot = target_slot,
+            supported_protocol = ?proto,
+            "Next proposer found"
+        );
 
-            let (tx_hash, tx_rlp) = sign_transaction(transaction_signer.signer(), tx).await?;
+        let (tx_hash, tx_rlp) = sign_transaction(transaction_signer.signer(), tx).await?;
 
-            let message_digest = {
-                let mut data = Vec::new();
-                data.extend_from_slice(&target_slot.to_le_bytes());
-                data.extend_from_slice(hex::decode(tx_hash.trim_start_matches("0x"))?.as_slice());
-                H256::from(ethers::utils::keccak256(data))
-            };
+        let message_digest = {
+            let mut data = Vec::new();
+            data.extend_from_slice(&target_slot.to_le_bytes());
+            data.extend_from_slice(hex::decode(tx_hash.trim_start_matches("0x"))?.as_slice());
+            H256::from(ethers::utils::keccak256(data))
+        };
 
-            let signature = transaction_signer
-                .signer()
-                .sign_hash(message_digest)?
-                .to_string();
+        let signature = transaction_signer
+            .signer()
+            .sign_hash(message_digest)?
+            .to_string();
 
-            let request = prepare_rpc_request(
-                "bolt_inclusionPreconfirmation",
-                vec![serde_json::json!({
-                    "slot": target_slot,
-                    "tx": tx_rlp,
-                    "signature": signature,
-                })],
-            );
+        let request = prepare_rpc_request(
+            "bolt_inclusionPreconfirmation",
+            vec![serde_json::json!({
+                "slot": target_slot,
+                "tx": tx_rlp,
+                "signature": signature,
+            })],
+        );
 
-            info!("Transaction hash: {}", tx_hash);
-            info!("body: {}", serde_json::to_string(&request)?);
+        info!("Transaction hash: {}", tx_hash);
+        info!("body: {}", serde_json::to_string(&request)?);
+
+        if let Some(ref events_client) = events_client {
+            if let Err(e) = events_client
+                .preconf_requested(PreconfRequestedEvent {
+                    protocol_id: proto.to_string(),
+                    tx_hash: tx_hash.clone(),
+                    timestamp: unix_millis(),
+                    slot: target_slot,
+                    validator_index: next_proposer.validator_index as u64,
+                    endpoint: endpoint.clone(),
+                })
+                .await
+            {
+                tracing::error!(error = ?e, "Failed publishing preconf requested event");
+            }
+        }
+
+        let response = send_preconf_to(&endpoint, request).await?;
+
+        info!("Response: {:?}", response.text().await?);
+
+        if let Some(ref events_client) = events_client {
+            if let Err(e) = events_client
+                .preconf_responded(PreconfRespondedEvent {
+                    protocol_id: proto.to_string(),
+                    tx_hash: tx_hash.clone(),
+                    timestamp: unix_millis(),
+                    slot: target_slot,
+                    validator_index: next_proposer.validator_index as u64,
+                    endpoint: endpoint.clone(),
+                })
+                .await
+            {
+                tracing::error!(error = ?e, "Failed publishing preconf requested event");
+            }
+        }
+
+        preconf_cache.insert(tx_hash);
+
+        tracing::info!("Checking block for confirmed preconfs...");
+
+        if let Some(block) = eth_provider.get_block(event.block).await? {
+            let mut confirmed = Vec::new();
+
+            for hash in block.transactions {
+                let hash_str = format!("{:?}", hash);
+                if preconf_cache.remove(&hash_str) {
+                    tracing::info!(tx_hash = ?hash, "Preconf included in block");
+                    confirmed.push(hash_str);
+                }
+            }
+
+            if confirmed.is_empty() {
+                continue;
+            }
 
             if let Some(ref events_client) = events_client {
                 if let Err(e) = events_client
-                    .preconf_requested(PreconfRequestedEvent {
+                    .preconfs_confirmed(PreconfsConfirmedEvent {
                         protocol_id: proto.to_string(),
-                        tx_hash: tx_hash.clone(),
                         timestamp: unix_millis(),
                         slot: target_slot,
                         validator_index: next_proposer.validator_index as u64,
                         endpoint: endpoint.clone(),
+                        tx_hashes: confirmed,
+                        block_number: block.number.unwrap().as_u64(),
+                        block_hash: format!("{:?}", block.hash.unwrap()),
+                        graffiti: String::from_utf8_lossy(&block.extra_data).to_string(),
                     })
                     .await
                 {
                     tracing::error!(error = ?e, "Failed publishing preconf requested event");
                 }
             }
-
-            let response = send_preconf_to(&endpoint, request).await?;
-
-            info!("Response: {:?}", response.text().await?);
-
-            if let Some(ref events_client) = events_client {
-                if let Err(e) = events_client
-                    .preconf_responded(PreconfRespondedEvent {
-                        protocol_id: proto.to_string(),
-                        tx_hash: tx_hash.clone(),
-                        timestamp: unix_millis(),
-                        slot: target_slot,
-                        validator_index: next_proposer.validator_index as u64,
-                        endpoint: endpoint.clone(),
-                    })
-                    .await
-                {
-                    tracing::error!(error = ?e, "Failed publishing preconf requested event");
-                }
-            }
-
-            preconf_cache.insert(tx_hash);
-
-            tracing::info!("Checking block for confirmed preconfs...");
-
-            if let Some(block) = eth_provider.get_block(event.block).await? {
-                let mut confirmed = Vec::new();
-
-                for hash in block.transactions {
-                    let hash_str = format!("{:?}", hash);
-                    if preconf_cache.remove(&hash_str) {
-                        tracing::info!(tx_hash = ?hash, "Preconf included in block");
-                        confirmed.push(hash_str);
-                    }
-                }
-
-                if confirmed.is_empty() {
-                    continue;
-                }
-
-                if let Some(ref events_client) = events_client {
-                    if let Err(e) = events_client
-                        .preconfs_confirmed(PreconfsConfirmedEvent {
-                            protocol_id: proto.to_string(),
-                            timestamp: unix_millis(),
-                            slot: target_slot,
-                            validator_index: next_proposer.validator_index as u64,
-                            endpoint: endpoint.clone(),
-                            tx_hashes: confirmed,
-                            block_number: block.number.unwrap().as_u64(),
-                            block_hash: format!("{:?}", block.hash.unwrap()),
-                            graffiti: String::from_utf8_lossy(&block.extra_data).to_string(),
-                        })
-                        .await
-                    {
-                        tracing::error!(error = ?e, "Failed publishing preconf requested event");
-                    }
-                }
-            } else {
-                tracing::error!(hash = ?event.block, "Block not found, skipping...");
-            }
+        } else {
+            tracing::error!(hash = ?event.block, "Block not found, skipping...");
         }
     }
 
