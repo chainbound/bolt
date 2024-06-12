@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::primitives::ConstraintsMessage;
 
-const id: &str = "bolt";
+const ID: &str = "bolt";
 
 pub struct CommitBoostClient {
     url: String,
@@ -16,10 +16,6 @@ pub struct CommitBoostClient {
 
 #[derive(Debug, Error)]
 pub enum CommitBoostError {
-    #[error("Failed to get public keys")]
-    FailedGettingPubkeys,
-    #[error("Bad url")]
-    BadUrl,
     #[error(transparent)]
     Reqwest(#[from] reqwest::Error),
 }
@@ -38,31 +34,33 @@ impl CommitBoostClient {
     }
 
     async fn load_pubkeys(&mut self) -> Result<(), CommitBoostError> {
-        let url = format!("{}{COMMIT_BOOST_API}{PUBKEYS_PATH}", self.url);
+        loop {
+            let url = format!("{}{COMMIT_BOOST_API}{PUBKEYS_PATH}", self.url);
 
-        tracing::debug!(url, "Loading signatures from commit_boost");
+            tracing::debug!(url, "Loading signatures from commit_boost");
 
-        let response = self.client.get(url).send().await?;
-        let status = response.status();
-        let response_bytes = response.bytes().await.expect("failed to get bytes");
+            let response = self.client.get(url).send().await?;
+            let status = response.status();
+            let response_bytes = response.bytes().await.expect("failed to get bytes");
 
-        if !status.is_success() {
-            let err = String::from_utf8_lossy(&response_bytes).into_owned();
-            tracing::error!(err, ?status, "failed to get public keys");
-            return Err(CommitBoostError::FailedGettingPubkeys);
+            if !status.is_success() {
+                let err = String::from_utf8_lossy(&response_bytes).into_owned();
+                tracing::error!(err, ?status, "failed to get public keys");
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                continue;
+            }
+
+            let pubkeys: Vec<BlsPublicKey> =
+                serde_json::from_slice(&response_bytes).expect("failed deser");
+
+            self.pubkeys = pubkeys;
         }
-
-        let pubkeys: Vec<BlsPublicKey> =
-            serde_json::from_slice(&response_bytes).expect("failed deser");
-
-        self.pubkeys = pubkeys;
-        Ok(())
     }
 
     // TODO: error handling
     pub async fn sign_constraint(&self, constraint: &ConstraintsMessage) -> Option<BlsSignature> {
         let root = constraint.hash_tree_root().unwrap();
-        let request = SignRequest::builder(id, *self.pubkeys.first().expect("pubkeys loaded"))
+        let request = SignRequest::builder(ID, *self.pubkeys.first().expect("pubkeys loaded"))
             .with_root(root.into());
 
         let url = format!("{}{COMMIT_BOOST_API}{SIGN_REQUEST_PATH}", self.url);
