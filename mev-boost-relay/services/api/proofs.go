@@ -18,17 +18,17 @@ var (
 	ErrInvalidRoot   = errors.New("failed getting tx root from bid")
 )
 
-// verifyConstraintProofs verifies the proofs against the constraints, and returns an error if the proofs are invalid.
-func verifyConstraintProofs(log *logrus.Entry, transactionsRoot phase0.Root, proofs []*common.PreconfirmationWithProof, constraints map[phase0.Hash32]*Constraint) error {
-	if proofs == nil {
-		return errors.New("proofs are nil")
+// verifyInclusionProof verifies the proofs against the constraints, and returns an error if the proofs are invalid.
+func verifyInclusionProof(log *logrus.Entry, transactionsRoot phase0.Root, proof *common.InclusionProof, constraints map[phase0.Hash32]*Constraint) error {
+	if proof == nil {
+		return ErrNilProof
 	}
 
-	log.WithField("len", len(proofs)).Info("[BOLT]: Verifying constraint proofs")
+	leaves := make([][]byte, len(constraints))
 
+	i := 0
 	for hash, constraint := range constraints {
 		if constraint == nil {
-			log.Warn("[BOLT]: nil constraint!")
 			return ErrNilConstraint
 		}
 
@@ -42,37 +42,34 @@ func verifyConstraintProofs(log *logrus.Entry, transactionsRoot phase0.Root, pro
 		tx := Transaction(constraint.Tx)
 		txHashTreeRoot, err := tx.HashTreeRoot()
 		if err != nil {
-			log.WithError(err).Error("[BOLT]: error getting tx hash tree root")
 			return ErrInvalidRoot
 		}
 
-		proof := Find(proofs, func(proof *common.PreconfirmationWithProof) bool {
-			return proof.TxHash == hash
-		})
+		leaves[i] = txHashTreeRoot[:]
+		i++
+	}
 
-		if proof == nil {
-			log.Warnf("[BOLT]: No proof found for tx hash %s", hash)
-			return ErrNilProof
-		}
+	hashes := make([][]byte, len(proof.MerkleHashes))
+	for i, hash := range proof.MerkleHashes {
+		hashes[i] = []byte(*hash)
+	}
+	indexes := make([]int, len(proof.GeneralizedIndexes))
+	for i, index := range proof.GeneralizedIndexes {
+		indexes[i] = int(index)
+	}
 
-		// Verify the proof
-		sszProof := proof.MerkleProof.ToFastSszProof(txHashTreeRoot[:])
+	currentTime := time.Now()
+	ok, err := fastSsz.VerifyMultiproof(transactionsRoot[:], hashes, leaves, indexes)
+	elapsed := time.Since(currentTime)
+	if err != nil {
+		log.WithError(err).Error("error verifying merkle proof")
+		return err
+	}
 
-		currentTime := time.Now()
-		ok, err := fastSsz.VerifyProof(transactionsRoot[:], sszProof)
-		elapsed := time.Since(currentTime)
-
-		if err != nil {
-			log.WithError(err).Error("error verifying merkle proof")
-			return err
-		}
-
-		if !ok {
-			log.Error("[BOLT]: constraint proof verification failed: 'not ok' for tx hash: ", proof.TxHash.String())
-			return ErrInvalidProofs
-		} else {
-			log.Info(fmt.Sprintf("[BOLT]: constraint proof verified for tx hash %s in %s", proof.TxHash.String(), elapsed))
-		}
+	if !ok {
+		return ErrInvalidProofs
+	} else {
+		log.Info(fmt.Sprintf("[BOLT]: inclusion proof verified in %s", elapsed))
 	}
 
 	return nil

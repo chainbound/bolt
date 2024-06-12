@@ -1333,15 +1333,15 @@ func (api *RelayAPI) handleGetHeaderWithProofs(w http.ResponseWriter, req *http.
 		return
 	}
 
-	// BOLT: get preconfirmations proofs of the best bid if available
-	proofs, err := api.redis.GetPreconfirmationsProofs(slot, proposerPubkeyHex, bidBlockHash.String())
+	// BOLT: get preconfirmations proof of the best bid if available
+	proof, err := api.redis.GetInclusionProof(slot, proposerPubkeyHex, bidBlockHash.String())
 	if err != nil {
-		api.boltLog.WithError(err).Error("failed getting preconfirmation proofs", proofs)
+		api.boltLog.WithError(err).Error("failed getting preconfirmation proofs", proof)
 		// We don't respond with an error and early return since proofs might be missing
 	}
 
-	if len(proofs) > 0 {
-		api.boltLog.Infof("Got %d preconfirmations proofs from cache", len(proofs))
+	if proof != nil {
+		api.boltLog.Infof("Got inclusion proof from cache")
 	}
 
 	if bid == nil || bid.IsEmpty() {
@@ -1371,14 +1371,13 @@ func (api *RelayAPI) handleGetHeaderWithProofs(w http.ResponseWriter, req *http.
 	// BOLT: Include the proofs in the final bid
 	bidWithProofs := &common.BidWithPreconfirmationsProofs{
 		Bid:    bid,
-		Proofs: proofs,
+		Proofs: proof,
 	}
 
 	log.WithFields(logrus.Fields{
 		"value":     value.String(),
 		"blockHash": blockHash.String(),
-		"proofs":    len(proofs),
-	}).Info("bid delivered")
+	}).Info("bid delivered with proof")
 
 	api.RespondOK(w, bidWithProofs)
 }
@@ -2135,11 +2134,11 @@ func (api *RelayAPI) updateRedisBid(
 
 func (api *RelayAPI) updateRedisBidWithProofs(
 	opts redisUpdateBidOpts,
-	proofs []*common.PreconfirmationWithProof) (
+	proof *common.InclusionProof) (
 	*datastore.SaveBidAndUpdateTopBidResponse,
 	*builderApi.VersionedSubmitBlindedBlockResponse, bool,
 ) {
-	api.boltLog.Infof("Updating Redis bid with %d proofs", len(proofs))
+	api.boltLog.Info("Updating Redis bid with inclusion proof")
 
 	// Prepare the response data
 	getHeaderResponse, err := common.BuildGetHeaderResponse(opts.payload, api.blsSk, api.publicKey, api.opts.EthNetDetails.DomainBuilder)
@@ -2172,18 +2171,19 @@ func (api *RelayAPI) updateRedisBidWithProofs(
 			}
 		}
 
-		if len(constraints) > len(proofs) {
-			api.log.Warnf("Constraints and proofs length mismatch for slot %d: %d > %d", api.headSlot.Load(), len(constraints), len(proofs))
+		if len(constraints) > len(proof.TransactionHashes) {
+			api.log.Warnf("Constraints and proofs length mismatch for slot %d: %d > %d", api.headSlot.Load(), len(constraints), len(proof.TransactionHashes))
 			api.RespondError(opts.w, http.StatusBadRequest, "constraints and proofs length mismatch")
 			return nil, nil, false
 		}
 
-		err = verifyConstraintProofs(api.log, transactionsRoot, proofs, constraints)
+		err = verifyInclusionProof(api.log, transactionsRoot, proof, constraints)
 		if err != nil {
+			api.log.WithError(err).Error("Constraints proofs verification failed")
 			api.RespondError(opts.w, http.StatusBadRequest, err.Error())
 			return nil, nil, false
 		} else {
-			api.log.Infof("Constraints proofs verified for slot %d, proofs = %s", api.headSlot.Load(), proofs)
+			api.log.Infof("constraints proofs verified for slot %d", api.headSlot.Load())
 		}
 	}
 
@@ -2223,7 +2223,7 @@ func (api *RelayAPI) updateRedisBidWithProofs(
 		opts.receivedAt,
 		opts.cancellationsEnabled,
 		opts.floorBidValue,
-		proofs)
+		proof)
 	if err != nil {
 		opts.log.WithError(err).Error("could not save bid and update top bids")
 		api.RespondError(opts.w, http.StatusInternalServerError, "failed saving and updating bid")
@@ -2696,7 +2696,7 @@ func (api *RelayAPI) handleSubmitNewBlockWithProofs(w http.ResponseWriter, req *
 
 	// BOLT: Send an event to the web demo
 	slot, _ := payload.Inner.Slot()
-	message := fmt.Sprintf("received block bid with %d preconfirmations for slot %d", len(payload.Proofs), slot)
+	message := fmt.Sprintf("received block bid with %d preconfirmations for slot %d", len(payload.Proofs.TransactionHashes), slot)
 	EmitBoltDemoEvent(message)
 
 	nextTime = time.Now().UTC()

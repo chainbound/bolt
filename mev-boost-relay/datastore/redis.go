@@ -15,10 +15,10 @@ import (
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
 	"github.com/attestantio/go-eth2-client/spec/capella"
-	"github.com/thedevbirb/flashbots-go-utils/cli"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/go-redis/redis/v9"
 	"github.com/sirupsen/logrus"
+	"github.com/thedevbirb/flashbots-go-utils/cli"
 )
 
 var (
@@ -87,7 +87,7 @@ type RedisCache struct {
 	prefixGetHeaderResponse           string
 	prefixExecPayloadCapella          string
 	prefixPayloadContentsDeneb        string
-	prefixPreconfirmationsProofs      string
+	prefixInclusionProof              string
 	prefixBidTrace                    string
 	prefixBlockBuilderLatestBids      string // latest bid for a given slot
 	prefixBlockBuilderLatestBidsValue string // value of latest bid for a given slot
@@ -126,11 +126,11 @@ func NewRedisCache(prefix, redisURI, readonlyURI string) (*RedisCache, error) {
 		readonlyClient: roClient,
 		boltLog:        common.NewBoltLogger("REDIS"),
 
-		prefixGetHeaderResponse:      fmt.Sprintf("%s/%s:cache-gethead-response", redisPrefix, prefix),
-		prefixExecPayloadCapella:     fmt.Sprintf("%s/%s:cache-execpayload-capella", redisPrefix, prefix),
-		prefixPayloadContentsDeneb:   fmt.Sprintf("%s/%s:cache-payloadcontents-deneb", redisPrefix, prefix),
-		prefixPreconfirmationsProofs: fmt.Sprintf("%s/%s:cache-preconfirmations-proofs", redisPrefix, prefix),
-		prefixBidTrace:               fmt.Sprintf("%s/%s:cache-bid-trace", redisPrefix, prefix),
+		prefixGetHeaderResponse:    fmt.Sprintf("%s/%s:cache-gethead-response", redisPrefix, prefix),
+		prefixExecPayloadCapella:   fmt.Sprintf("%s/%s:cache-execpayload-capella", redisPrefix, prefix),
+		prefixPayloadContentsDeneb: fmt.Sprintf("%s/%s:cache-payloadcontents-deneb", redisPrefix, prefix),
+		prefixInclusionProof:       fmt.Sprintf("%s/%s:cache-preconfirmations-proofs", redisPrefix, prefix),
+		prefixBidTrace:             fmt.Sprintf("%s/%s:cache-bid-trace", redisPrefix, prefix),
 
 		prefixBlockBuilderLatestBids:      fmt.Sprintf("%s/%s:block-builder-latest-bid", redisPrefix, prefix),       // hashmap for slot+parentHash+proposerPubkey with builderPubkey as field
 		prefixBlockBuilderLatestBidsValue: fmt.Sprintf("%s/%s:block-builder-latest-bid-value", redisPrefix, prefix), // hashmap for slot+parentHash+proposerPubkey with builderPubkey as field
@@ -160,12 +160,10 @@ func (r *RedisCache) keyExecPayloadCapella(slot uint64, proposerPubkey, blockHas
 
 func (r *RedisCache) keyPayloadContentsDeneb(slot uint64, proposerPubkey, blockHash string) string {
 	return fmt.Sprintf("%s:%d_%s_%s", r.prefixPayloadContentsDeneb, slot, proposerPubkey, blockHash)
-
 }
 
-func (r *RedisCache) keyPreconfirmationsProofs(slot uint64, proposerPubkey string, blockHash string) string {
-	return fmt.Sprintf("%s:%d_%s_%s", r.prefixPreconfirmationsProofs, slot, proposerPubkey, blockHash)
-
+func (r *RedisCache) keyInclusionProof(slot uint64, proposerPubkey string, blockHash string) string {
+	return fmt.Sprintf("%s:%d_%s_%s", r.prefixInclusionProof, slot, proposerPubkey, blockHash)
 }
 
 func (r *RedisCache) keyCacheBidTrace(slot uint64, proposerPubkey, blockHash string) string {
@@ -375,10 +373,10 @@ func (r *RedisCache) GetBestBid(slot uint64, parentHash, proposerPubkey string) 
 	return resp, err
 }
 
-func (r *RedisCache) GetPreconfirmationsProofs(slot uint64, proposerPubkey string, bidBlockHash string) ([]*common.PreconfirmationWithProof, error) {
-	key := r.keyPreconfirmationsProofs(slot, proposerPubkey, bidBlockHash)
+func (r *RedisCache) GetInclusionProof(slot uint64, proposerPubkey string, bidBlockHash string) (*common.InclusionProof, error) {
+	key := r.keyInclusionProof(slot, proposerPubkey, bidBlockHash)
 	r.boltLog.Infof("Getting preconfirmations proofs from Redis with key %s", key)
-	resp := make([]*common.PreconfirmationWithProof, 0, 10)
+	resp := new(common.InclusionProof)
 	err := r.GetObj(key, &resp)
 	if errors.Is(err, redis.Nil) {
 		return nil, nil
@@ -439,11 +437,12 @@ func (r *RedisCache) SaveExecutionPayloadCapella(ctx context.Context, pipeliner 
 
 // SavePreconfirmationsProofs saves the preconfirmation proofs in the Redis cache with JSON encoding
 // TODO: maybe ssz encoding?
-func (r *RedisCache) SavePreconfirmationsProofs(ctx context.Context, pipeliner redis.Pipeliner,
-	slot uint64, proposerPubkey string, bidBlockHash string, proofs []*common.PreconfirmationWithProof) (err error) {
-	key := r.keyPreconfirmationsProofs(slot, proposerPubkey, bidBlockHash)
-	r.boltLog.Infof("Saving %d preconfirmations proofs with key %s", len(proofs), key)
-	b, err := json.Marshal(proofs)
+func (r *RedisCache) SaveInclusionProof(ctx context.Context, pipeliner redis.Pipeliner,
+	slot uint64, proposerPubkey string, bidBlockHash string, proof *common.InclusionProof,
+) (err error) {
+	key := r.keyInclusionProof(slot, proposerPubkey, bidBlockHash)
+	r.boltLog.Infof("Saving %d inclusion proofs with key %s", len(proof.TransactionHashes), key)
+	b, err := json.Marshal(proof)
 	if err != nil {
 		r.boltLog.WithError(err).Errorf("Failed to marshal preconfirmations proofs for slot %d", slot)
 		return err
@@ -557,8 +556,8 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(
 	reqReceivedAt time.Time,
 	isCancellationEnabled bool,
 	floorValue *big.Int,
-	proofs []*common.PreconfirmationWithProof) (state SaveBidAndUpdateTopBidResponse, err error) {
-
+	proof *common.InclusionProof,
+) (state SaveBidAndUpdateTopBidResponse, err error) {
 	var prevTime, nextTime time.Time
 	prevTime = time.Now()
 
@@ -619,8 +618,8 @@ func (r *RedisCache) SaveBidAndUpdateTopBid(
 	}
 
 	// BOLT: If preconfirmations proofs are available, save them
-	if len(proofs) > 0 {
-		err = r.SavePreconfirmationsProofs(ctx, pipeliner, submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String(), proofs)
+	if proof != nil {
+		err = r.SaveInclusionProof(ctx, pipeliner, submission.BidTrace.Slot, submission.BidTrace.ProposerPubkey.String(), submission.BidTrace.BlockHash.String(), proof)
 		if err != nil {
 			r.boltLog.WithError(err).Errorf("Failed to save preconfirmations proofs to redis for slot %d", submission.BidTrace.Slot)
 			return state, err
@@ -724,7 +723,8 @@ func (r *RedisCache) _updateTopBid(
 	parentHash,
 	proposerPubkey string,
 	floorValue *big.Int) (
-	resp SaveBidAndUpdateTopBidResponse, err error) {
+	resp SaveBidAndUpdateTopBidResponse, err error,
+) {
 	r.boltLog.Info("Updating top bid")
 
 	if builderBids == nil {
