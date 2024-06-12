@@ -91,9 +91,58 @@ async fn main() -> Result<()> {
     let opts = Opts::parse();
     let config = config::Config::from_toml("config.toml")?;
 
-    let wallet = LocalWallet::from_str(&opts.private_key)?;
     let eth_provider = Arc::new(Provider::<Http>::try_from(config.execution_api)?);
-    let transaction_signer = SignerMiddleware::new(eth_provider.clone(), wallet);
+
+    let signers = vec![
+        SignerMiddleware::new(
+            eth_provider.clone(),
+            LocalWallet::from_str(
+                "bb1d0f125b4fb2bb173c318cdead45468474ca71474e2247776b2b4c0fa2d3f5",
+            )?,
+        ),
+        SignerMiddleware::new(
+            eth_provider.clone(),
+            LocalWallet::from_str(
+                "850643a0224065ecce3882673c21f56bcf6eef86274cc21cadff15930b59fc8c",
+            )?,
+        ),
+        SignerMiddleware::new(
+            eth_provider.clone(),
+            LocalWallet::from_str(
+                "94eb3102993b41ec55c241060f47daa0f6372e2e3ad7e91612ae36c364042e44",
+            )?,
+        ),
+        SignerMiddleware::new(
+            eth_provider.clone(),
+            LocalWallet::from_str(
+                "daf15504c22a352648a71ef2926334fe040ac1d5005019e09f6c979808024dc7",
+            )?,
+        ),
+        SignerMiddleware::new(
+            eth_provider.clone(),
+            LocalWallet::from_str(
+                "eaba42282ad33c8ef2524f07277c03a776d98ae19f581990ce75becb7cfa1c23",
+            )?,
+        ),
+        SignerMiddleware::new(
+            eth_provider.clone(),
+            LocalWallet::from_str(
+                "3fd98b5187bf6526734efaa644ffbb4e3670d66f5d0268ce0323ec09124bff61",
+            )?,
+        ),
+        SignerMiddleware::new(
+            eth_provider.clone(),
+            LocalWallet::from_str(
+                "5288e2f440c7f0cb61a9be8afdeb4295f786383f96f5e35eb0c94ef103996b64",
+            )?,
+        ),
+        SignerMiddleware::new(
+            eth_provider.clone(),
+            LocalWallet::from_str(
+                "f296c7802555da2a5a662be70e078cbd38b44f96f8615ae529da41122ce8db05",
+            )?,
+        ),
+    ];
 
     let events_client = config.events_api.map(EventsClient::new);
 
@@ -111,6 +160,7 @@ async fn main() -> Result<()> {
     tracing::info!(lookahead_size, "Proposer lookahead fetched");
 
     // Start listening to head events
+    let mut signer_idx = 0;
     while let Some(event) = sub.next().await {
         let event = event?;
         tracing::info!(block_hash = ?event.block, "New head slot: {}", event.slot);
@@ -122,6 +172,10 @@ async fn main() -> Result<()> {
 
         let mut tx = generate_random_tx(opts.nonce);
         tx.set_gas_price(69_420_000_000_000u128); // 69_420 gwei
+
+        // pick a signer in round robin fashion to avoid nonce conflicts
+        let transaction_signer = &signers[signer_idx];
+        signer_idx = (signer_idx + 1) % signers.len();
         transaction_signer.fill_transaction(&mut tx, None).await?;
 
         let Some(next_proposer) = lookahead.iter().find(|duty| duty.slot == event.slot + 1) else {
