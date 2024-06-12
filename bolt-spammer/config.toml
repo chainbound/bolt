@@ -1,0 +1,14 @@
+# The spammer configuration
+beacon_api = "$BEACON_API"
+execution_api = "$EXECUTION_API"
+
+# Bolt configuration
+[bolt]
+# This will be set at runtime
+endpoint = "$BOLT_ENDPOINT"
+validator_range = { start = 0, end = 64 }
+
+# The Titan Gateway entrypoint configuration
+[titan]
+endpoint = "$TITAN_GATEWAY_ENDPOINT"
+validator_range = { start = 64, end = 256 }

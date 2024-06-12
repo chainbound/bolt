@@ -15,3 +15,7 @@ tracing-subscriber = "0.3.18"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.115"
 reqwest = "0.12.3"
+beacon-api-client = { git = "https://github.com/ralexstokes/ethereum-consensus" }
+mev-share-sse = { git = "https://github.com/paradigmxyz/mev-share-rs" }
+thiserror = "1.0"
+toml = "0.8.14"
