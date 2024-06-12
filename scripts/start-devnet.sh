@@ -21,7 +21,7 @@ BEACON_RPC=$(kurtosis port print bolt-devnet cl-1-lighthouse-geth http)
 echo "Beacon RPC endpoint: $BEACON_RPC"
 
 # Bolt Sidecar URL
-BOLT_SIDECAR=http://$(kurtosis port print bolt-devnet mev-sidecar-api api)
+BOLT_SIDECAR="http://$(kurtosis port print bolt-devnet mev-sidecar-api api)"
 echo "Bolt Sidecar URL: $BOLT_SIDECAR"
 
 SPAMMER_CONFIG_FILE=config.toml
