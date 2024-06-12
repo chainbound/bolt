@@ -124,8 +124,6 @@ async fn main() -> Result<()> {
         tx.set_gas_price(69_420_000_000_000u128); // 69_420 gwei
         transaction_signer.fill_transaction(&mut tx, None).await?;
 
-        // TODO: fix panic
-
         let Some(next_proposer) = lookahead.iter().find(|duty| duty.slot == event.slot + 1) else {
             tracing::warn!("At end of epoch, waiting");
             continue;
@@ -177,7 +175,7 @@ async fn main() -> Result<()> {
                     )
                 } else {
                     // Next proposer is vanilla
-                    tracing::info!(slot = next_proposer.slot, index = next_proposer.validator_index, "Proposer for next slot is vanilla proposer, looking for next preconf proposer...");
+                    tracing::warn!(slot = next_proposer.slot, index = next_proposer.validator_index, "Proposer for next slot is vanilla proposer, looking for next preconf proposer...");
                     let mut proto = None;
                     let next_supported = lookahead
                         .iter()
@@ -294,15 +292,18 @@ async fn main() -> Result<()> {
 
         preconf_cache.insert(tx_hash);
 
-        tracing::info!("Checking block for confirmed preconfs...");
-
         if let Some(block) = eth_provider.get_block(BlockNumber::Latest).await? {
+            let number = block.number.unwrap().as_u64();
+            let graffiti = String::from_utf8_lossy(&block.extra_data).to_string();
+            tracing::info!(number, "Checking block for confirmed preconfs...");
             let mut confirmed = Vec::new();
 
             for hash in block.transactions {
                 let hash_str = format!("{:?}", hash);
+                tracing::info!(block_hash = hash_str, "Checking transaction");
+
                 if preconf_cache.remove(&hash_str) {
-                    tracing::info!(tx_hash = ?hash, "Preconf included in block");
+                    tracing::info!(number, graffiti, tx_hash = ?hash, "PRECONF INCLUDED IN BLOCK");
                     confirmed.push(hash_str);
                 }
             }
@@ -320,7 +321,7 @@ async fn main() -> Result<()> {
                         validator_index: next_proposer.validator_index as u64,
                         endpoint: endpoint.clone(),
                         tx_hashes: confirmed,
-                        block_number: block.number.unwrap().as_u64(),
+                        block_number: number,
                         block_hash: format!("{:?}", block.hash.unwrap()),
                         graffiti: String::from_utf8_lossy(&block.extra_data).to_string(),
                     })
@@ -363,7 +364,7 @@ fn generate_random_tx(nonce: Option<u16>) -> TypedTransaction {
     let mut tx = Eip1559TransactionRequest::new()
         .to("0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD")
         .value("0x69420")
-        .chain_id(3151908)
+        .chain_id(67707)
         .data(vec![thread_rng().gen::<u8>(); 32]);
 
     tx = if let Some(nonce) = nonce {
