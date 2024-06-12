@@ -14,6 +14,8 @@ min_bid_eth = 0.0
 
 [signer]
 address = "0.0.0.0:33950"
+[signer.loader]
+key_path = "keys.example.json"
 
 [[modules]]
 id = "bolt"

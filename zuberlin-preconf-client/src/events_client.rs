@@ -60,6 +60,7 @@ pub struct PreconfsConfirmedEvent {
     pub tx_hashes: Vec<String>,
 }
 
+#[derive(Debug, Clone)]
 pub struct EventsClient {
     url: String,
     client: reqwest::Client,

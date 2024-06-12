@@ -1,5 +1,5 @@
 [package]
-name = "bolt-spammer"
+name = "zuberlin-preconf-client"
 version = "0.1.0"
 edition = "2021"
 
@@ -19,3 +19,4 @@ beacon-api-client = { git = "https://github.com/ralexstokes/ethereum-consensus" 
 mev-share-sse = { git = "https://github.com/paradigmxyz/mev-share-rs" }
 thiserror = "1.0"
 toml = "0.8.14"
+colored = "2"
