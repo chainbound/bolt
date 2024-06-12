@@ -44,12 +44,15 @@ impl CommitBoostClient {
         loop {
             let url = format!("{}{COMMIT_BOOST_API}{PUBKEYS_PATH}", self.url);
 
-            tracing::debug!(url, "Loading signatures from commit_boost");
+            tracing::info!(url, "Loading signatures from commit_boost");
 
-            let Ok(response) = self.client.get(url).send().await else {
-                tracing::error!("failed to get public keys from commit-boost, retrying...");
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                continue;
+            let response = match self.client.get(url).send().await {
+                Ok(res) => res,
+                Err(e) => {
+                    tracing::error!(err = ?e, "failed to get public keys from commit-boost, retrying...");
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    continue;
+                }
             };
 
             let status = response.status();
