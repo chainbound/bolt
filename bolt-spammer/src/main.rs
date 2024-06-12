@@ -300,10 +300,9 @@ async fn main() -> Result<()> {
 
             for hash in block.transactions {
                 let hash_str = format!("{:?}", hash);
-                tracing::info!(block_hash = hash_str, "Checking transaction");
 
                 if preconf_cache.remove(&hash_str) {
-                    tracing::info!(number, graffiti, tx_hash = ?hash, "PRECONF INCLUDED IN BLOCK");
+                    tracing::info!(number, slot = event.slot, graffiti, tx_hash = ?hash, "PRECONF INCLUDED IN BLOCK");
                     confirmed.push(hash_str);
                 }
             }
