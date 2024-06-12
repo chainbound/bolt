@@ -1,17 +1,21 @@
+use std::sync::Arc;
+
 use alloy_rpc_types_beacon::{BlsPublicKey, BlsSignature};
 use cb_common::pbs::{COMMIT_BOOST_API, PUBKEYS_PATH, SIGN_REQUEST_PATH};
 use cb_crypto::types::SignRequest;
 use ethereum_consensus::ssz::prelude::HashTreeRoot;
+use parking_lot::RwLock;
 use thiserror::Error;
 
 use crate::primitives::ConstraintsMessage;
 
 const ID: &str = "bolt";
 
+#[derive(Debug, Clone)]
 pub struct CommitBoostClient {
     url: String,
     client: reqwest::Client,
-    pubkeys: Vec<BlsPublicKey>,
+    pubkeys: Arc<RwLock<Vec<BlsPublicKey>>>,
 }
 
 #[derive(Debug, Error)]
@@ -22,18 +26,21 @@ pub enum CommitBoostError {
 
 impl CommitBoostClient {
     pub async fn new(url: impl Into<String>) -> Result<Self, CommitBoostError> {
-        let mut client = Self {
+        let client = Self {
             url: url.into(),
             client: reqwest::Client::new(),
-            pubkeys: Vec::new(),
+            pubkeys: Arc::new(RwLock::new(Vec::new())),
         };
 
-        client.load_pubkeys().await?;
+        let mut this = client.clone();
+        tokio::spawn(async move {
+            this.load_pubkeys().await.expect("failed to load pubkeys");
+        });
 
         Ok(client)
     }
 
-    async fn load_pubkeys(&mut self) -> Result<(), CommitBoostError> {
+    pub async fn load_pubkeys(&mut self) -> Result<(), CommitBoostError> {
         loop {
             let url = format!("{}{COMMIT_BOOST_API}{PUBKEYS_PATH}", self.url);
 
@@ -58,16 +65,20 @@ impl CommitBoostClient {
             let pubkeys: Vec<BlsPublicKey> =
                 serde_json::from_slice(&response_bytes).expect("failed deser");
 
-            self.pubkeys = pubkeys;
-            return Ok(());
+            {
+                let mut pk = self.pubkeys.write();
+                *pk = pubkeys;
+                return Ok(());
+            } // drop write lock
         }
     }
 
     // TODO: error handling
     pub async fn sign_constraint(&self, constraint: &ConstraintsMessage) -> Option<BlsSignature> {
         let root = constraint.hash_tree_root().unwrap();
-        let request = SignRequest::builder(ID, *self.pubkeys.first().expect("pubkeys loaded"))
-            .with_root(root.into());
+        let request =
+            SignRequest::builder(ID, *self.pubkeys.read().first().expect("pubkeys loaded"))
+                .with_root(root.into());
 
         let url = format!("{}{COMMIT_BOOST_API}{SIGN_REQUEST_PATH}", self.url);
 
