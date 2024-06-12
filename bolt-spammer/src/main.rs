@@ -42,7 +42,7 @@ pub enum Error {
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
-enum PreconfProtocol {
+pub enum PreconfProtocol {
     Bolt,
     Titan,
 }
@@ -249,6 +249,7 @@ fn prepare_rpc_request(method: &str, params: Vec<Value>) -> Value {
     })
 }
 
+#[allow(dead_code)]
 async fn get_slot(beacon_url: &str, slot: &str) -> Result<u64> {
     let url = format!("{}/eth/v1/beacon/headers/{}", beacon_url, slot);
 

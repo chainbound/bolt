@@ -14,10 +14,10 @@ port_publisher:
   nat_exit_ip: "10.1.0.95"
 
 additional_services:
-  #- broadcaster
   - tx_spammer
-  #- blockscout
   - dora
+  #- broadcaster
+  #- blockscout
 
 disable_peer_scoring: true
 persistent: true
