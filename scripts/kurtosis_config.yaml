@@ -1,22 +1,26 @@
+participants:
+  - el_type: geth
+    cl_type: lighthouse
+    cl_image: sigp/lighthouse:v5.1.3
+    count: 1
+    validator_count: 64
 network_params:
   network: rhea-devnet-0
+
 tx_spammer_params:
   tx_spammer_extra_args: ["--slot-time=1", "--accounts=10", "--txcount=1"]
 
+port_publisher:
+  nat_exit_ip: "10.1.0.95"
+
 additional_services:
-  - broadcaster
+  #- broadcaster
   - tx_spammer
-  - blockscout
+  #- blockscout
   - dora
-  # - assertoor
-  # - blob_spammer
-  # - custom_flood
-  # - goomy_blob
-  # - el_forkmon
-  # - beacon_metrics_gazer
-  # - full_beaconchain_explorer
-  # - prometheus_grafana
-  # - blobscan
+
+disable_peer_scoring: true
+persistent: true
 
 mev_type: full
 
