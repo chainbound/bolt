@@ -69,6 +69,7 @@ impl TryFrom<Opts> for Config {
             config.limits.max_commitments_per_slot = max_commitments;
         }
 
+        config.commit_boost_url = opts.commit_boost_url.trim_end_matches('/').to_string();
         config.beacon_client_url = opts.beacon_client_url.trim_end_matches('/').to_string();
         config.mevboost_url = opts.mevboost_url.trim_end_matches('/').to_string();
         config.private_key = SecretKey::from_bytes(&hex::decode(opts.private_key)?)
