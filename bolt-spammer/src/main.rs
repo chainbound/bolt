@@ -296,7 +296,7 @@ async fn main() -> Result<()> {
 
         tracing::info!("Checking block for confirmed preconfs...");
 
-        if let Some(block) = eth_provider.get_block(event.block).await? {
+        if let Some(block) = eth_provider.get_block(BlockNumber::Latest).await? {
             let mut confirmed = Vec::new();
 
             for hash in block.transactions {
