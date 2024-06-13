@@ -70,7 +70,7 @@ var (
 	pathGetHeaderWithProofs = "/eth/v1/builder/header_with_proofs/{slot:[0-9]+}/{parent_hash:0x[a-fA-F0-9]+}/{pubkey:0x[a-fA-F0-9]+}"
 	pathGetPayload          = "/eth/v1/builder/blinded_blocks"
 	// BOLT: allow relay to receive constraints from the proposer
-	pathSubmitContraints = "/eth/v1/builder/constraints"
+	pathSubmitConstraints = "/eth/v1/builder/constraints"
 
 	// Block builder API
 	pathBuilderGetValidators = "/relay/v1/builder/validators"
@@ -358,7 +358,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 		r.HandleFunc(pathGetHeader, api.handleGetHeader).Methods(http.MethodGet)
 		r.HandleFunc(pathGetHeaderWithProofs, api.handleGetHeaderWithProofs).Methods(http.MethodGet)
 		r.HandleFunc(pathGetPayload, api.handleGetPayload).Methods(http.MethodPost)
-		r.HandleFunc(pathSubmitContraints, api.handleSubmitConstraints).Methods(http.MethodPost)
+		r.HandleFunc(pathSubmitConstraints, api.handleSubmitConstraints).Methods(http.MethodPost)
 	}
 
 	// Builder API
