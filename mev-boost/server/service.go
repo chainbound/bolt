@@ -22,7 +22,6 @@ import (
 	eth2ApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	eth2ApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/ethereum/go-ethereum/common"
 	fastSsz "github.com/ferranbt/fastssz"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/types"
@@ -337,8 +336,8 @@ func (m *BoostService) handleRegisterValidator(w http.ResponseWriter, req *http.
 	m.respondError(w, http.StatusBadGateway, errNoSuccessfulRelayResponse.Error())
 }
 
-// verifyConstraintProofs verifies the proofs against the constraints, and returns an error if the proofs are invalid.
-func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithInclusionProofs, slot uint64) error {
+// verifyInclusionProof verifies the proofs against the constraints, and returns an error if the proofs are invalid.
+func (m *BoostService) verifyInclusionProof(responsePayload *BidWithInclusionProofs, slot uint64) error {
 	log := m.log.WithFields(logrus.Fields{})
 
 	// BOLT: get constraints for the slot
@@ -348,90 +347,85 @@ func (m *BoostService) verifyConstraintProofs(responsePayload *BidWithInclusionP
 		return errMissingConstraint
 	}
 
-	if len(responsePayload.Proofs) != len(inclusionConstraints) {
+	if responsePayload.Proofs == nil {
+		log.Warn("[BOLT]: Nil proof")
+		return errNilProof
+	}
+
+	if len(responsePayload.Proofs.TransactionHashes) != len(inclusionConstraints) {
 		log.Warnf("[BOLT]: Proof verification failed - number of preconfirmations mismatch: proofs %d != constraints %d",
-			len(responsePayload.Proofs), len(inclusionConstraints))
+			len(responsePayload.Proofs.TransactionHashes), len(inclusionConstraints))
 		return errMismatchProofSize
 	}
 
-	// BOLT: verify preconfirmation inclusion proofs. If they don't match, we don't consider the bid to be valid.
-	if responsePayload.Proofs != nil {
-		// BOLT: remove unnecessary fields while logging
-		log.WithFields(logrus.Fields{})
+	// BOLT: remove unnecessary fields while logging
+	log.WithFields(logrus.Fields{})
 
-		log.WithField("len", len(responsePayload.Proofs)).Info("[BOLT]: Verifying constraint proofs")
+	log.WithField("len", len(responsePayload.Proofs.TransactionHashes)).Info("[BOLT]: Verifying inclusion proofs")
 
-		transactionsRoot, err := responsePayload.Bid.TransactionsRoot()
+	transactionsRoot, err := responsePayload.Bid.TransactionsRoot()
+	if err != nil {
+		log.WithError(err).Error("[BOLT]: error getting tx root from bid")
+		return errInvalidRoot
+	}
+
+	leaves := make([][]byte, len(inclusionConstraints))
+	i := 0
+
+	for hash, constraint := range inclusionConstraints {
+		if len(constraint.Tx) == 0 {
+			log.Warnf("[BOLT]: Raw tx is empty for constraint tx hash %s", hash)
+			continue
+		}
+
+		// Compute the hash tree root for the raw preconfirmed transaction
+		// and use it as "Leaf" in the proof to be verified against
+		tx := Transaction(constraint.Tx)
+		txHashTreeRoot, err := tx.HashTreeRoot()
 		if err != nil {
-			log.WithError(err).Error("[BOLT]: error getting tx root from bid")
 			return errInvalidRoot
 		}
 
-		for _, proof := range responsePayload.Proofs {
-			if proof == nil {
-				log.Warn("[BOLT]: Nil proof!")
-				return errNilProof
-			}
+		leaves[i] = txHashTreeRoot[:]
+		i++
+	}
 
-			// Find the constraint associated with this transaction in the cache
-			constraint, ok := m.constraints.FindTransactionByHash(common.HexToHash(proof.TxHash.String()))
-			if !ok {
-				log.Warnf("[BOLT]: Tx hash %s not found in constraints", proof.TxHash.String())
-				// We don't actually have to return an error here, the relay just provided a proof that was unnecessary
-				continue
-			}
+	hashes := make([][]byte, len(responsePayload.Proofs.MerkleHashes))
+	for i, hash := range responsePayload.Proofs.MerkleHashes {
+		hashes[i] = []byte(*hash)
+	}
+	indexes := make([]int, len(responsePayload.Proofs.GeneralizedIndexes))
+	for i, index := range responsePayload.Proofs.GeneralizedIndexes {
+		indexes[i] = int(index)
+	}
 
-			rawTx := constraint.Tx
+	currentTime := time.Now()
+	ok, err := fastSsz.VerifyMultiproof(transactionsRoot[:], hashes, leaves, indexes)
+	elapsed := time.Since(currentTime)
+	if err != nil {
+		log.WithError(err).Error("error verifying merkle proof")
+		return err
+	}
 
-			log.Infof("[BOLT]: Raw tx: %x", rawTx)
+	if !ok {
+		return errInvalidProofs
+	} else {
+		log.Info(fmt.Sprintf("[BOLT]: inclusion proof verified in %s", elapsed))
+	}
+	if !ok {
+		log.Error("[BOLT]: proof verification failed")
 
-			if len(rawTx) == 0 {
-				log.Warnf("[BOLT]: Raw tx is empty for tx hash %s", proof.TxHash.String())
-				continue
-			}
+		// BOLT: send event to web demo
+		message := fmt.Sprintf("failed to verify inclusion proof for slot %d", slot)
+		EmitBoltDemoEvent(message)
 
-			// Compute the hash tree root for the raw preconfirmed transaction
-			// and use it as "Leaf" in the proof to be verified against
-			txHashTreeRoot, err := rawTx.HashTreeRoot()
-			if err != nil {
-				log.WithError(err).Error("[BOLT]: error getting tx hash tree root")
-				return errInvalidRoot
-			}
+		return errInvalidProofs
+	} else {
+		log.Info(fmt.Sprintf("[BOLT]: inclusion proof verified in %s", elapsed))
 
-			log.Infof("[BOLT]: Tx hash tree root: %x", txHashTreeRoot)
-
-			// Verify the proof
-			sszProof := proof.MerkleProof.ToFastSszProof(txHashTreeRoot[:])
-
-			log.Infof("[BOLT]: Fast sszProof index: %d", sszProof.Index)
-			log.Infof("[BOLT]: Fast sszProof hashes: %x", sszProof.Hashes)
-			log.Infof("[BOLT]: Fast sszProof leaf: %x. Raw tx: %x", sszProof.Leaf, rawTx)
-
-			currentTime := time.Now()
-			ok, err = fastSsz.VerifyProof(transactionsRoot[:], sszProof)
-			elapsed := time.Since(currentTime)
-
-			if err != nil {
-				log.WithError(err).Error("error verifying merkle proof")
-				return err
-			}
-
-			if !ok {
-				log.Error("[BOLT]: proof verification failed: 'not ok' for tx hash: ", proof.TxHash.String())
-
-				// BOLT: send event to web demo
-				message := fmt.Sprintf("failed to verify merkle proof for tx_hash %s", proof.TxHash.String())
-				EmitBoltDemoEvent(message)
-
-				return errInvalidProofs
-			} else {
-				log.Info(fmt.Sprintf("[BOLT]: Merkle proof verified for tx hash %s in %s", proof.TxHash.String(), elapsed))
-
-				// BOLT: send event to web demo
-				message := fmt.Sprintf("verified merkle proof for tx: %s in %v", proof.TxHash.String(), elapsed)
-				EmitBoltDemoEvent(message)
-			}
-		}
+		// BOLT: send event to web demo
+		message := fmt.Sprintf("verified inclusion proof for slot %d in %v", slot, elapsed)
+		EmitBoltDemoEvent(message)
 	}
 
 	return nil
@@ -875,7 +869,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 			// BOLT: verify preconfirmation inclusion proofs. If they don't match, we don't consider the bid to be valid.
 			if responsePayload.Proofs != nil {
 				// BOLT: verify the proofs against the constraints. If they don't match, we don't consider the bid to be valid.
-				if err := m.verifyConstraintProofs(responsePayload, slotUint); err != nil {
+				if err := m.verifyInclusionProof(responsePayload, slotUint); err != nil {
 					log.Warnf("[BOLT]: Proof verification failed for relay %s: %s", relay.URL, err)
 					return
 				}

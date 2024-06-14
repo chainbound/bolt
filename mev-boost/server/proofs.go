@@ -18,7 +18,7 @@ type BidWithInclusionProofs struct {
 	// The block bid
 	Bid *builderSpec.VersionedSignedBuilderBid `json:"bid"`
 	// The inclusion proofs
-	Proofs []*InclusionProof `json:"proofs"`
+	Proofs *InclusionProof `json:"proofs"`
 }
 
 func (b *BidWithInclusionProofs) String() string {
@@ -72,42 +72,33 @@ func (h *HexBytes) UnmarshalJSON(input []byte) error {
 	return nil
 }
 
-// SerializedMerkleProof contains a serialized Merkle proof of transaction inclusion.
-//   - `Index“ is the generalized index of the included transaction from the SSZ tree
-//     created from the list of transactions.
-//   - `Hashes` are the other branch hashes needed to reconstruct the Merkle proof.
-//
-// For reference, see https://github.com/ethereum/consensus-specs/blob/dev/ssz/simple-serialize.md
-type SerializedMerkleProof struct {
-	Index  int        `json:"index"`
-	Hashes []HexBytes `ssz-size:"dynamic" json:"hashes"`
-}
-
-func (s *SerializedMerkleProof) FromFastSszProof(p *fastSsz.Proof) {
-	s.Index = p.Index
-	s.Hashes = make([]HexBytes, len(p.Hashes))
-	for i, h := range p.Hashes {
-		s.Hashes[i] = h
-	}
-}
-
-// ToFastSszProof converts a SerializedMerkleProof to a fastssz.Proof.
-func (s *SerializedMerkleProof) ToFastSszProof(leaf []byte) *fastSsz.Proof {
-	p := &fastSsz.Proof{
-		Index:  s.Index,
-		Leaf:   leaf,
-		Hashes: make([][]byte, len(s.Hashes)),
-	}
-	for i, h := range s.Hashes {
-		p.Hashes[i] = h
-	}
-	return p
-}
-
-// InclusionProof is a Merkle inclusion proof for a transaction hash.
+// InclusionProof is a Merkle Multiproof of inclusion of a set of TransactionHashes
 type InclusionProof struct {
-	// The transaction hash of the preconfirmation
-	TxHash phase0.Hash32 `ssz-size:"32" json:"txHash"`
-	// The Merkle proof of the preconfirmation
-	MerkleProof *SerializedMerkleProof `json:"merkleProof"`
+	TransactionHashes  []phase0.Hash32 `json:"transaction_hashes"`
+	GeneralizedIndexes []uint64        `json:"generalized_indexes"`
+	MerkleHashes       []*HexBytes     `json:"merkle_hashes"`
+}
+
+// InclusionProofFromMultiProof converts a fastssz.Multiproof into an InclusionProof, without
+// filling the TransactionHashes
+func InclusionProofFromMultiProof(mp *fastSsz.Multiproof) *InclusionProof {
+	merkleHashes := make([]*HexBytes, len(mp.Hashes))
+	for i, h := range mp.Hashes {
+		merkleHashes[i] = new(HexBytes)
+		*(merkleHashes[i]) = h
+	}
+
+	leaves := make([]*HexBytes, len(mp.Leaves))
+	for i, h := range mp.Leaves {
+		leaves[i] = new(HexBytes)
+		*(leaves[i]) = h
+	}
+	generalIndexes := make([]uint64, len(mp.Indices))
+	for i, idx := range mp.Indices {
+		generalIndexes[i] = uint64(idx)
+	}
+	return &InclusionProof{
+		MerkleHashes:       merkleHashes,
+		GeneralizedIndexes: generalIndexes,
+	}
 }

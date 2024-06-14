@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -215,24 +214,14 @@ func (m *mockRelay) MakeGetHeaderWithConstraintsResponse(value uint64, blockHash
 	txsRoot := rootNode.Hash()
 
 	bidWithProofs := m.MakeGetHeaderWithProofsResponseWithTxsRoot(value, blockHash, parentHash, publicKey, version, phase0.Root(txsRoot))
-	bidWithProofs.Proofs = make([]*InclusionProof, len(constraints))
 
-	for i, con := range constraints {
-		generalizedIndex := int(math.Pow(float64(2), float64(21))) + i
-
-		proof, err := rootNode.Prove(generalizedIndex)
-		if err != nil {
-			panic(err)
-		}
-
-		merkleProof := new(SerializedMerkleProof)
-		merkleProof.FromFastSszProof(proof)
-
-		bidWithProofs.Proofs[i] = &InclusionProof{
-			TxHash:      con.hash,
-			MerkleProof: merkleProof,
-		}
+	// Calculate the inclusion proof
+	inclusionProof, err := CalculateMerkleMultiProofs(rootNode, constraints)
+	if err != nil {
+		panic(err)
 	}
+
+	bidWithProofs.Proofs = inclusionProof
 
 	return bidWithProofs
 }
