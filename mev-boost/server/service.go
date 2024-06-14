@@ -348,24 +348,17 @@ func (m *BoostService) verifyInclusionProof(responsePayload *BidWithInclusionPro
 	}
 
 	if responsePayload.Proofs == nil {
-		log.Warn("[BOLT]: Nil proof")
 		return errNilProof
 	}
 
 	if len(responsePayload.Proofs.TransactionHashes) != len(inclusionConstraints) {
-		log.Warnf("[BOLT]: Proof verification failed - number of preconfirmations mismatch: proofs %d != constraints %d",
-			len(responsePayload.Proofs.TransactionHashes), len(inclusionConstraints))
 		return errMismatchProofSize
 	}
 
-	// BOLT: remove unnecessary fields while logging
-	log.WithFields(logrus.Fields{})
-
-	log.WithField("len", len(responsePayload.Proofs.TransactionHashes)).Info("[BOLT]: Verifying merkle proofs")
+	log.Infof("[BOLT]: Verifying merkle multiproofs for %d transactions", len(responsePayload.Proofs.TransactionHashes))
 
 	transactionsRoot, err := responsePayload.Bid.TransactionsRoot()
 	if err != nil {
-		log.WithError(err).Error("[BOLT]: error getting tx root from bid")
 		return errInvalidRoot
 	}
 

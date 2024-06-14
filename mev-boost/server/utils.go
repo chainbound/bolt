@@ -25,7 +25,7 @@ import (
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/mev-boost/config"
 	"github.com/holiman/uint256"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -107,7 +107,7 @@ func SendHTTPRequest(ctx context.Context, client http.Client, method, url string
 }
 
 // SendHTTPRequestWithRetries - prepare and send HTTP request, retrying the request if within the client timeout
-func SendHTTPRequestWithRetries(ctx context.Context, client http.Client, method, url string, userAgent UserAgent, headers map[string]string, payload, dst any, maxRetries int, log *logrus.Entry) (code int, err error) {
+func SendHTTPRequestWithRetries(ctx context.Context, client http.Client, method, url string, userAgent UserAgent, headers map[string]string, payload, dst any, maxRetries int, log *log.Entry) (code int, err error) {
 	var requestCtx context.Context
 	var cancel context.CancelFunc
 	if client.Timeout > 0 {
@@ -306,8 +306,6 @@ func CalculateMerkleMultiProofs(rootNode *fastssz.Node, constraints []struct {
 	tx   Transaction
 	hash phase0.Hash32
 }) (inclusionProof *InclusionProof, err error) {
-	var log = logrus.NewEntry(logrus.New())
-
 	// using our gen index formula: 2 * 2^21 + preconfIndex
 	baseGeneralizedIndex := int(math.Pow(float64(2), float64(21)))
 	generalizedIndexes := make([]int, len(constraints))

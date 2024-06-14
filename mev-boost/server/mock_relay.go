@@ -26,6 +26,7 @@ import (
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/gorilla/mux"
 	"github.com/holiman/uint256"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -218,7 +219,7 @@ func (m *mockRelay) MakeGetHeaderWithConstraintsResponse(value uint64, blockHash
 	// Calculate the inclusion proof
 	inclusionProof, err := CalculateMerkleMultiProofs(rootNode, constraints)
 	if err != nil {
-		panic(err)
+		logrus.WithError(err).Error("failed to calculate inclusion proof")
 	}
 
 	bidWithProofs.Proofs = inclusionProof
