@@ -361,7 +361,7 @@ func (m *BoostService) verifyInclusionProof(responsePayload *BidWithInclusionPro
 	// BOLT: remove unnecessary fields while logging
 	log.WithFields(logrus.Fields{})
 
-	log.WithField("len", len(responsePayload.Proofs.TransactionHashes)).Info("[BOLT]: Verifying inclusion proofs")
+	log.WithField("len", len(responsePayload.Proofs.TransactionHashes)).Info("[BOLT]: Verifying merkle proofs")
 
 	transactionsRoot, err := responsePayload.Bid.TransactionsRoot()
 	if err != nil {
@@ -408,23 +408,19 @@ func (m *BoostService) verifyInclusionProof(responsePayload *BidWithInclusionPro
 	}
 
 	if !ok {
-		return errInvalidProofs
-	} else {
-		log.Info(fmt.Sprintf("[BOLT]: inclusion proof verified in %s", elapsed))
-	}
-	if !ok {
 		log.Error("[BOLT]: proof verification failed")
 
 		// BOLT: send event to web demo
-		message := fmt.Sprintf("failed to verify inclusion proof for slot %d", slot)
+		message := fmt.Sprintf("failed to verify merkle proof for slot %d", slot)
 		EmitBoltDemoEvent(message)
 
 		return errInvalidProofs
 	} else {
-		log.Info(fmt.Sprintf("[BOLT]: inclusion proof verified in %s", elapsed))
+		log.Info(fmt.Sprintf("[BOLT]: merkle proof verified in %s", elapsed))
 
 		// BOLT: send event to web demo
-		message := fmt.Sprintf("verified inclusion proof for slot %d in %v", slot, elapsed)
+		// verified merkle proof for tx: %s in %v", proof.TxHash.String(), elapsed)
+		message := fmt.Sprintf("verified merkle proof for slot %d in %v", slot, elapsed)
 		EmitBoltDemoEvent(message)
 	}
 
