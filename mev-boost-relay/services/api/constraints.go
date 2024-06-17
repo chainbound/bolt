@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/binary"
+	"encoding/hex"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	ssz "github.com/ferranbt/fastssz"
@@ -236,6 +237,29 @@ func (m *ConstraintsMessage) UnmarshalSSZ(buf []byte) (err error) {
 	return
 }
 
+func (m *ConstraintsMessage) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(m)
+}
+
+func (m *ConstraintsMessage) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	index := hh.Index()
+
+	// Field (0) `ValidatorIndex`
+	hh.PutUint64(m.ValidatorIndex)
+
+	// Field (1) `Slot`
+	hh.PutUint64(m.Slot)
+
+	// Field (2) 'Transactions'
+
+	hh.Merkleize(index)
+	return
+}
+
+func (m *ConstraintsMessage) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(m)
+}
+
 func (c *Constraint) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(c)
 }
@@ -322,6 +346,44 @@ func (c *Constraint) UnmarshalSSZ(buf []byte) (err error) {
 	}
 
 	return
+}
+
+func (m *Constraint) HashTreeRoot() ([32]byte, error) {
+	return ssz.HashWithDefaultHasher(m)
+}
+
+func (m *Constraint) HashTreeRootWith(hh ssz.HashWalker) (err error) {
+	index := hh.Index()
+
+	// Field (0) `Tx`
+	{
+		subIndex := hh.Index()
+		byteLen := uint64(len(m.Tx))
+		if byteLen > MAX_BYTES_PER_TRANSACTION {
+			err = ssz.ErrIncorrectListSize
+			return
+		}
+		hh.AppendBytes32(m.Tx)
+		hh.MerkleizeWithMixin(subIndex, byteLen, (MAX_BYTES_PER_TRANSACTION+31)/32)
+	}
+
+	// Field (1) `Index`
+	if m.Index == nil {
+		// The keccak-256 hash 64 zero bytes
+		bytes, _ := hex.DecodeString("ad3228b676f7d3cd4284a5443f17f1962b36e491b30a40b2405849e597ba5fb5")
+		hh.PutBytes(bytes)
+	} else {
+
+		buf := make([]byte, 8)
+		binary.LittleEndian.PutUint64(buf, uint64(*m.Index))
+		h.AppendBytes32(buf)
+	}
+
+	return
+}
+
+func (m *Constraint) GetTree() (*ssz.Node, error) {
+	return ssz.ProofTree(m)
 }
 
 func (i *Index) SizeSSZ() int {
