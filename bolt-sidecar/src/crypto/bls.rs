@@ -21,6 +21,7 @@ pub trait SignableBLS {
     /// Sign the object with the given key. Returns the signature.
     ///
     /// Note: The default implementation should be used where possible.
+    #[allow(dead_code)]
     fn sign(&self, key: &BlsSecretKey) -> Signature {
         sign_with_prefix(key, &self.digest())
     }
@@ -34,6 +35,7 @@ pub trait SignableBLS {
     }
 }
 
+#[allow(dead_code)]
 pub trait SignerBLS {
     fn sign(&self, data: &[u8]) -> eyre::Result<BLSBytes>;
 }

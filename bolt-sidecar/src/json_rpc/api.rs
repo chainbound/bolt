@@ -65,7 +65,7 @@ pub struct JsonRpcApi {
     cache: Arc<RwLock<lru::LruCache<Slot, Vec<CommitmentRequest>>>>,
     /// The client for the MEV-Boost sidecar.
     mevboost_client: MevBoostClient,
-    /// The commit boost client
+    /// The signer for the sidecar.
     signer: Arc<dyn SignerBLSAsync>,
     /// The client for the beacon node API.
     #[allow(dead_code)]
