@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math"
 	"math/big"
 	"net/http"
 	"strings"
@@ -14,7 +13,6 @@ import (
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	utilbellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -22,7 +20,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/flashbotsextra"
 	"github.com/ethereum/go-ethereum/log"
-	fastSsz "github.com/ferranbt/fastssz"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/utils"
@@ -361,173 +358,6 @@ func TestBlockWithPreconfs(t *testing.T) {
 	time.Sleep(2200 * time.Millisecond)
 	require.NotNil(t, testRelay.submittedMsgWithPreconf)
 }
-
-func TestGenerateSSZProofs(t *testing.T) {
-	raw := `["0x02f872833018240385e8d4a5100085e8d4a5100082520894deaddeaddeaddeaddeaddeaddeaddeaddeaddead8306942080c001a042696cf1ef039cf23f51b8348c7fcda961727dd6350992b06c6139cf2b66ed18a012252715233c0cb9803bf827942f619b4a6857a9bfb214ef2feba983d1b5ed0e","0x02f90176833018242585012a05f2008512a05f2000830249f0946c6340ba1dc72c59197825cd94eccc1f9c67416e80b901040cc7326300000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000008ffb6787e8ad80000000000000000000000000000b77d61ea79c7ea8bfa03d3604ce5eabfb95c2ab20000000000000000000000002c57d1cfc6d5f8e4182a56b4cf75421472ebaea4000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000001cd4af4a9bf33474c802d31790a195335f7a9ab8000000000000000000000000d676af79742bcaeb4a71cf62b85d5ba2d1deaf86c001a08d03bdca0c1647263ef73d916e949ccc53284c6fa208c3fa4f9ddfe67d9c45dfa055be5793b42f1818716276033eb36420fa4fb4e3efabd0bbb01c489f7d9cd43c","0x02f86c8330182404801b825208948943545177806ed17b9f23f0a21ee5948ecaa7768701e71eeda00c3080c001a05918a7b26059059e3fc130bfeb42707bcdab9efaabad518f02f062a5d79e0ae7a06c3f27be896c38ed49a6a943050680b8bb1544b77a4df75c62ef75b357b27c7b"]`
-
-	transactionsRaw := new([]string)
-	if err := json.Unmarshal([]byte(raw), transactionsRaw); err != nil {
-		t.Fatal("failed decoding json txs", err)
-	}
-
-	fmt.Println("transactionsRaw", transactionsRaw)
-
-	transactions := make([]bellatrix.Transaction, 0, 10)
-	for _, tx := range *transactionsRaw {
-		rawBytes, _ := hex.DecodeString(tx[2:])
-		transactions = append(transactions, bellatrix.Transaction(rawBytes))
-	}
-
-	fmt.Printf("Transactions len %d\n", len(transactions))
-
-	// generate the SSZ transactions root
-	rawTxs := utilbellatrix.ExecutionPayloadTransactions{Transactions: transactions}
-	sszRootBytes, err := rawTxs.HashTreeRoot()
-	if err != nil {
-		t.Fatal("failed generating transactions root", err)
-	}
-	sszRoot := phase0.Root(sszRootBytes)
-
-	t.Log("ssz root: ", sszRoot.String())
-
-	// now get the binary ssz tree
-	rootNode, err := rawTxs.GetTree()
-	if err != nil {
-		t.Fatal("could not get raw txs tree", err)
-	}
-
-	t.Logf("rootNode: %x", rootNode.Hash())
-
-	if [32]byte(rootNode.Hash()) != sszRootBytes {
-		t.Fatal("SSZ root from tree doesn't match with computed ssz root from raw transactions: ", [32]byte(rootNode.Hash()), sszRootBytes)
-	}
-
-	// generate the proof
-	IndexTxToProve := 0
-	TRANSACTIONS_LIST_DEPTH := 20
-
-	generalizedIndex := int(math.Pow(float64(2), float64(TRANSACTIONS_LIST_DEPTH+1))) + IndexTxToProve
-	t.Log("generalizedIndex: ", generalizedIndex)
-
-	proof, err := rootNode.Prove(generalizedIndex)
-	require.NoError(t, err)
-
-	t.Logf("proof hashes: %x", proof.Hashes)
-	t.Logf("proof leaf: %x", proof.Leaf)
-	t.Log("proof index: ", proof.Index)
-
-	// verify the proof
-	// computer the hash tree root of the transaction
-	rawTxToVerify := Transaction(transactions[IndexTxToProve])
-	t.Logf("rawTxToVerify: %x", rawTxToVerify)
-	transactionRoot, err := rawTxToVerify.HashTreeRoot()
-	require.NoError(t, err)
-
-	t.Logf("transactionRoot %x", transactionRoot)
-	if transactionRoot != [32]byte(proof.Leaf) {
-		t.Fatal("transaction root doesn't match with proof leaf")
-	}
-
-	res, err := fastSsz.VerifyProof(sszRoot[:], proof)
-
-	require.NoError(t, err)
-	if !res {
-		t.Fatal("proof verification failed")
-	}
-}
-
-// func TestGenerateSSZProofs2(t *testing.T) {
-// 	raw := `["0x02f872833018240385e8d4a5100085e8d4a5100082520894deaddeaddeaddeaddeaddeaddeaddeaddeaddead8306942080c001a042696cf1ef039cf23f51b8348c7fcda961727dd6350992b06c6139cf2b66ed18a012252715233c0cb9803bf827942f619b4a6857a9bfb214ef2feba983d1b5ed0e","0x02f90176833018242585012a05f2008512a05f2000830249f0946c6340ba1dc72c59197825cd94eccc1f9c67416e80b901040cc7326300000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000008ffb6787e8ad80000000000000000000000000000b77d61ea79c7ea8bfa03d3604ce5eabfb95c2ab20000000000000000000000002c57d1cfc6d5f8e4182a56b4cf75421472ebaea4000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000020000000000000000000000001cd4af4a9bf33474c802d31790a195335f7a9ab8000000000000000000000000d676af79742bcaeb4a71cf62b85d5ba2d1deaf86c001a08d03bdca0c1647263ef73d916e949ccc53284c6fa208c3fa4f9ddfe67d9c45dfa055be5793b42f1818716276033eb36420fa4fb4e3efabd0bbb01c489f7d9cd43c","0x02f86c8330182404801b825208948943545177806ed17b9f23f0a21ee5948ecaa7768701e71eeda00c3080c001a05918a7b26059059e3fc130bfeb42707bcdab9efaabad518f02f062a5d79e0ae7a06c3f27be896c38ed49a6a943050680b8bb1544b77a4df75c62ef75b357b27c7b"]`
-// 	preconfRaw := "02f872833018240385e8d4a5100085e8d4a5100082520894deaddeaddeaddeaddeaddeaddeaddeaddeaddead8306942080c001a042696cf1ef039cf23f51b8348c7fcda961727dd6350992b06c6139cf2b66ed18a012252715233c0cb9803bf827942f619b4a6857a9bfb214ef2feba983d1b5ed0e"
-//
-// 	// prepare the decoded preconf
-// 	preconf := new(types.Transaction)
-// 	bytes, err := hex.DecodeString(preconfRaw)
-// 	require.NoError(t, err)
-// 	err = preconf.UnmarshalBinary(bytes)
-// 	require.NoError(t, err)
-// 	require.NotNil(t, preconf)
-// 	preconfs := []*types.Transaction{preconf}
-//
-// 	transactionsRaw := new([]string)
-// 	err = json.Unmarshal([]byte(raw), transactionsRaw)
-// 	require.NoError(t, err)
-//
-// 	// prepare the entire payload
-// 	payloadTransactions := make([]*types.Transaction, 0, 10)
-// 	for _, tx := range *transactionsRaw {
-// 		rawBytes, _ := hex.DecodeString(tx[2:])
-// 		transaction := new(types.Transaction)
-// 		require.NoError(t, err)
-// 		err = transaction.UnmarshalBinary(rawBytes)
-// 		require.NoError(t, err)
-// 		require.NotNil(t, transaction)
-// 		payloadTransactions = append(payloadTransactions, transaction)
-// 	}
-//
-// 	t.Logf("Transactions: len %d\n", len(payloadTransactions))
-//
-// 	// BUILDER CODE starts here
-// 	if payloadTransactions[0].Hash() != preconf.Hash() {
-// 		t.Fatal("Preconf transaction doesn't match with the first transaction in the payload")
-// 	}
-//
-// 	// BOLT: generate merkle tree from payload transactions (we need raw RLP bytes for this)
-// 	rawTxs := make([]bellatrix.Transaction, len(payloadTransactions))
-// 	for i, tx := range payloadTransactions {
-// 		raw, err := tx.MarshalBinary()
-// 		if err != nil {
-// 			log.Error("[BOLT]: could not marshal transaction", "txHash", tx.Hash(), "err", err)
-// 			continue
-// 		}
-// 		rawTxs[i] = bellatrix.Transaction(raw)
-// 	}
-//
-// 	bellatrixPayloadTxs := utilbellatrix.ExecutionPayloadTransactions{Transactions: rawTxs}
-//
-// 	rootNode, err := bellatrixPayloadTxs.GetTree()
-// 	require.NoError(t, err, "could not get raw txs tree")
-//
-// 	t.Logf("rootNode: %x", rootNode.Hash()) // e557527d9e7d97eaf4592637901e02a31c09c27d6076c27970799f418e47deab
-//
-// 	// BOLT: calculate merkle proofs for preconfirmed transactions
-// 	preconfirmationsProofs := make([]*common.PreconfirmationWithProof, 0, len(preconfs))
-//
-// 	for i, preconf := range preconfs {
-// 		// get the index of the preconfirmed transaction in the block
-// 		preconfIndex := slices.IndexFunc(payloadTransactions, func(tx *types.Transaction) bool { return tx.Hash() == preconf.Hash() })
-// 		if preconfIndex == -1 {
-// 			log.Error(fmt.Sprintf("Preconfirmed transaction %s not found", preconf.Hash()))
-// 			log.Error(fmt.Sprintf("block has %v transactions", len(payloadTransactions)))
-// 			continue
-// 		}
-//
-// 		// using our gen index formula: 2 * 2^20 + preconfIndex
-// 		generalizedIndex := int(math.Pow(float64(2), float64(21))) + preconfIndex
-//
-// 		t.Logf("[BOLT]: Calculating merkle proof for preconfirmed transaction %s with index %d. Preconf index: %d",
-// 			preconf.Hash(), generalizedIndex, preconfIndex)
-//
-// 		timeStart := time.Now()
-// 		proof, err := rootNode.Prove(generalizedIndex)
-// 		require.NoError(t, err, "could not generate proof for preconfirmed transaction")
-//
-// 		t.Logf("[BOLT]: Calculated merkle proof for preconf %s in %s", preconf.Hash(), time.Since(timeStart))
-// 		t.Logf("[BOLT]: LEAF: %x, Is leaf nil? %v", proof.Leaf, proof.Leaf == nil)
-//
-// 		merkleProof := new(common.SerializedMerkleProof)
-// 		merkleProof.FromFastSszProof(proof)
-//
-// 		preconfirmationsProofs = append(preconfirmationsProofs, &common.PreconfirmationWithProof{
-// 			TxHash:      phase0.Hash32(preconf.Hash()),
-// 			MerkleProof: merkleProof,
-// 		})
-//
-// 		t.Logf("[BOLT]: Added merkle proof for preconfirmed transaction %s", preconfirmationsProofs[i])
-// 	}
-//
-// 	t.Logf("[BOLT]: Generated %d merkle proofs for preconfirmed transactions", len(preconfirmationsProofs))
-// }
 
 func TestSubscribeProposerConstraints(t *testing.T) {
 	// ------------ Start Builder setup ------------- //
