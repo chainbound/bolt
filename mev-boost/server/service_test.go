@@ -314,7 +314,7 @@ func TestRegisterValidator(t *testing.T) {
 func TestParseConstraints(t *testing.T) {
 	jsonStr := `[{
 		"message": {
-			"validatorIndex": 12345,
+			"validator_index": 12345,
 			"slot": 8978583,
 			"constraints": [{
 				"tx": "0x02f871018304a5758085025ff11caf82565f94388c818ca8b9251b393131c08a736a67ccb1929787a41bb7ee22b41380c001a0c8630f734aba7acb4275a8f3b0ce831cf0c7c487fd49ee7bcca26ac622a28939a04c3745096fa0130a188fa249289fd9e60f9d6360854820dba22ae779ea6f573f",
