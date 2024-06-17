@@ -196,8 +196,8 @@ func (m *mockRelay) defaultHandleSubmitConstraint(w http.ResponseWriter, req *ht
 func (m *mockRelay) MakeGetHeaderWithConstraintsResponse(value uint64, blockHash, parentHash, publicKey string, version spec.DataVersion, constraints []struct {
 	tx   Transaction
 	hash phase0.Hash32
-}) *BidWithInclusionProofs {
-
+},
+) *BidWithInclusionProofs {
 	transactions := new(utilbellatrix.ExecutionPayloadTransactions)
 
 	for _, con := range constraints {
@@ -220,6 +220,7 @@ func (m *mockRelay) MakeGetHeaderWithConstraintsResponse(value uint64, blockHash
 	inclusionProof, err := CalculateMerkleMultiProofs(rootNode, constraints)
 	if err != nil {
 		logrus.WithError(err).Error("failed to calculate inclusion proof")
+		return nil
 	}
 
 	bidWithProofs.Proofs = inclusionProof
