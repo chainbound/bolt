@@ -471,7 +471,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 		}
 
 		// BOLT: send event to web demo
-		EmitBoltDemoEvent(fmt.Sprintf("created %d merkle proofs for block %d in %v", len(constraints), opts.Block.Number(), timeForProofs))
+		EmitBoltDemoEvent(fmt.Sprintf("created merkle multiproof of %d constraint(s) for block %d in %v", len(constraints), opts.Block.Number(), timeForProofs))
 
 		versionedBlockRequestWithPreconfsProofs = &common.VersionedSubmitBlockRequestWithProofs{
 			Inner:  versionedBlockRequest,
@@ -495,7 +495,6 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 		// NOTE: we can ignore preconfs for `processBuiltBlock`
 		go b.processBuiltBlock(opts.Block, opts.BlockValue, opts.OrdersClosedAt, opts.SealedAt, opts.CommitedBundles, opts.AllBundles, opts.UsedSbundles, &blockBidMsg)
 		if versionedBlockRequestWithPreconfsProofs != nil {
-			log.Info(fmt.Sprintf("[BOLT]: Sending block with %d proofs to relay %s", len(versionedBlockRequestWithPreconfsProofs.Proofs.TransactionHashes), versionedBlockRequestWithPreconfsProofs.String()))
 			err = b.relay.SubmitBlockWithProofs(versionedBlockRequestWithPreconfsProofs, opts.ValidatorData)
 		} else if len(constraints) == 0 {
 			// If versionedBlockRequestWithPreconfsProofs is nil and no constraints, then we don't have proofs to send
