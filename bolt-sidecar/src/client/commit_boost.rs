@@ -95,9 +95,10 @@ impl SignerBLSAsync for CommitBoostClient {
             root.copy_from_slice(data);
             Ok(root)
         } else {
-            Err(CommitBoostError::NoSignature(
-                "invalid data length".to_owned(),
-            ))
+            Err(CommitBoostError::NoSignature(format!(
+                "invalid data length. Expected 32 bytes, found {} bytes",
+                data.len()
+            )))
         }?;
 
         let request = SignRequest::builder(

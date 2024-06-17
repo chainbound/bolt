@@ -1,5 +1,5 @@
 use blst::min_pk::SecretKey;
-use clap::Parser;
+use clap::{ArgGroup, Parser};
 
 use crate::crypto::bls::random_bls_secret;
 
@@ -9,20 +9,33 @@ pub struct Opts {
     /// Port to listen on for incoming JSON-RPC requests
     #[clap(short = 'p', long)]
     pub(super) port: Option<u16>,
-    /// Private key to use for signing preconfirmation requests
-    #[clap(short = 'k', long)]
-    pub(super) private_key: String,
     /// URL for the beacon client
     #[clap(short = 'c', long)]
     pub(super) beacon_client_url: String,
     /// URL for the MEV-Boost sidecar client to use
     #[clap(short = 'b', long)]
     pub(super) mevboost_url: String,
-    #[clap(short = 'C', long)]
-    pub(super) commit_boost_url: String,
     /// Max commitments to accept per block
     #[clap(short = 'm', long)]
     pub(super) max_commitments: Option<usize>,
+    /// Signing options
+    #[clap(flatten)]
+    pub(super) signing: SigningOpts,
+}
+
+/// Command-line options for signing
+#[derive(Debug, Clone, clap::Args)]
+#[clap(
+    group = ArgGroup::new("signing-opts").required(true)
+        .args(&["private_key", "commit_boost_url"])
+)]
+pub struct SigningOpts {
+    /// Private key to use for signing preconfirmation requests
+    #[clap(short = 'k', long)]
+    pub(super) private_key: Option<String>,
+    /// URL for the commit-boost sidecar
+    #[clap(short = 'C', long, conflicts_with("private_key"))]
+    pub(super) commit_boost_url: Option<String>,
 }
 
 /// Configuration options for the sidecar
@@ -33,11 +46,11 @@ pub struct Config {
     /// URL for the MEV-Boost sidecar client to use
     pub mevboost_url: String,
     /// URL for the commit-boost sidecar
-    pub commit_boost_url: String,
+    pub commit_boost_url: Option<String>,
     /// URL for the beacon client API URL
     pub beacon_client_url: String,
     /// Private key to use for signing preconfirmation requests
-    pub private_key: SecretKey,
+    pub private_key: Option<SecretKey>,
     /// Limits for the sidecar
     pub limits: Limits,
 }
@@ -47,9 +60,9 @@ impl Default for Config {
         Self {
             rpc_port: 8000,
             mevboost_url: "http://localhost:3030".to_string(),
-            commit_boost_url: "http://localhost:18552".to_string(),
+            commit_boost_url: None,
             beacon_client_url: "http://localhost:5052".to_string(),
-            private_key: random_bls_secret(),
+            private_key: Some(random_bls_secret()),
             limits: Limits::default(),
         }
     }
@@ -69,11 +82,19 @@ impl TryFrom<Opts> for Config {
             config.limits.max_commitments_per_slot = max_commitments;
         }
 
-        config.commit_boost_url = opts.commit_boost_url.trim_end_matches('/').to_string();
+        config.commit_boost_url = opts
+            .signing
+            .commit_boost_url
+            .map(|url| url.trim_end_matches('/').to_string());
         config.beacon_client_url = opts.beacon_client_url.trim_end_matches('/').to_string();
         config.mevboost_url = opts.mevboost_url.trim_end_matches('/').to_string();
-        config.private_key = SecretKey::from_bytes(&hex::decode(opts.private_key)?)
-            .map_err(|e| eyre::eyre!("Failed decoding BLS secret key: {:?}", e))?;
+        config.private_key = if let Some(sk) = opts.signing.private_key {
+            let sk = SecretKey::from_bytes(&hex::decode(sk)?)
+                .map_err(|e| eyre::eyre!("Failed decoding BLS secret key: {:?}", e))?;
+            Some(sk)
+        } else {
+            None
+        };
 
         Ok(config)
     }
