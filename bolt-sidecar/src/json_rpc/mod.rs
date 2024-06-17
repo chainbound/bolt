@@ -10,8 +10,8 @@ use warp::{http::Method, reject::Rejection, Filter};
 mod api;
 mod mevboost;
 mod spec;
-mod types;
 
+use crate::client::commit_boost::CommitBoostClient;
 use crate::config::Config;
 
 use self::api::CommitmentsRpc;
@@ -22,10 +22,12 @@ pub async fn start_server(config: Config) -> eyre::Result<mpsc::Sender<()>> {
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);
     let cors = warp::cors().allow_any_origin().allow_method(Method::POST);
 
+    let commit_boost = CommitBoostClient::new(config.commit_boost_url).await?;
+
     let rpc_api = api::JsonRpcApi::new(
-        config.private_key,
         config.mevboost_url,
         config.beacon_client_url,
+        Arc::new(commit_boost),
     );
 
     let rpc = warp::post()
