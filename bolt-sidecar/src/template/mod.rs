@@ -23,6 +23,7 @@ use crate::{
 /// - Simulate new commitment requests.
 /// - Update state every block, to invalidate old commitments.
 /// - Make sure we DO NOT accept invalid commitments in any circumstances.
+#[derive(Debug, Default)]
 pub struct BlockTemplate {
     /// The state diffs per address given the list of commitments.
     state_diff: StateDiff,
@@ -30,13 +31,6 @@ pub struct BlockTemplate {
 }
 
 impl BlockTemplate {
-    pub fn new() -> Self {
-        Self {
-            state_diff: StateDiff::default(),
-            transactions: Vec::new(),
-        }
-    }
-
     pub fn state_diff(&self) -> &StateDiff {
         &self.state_diff
     }

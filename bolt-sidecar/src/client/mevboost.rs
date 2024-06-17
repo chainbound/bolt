@@ -20,6 +20,7 @@ use crate::{
     },
 };
 
+/// A client for interacting with the MEV-Boost API.
 #[derive(Debug)]
 pub struct MevBoostClient {
     url: String,

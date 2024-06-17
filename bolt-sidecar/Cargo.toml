@@ -33,11 +33,13 @@ alloy-transport-http = { git = "https://github.com/alloy-rs/alloy" }
 alloy-transport-ws = { git = "https://github.com/alloy-rs/alloy" }
 alloy-pubsub = { git = "https://github.com/alloy-rs/alloy" }
 alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy" }
+alloy-rpc-types-beacon = { git = "https://github.com/alloy-rs/alloy" }
 alloy-consensus = { git = "https://github.com/alloy-rs/alloy", features = [
   "k256",
 ] }
 alloy-json-rpc = { git = "https://github.com/alloy-rs/alloy" }
 alloy-primitives = { version = "0.7.1", features = ["rand"] }
+alloy-network = { git = "https://github.com/alloy-rs/alloy" }
 alloy-rlp = "0.3"
 
 reqwest = "0.12"

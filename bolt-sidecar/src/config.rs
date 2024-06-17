@@ -1,5 +1,5 @@
 use blst::min_pk::SecretKey;
-use clap::{ArgGroup, Parser};
+use clap::{ArgGroup, Args, Parser};
 
 use crate::crypto::bls::random_bls_secret;
 
@@ -20,6 +20,24 @@ pub struct Opts {
     pub(super) max_commitments: Option<usize>,
     #[clap(short = 'e', long)]
     pub(super) execution_api: String,
+    /// Signing options
+    #[clap(flatten)]
+    pub(super) signing: SigningOpts,
+}
+
+/// Command-line options for signing
+#[derive(Debug, Clone, Args)]
+#[clap(
+    group = ArgGroup::new("signing-opts").required(true)
+        .args(&["private_key", "commit_boost_url"])
+)]
+pub struct SigningOpts {
+    /// Private key to use for signing preconfirmation requests
+    #[clap(short = 'k', long)]
+    pub(super) private_key: Option<String>,
+    /// URL for the commit-boost sidecar
+    #[clap(short = 'C', long, conflicts_with("private_key"))]
+    pub(super) commit_boost_url: Option<String>,
 }
 
 /// Configuration options for the sidecar
@@ -34,7 +52,7 @@ pub struct Config {
     /// URL for the beacon client API URL
     pub beacon_client_url: String,
     /// Private key to use for signing preconfirmation requests
-    pub private_key: SecretKey,
+    pub private_key: Option<SecretKey>,
     /// The execution API url
     pub execution_api: String,
     /// Limits for the sidecar
@@ -49,7 +67,7 @@ impl Default for Config {
             commit_boost_url: None,
             beacon_client_url: "http://localhost:5052".to_string(),
             execution_api: "http://localhost:8545".to_string(),
-            private_key: random_bls_secret(),
+            private_key: Some(random_bls_secret()),
             limits: Limits::default(),
         }
     }
@@ -69,12 +87,12 @@ impl TryFrom<Opts> for Config {
             config.limits.max_commitments_per_slot = max_commitments;
         }
 
-        config.commit_boost_url = opts
-            .signing
-            .commit_boost_url
-            .map(|url| url.trim_end_matches('/').to_string());
-        config.beacon_client_url = opts.beacon_client_url.trim_end_matches('/').to_string();
-        config.mevboost_url = opts.mevboost_url.trim_end_matches('/').to_string();
+        config.commit_boost_url = if let Some(url) = opts.signing.commit_boost_url {
+            Some(url.trim_end_matches('/').to_string())
+        } else {
+            None
+        };
+
         config.private_key = if let Some(sk) = opts.signing.private_key {
             let sk = SecretKey::from_bytes(&hex::decode(sk)?)
                 .map_err(|e| eyre::eyre!("Failed decoding BLS secret key: {:?}", e))?;
@@ -82,6 +100,9 @@ impl TryFrom<Opts> for Config {
         } else {
             None
         };
+
+        config.beacon_client_url = opts.beacon_client_url.trim_end_matches('/').to_string();
+        config.mevboost_url = opts.mevboost_url.trim_end_matches('/').to_string();
 
         Ok(config)
     }

@@ -16,12 +16,16 @@ use ethereum_consensus::{
 };
 use tokio::sync::{mpsc, oneshot};
 
+/// Commitment types, received by users wishing to receive preconfirmations.
 pub mod commitment;
 pub use commitment::{CommitmentRequest, InclusionRequest};
 
+/// Constraint types, signed by proposers and sent along the PBS pipeline
+/// for validation.
 pub mod constraint;
-pub use constraint::BatchedSignedConstraints;
+pub use constraint::{BatchedSignedConstraints, ConstraintsMessage, SignedConstraints};
 
+/// Transaction primitives and utilities.
 pub mod transaction;
 pub use transaction::TxInfo;
 
@@ -211,6 +215,7 @@ impl<'de> serde::Deserialize<'de> for GetPayloadResponse {
     }
 }
 
+/// A struct representing the current chain head.
 #[derive(Debug, Clone)]
 pub struct ChainHead {
     /// The current slot number.
@@ -220,6 +225,7 @@ pub struct ChainHead {
 }
 
 impl ChainHead {
+    /// Create a new ChainHead instance.
     pub fn new(slot: u64, head: u64) -> Self {
         Self {
             slot: Arc::new(AtomicU64::new(slot)),

@@ -18,10 +18,11 @@ use crate::primitives::AccountState;
 
 /// An HTTP-based JSON-RPC client that supports batching. Implements all methods that are relevant
 /// to Bolt state.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RpcClient(alloy::RpcClient<Http<Client>>);
 
 impl RpcClient {
+    /// Create a new `RpcClient` with the given URL.
     pub fn new(url: &str) -> Self {
         let url = Url::from_str(url).unwrap();
 

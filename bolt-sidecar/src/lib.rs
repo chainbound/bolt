@@ -3,23 +3,37 @@
 #![deny(unused_must_use, rust_2018_idioms)]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
+/// Builder API proxy and utilities
 mod api;
+pub use api::{
+    builder::{start_builder_proxy, BuilderProxyConfig},
+    spec,
+};
+
 mod client;
-mod common;
-mod template;
-
-/// Configuration and command-line argument parsing for the sidecar
-pub mod config;
-
-pub mod crypto;
-/// JSON-RPC server and handlers for the sidecar
-pub mod json_rpc;
-
-pub mod primitives;
-
-pub mod state;
-
-pub use api::builder::{start_builder_proxy, BuilderProxyConfig};
 pub use client::{mevboost::MevBoostClient, rpc::RpcClient};
 
-pub use api::spec;
+/// Common types and compatibility utilities
+/// (To be refactored)
+mod common;
+
+/// Functionality for building local block templates that can
+/// be used as a fallback for proposers. It's also used to keep
+/// any intermediary state that is needed to simulate EVM execution
+mod template;
+
+/// Configuration and command-line argument parsing
+mod config;
+pub use config::{Config, Opts};
+
+/// Crypto utilities, including BLS and ECDSA
+pub mod crypto;
+
+/// JSON-RPC server and handlers
+pub mod json_rpc;
+
+/// Primitive types and utilities
+pub mod primitives;
+
+/// State management and fetching for EVM simulation
+pub mod state;

@@ -1,5 +1,6 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
+use ethereum_consensus::ssz::prelude::ssz_rs;
 use parking_lot::RwLock;
 use serde_json::Value;
 use thiserror::Error;
@@ -153,6 +154,8 @@ impl CommitmentsRpc for JsonRpcApi {
     }
 }
 
+/// Emit an event to the demo server webhook. This is only used for demo purposes.
+#[allow(dead_code)]
 fn emit_bolt_demo_event<T: Into<String>>(message: T) {
     let msg = message.into();
     tokio::spawn(async move {

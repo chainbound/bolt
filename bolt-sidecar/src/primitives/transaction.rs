@@ -1,14 +1,23 @@
 use alloy_consensus::TxEnvelope;
 use alloy_primitives::{Address, SignatureError, U256};
 
+/// Utility trait for exposing transaction information on some opaque type.
 pub trait TxInfo {
+    /// Get the gas price of the transaction.
     fn gas_price(&self) -> Option<u128>;
+    /// Get the max fee per gas of the transaction.
     fn max_fee_per_gas(&self) -> Option<u128>;
+    /// Get the max priority fee per gas of the transaction.
     fn max_priority_fee_per_gas(&self) -> Option<u128>;
+    /// Get the sender of the transaction.
     fn from(&self) -> Result<Address, SignatureError>;
+    /// Get the gas limit of the transaction.
     fn gas_limit(&self) -> u128;
+    /// Get the nonce of the transaction.
     fn nonce(&self) -> u64;
+    /// Get the value of the transaction.
     fn value(&self) -> U256;
+    /// Get the number of blobs in the transaction.
     fn blob_count(&self) -> usize;
 }
 

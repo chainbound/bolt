@@ -25,6 +25,7 @@ pub trait SignableECDSA {
 }
 
 /// A signer that can sign any type that implements `Signable{curve}` trait.
+#[derive(Clone, Debug)]
 pub struct ECDSASigner {
     secp256k1_key: SecretKey,
 }

@@ -329,7 +329,20 @@ source = "git+https://github.com/alloy-rs/alloy?rev=64feb9bc51c8021ea08535694c44
 dependencies = [
  "alloy-eips 0.1.0",
  "alloy-primitives",
- "alloy-rpc-types-engine",
+ "alloy-rpc-types-engine 0.1.0",
+ "serde",
+ "serde_with",
+ "thiserror",
+]
+
+[[package]]
+name = "alloy-rpc-types-beacon"
+version = "0.1.2"
+source = "git+https://github.com/alloy-rs/alloy#8aa54828c025a99bbe7e2d4fc9768605d172cc6d"
+dependencies = [
+ "alloy-eips 0.1.2",
+ "alloy-primitives",
+ "alloy-rpc-types-engine 0.1.2",
  "serde",
  "serde_with",
  "thiserror",
@@ -346,6 +359,23 @@ dependencies = [
  "alloy-rlp",
  "alloy-rpc-types 0.1.0",
  "alloy-serde 0.1.0",
+ "jsonwebtoken",
+ "rand 0.8.5",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "alloy-rpc-types-engine"
+version = "0.1.2"
+source = "git+https://github.com/alloy-rs/alloy#8aa54828c025a99bbe7e2d4fc9768605d172cc6d"
+dependencies = [
+ "alloy-consensus 0.1.2",
+ "alloy-eips 0.1.2",
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-rpc-types-eth",
+ "alloy-serde 0.1.2",
  "jsonwebtoken",
  "rand 0.8.5",
  "serde",
@@ -1041,6 +1071,7 @@ dependencies = [
  "alloy-consensus 0.1.2",
  "alloy-eips 0.1.2",
  "alloy-json-rpc",
+ "alloy-network",
  "alloy-node-bindings",
  "alloy-primitives",
  "alloy-provider",
@@ -1048,6 +1079,7 @@ dependencies = [
  "alloy-rlp",
  "alloy-rpc-client",
  "alloy-rpc-types 0.1.2",
+ "alloy-rpc-types-beacon 0.1.2",
  "alloy-signer",
  "alloy-signer-local",
  "alloy-transport",
@@ -1132,7 +1164,7 @@ version = "0.0.1"
 source = "git+https://github.com/Commit-Boost/commit-boost-client#4c482605195d22cc797886d082e5cd6a90160ba9"
 dependencies = [
  "alloy-primitives",
- "alloy-rpc-types-beacon",
+ "alloy-rpc-types-beacon 0.1.0",
  "blst",
  "ethereum_ssz",
  "ethereum_ssz_derive",
@@ -1153,7 +1185,7 @@ version = "0.0.1"
 source = "git+https://github.com/Commit-Boost/commit-boost-client#4c482605195d22cc797886d082e5cd6a90160ba9"
 dependencies = [
  "alloy-primitives",
- "alloy-rpc-types-beacon",
+ "alloy-rpc-types-beacon 0.1.0",
  "axum",
  "blst",
  "cb-common",

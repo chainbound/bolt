@@ -7,12 +7,13 @@ use tokio::sync::mpsc;
 use tracing::{error, info};
 use warp::{http::Method, reject::Rejection, Filter};
 
+/// JSON-RPC API implementation and handlers.
 pub mod api;
+
+/// JSON-RPC API specification and utilities.
 mod spec;
 
-use crate::client::commit_boost::CommitBoostClient;
-use crate::config::Config;
-use crate::crypto::bls::{Signer, SignerBLSAsync};
+use crate::Config;
 
 use self::api::CommitmentsRpc;
 use self::spec::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};

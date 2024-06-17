@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::{
     common::{calculate_max_basefee, validate_transaction},
-    primitives::{AccountState, ChainHead, CommitmentRequest},
+    primitives::{AccountState, ChainHead, CommitmentRequest, Slot},
     template::BlockTemplate,
 };
 
@@ -15,16 +15,22 @@ use super::{fetcher::StateFetcher, StateError};
 /// Possible commitment validation errors.
 #[derive(Debug, Error)]
 pub enum ValidationError {
+    /// The transaction fee is too low to cover the maximum base fee.
     #[error("Transaction fee is too low, need {0} gwei to cover the maximum base fee")]
     BaseFeeTooLow(u128),
+    /// The transaction nonce is too low.
     #[error("Transaction nonce too low")]
     NonceTooLow,
+    /// The transaction nonce is too high.
     #[error("Transaction nonce too high")]
     NonceTooHigh,
+    /// The sender does not have enough balance to pay for the transaction.
     #[error("Not enough balance to pay for value + maximum fee")]
     InsufficientBalance,
+    /// There are too many EIP-4844 transactions in the target block.
     #[error("Too many EIP-4844 transactions in target block")]
     Eip4844Limit,
+    /// The signature is invalid.
     #[error("Signature error: {0:?}")]
     Signature(#[from] SignatureError),
     /// NOTE: this should not be exposed to the user.
@@ -33,6 +39,7 @@ pub enum ValidationError {
 }
 
 impl ValidationError {
+    /// Returns true if the error is internal.
     pub fn is_internal(&self) -> bool {
         matches!(self, Self::Internal(_))
     }
@@ -48,6 +55,7 @@ impl ValidationError {
 /// The state can be updated with a new head block number. This will fetch the state
 /// update from the client and apply it to the state. It will also invalidate any commitments
 /// that conflict with the new state so that we NEVER propose an invalid block.
+#[derive(Debug)]
 pub struct ExecutionState<C> {
     /// The latest head block number.
     head: ChainHead,
@@ -62,7 +70,7 @@ pub struct ExecutionState<C> {
     /// The block templates by target SLOT NUMBER.
     /// We have multiple block templates because in rare cases we might have multiple
     /// proposal duties for a single lookahead.
-    block_templates: HashMap<u64, BlockTemplate>,
+    block_templates: HashMap<Slot, BlockTemplate>,
 
     /// The state fetcher client.
     client: C,
@@ -83,10 +91,12 @@ impl<C: StateFetcher> ExecutionState<C> {
         })
     }
 
+    /// Returns the current base fee in gwei
     pub fn basefee(&self) -> u128 {
         self.basefee
     }
 
+    /// Returns the current block templates mapped by slot number
     pub fn block_templates(&self) -> &HashMap<u64, BlockTemplate> {
         &self.block_templates
     }
@@ -163,13 +173,13 @@ impl<C: StateFetcher> ExecutionState<C> {
         if let Some(template) = self.block_templates.get_mut(&target_slot) {
             template.add_transaction(transaction);
         } else {
-            let mut template = BlockTemplate::new();
+            let mut template = BlockTemplate::default();
             template.add_transaction(transaction);
             self.block_templates.insert(target_slot, template);
         }
     }
 
-    // Updates the state with a new head
+    /// Updates the state with a new head
     pub async fn update_head(&mut self, head: ChainHead) -> Result<(), StateError> {
         // TODO: invalidate any state that we don't need anymore (will be based on block template)
         let update = self

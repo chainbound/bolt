@@ -1,10 +1,9 @@
 use bolt_sidecar::{
-    config::{Config, Opts},
     crypto::bls::{from_bls_signature_to_consensus_signature, BLSSigner},
     json_rpc::{api::ApiError, start_server},
     primitives::{
-        constraint::{BatchedSignedConstraints, ConstraintsMessage, SignedConstraints},
-        ChainHead, CommitmentRequest, LocalPayloadFetcher, NoopPayloadFetcher,
+        BatchedSignedConstraints, ChainHead, CommitmentRequest, ConstraintsMessage,
+        LocalPayloadFetcher, NoopPayloadFetcher, SignedConstraints,
     },
     spec::ConstraintsApi,
     start_builder_proxy,
@@ -12,7 +11,7 @@ use bolt_sidecar::{
         fetcher::{StateClient, StateFetcher},
         ExecutionState,
     },
-    BuilderProxyConfig, MevBoostClient,
+    BuilderProxyConfig, Config, MevBoostClient, Opts,
 };
 
 use clap::Parser;
@@ -45,7 +44,7 @@ async fn main() -> eyre::Result<()> {
     let builder_proxy_config = BuilderProxyConfig::default();
 
     let (payload_tx, mut payload_rx) = mpsc::channel(1);
-    let payload_fetcher = LocalPayloadFetcher::new(payload_tx);
+    let _payload_fetcher = LocalPayloadFetcher::new(payload_tx);
 
     let _builder_proxy = tokio::spawn(async move {
         if let Err(e) = start_builder_proxy(NoopPayloadFetcher, builder_proxy_config).await {
@@ -76,17 +75,11 @@ async fn main() -> eyre::Result<()> {
 
                 // parse the request into constraints and sign them with the sidecar signer
                 // TODO: get the validator index from somewhere
-                let Ok(message) = ConstraintsMessage::build(0, request.slot, request.clone()) else {
-                    tracing::error!("Failed to build constraints message, parsing error");
-                    let _ = event
-                        .response
-                        .send(Err(ApiError::Custom("Internal server error".to_string())));
-                    continue;
-                };
+                let message = ConstraintsMessage::build(0, request.slot, request.clone());
 
                 let signature = from_bls_signature_to_consensus_signature(signer.sign(&message));
                 let signed_constraints: BatchedSignedConstraints =
-                    vec![SignedConstraints { message, signature }];
+                    vec![SignedConstraints { message, signature: signature.to_string() }];
 
                 // TODO: fix retry logic
                 while let Err(e) = mevboost_client

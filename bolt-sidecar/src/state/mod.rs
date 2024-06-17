@@ -1,15 +1,19 @@
 //! The `state` module is responsible for keeping a local copy of relevant state that is needed
 //! to simulate commitments against. It is updated on every block. It has both execution state and consensus state.
+
 use alloy_transport::TransportError;
 use thiserror::Error;
 
 mod execution;
 pub use execution::{ExecutionState, ValidationError};
 
+/// Module to fetch state from the Execution layer.
 pub mod fetcher;
 
+/// Errors that can occur in the state module.
 #[derive(Debug, Error)]
 pub enum StateError {
+    /// An error occurred while fetching from an RPC client.
     #[error("RPC error: {0:?}")]
     Rpc(#[from] TransportError),
 }
@@ -23,15 +27,13 @@ struct ProposerDuties {
 mod tests {
     use alloy_consensus::constants::ETH_TO_WEI;
     use alloy_eips::eip2718::Encodable2718;
+    use alloy_network::EthereumWallet;
     use alloy_node_bindings::{Anvil, AnvilInstance};
     use alloy_primitives::{hex, uint, Address, Uint, U256};
-    use alloy_provider::{
-        network::{EthereumSigner, TransactionBuilder},
-        Provider, ProviderBuilder,
-    };
+    use alloy_provider::{network::TransactionBuilder, Provider, ProviderBuilder};
     use alloy_rpc_types::TransactionRequest;
     use alloy_signer::SignerSync;
-    use alloy_signer_local::LocalWallet;
+    use alloy_signer_local::PrivateKeySigner;
     use execution::{ExecutionState, ValidationError};
     use fetcher::StateClient;
     use tracing_subscriber::fmt;
@@ -69,7 +71,7 @@ mod tests {
 
         let mut state = ExecutionState::new(client, head).await.unwrap();
 
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
         let sender = anvil.addresses()[0];
 
@@ -77,7 +79,7 @@ mod tests {
 
         let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
 
-        let signer: EthereumSigner = wallet.into();
+        let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
@@ -100,7 +102,7 @@ mod tests {
 
         let mut state = ExecutionState::new(client, head).await.unwrap();
 
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
         let sender = anvil.addresses()[0];
 
@@ -108,7 +110,7 @@ mod tests {
 
         let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
 
-        let signer: EthereumSigner = wallet.into();
+        let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
@@ -134,7 +136,7 @@ mod tests {
 
         let mut state = ExecutionState::new(client, head).await.unwrap();
 
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
         let sender = anvil.addresses()[0];
 
@@ -143,7 +145,7 @@ mod tests {
 
         let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
 
-        let signer: EthereumSigner = wallet.into();
+        let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
@@ -171,7 +173,7 @@ mod tests {
 
         let basefee = state.basefee();
 
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
         let sender = anvil.addresses()[0];
 
@@ -179,7 +181,7 @@ mod tests {
 
         let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
 
-        let signer: EthereumSigner = wallet.into();
+        let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
@@ -205,7 +207,7 @@ mod tests {
 
         let mut state = ExecutionState::new(client, head).await.unwrap();
 
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
         let sender = anvil.addresses()[0];
 
@@ -213,7 +215,7 @@ mod tests {
 
         let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
 
-        let signer: EthereumSigner = wallet.into();
+        let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
