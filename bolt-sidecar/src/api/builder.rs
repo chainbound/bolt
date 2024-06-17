@@ -22,7 +22,7 @@ use super::spec::{
 };
 use crate::{
     client::mevboost::MevBoostClient,
-    types::{GetPayloadResponse, PayloadFetcher, SignedBuilderBid},
+    primitives::{GetPayloadResponse, PayloadFetcher, SignedBuilderBid},
 };
 
 const MAX_BLINDED_BLOCK_LENGTH: usize = 1024 * 1024;

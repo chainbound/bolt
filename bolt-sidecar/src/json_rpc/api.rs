@@ -1,18 +1,12 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
-use beacon_api_client::mainnet::Client as BeaconApiClient;
-use ethereum_consensus::ssz::prelude::{ssz_rs, HashTreeRoot};
 use parking_lot::RwLock;
 use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tracing::info;
 
-use crate::{
-    client::mevboost::MevBoostClient,
-    crypto::{bls::from_bls_signature_to_consensus_signature, BLSSigner},
-    primitives::{CommitmentRequest, InclusionRequest, Slot},
-};
+use crate::primitives::{CommitmentRequest, InclusionRequest, Slot};
 
 /// Default size of the api request cache (implemented as a LRU).
 const DEFAULT_API_REQUEST_CACHE_SIZE: usize = 1000;
@@ -77,7 +71,6 @@ impl JsonRpcApi {
     /// Create a new instance of the JSON-RPC API.
     pub fn new(event_tx: mpsc::Sender<ApiEvent>) -> Arc<Self> {
         let cap = NonZeroUsize::new(DEFAULT_API_REQUEST_CACHE_SIZE).unwrap();
-        let beacon_url = reqwest::Url::parse(&beacon_url).expect("failed to parse beacon node URL");
 
         Arc::new(Self {
             cache: Arc::new(RwLock::new(lru::LruCache::new(cap))),

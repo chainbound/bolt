@@ -1,6 +1,5 @@
 use alloy_consensus::TxEnvelope;
 use alloy_primitives::{Address, SignatureError, U256};
-use alloy_rpc_types::Transaction;
 
 pub trait TxInfo {
     fn gas_price(&self) -> Option<u128>;

@@ -8,9 +8,8 @@ use ethereum_consensus::{
 };
 use serde::{Deserialize, Serialize, Serializer};
 
-use crate::types::{
-    constraint::BatchedSignedConstraints, GetPayloadResponse, SignedBuilderBid,
-    SignedBuilderBidWithProofs,
+use crate::primitives::{
+    BatchedSignedConstraints, GetPayloadResponse, SignedBuilderBid, SignedBuilderBidWithProofs,
 };
 
 use super::builder::GetHeaderParams;

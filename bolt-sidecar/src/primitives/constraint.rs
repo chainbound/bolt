@@ -2,7 +2,9 @@ use alloy_primitives::keccak256;
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 
-use crate::{crypto::SignableECDSA, types::Slot};
+use crate::crypto::ecdsa::SignableECDSA;
+
+use super::Slot;
 
 /// The API parameters to request an inclusion commitment for a given slot.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

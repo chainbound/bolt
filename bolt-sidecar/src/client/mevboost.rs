@@ -6,7 +6,6 @@ use axum::http::StatusCode;
 use ethereum_consensus::{
     builder::SignedValidatorRegistration, deneb::mainnet::SignedBlindedBeaconBlock,
 };
-use serde_json::Value;
 
 use crate::{
     api::{
@@ -16,9 +15,8 @@ use crate::{
             GET_PAYLOAD_PATH, REGISTER_VALIDATORS_PATH, STATUS_PATH,
         },
     },
-    types::{
-        constraint::BatchedSignedConstraints, GetPayloadResponse, SignedBuilderBid,
-        SignedBuilderBidWithProofs,
+    primitives::{
+        BatchedSignedConstraints, GetPayloadResponse, SignedBuilderBid, SignedBuilderBidWithProofs,
     },
 };
 

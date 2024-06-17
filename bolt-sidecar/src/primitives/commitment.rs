@@ -96,7 +96,7 @@ fn signature_as_str<S: serde::Serializer>(
 }
 
 impl InclusionRequest {
-    // TODO: actually use SSZ encoding here
+    /// TODO: actually use SSZ encoding here
     pub fn digest(&self) -> B256 {
         let mut data = Vec::new();
         data.extend_from_slice(&self.slot.to_le_bytes());
