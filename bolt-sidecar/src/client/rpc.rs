@@ -1,15 +1,19 @@
 //! This module contains the `RpcClient` struct, which is a wrapper around the `alloy_rpc_client`.
 //! It provides a simple interface to interact with the Execution layer JSON-RPC API.
+
+use alloy_rpc_types_trace::geth::{GethDebugTracingCallOptions, GethTrace};
 use std::{
+    collections::HashSet,
     ops::{Deref, DerefMut},
     str::FromStr,
 };
 
 use alloy::ClientBuilder;
 use alloy_eips::BlockNumberOrTag;
-use alloy_primitives::{Address, U256, U64};
+use alloy_primitives::{Address, B256, U256, U64};
 use alloy_rpc_client as alloy;
-use alloy_rpc_types::FeeHistory;
+use alloy_rpc_types::{Block, EIP1186AccountProofResponse, FeeHistory, TransactionRequest};
+use alloy_rpc_types_trace::parity::{TraceResults, TraceType};
 use alloy_transport::TransportResult;
 use alloy_transport_http::Http;
 use reqwest::{Client, Url};
@@ -80,6 +84,54 @@ impl RpcClient {
             transaction_count: tx_count.to(),
         })
     }
+
+    /// Get the block with the given number. If `None`, the latest block is returned.
+    pub async fn get_block(&self, block_number: Option<u64>, full: bool) -> TransportResult<Block> {
+        let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
+
+        Ok(self.0.request("eth_getBlockByNumber", (tag, full)).await?)
+    }
+
+    /// Returns the account and storage values of the specified account including the Merkle-proof.
+    /// If the block number is `None`, the latest block is used.
+    pub async fn get_proof(
+        &self,
+        address: Address,
+        storage_keys: Vec<B256>,
+        block_number: Option<u64>,
+    ) -> TransportResult<EIP1186AccountProofResponse> {
+        let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
+        let params = (address, storage_keys, tag);
+
+        Ok(self.0.request("eth_getProof", params).await?)
+    }
+
+    /// Performs multiple call traces on top of the same block. i.e. transaction n will be executed
+    /// on top of a pending block with all n-1 transactions applied (traced) first.
+    ///
+    /// Note: Allows tracing dependent transactions, hence all transactions are traced in sequence
+    pub async fn trace_call_many(
+        &self,
+        calls: Vec<(TransactionRequest, HashSet<TraceType>)>,
+        block_number: Option<u64>,
+    ) -> TransportResult<Vec<TraceResults>> {
+        let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
+        let params = (calls, tag);
+
+        Ok(self.0.request("trace_callMany", params).await?)
+    }
+
+    pub async fn debug_trace_call(
+        &self,
+        tx: TransactionRequest,
+        block_number: Option<u64>,
+        opts: Option<GethDebugTracingCallOptions>,
+    ) -> TransportResult<GethTrace> {
+        let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
+        let params = (tx, tag, opts);
+
+        Ok(self.0.request("debug_traceCall", params).await?)
+    }
 }
 
 impl Deref for RpcClient {
@@ -101,6 +153,8 @@ mod tests {
     use alloy_consensus::constants::ETH_TO_WEI;
     use alloy_node_bindings::{Anvil, AnvilInstance};
     use alloy_primitives::{uint, Uint};
+    use alloy_rpc_types::EIP1186AccountProofResponse;
+    use reth_primitives::B256;
 
     use super::*;
 
@@ -124,5 +178,30 @@ mod tests {
         );
 
         assert_eq!(account_state.transaction_count, 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_proof() -> eyre::Result<()> {
+        let rpc_client = RpcClient::new("https://cloudflare-eth.com");
+
+        let proof: EIP1186AccountProofResponse = rpc_client
+            .0
+            .request(
+                "eth_getProof",
+                (
+                    "0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5",
+                    vec![] as Vec<B256>,
+                    "latest",
+                ),
+            )
+            .await?;
+
+        println!("proof: {:?}", proof);
+
+        let block = rpc_client.get_block(None, false).await?;
+
+        println!("root {:?}", block.header.state_root);
+
+        Ok(())
     }
 }
