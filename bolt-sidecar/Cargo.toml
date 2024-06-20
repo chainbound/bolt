@@ -17,22 +17,26 @@ blst = "0.3.12"
 secp256k1 = { version = "0.29.0", features = ["rand"] }
 
 # alloy
-alloy-rpc-client = { version = "0.1.1", features = ["reqwest", "ws", "pubsub"] }
-alloy-consensus = { version = "0.1.1", features = ["k256"] }
-alloy-provider = { version = "0.1.1", features = ["ws"] }
-alloy-signer = "0.1.1"
-alloy-signer-local = "0.1.1"
-alloy-transport = "0.1.1"
-alloy-eips = "0.1.1"
-alloy-transport-http = "0.1.1"
-alloy-transport-ws = "0.1.1"
-alloy-pubsub = "0.1.1"
-alloy-rpc-types = "0.1.1"
-alloy-rpc-types-trace = "0.1.1"
-alloy-json-rpc = "0.1.1"
-alloy-network = "0.1.1"
-alloy-primitives = "0.7.1"
-alloy-rlp = "0.3"
+alloy-rpc-client = { version = "0.1.2", features = ["reqwest", "ws", "pubsub"] }
+alloy-consensus = { version = "0.1.2", features = ["k256"] }
+alloy-provider = { version = "0.1.2", features = ["ws"] }
+alloy-signer = { version = "0.1.2" }
+alloy-signer-local = { version = "0.1.2" }
+alloy-transport = { version = "0.1.2" }
+alloy-eips = { version = "0.1.2" }
+alloy-transport-http = { version = "0.1.2" }
+alloy-transport-ws = { version = "0.1.2" }
+alloy-pubsub = { version = "0.1.2" }
+alloy-rpc-types = { version = "0.1.2" }
+alloy-rpc-types-trace = { version = "0.1.2" }
+alloy-json-rpc = { version = "0.1.2" }
+alloy-network = { version = "0.1.2" }
+alloy-primitives = { version = "0.7.1" }
+alloy-rlp = { version = "0.3" }
+
+
+# alloy-rpc-types = { git = "https://github.com/chainbound/alloy", branch = "fix/account-override-serialize" }
+
 
 # reth
 reth-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "71c404d" }
