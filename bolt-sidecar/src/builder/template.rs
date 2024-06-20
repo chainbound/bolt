@@ -154,6 +154,7 @@ impl StateDiff {
     }
 }
 
+#[derive(Debug)]
 pub struct Unsigned<T> {
     message: T,
 }

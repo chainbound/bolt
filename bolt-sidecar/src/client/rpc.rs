@@ -2,6 +2,7 @@
 //! It provides a simple interface to interact with the Execution layer JSON-RPC API.
 
 use alloy_rpc_types_trace::geth::{GethDebugTracingCallOptions, GethTrace};
+use futures::future::join_all;
 use std::{
     collections::HashSet,
     ops::{Deref, DerefMut},
@@ -11,7 +12,7 @@ use std::{
 use alloy::ClientBuilder;
 use alloy_eips::BlockNumberOrTag;
 use alloy_primitives::{Address, B256, U256, U64};
-use alloy_rpc_client as alloy;
+use alloy_rpc_client::{self as alloy, Waiter};
 use alloy_rpc_types::{Block, EIP1186AccountProofResponse, FeeHistory, TransactionRequest};
 use alloy_rpc_types_trace::parity::{TraceResults, TraceType};
 use alloy_transport::TransportResult;
@@ -106,6 +107,32 @@ impl RpcClient {
         Ok(self.0.request("eth_getProof", params).await?)
     }
 
+    /// Perform multiple `eth_getProof` calls in a single batch.
+    pub async fn get_proof_batched(
+        &self,
+        opts: Vec<(Address, Vec<B256>, BlockNumberOrTag)>,
+    ) -> TransportResult<Vec<EIP1186AccountProofResponse>> {
+        let mut batch = self.0.new_batch();
+
+        let mut proofs: Vec<Waiter<EIP1186AccountProofResponse>> = Vec::new();
+
+        for params in opts {
+            proofs.push(
+                batch
+                    .add_call("eth_getProof", &params)
+                    .expect("Correct parameters"),
+            );
+        }
+
+        batch.send().await?;
+
+        // Important: join_all will preserve the order of the proofs
+        join_all(proofs)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+    }
+
     /// Performs multiple call traces on top of the same block. i.e. transaction n will be executed
     /// on top of a pending block with all n-1 transactions applied (traced) first.
     ///
@@ -121,6 +148,7 @@ impl RpcClient {
         Ok(self.0.request("trace_callMany", params).await?)
     }
 
+    /// Performs the `debug_traceCall` JSON-RPC method.
     pub async fn debug_trace_call(
         &self,
         tx: TransactionRequest,

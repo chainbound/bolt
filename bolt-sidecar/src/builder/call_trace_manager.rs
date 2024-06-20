@@ -1,19 +1,21 @@
+//! Module that defines the [CallTraceManager] actor, which is responsible for
+//! handling trace requests for transactions and accumulating the state diffs
+//! for each block that is traced.
+
 use std::{
     collections::{HashMap, VecDeque},
-    hash::Hash,
     pin::Pin,
-    task::Poll,
+    task::{Context, Poll},
 };
 
-use alloy_eips::BlockId;
-use alloy_primitives::{Address, BlockNumber, U64};
+use alloy_primitives::{BlockNumber, U64};
 use alloy_rpc_types::{
     state::{AccountOverride, StateOverride},
     TransactionRequest,
 };
 use alloy_rpc_types_trace::geth::{
     AccountState, GethDebugBuiltInTracerType, GethDebugTracerType, GethDebugTracingCallOptions,
-    GethDebugTracingOptions, GethDefaultTracingOptions, GethTrace, PreStateFrame, TraceResult,
+    GethDebugTracingOptions, GethDefaultTracingOptions, GethTrace, PreStateFrame,
 };
 use alloy_transport::TransportResult;
 use futures::{stream::FuturesOrdered, Future, StreamExt};
@@ -31,7 +33,9 @@ pub enum TraceCommand {
     /// considering the given block as starting point and accumulating
     /// the results on a state diff map.
     AddTrace {
+        /// The transaction to trace
         transaction: TransactionRequest,
+        /// The block in which the transaction should be simulated on
         block: BlockNumber,
     },
     /// Request to get the accumulated state diffs for a bundle of transactions
@@ -40,17 +44,22 @@ pub enum TraceCommand {
     /// The result is sent back through a response channel as soon as the last
     /// pending trace request for that block has been processed.
     FetchAccumulatedDiffs {
+        /// The block of the accumulated diffs to fetch
         block: BlockNumber,
+        /// The oneshot channel to receive the accumulated diffs
         res: oneshot::Sender<Option<StateOverride>>,
     },
 }
 
+/// The handle to control the [CallTraceManager] actor in a
+/// thread-safe, non-blocking way.
 #[derive(Debug, Clone)]
 pub struct CallTraceHandle {
     cmd_tx: mpsc::Sender<TraceCommand>,
 }
 
 impl CallTraceHandle {
+    /// Request the trace for the given transaction on the provided block
     pub async fn add_trace(&self, transaction: TransactionRequest, block: BlockNumber) {
         let _ = self
             .cmd_tx
@@ -58,17 +67,29 @@ impl CallTraceHandle {
             .await;
     }
 
+    /// Request the accumulated state diffs for a given block from previously
+    /// traced transactions.
+    ///
+    /// If the diffs are not available yet, this function
+    /// will hang until the last transaction has been processed and the diffs are ready.
     pub async fn fetch_accumulated_diffs(&self, block: BlockNumber) -> Option<StateOverride> {
         let (res_tx, res_rx) = oneshot::channel();
         let _ = self
             .cmd_tx
-            .send(TraceCommand::FetchAccumulatedDiffs { block, res: res_tx });
+            .send(TraceCommand::FetchAccumulatedDiffs { block, res: res_tx })
+            .await;
 
         res_rx.await.unwrap()
     }
 }
 
+/// The [CallTraceManager] actor is responsible for handling trace requests for transactions
+/// and accumulating the state diffs for each block that is traced. It listens for incoming
+/// trace requests and processes them in the background using the given RPC client.
+///
+/// The actor is implemented as a future that can be polled in the background.
 #[derive(Debug)]
+#[must_use = "CallTraceManager does nothing unless polled"]
 pub struct CallTraceManager {
     rpc: RpcClient,
     cmd_rx: mpsc::Receiver<TraceCommand>,
@@ -79,6 +100,33 @@ pub struct CallTraceManager {
 }
 
 type TraceFuture = JoinHandle<(BlockNumber, TransportResult<GethTrace>)>;
+
+impl Future for CallTraceManager {
+    type Output = ();
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.get_mut();
+
+        loop {
+            match this.cmd_rx.poll_recv(cx) {
+                Poll::Ready(Some(cmd)) => this.handle_new_trace_command(cmd),
+                Poll::Ready(None) => return Poll::Ready(()),
+                Poll::Pending => return Poll::Pending,
+            }
+
+            match this.pending_traces.poll_next_unpin(cx) {
+                Poll::Ready(Some(Ok((block, trace_result)))) => {
+                    this.handle_trace_result(block, trace_result)
+                }
+                Poll::Ready(Some(Err(e))) => {
+                    tracing::error!(err = ?e, "Error while tracing transaction");
+                }
+                Poll::Ready(None) => return Poll::Ready(()),
+                Poll::Pending => return Poll::Pending,
+            }
+        }
+    }
+}
 
 impl CallTraceManager {
     /// Creates a new [CallTraceManager] instance, which will listen for incoming
@@ -100,22 +148,11 @@ impl CallTraceManager {
         )
     }
 
-    /// Runs the [CallTraceManager] actor, processing incoming trace requests and
-    /// accumulating the resulting state diffs for each block in the background.
-    pub async fn run(mut self) {
-        tokio::select! {
-            Some(request) = self.cmd_rx.recv() => {
-                self.handle_new_trace_command(request);
-            },
-            Some(Ok((block, trace_result))) = self.pending_traces.next() => {
-                self.handle_trace_result(block, trace_result);
-            }
-        }
-    }
-
     fn handle_new_trace_command(&mut self, cmd: TraceCommand) {
         match cmd {
             TraceCommand::AddTrace { transaction, block } => {
+                tracing::debug!(block = block, "Received new transaction trace request");
+
                 // TODO: handle the case where the block is in the future.
                 // Requires a execution block interval ticker.
 
@@ -133,6 +170,8 @@ impl CallTraceManager {
                 }
             }
             TraceCommand::FetchAccumulatedDiffs { block, res } => {
+                tracing::debug!(block = block, "Fetching accumulated state diffs");
+
                 if self.pending_traces.is_empty() {
                     // If there are no pending traces for the given block, and the
                     // accumulated state diffs are already available, send the result
