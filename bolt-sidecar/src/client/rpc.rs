@@ -90,7 +90,7 @@ impl RpcClient {
     pub async fn get_block(&self, block_number: Option<u64>, full: bool) -> TransportResult<Block> {
         let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
 
-        Ok(self.0.request("eth_getBlockByNumber", (tag, full)).await?)
+        self.0.request("eth_getBlockByNumber", (tag, full)).await
     }
 
     /// Returns the account and storage values of the specified account including the Merkle-proof.
@@ -104,7 +104,7 @@ impl RpcClient {
         let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
         let params = (address, storage_keys, tag);
 
-        Ok(self.0.request("eth_getProof", params).await?)
+        self.0.request("eth_getProof", params).await
     }
 
     /// Perform multiple `eth_getProof` calls in a single batch.
@@ -145,7 +145,7 @@ impl RpcClient {
         let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
         let params = (calls, tag);
 
-        Ok(self.0.request("trace_callMany", params).await?)
+        self.0.request("trace_callMany", params).await
     }
 
     /// Performs the `debug_traceCall` JSON-RPC method.
@@ -158,7 +158,7 @@ impl RpcClient {
         let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
         let params = (tx, tag, opts);
 
-        Ok(self.0.request("debug_traceCall", params).await?)
+        self.0.request("debug_traceCall", params).await
     }
 }
 
