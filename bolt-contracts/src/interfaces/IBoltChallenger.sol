@@ -27,6 +27,7 @@ interface IBoltChallenger {
     error TargetSlotTooFarInThePast();
     error InvalidCommitmentSignature();
     error InvalidCommitmentSigner();
+    error InvalidInclusionProof();
 
     // Relic related errors
     error UnexpectedFactSignature();

@@ -76,19 +76,19 @@ library SSZContainers {
         uint256 chunkCount = (transaction.length + 31) / 32;
         bytes32[] memory nodes = new bytes32[](chunkCount);
 
-        // TODO: this is most likely wrong, needs fix according to ssz specs
-        for (uint256 i = 0; i < chunkCount; i++) {
-            uint256 start = i * 32;
-            uint256 end = start + 32;
-            if (end > transaction.length) {
-                end = transaction.length;
-            }
-            bytes memory chunk = new bytes(32);
-            for (uint256 j = start; j < end; j++) {
-                chunk[j - start] = transaction[j];
-            }
-            nodes[i] = keccak256(chunk);
-        }
+        // TODO: Implement
+        // for (uint256 i = 0; i < chunkCount; i++) {
+        //     uint256 start = i * 32;
+        //     uint256 end = start + 32;
+        //     if (end > transaction.length) {
+        //         end = transaction.length;
+        //     }
+        //     bytes memory chunk = new bytes(32);
+        //     for (uint256 j = start; j < end; j++) {
+        //         chunk[j - start] = transaction[j];
+        //     }
+        //     nodes[i] = keccak256(chunk);
+        // }
 
         return SSZ._hashTreeRoot(nodes, uint8(chunkCount));
     }

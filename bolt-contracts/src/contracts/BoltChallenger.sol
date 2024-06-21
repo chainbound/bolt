@@ -197,11 +197,6 @@ contract BoltChallenger is IBoltChallenger {
             return;
         }
 
-        // From here on, we assume the function was called by the based proposer
-        if (msg.sender != challenge.basedProposer) {
-            revert Unauthorized();
-        }
-
         // Derive the block header data of the target block from the block header proof
         CoreTypes.BlockHeaderData memory verifiedHeader = _deriveBlockHeaderInfo(_blockHeaderProof);
 
@@ -240,14 +235,21 @@ contract BoltChallenger is IBoltChallenger {
             return;
         }
 
+        // TODO: Use EIP-4788 beacon block root to prove the correctness of the SSZ TransactionsRoot 
+        // inside the execution payload contained in the proposed beacon block.
+        // 
+        // that way, we obtain the SSZ transactionsRoot which is currently different from the one 
+        // kept in the execution layer's execution payload (see: https://eips.ethereum.org/EIPS/eip-6404)
+        // Perhaps also EIP-2935 could help? (https://eips.ethereum.org/EIPS/eip-2935)
+
         bool isValid = _verifyInclusionProof(
             verifiedHeader.TxHash, _transactionIndex, _inclusionProof, challenge.signedCommitment.signedRawTransaction
         );
 
         if (!isValid) {
-            // The challenge was successful: the proposer failed to honor the preconfirmation
-            // TODO: slash the based proposer
-            _onChallengeSuccess(_challengeID);
+            // The inclusion proof isn't valid: simply revert, leaving time
+            // for another challenger to provide a valid proof.
+            revert InvalidInclusionProof();
         } else {
             // The challenge was unsuccessful: the proposer honored the preconfirmation
             _onChallengeFailure(_challengeID);
@@ -294,8 +296,7 @@ contract BoltChallenger is IBoltChallenger {
         internal
         returns (CoreTypes.AccountData memory account)
     {
-        // TODO: handle fee for proving. make payable?
-
+        // TODO: handle proving fee (not active yet in Relic's mainnet contracts).
         Fact memory fact = accountInfoProver.prove(_proof, false);
         account = abi.decode(fact.data, (CoreTypes.AccountData));
 
