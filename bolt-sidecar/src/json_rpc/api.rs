@@ -1,6 +1,7 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
 use beacon_api_client::mainnet::Client as BeaconApiClient;
+use ethereum_consensus::ssz::prelude::{ssz_rs, HashTreeRoot};
 use parking_lot::RwLock;
 use serde_json::Value;
 use thiserror::Error;
@@ -8,12 +9,10 @@ use tracing::info;
 
 use super::mevboost::MevBoostClient;
 use crate::{
-    crypto::{
-        bls::{from_bls_signature_to_consensus_signature, BlsSecretKey},
-        BLSSigner,
+    crypto::bls::{from_bls_signature_to_consensus_signature, SignerBLSAsync},
+    primitives::{
+        BatchedSignedConstraints, CommitmentRequest, ConstraintsMessage, SignedConstraints, Slot,
     },
-    json_rpc::types::{BatchedSignedConstraints, ConstraintsMessage, SignedConstraints},
-    primitives::{CommitmentRequest, Slot},
 };
 
 /// Default size of the api request cache (implemented as a LRU).
@@ -40,6 +39,8 @@ pub enum ApiError {
     Eyre(#[from] eyre::Report),
     #[error("failed while processing API request: {0}")]
     Custom(String),
+    #[error("failed to calculate hash tree root for constraints: {0}")]
+    MerkleizationError(#[from] ssz_rs::MerkleizationError),
 }
 
 /// Alias for the result of an API call that returns a JSON value.
@@ -62,10 +63,10 @@ pub trait CommitmentsRpc {
 pub struct JsonRpcApi {
     /// A cache of commitment requests.
     cache: Arc<RwLock<lru::LruCache<Slot, Vec<CommitmentRequest>>>>,
-    /// The signer for this sidecar.
-    signer: BLSSigner,
     /// The client for the MEV-Boost sidecar.
     mevboost_client: MevBoostClient,
+    /// The signer for the sidecar.
+    signer: Arc<dyn SignerBLSAsync>,
     /// The client for the beacon node API.
     #[allow(dead_code)]
     beacon_api_client: BeaconApiClient,
@@ -73,7 +74,11 @@ pub struct JsonRpcApi {
 
 impl JsonRpcApi {
     /// Create a new instance of the JSON-RPC API.
-    pub fn new(private_key: BlsSecretKey, mevboost_url: String, beacon_url: String) -> Arc<Self> {
+    pub fn new(
+        mevboost_url: String,
+        beacon_url: String,
+        signer: Arc<dyn SignerBLSAsync>,
+    ) -> Arc<Self> {
         let cap = NonZeroUsize::new(DEFAULT_API_REQUEST_CACHE_SIZE).unwrap();
         let beacon_url = reqwest::Url::parse(&beacon_url).expect("failed to parse beacon node URL");
 
@@ -81,7 +86,7 @@ impl JsonRpcApi {
             cache: Arc::new(RwLock::new(lru::LruCache::new(cap))),
             mevboost_client: MevBoostClient::new(mevboost_url),
             beacon_api_client: BeaconApiClient::new(beacon_url),
-            signer: BLSSigner::new(private_key),
+            signer,
         })
     }
 }
@@ -143,8 +148,11 @@ impl CommitmentsRpc for JsonRpcApi {
         // TODO: get the validator index from somewhere
         // let validator_index = self.beacon_api_client.get_proposer_duties(get_epoch_from_slot(params.slot)).await?;
         let message = ConstraintsMessage::build(0, params.slot, params.clone())?;
+        let root = message.hash_tree_root()?;
 
-        let signature = from_bls_signature_to_consensus_signature(self.signer.sign(&message));
+        let bls_signature = self.signer.sign(root.as_ref()).await.unwrap();
+
+        let signature = from_bls_signature_to_consensus_signature(bls_signature);
         let signed_constraints: BatchedSignedConstraints =
             vec![SignedConstraints { message, signature }];
 
@@ -170,7 +178,7 @@ fn emit_bolt_demo_event<T: Into<String>>(message: T) {
     tokio::spawn(async move {
         let client = reqwest::Client::new();
         client
-            .post("http://host.docker.internal:3001/events")
+            .post("http://172.17.0.1:3001/events")
             .header("Content-Type", "application/json")
             .body(
                 serde_json::to_string(

@@ -1,4 +1,4 @@
 pub mod bls;
-pub use bls::{BLSSigner, SignableBLS};
+pub use bls::SignableBLS;
 
 pub mod ecdsa;
