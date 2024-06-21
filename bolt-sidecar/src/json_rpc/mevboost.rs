@@ -5,7 +5,9 @@
 use serde_json::Value;
 use std::time::Duration;
 
-use super::{api::JsonApiResult, types::BatchedSignedConstraints};
+use crate::primitives::BatchedSignedConstraints;
+
+use super::api::JsonApiResult;
 
 #[derive(Debug)]
 pub struct MevBoostClient {

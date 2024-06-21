@@ -1,0 +1,15 @@
+# The spammer configuration
+beacon_api = "http://127.0.0.1:33900"
+execution_api = "http://127.0.0.1:33892"
+events_api = "http://127.0.0.1:8080"
+
+# Bolt configuration
+[bolt]
+# This will be set at runtime
+endpoint = "http://127.0.0.1:33911"
+validator_range = { start = 0, end = 63 }
+
+# The Titan Gateway entrypoint configuration
+[titan]
+endpoint = "http://18.199.195.154:18551/commitments/v1/request_preconf"
+validator_range = { start = 192, end = 245 }

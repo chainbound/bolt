@@ -1,0 +1,24 @@
+chain = "Holesky"
+
+[pbs]
+# unused
+# path = "target/debug/custom_boost"
+address = "127.0.0.1:18556"
+relays = []
+relay_check = true
+timeout_get_header_ms = 950
+timeout_get_payload_ms = 4000
+timeout_register_validator_ms = 3000
+skip_sigverify = true
+min_bid_eth = 0.0
+
+[signer]
+address = "0.0.0.0:33950"
+[signer.loader]
+key_path = "keys.example.json"
+
+[[modules]]
+id = "bolt"
+# dummy path
+path = "/bin/echo"
+sleep_secs = 5
