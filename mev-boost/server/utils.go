@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -19,11 +20,12 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	fastssz "github.com/ferranbt/fastssz"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/mev-boost/config"
 	"github.com/holiman/uint256"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -105,7 +107,7 @@ func SendHTTPRequest(ctx context.Context, client http.Client, method, url string
 }
 
 // SendHTTPRequestWithRetries - prepare and send HTTP request, retrying the request if within the client timeout
-func SendHTTPRequestWithRetries(ctx context.Context, client http.Client, method, url string, userAgent UserAgent, headers map[string]string, payload, dst any, maxRetries int, log *logrus.Entry) (code int, err error) {
+func SendHTTPRequestWithRetries(ctx context.Context, client http.Client, method, url string, userAgent UserAgent, headers map[string]string, payload, dst any, maxRetries int, log *log.Entry) (code int, err error) {
 	var requestCtx context.Context
 	var cancel context.CancelFunc
 	if client.Timeout > 0 {
@@ -282,4 +284,56 @@ func EmitBoltDemoEvent(message string) {
 	if eventRes != nil {
 		defer eventRes.Body.Close()
 	}
+}
+
+func Map[T any, U any](slice []*T, mapper func(el *T) *U) []*U {
+	result := make([]*U, len(slice))
+	for i, el := range slice {
+		result[i] = mapper(el)
+	}
+	return result
+}
+
+func JSONStringify(obj any) string {
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func CalculateMerkleMultiProofs(rootNode *fastssz.Node, constraints []struct {
+	tx   Transaction
+	hash phase0.Hash32
+}) (inclusionProof *InclusionProof, err error) {
+	// using our gen index formula: 2 * 2^21 + preconfIndex
+	baseGeneralizedIndex := int(math.Pow(float64(2), float64(21)))
+	generalizedIndexes := make([]int, len(constraints))
+	transactionHashes := make([]phase0.Hash32, len(constraints))
+	j := 0
+
+	for i, con := range constraints {
+		generalizedIndex := baseGeneralizedIndex + i
+		generalizedIndexes[i] = generalizedIndex
+		transactionHashes[j] = con.hash
+		j++
+	}
+
+	log.Info(fmt.Sprintf("[BOLT]: Calculating merkle multiproof for %d preconfirmed transaction",
+		len(constraints)))
+
+	timeStart := time.Now()
+	multiProof, err := rootNode.ProveMulti(generalizedIndexes)
+	if err != nil {
+		log.Error(fmt.Sprintf("[BOLT]: could not calculate merkle multiproof for %d preconf %s", len(constraints), err))
+		return
+	}
+
+	timeForProofs := time.Since(timeStart)
+	log.Info(fmt.Sprintf("[BOLT]: Calculated merkle multiproof for %d preconf in %s", len(constraints), timeForProofs))
+
+	inclusionProof = InclusionProofFromMultiProof(multiProof)
+	inclusionProof.TransactionHashes = transactionHashes
+
+	return inclusionProof, nil
 }

@@ -34,7 +34,7 @@ type IDatabaseService interface {
 		saveExecPayload bool,
 		profile common.Profile,
 		optimisticSubmission bool,
-		preconfirmations []*common.PreconfirmationWithProof) (entry *BuilderBlockSubmissionEntry, err error)
+		inclusionProof *common.InclusionProof) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBlockSubmissionEntry(slot uint64, proposerPubkey, blockHash string) (entry *BuilderBlockSubmissionEntry, err error)
 	GetBuilderSubmissions(filters GetBuilderSubmissionsFilters) ([]*BuilderBlockSubmissionEntry, error)
 	GetBuilderSubmissionsBySlots(slotFrom, slotTo uint64) (entries []*BuilderBlockSubmissionEntry, err error)
@@ -194,7 +194,8 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(
 	saveExecPayload bool,
 	profile common.Profile,
 	optimisticSubmission bool,
-	preconfirmations []*common.PreconfirmationWithProof) (entry *BuilderBlockSubmissionEntry, err error) {
+	inclusionProof *common.InclusionProof,
+) (entry *BuilderBlockSubmissionEntry, err error) {
 	// Save execution_payload: insert, or if already exists update to be able to return the id ('on conflict do nothing' doesn't return an id)
 	execPayloadEntry, err := PayloadToExecPayloadEntry(payload)
 	if err != nil {
@@ -224,7 +225,7 @@ func (s *DatabaseService) SaveBuilderBlockSubmission(
 		return nil, err
 	}
 
-	jsonPreconfirmations, err := json.Marshal(preconfirmations)
+	jsonPreconfirmations, err := json.Marshal(inclusionProof)
 	if err != nil {
 		return nil, err
 	}

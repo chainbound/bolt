@@ -8,12 +8,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"slices"
 	"strings"
+	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/bellatrix"
+	utilbellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	ssz "github.com/ferranbt/fastssz"
 )
 
 var errHTTPErrorResponse = errors.New("HTTP error response")
@@ -146,4 +152,72 @@ func EmitBoltDemoEvent(message string) {
 	if eventRes != nil {
 		defer eventRes.Body.Close()
 	}
+}
+
+func CalculateMerkleMultiProofs(
+	payloadTransactions types.Transactions,
+	constraints types.HashToConstraintDecoded,
+) (inclusionProof *common.InclusionProof, rootNode *ssz.Node, err error) {
+	// BOLT: generate merkle tree from payload transactions (we need raw RLP bytes for this)
+	rawTxs := make([]bellatrix.Transaction, len(payloadTransactions))
+	for i, tx := range payloadTransactions {
+		raw, err := tx.MarshalBinary()
+		if err != nil {
+			log.Warn("[BOLT]: could not marshal transaction", "txHash", tx.Hash(), "err", err)
+			continue
+		}
+		rawTxs[i] = bellatrix.Transaction(raw)
+	}
+
+	log.Info(fmt.Sprintf("[BOLT]: Generated %d raw transactions for merkle tree", len(rawTxs)))
+	bellatrixPayloadTxs := utilbellatrix.ExecutionPayloadTransactions{Transactions: rawTxs}
+
+	rootNode, err = bellatrixPayloadTxs.GetTree()
+	if err != nil {
+		log.Error("[BOLT]: could not get tree from transactions", "err", err)
+		return
+	}
+
+	// BOLT: Set the value of nodes. This is MANDATORY for the proof calculation
+	// to output the leaf correctly. This is also never documented in fastssz. -__-
+	rootNode.Hash()
+
+	// using our gen index formula: 2 * 2^21 + preconfIndex
+	baseGeneralizedIndex := int(math.Pow(float64(2), float64(21)))
+	generalizedIndexes := make([]int, len(constraints))
+	transactionHashes := make([]common.Hash, len(constraints))
+	i := 0
+
+	for hash := range constraints {
+		// get the index of the preconfirmed transaction in the block
+		preconfIndex := slices.IndexFunc(payloadTransactions, func(tx *types.Transaction) bool { return tx.Hash() == hash })
+		if preconfIndex == -1 {
+			log.Error(fmt.Sprintf("Preconfirmed transaction %s not found in block", hash))
+			log.Error(fmt.Sprintf("block has %v transactions", len(payloadTransactions)))
+			continue
+		}
+
+		generalizedIndex := baseGeneralizedIndex + preconfIndex
+		generalizedIndexes[i] = generalizedIndex
+		transactionHashes[i] = hash
+		i++
+	}
+
+	log.Info(fmt.Sprintf("[BOLT]: Calculating merkle multiproof for %d preconfirmed transaction",
+		len(constraints)))
+
+	timeStart := time.Now()
+	multiProof, err := rootNode.ProveMulti(generalizedIndexes)
+	if err != nil {
+		log.Error(fmt.Sprintf("[BOLT]: could not calculate merkle multiproof for %d preconf %s", len(constraints), err))
+		return
+	}
+
+	timeForProofs := time.Since(timeStart)
+	log.Info(fmt.Sprintf("[BOLT]: Calculated merkle multiproof for %d preconf in %s", len(constraints), timeForProofs))
+
+	inclusionProof = common.InclusionProofFromMultiProof(multiProof)
+	inclusionProof.TransactionHashes = transactionHashes
+
+	return
 }

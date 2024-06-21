@@ -90,7 +90,7 @@ export default function Home() {
       // If the event is a preconfirmation, extract the tx hash and slot number
       // and display a message with the explorer URL
       if (
-        event.message.toLowerCase().includes("verified merkle proof for tx")
+        event.message.toLowerCase().includes("verified merkle proof for slot")
       ) {
         setPreconfIncluded(true);
         setInclusionTimerActive(false);

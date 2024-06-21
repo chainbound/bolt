@@ -3,7 +3,6 @@ package server
 import (
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -27,6 +26,7 @@ import (
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/gorilla/mux"
 	"github.com/holiman/uint256"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -196,8 +196,8 @@ func (m *mockRelay) defaultHandleSubmitConstraint(w http.ResponseWriter, req *ht
 func (m *mockRelay) MakeGetHeaderWithConstraintsResponse(value uint64, blockHash, parentHash, publicKey string, version spec.DataVersion, constraints []struct {
 	tx   Transaction
 	hash phase0.Hash32
-}) *BidWithInclusionProofs {
-
+},
+) *BidWithInclusionProofs {
 	transactions := new(utilbellatrix.ExecutionPayloadTransactions)
 
 	for _, con := range constraints {
@@ -215,24 +215,15 @@ func (m *mockRelay) MakeGetHeaderWithConstraintsResponse(value uint64, blockHash
 	txsRoot := rootNode.Hash()
 
 	bidWithProofs := m.MakeGetHeaderWithProofsResponseWithTxsRoot(value, blockHash, parentHash, publicKey, version, phase0.Root(txsRoot))
-	bidWithProofs.Proofs = make([]*InclusionProof, len(constraints))
 
-	for i, con := range constraints {
-		generalizedIndex := int(math.Pow(float64(2), float64(21))) + i
-
-		proof, err := rootNode.Prove(generalizedIndex)
-		if err != nil {
-			panic(err)
-		}
-
-		merkleProof := new(SerializedMerkleProof)
-		merkleProof.FromFastSszProof(proof)
-
-		bidWithProofs.Proofs[i] = &InclusionProof{
-			TxHash:      con.hash,
-			MerkleProof: merkleProof,
-		}
+	// Calculate the inclusion proof
+	inclusionProof, err := CalculateMerkleMultiProofs(rootNode, constraints)
+	if err != nil {
+		logrus.WithError(err).Error("failed to calculate inclusion proof")
+		return nil
 	}
+
+	bidWithProofs.Proofs = inclusionProof
 
 	return bidWithProofs
 }
