@@ -1,5 +1,8 @@
 use bolt_sidecar::{
-    crypto::bls::{from_bls_signature_to_consensus_signature, BLSSigner},
+    crypto::{
+        bls::{from_bls_signature_to_consensus_signature, Signer, SignerBLS},
+        SignableBLS,
+    },
     json_rpc::{api::ApiError, start_server},
     primitives::{
         BatchedSignedConstraints, ChainHead, CommitmentRequest, ConstraintsMessage,
@@ -29,7 +32,7 @@ async fn main() -> eyre::Result<()> {
 
     let (api_events, mut api_events_rx) = mpsc::channel(1024);
 
-    let signer = BLSSigner::new(config.private_key.clone());
+    let signer = Signer::new(config.private_key.clone().unwrap());
 
     let state_client = StateClient::new(&config.execution_api, 8);
 
@@ -77,7 +80,7 @@ async fn main() -> eyre::Result<()> {
                 // TODO: get the validator index from somewhere
                 let message = ConstraintsMessage::build(0, request.slot, request.clone());
 
-                let signature = from_bls_signature_to_consensus_signature(signer.sign(&message));
+                let signature = from_bls_signature_to_consensus_signature(signer.sign(&message.digest())?);
                 let signed_constraints: BatchedSignedConstraints =
                     vec![SignedConstraints { message, signature: signature.to_string() }];
 

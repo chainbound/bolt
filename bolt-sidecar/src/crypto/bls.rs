@@ -46,15 +46,18 @@ pub trait SignerBLSAsync: Send + Sync {
 }
 
 /// A BLS signer that can sign any type that implements the `Signable` trait.
+#[derive(Debug, Clone)]
 pub struct Signer {
     key: BlsSecretKey,
 }
 
 impl Signer {
+    /// Create a new signer with the given BLS secret key.
     pub fn new(key: BlsSecretKey) -> Self {
         Self { key }
     }
 
+    /// Verify the signature of the object with the given public key.
     #[allow(dead_code)]
     pub fn verify<T: SignableBLS>(
         &self,
@@ -81,10 +84,12 @@ impl SignerBLSAsync for Signer {
     }
 }
 
+/// Compatibility between ethereum_consensus and blst
 pub fn from_bls_signature_to_consensus_signature(sig_bytes: impl AsRef<[u8]>) -> BlsSignature {
     BlsSignature::try_from(sig_bytes.as_ref()).unwrap()
 }
 
+/// Generate a random BLS secret key.
 pub fn random_bls_secret() -> BlsSecretKey {
     let mut rng = rand::thread_rng();
     let mut ikm = [0u8; 32];
@@ -92,6 +97,7 @@ pub fn random_bls_secret() -> BlsSecretKey {
     BlsSecretKey::key_gen(&ikm, &[]).unwrap()
 }
 
+/// Sign the given data with the given BLS secret key.
 #[inline]
 fn sign_with_prefix(key: &BlsSecretKey, data: &[u8]) -> Signature {
     key.sign(data, BLS_DST_PREFIX, &[])
