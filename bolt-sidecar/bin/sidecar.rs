@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use bolt_sidecar::{
     crypto::{
         bls::{from_bls_signature_to_consensus_signature, Signer, SignerBLS},
@@ -6,7 +8,7 @@ use bolt_sidecar::{
     json_rpc::{api::ApiError, start_server},
     primitives::{
         BatchedSignedConstraints, ChainHead, CommitmentRequest, ConstraintsMessage,
-        LocalPayloadFetcher, NoopPayloadFetcher, SignedConstraints,
+        LocalPayloadFetcher, SignedConstraints,
     },
     spec::ConstraintsApi,
     start_builder_proxy,
@@ -14,10 +16,9 @@ use bolt_sidecar::{
         fetcher::{StateClient, StateFetcher},
         ExecutionState,
     },
-    BuilderProxyConfig, Config, MevBoostClient, Opts,
+    BuilderProxyConfig, Config, MevBoostClient,
 };
 
-use clap::Parser;
 use tokio::sync::mpsc;
 use tracing::info;
 
@@ -27,31 +28,34 @@ async fn main() -> eyre::Result<()> {
 
     info!("Starting sidecar");
 
-    let opts = Opts::parse();
-    let config = Config::try_from(opts)?;
+    let config = Config::parse_from_cli()?;
 
     let (api_events, mut api_events_rx) = mpsc::channel(1024);
 
+    // TODO: support external signers
     let signer = Signer::new(config.private_key.clone().unwrap());
 
     let state_client = StateClient::new(&config.execution_api, 8);
+    let mevboost_client = MevBoostClient::new(&config.mevboost_url);
 
     let head = state_client.get_head().await?;
-
     let mut execution_state = ExecutionState::new(state_client, ChainHead::new(0, head)).await?;
-
-    let mevboost_client = MevBoostClient::new(config.mevboost_url.clone());
 
     let shutdown_tx = start_server(config, api_events).await?;
 
     let builder_proxy_config = BuilderProxyConfig::default();
 
     let (payload_tx, mut payload_rx) = mpsc::channel(1);
-    let _payload_fetcher = LocalPayloadFetcher::new(payload_tx);
+    let payload_fetcher = LocalPayloadFetcher::new(payload_tx);
 
-    let _builder_proxy = tokio::spawn(async move {
-        if let Err(e) = start_builder_proxy(NoopPayloadFetcher, builder_proxy_config).await {
-            tracing::error!("Builder proxy failed: {:?}", e);
+    tokio::spawn(async move {
+        loop {
+            if let Err(e) =
+                start_builder_proxy(payload_fetcher.clone(), builder_proxy_config.clone()).await
+            {
+                tracing::error!("Builder API proxy failed: {:?}", e);
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
         }
     });
 
@@ -94,8 +98,18 @@ async fn main() -> eyre::Result<()> {
             }
             Some(request) = payload_rx.recv() => {
                 tracing::info!("Received payload request: {:?}", request);
-                let _response = execution_state.get_block_template(request.slot);
-                // TODO: extract payload & bid
+                let Some(response) = execution_state.get_block_template(request.slot) else {
+                    tracing::warn!("No block template found for slot {} when requested", request.slot);
+                    let _ = request.response.send(None);
+                    continue;
+                };
+
+                // For fallback block building, we need to turn a block template into an actual SignedBuilderBid.
+                // This will also require building the full ExecutionPayload that we want the proposer to commit to.
+                // Once we have that, we need to send it as response to the validator via the pending get_header RPC call.
+                // The validator will then call get_payload with the corresponding SignedBlindedBeaconBlock. We then need to
+                // respond with the full ExecutionPayload inside the BeaconBlock (+ blobs if any).
+
                 let _ = request.response.send(None);
             }
 

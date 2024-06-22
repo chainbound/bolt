@@ -15,6 +15,7 @@ const MAX_RETRIES: u32 = 8;
 /// The retry backoff in milliseconds.
 const RETRY_BACKOFF_MS: u64 = 200;
 
+/// A trait for fetching state updates.
 pub trait StateFetcher {
     async fn get_state_update(
         &self,
@@ -23,7 +24,9 @@ pub trait StateFetcher {
     ) -> Result<StateUpdate, TransportError>;
 
     async fn get_head(&self) -> Result<u64, TransportError>;
+
     async fn get_basefee(&self, block_number: Option<u64>) -> Result<u128, TransportError>;
+
     async fn get_account_state(
         &self,
         address: &Address,
@@ -31,13 +34,15 @@ pub trait StateFetcher {
     ) -> Result<AccountState, TransportError>;
 }
 
-#[derive(Clone)]
+/// A basic state fetcher that uses an RPC client to fetch state updates.
+#[derive(Clone, Debug)]
 pub struct StateClient {
     client: RpcClient,
     retry_backoff: Duration,
 }
 
 impl StateClient {
+    /// Create a new `StateClient` with the given URL and maximum retries.
     pub fn new(url: &str, max_retries: u32) -> Self {
         let client = RpcClient::new(url);
         Self {

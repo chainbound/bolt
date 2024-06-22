@@ -29,7 +29,7 @@ pub struct MevBoostClient {
 
 impl MevBoostClient {
     /// Creates a new MEV-Boost client with the given URL.
-    pub fn new(url: String) -> Self {
+    pub fn new(url: &str) -> Self {
         Self {
             url: url.trim_end_matches('/').to_string(),
             client: reqwest::ClientBuilder::new()

@@ -5,9 +5,9 @@ use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::{
+    builder::BlockTemplate,
     common::{calculate_max_basefee, validate_transaction},
     primitives::{AccountState, ChainHead, CommitmentRequest, Slot},
-    template::BlockTemplate,
 };
 
 use super::{fetcher::StateFetcher, StateError};
