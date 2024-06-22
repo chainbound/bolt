@@ -28,6 +28,7 @@ alloy-transport-http = { version = "0.1.2" }
 alloy-transport-ws = { version = "0.1.2" }
 alloy-pubsub = { version = "0.1.2" }
 alloy-rpc-types = { version = "0.1.2" }
+alloy-rpc-types-beacon = { version = "0.1.2" }
 alloy-rpc-types-trace = { version = "0.1.2" }
 alloy-json-rpc = { version = "0.1.2" }
 alloy-network = { version = "0.1.2" }

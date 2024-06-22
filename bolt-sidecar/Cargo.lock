@@ -404,6 +404,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "alloy-rpc-types-beacon"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb383cd3981cee0031aeacbd394c4e726e907f3a0180fe36d5fc76d37c41cd82"
+dependencies = [
+ "alloy-eips 0.1.2",
+ "alloy-primitives",
+ "alloy-rpc-types-engine 0.1.2",
+ "serde",
+ "serde_with",
+ "thiserror",
+]
+
+[[package]]
 name = "alloy-rpc-types-engine"
 version = "0.1.0"
 source = "git+https://github.com/alloy-rs/alloy?rev=17633df#17633df04920e07cd7afbd6ee825fcde677fa1d1"
@@ -429,6 +443,24 @@ dependencies = [
  "alloy-rlp",
  "alloy-rpc-types 0.1.0 (git+https://github.com/alloy-rs/alloy?rev=64feb9bc51c8021ea08535694c44de84222f474e)",
  "alloy-serde 0.1.0 (git+https://github.com/alloy-rs/alloy?rev=64feb9bc51c8021ea08535694c44de84222f474e)",
+ "jsonwebtoken",
+ "rand 0.8.5",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
+name = "alloy-rpc-types-engine"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd473d98ec552f8229cd6d566bd2b0bbfc5bb4efcefbb5288c834aa8fd832020"
+dependencies = [
+ "alloy-consensus 0.1.2",
+ "alloy-eips 0.1.2",
+ "alloy-primitives",
+ "alloy-rlp",
+ "alloy-rpc-types-eth",
+ "alloy-serde 0.1.2",
  "jsonwebtoken",
  "rand 0.8.5",
  "serde",
@@ -1214,6 +1246,7 @@ dependencies = [
  "alloy-rlp",
  "alloy-rpc-client",
  "alloy-rpc-types 0.1.2",
+ "alloy-rpc-types-beacon 0.1.2",
  "alloy-rpc-types-trace 0.1.2",
  "alloy-signer",
  "alloy-signer-local",
@@ -1308,7 +1341,7 @@ version = "0.0.1"
 source = "git+https://github.com/Commit-Boost/commit-boost-client#4c482605195d22cc797886d082e5cd6a90160ba9"
 dependencies = [
  "alloy-primitives",
- "alloy-rpc-types-beacon",
+ "alloy-rpc-types-beacon 0.1.0",
  "blst",
  "ethereum_ssz",
  "ethereum_ssz_derive",
@@ -1329,7 +1362,7 @@ version = "0.0.1"
 source = "git+https://github.com/Commit-Boost/commit-boost-client#4c482605195d22cc797886d082e5cd6a90160ba9"
 dependencies = [
  "alloy-primitives",
- "alloy-rpc-types-beacon",
+ "alloy-rpc-types-beacon 0.1.0",
  "axum",
  "blst",
  "cb-common",
