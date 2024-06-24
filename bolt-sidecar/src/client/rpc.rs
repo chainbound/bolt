@@ -16,8 +16,8 @@ use reqwest::{Client, Url};
 
 use crate::primitives::AccountState;
 
-/// An HTTP-based JSON-RPC client that supports batching. Implements all methods that are relevant
-/// to Bolt state.
+/// An HTTP-based JSON-RPC client that supports batching.
+/// Implements all methods that are relevant to Bolt state.
 #[derive(Clone, Debug)]
 pub struct RpcClient(alloy::RpcClient<Http<Client>>);
 

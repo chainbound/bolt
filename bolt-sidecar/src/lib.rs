@@ -20,7 +20,7 @@ mod common;
 /// Functionality for building local block templates that can
 /// be used as a fallback for proposers. It's also used to keep
 /// any intermediary state that is needed to simulate EVM execution
-mod template;
+pub mod builder;
 
 /// Configuration and command-line argument parsing
 mod config;

@@ -73,6 +73,14 @@ impl Default for Config {
     }
 }
 
+impl Config {
+    /// Parse the command-line options and return a new `Config` instance
+    pub fn parse_from_cli() -> eyre::Result<Self> {
+        let opts = Opts::parse();
+        Self::try_from(opts)
+    }
+}
+
 impl TryFrom<Opts> for Config {
     type Error = eyre::Report;
 

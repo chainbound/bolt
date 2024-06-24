@@ -1,6 +1,9 @@
+// TODO: add docs
+#![allow(missing_docs)]
+
 use std::sync::{atomic::AtomicU64, Arc};
 
-use alloy_primitives::{Bytes, TxHash, U256};
+use alloy_primitives::U256;
 use ethereum_consensus::{
     capella,
     crypto::{KzgCommitment, PublicKey as BlsPublicKey, Signature as BlsSignature},
@@ -31,23 +34,6 @@ pub use transaction::TxInfo;
 
 /// An alias for a Beacon Chain slot number
 pub type Slot = u64;
-
-/// An enum representing all possible (signed) commitments.
-#[derive(Debug)]
-pub enum Commitment {
-    /// Inclusion commitment, accepted and signed by the proposer
-    /// through this sidecar's signer.
-    Inclusion(InclusionCommitment),
-}
-
-#[derive(Debug)]
-pub struct InclusionCommitment {
-    pub slot: Slot,
-    pub tx_hash: TxHash,
-    pub raw_tx: Bytes,
-    // TODO:
-    pub signature: Bytes,
-}
 
 /// Minimal account state needed for commitment validation.
 #[derive(Debug, Clone, Copy)]
@@ -80,14 +66,6 @@ pub struct SignedBuilderBidWithProofs {
 }
 
 #[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
-pub struct MerkleMultiProof {
-    // We use List here for SSZ, TODO: choose max
-    transaction_hashes: List<Hash32, 300>,
-    generalized_indexes: List<u64, 300>,
-    merkle_hashes: List<Hash32, 1000>,
-}
-
-#[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
 pub struct ConstraintProof {
     #[serde(rename = "txHash")]
     tx_hash: Hash32,
@@ -102,6 +80,14 @@ pub struct MerkleProof {
     hashes: List<Hash32, 1000>,
 }
 
+#[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
+pub struct MerkleMultiProof {
+    // We use List here for SSZ, TODO: choose max
+    transaction_hashes: List<Hash32, 300>,
+    generalized_indexes: List<u64, 300>,
+    merkle_hashes: List<Hash32, 1000>,
+}
+
 #[derive(Debug)]
 pub struct FetchPayloadRequest {
     pub slot: u64,
@@ -114,6 +100,7 @@ pub struct PayloadAndBid {
     pub payload: GetPayloadResponse,
 }
 
+#[derive(Debug, Clone)]
 pub struct LocalPayloadFetcher {
     tx: mpsc::Sender<FetchPayloadRequest>,
 }
@@ -142,6 +129,7 @@ pub trait PayloadFetcher {
     async fn fetch_payload(&self, slot: u64) -> Option<PayloadAndBid>;
 }
 
+#[derive(Debug)]
 pub struct NoopPayloadFetcher;
 
 #[async_trait::async_trait]

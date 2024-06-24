@@ -113,6 +113,8 @@ impl<T: ConstraintsApi, P: PayloadFetcher + Send + Sync> BuilderProxyServer<T, P
         {
             Ok(Ok(header)) => {
                 tracing::debug!(elapsed = ?start.elapsed(), "Returning signed builder bid: {:?}", header);
+                // TODO: verify proofs here. If they are invalid, we should fall back to locally built block
+
                 Ok(Json(header.bid))
             }
             Ok(Err(_)) | Err(_) => {
@@ -210,14 +212,14 @@ impl Default for BuilderProxyConfig {
 pub async fn start_builder_proxy<P: PayloadFetcher + Send + Sync + 'static>(
     payload_fetcher: P,
     config: BuilderProxyConfig,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<(), eyre::Error> {
     tracing::info!(
         port = config.port,
         target = config.mev_boost_url,
         "Starting builder proxy..."
     );
 
-    let mev_boost = MevBoostClient::new(config.mev_boost_url);
+    let mev_boost = MevBoostClient::new(&config.mev_boost_url);
     let server = Arc::new(BuilderProxyServer::new(mev_boost, payload_fetcher));
     let router = Router::new()
         .route("/", get(index))

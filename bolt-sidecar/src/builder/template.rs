@@ -116,21 +116,6 @@ impl BlockTemplate {
     }
 }
 
-/// StateDiff tracks the intermediate changes to the state according to the block template.
-#[derive(Debug, Default)]
-pub struct StateDiff {
-    diffs: HashMap<Address, (u64, U256)>,
-}
-
-impl StateDiff {
-    /// Returns a tuple of the nonce and balance diff for the given address.
-    /// The nonce diff should be added to the current nonce, the balance diff should be subtracted from
-    /// the current balance.
-    pub fn get_diff(&self, address: &Address) -> Option<(u64, U256)> {
-        self.diffs.get(address).copied()
-    }
-}
-
 impl TryFrom<BlockTemplate> for PayloadAndBid {
     type Error = Box<dyn std::error::Error>;
 
@@ -144,6 +129,28 @@ impl TryFrom<BlockTemplate> for PayloadAndBid {
             },
             signature: todo!(),
         };
+
+        Ok(PayloadAndBid {
+            payload: todo!(),
+            bid,
+        })
+    }
+}
+
+/// StateDiff tracks the intermediate changes to the state according to the block template.
+#[derive(Debug, Default)]
+pub struct StateDiff {
+    /// Map of diffs per address. Each diff is a tuple of the nonce and balance diff
+    /// that should be applied to the current state.
+    diffs: HashMap<Address, (u64, U256)>,
+}
+
+impl StateDiff {
+    /// Returns a tuple of the nonce and balance diff for the given address.
+    /// The nonce diff should be added to the current nonce, the balance diff should be subtracted from
+    /// the current balance.
+    pub fn get_diff(&self, address: &Address) -> Option<(u64, U256)> {
+        self.diffs.get(address).copied()
     }
 }
 
