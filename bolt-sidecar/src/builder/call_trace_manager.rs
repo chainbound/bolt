@@ -255,7 +255,18 @@ impl CallTraceManager {
             .cloned()
             .unwrap_or_default();
 
-        let tracing_options = get_trace_options_with_override(state_override);
+        let mut tracing_options = get_trace_options_with_override(state_override);
+        tracing_options.tracing_options.tracer = Some(GethDebugTracerType::JsTracer(format!(
+            r#"{{
+                data: [],
+                result: function(ctx, db) {{
+                    var root = db.GetStorageRoot("{:x}");
+                    return root;
+                }},
+            }}"#,
+            transaction.from.unwrap_or_default()
+        )));
+
         self.pending_traces.push_back(tokio::spawn(async move {
             (
                 block,
