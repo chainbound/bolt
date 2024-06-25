@@ -1,3 +1,7 @@
+#![allow(missing_docs)]
+#![allow(unused_variables)]
+#![allow(missing_debug_implementations)]
+
 use std::{collections::HashMap, time::Duration};
 
 use alloy_eips::BlockNumberOrTag;
@@ -16,6 +20,7 @@ const MAX_RETRIES: u32 = 8;
 const RETRY_BACKOFF_MS: u64 = 200;
 
 /// A trait for fetching state updates.
+#[async_trait::async_trait]
 pub trait StateFetcher {
     async fn get_state_update(
         &self,
@@ -52,6 +57,7 @@ impl StateClient {
     }
 }
 
+#[async_trait::async_trait]
 impl StateFetcher for StateClient {
     // TODO: should this be durable i.e. retries?
     // Yes
@@ -164,5 +170,28 @@ impl StateFetcher for StateClient {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_util::launch_anvil;
+
+    #[tokio::test]
+    async fn test_state_client() {
+        let anvil = launch_anvil();
+        let client = StateClient::new(&anvil.endpoint(), 8);
+
+        let address = anvil.addresses().first().unwrap();
+        let state = client.get_account_state(address, None).await.unwrap();
+        assert_eq!(state.balance, U256::from(10000000000000000000000u128));
+        assert_eq!(state.transaction_count, 0);
+
+        let head = client.get_head().await.unwrap();
+        assert_eq!(head, 0);
+
+        let basefee = client.get_basefee(None).await.unwrap();
+        assert_eq!(basefee, 1_000_000_000);
     }
 }
