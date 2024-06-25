@@ -105,28 +105,13 @@ fn sign_with_prefix(key: &BlsSecretKey, data: &[u8]) -> Signature {
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::bls::SignerBLS;
-    use blst::min_pk::SecretKey;
-
-    use super::SignableBLS;
-    use super::Signer;
-
-    fn test_bls_secret_key() -> SecretKey {
-        SecretKey::key_gen(&[0u8; 32], &[]).unwrap()
-    }
-
-    struct TestSignableData {
-        data: Vec<u8>,
-    }
-
-    impl SignableBLS for TestSignableData {
-        fn digest(&self) -> Vec<u8> {
-            self.data.clone()
-        }
-    }
+    use crate::{
+        crypto::bls::{SignableBLS, Signer, SignerBLS},
+        test_util::{test_bls_secret_key, TestSignableData},
+    };
 
     #[test]
-    fn test_signer() {
+    fn test_bls_signer() {
         let key = test_bls_secret_key();
         let pubkey = key.sk_to_pk();
         let signer = Signer::new(key);

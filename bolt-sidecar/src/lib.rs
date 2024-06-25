@@ -37,3 +37,7 @@ pub mod primitives;
 
 /// State management and fetching for EVM simulation
 pub mod state;
+
+/// Utilities for testing
+#[cfg(test)]
+mod test_util;
