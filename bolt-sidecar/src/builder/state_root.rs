@@ -18,14 +18,14 @@ mod tests {
 
         tracing::info!("Starting test_trace_call");
 
-        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL must be set");
-        let client = RpcClient::new(&rpc_url);
+        let rpc_url = "http://remotebeast:8545";
+        let client = RpcClient::new(rpc_url);
 
-        let (call_trace_manager, call_trace_handler) = CallTraceManager::new(&rpc_url);
+        let (call_trace_manager, call_trace_handler) = CallTraceManager::new(rpc_url);
         tokio::spawn(call_trace_manager);
 
-        // https://etherscan.io/block/20125606
-        let block_number = 20125606;
+        // https://etherscan.io/block/20167237
+        let block_number = 20167539;
 
         let latest_block = client.get_block(Some(block_number), true).await?;
         let latest_state_root = B256::from(latest_block.header.state_root.0);

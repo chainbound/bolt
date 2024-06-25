@@ -28,6 +28,7 @@ alloy-transport-http = { version = "0.1.2" }
 alloy-transport-ws = { version = "0.1.2" }
 alloy-pubsub = { version = "0.1.2" }
 alloy-rpc-types = { version = "0.1.2" }
+alloy-rpc-types-engine = { version = "0.1.2" }
 alloy-rpc-types-beacon = { version = "0.1.2" }
 alloy-rpc-types-trace = { version = "0.1.2" }
 alloy-json-rpc = { version = "0.1.2" }
@@ -41,6 +42,7 @@ alloy-rlp = { version = "0.3" }
 
 # reth
 reth-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "71c404d" }
+reth-rpc-layer = { git = "https://github.com/paradigmxyz/reth", rev = "6e146e1" }
 # reth-provider = { git = "https://github.com/paradigmxyz/reth", rev = "71c404d" }
 
 reqwest = "0.12"
@@ -70,6 +72,8 @@ tracing-subscriber = "0.3.18"
 # commit-boost
 cb-crypto = { git = "https://github.com/Commit-Boost/commit-boost-client" }
 cb-common = { git = "https://github.com/Commit-Boost/commit-boost-client" }
+
+base64 = "0.22.1"
 
 [dev-dependencies]
 alloy-node-bindings = "0.1.1"
