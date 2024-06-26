@@ -138,6 +138,12 @@ impl FallbackPayloadBuilder {
             .await
             .unwrap();
 
+        let versioned_hashes = transactions
+            .iter()
+            .flat_map(|tx| tx.blob_versioned_hashes())
+            .flatten()
+            .collect::<Vec<_>>();
+
         let base_fee = calc_next_block_base_fee(
             latest_block.header.gas_used,
             latest_block.header.gas_limit,
@@ -170,7 +176,7 @@ impl FallbackPayloadBuilder {
         };
 
         let mut hints = Hints::default();
-        let max_iterations = 12;
+        let max_iterations = 5;
         let mut i = 1;
         let (sealed_header, sealed_block) = loop {
             let header = build_header_with_hints_and_context(&latest_block, &hints, &ctx);
@@ -180,9 +186,6 @@ impl FallbackPayloadBuilder {
 
             let hinted_hash = hints.block_hash.unwrap_or(sealed_block.hash());
             let exec_payload = to_alloy_execution_payload(&sealed_block, hinted_hash);
-
-            // TODO: blob hashes from cl? not sure
-            let versioned_hashes: Vec<B256> = Vec::new();
 
             let engine_hint = self
                 .engine_hinter
@@ -247,8 +250,6 @@ impl EngineHinter {
             parent_beacon_root
         );
 
-        println!("body: {}", body);
-
         let raw_hint = self
             .client
             .post(&self.engine_rpc_url)
@@ -291,7 +292,6 @@ impl EngineHinter {
 /// Reference: https://github.com/ethereum/go-ethereum/blob/9298d2db884c4e3f9474880e3dcfd080ef9eacfa/core/block_validator.go#L122-L151,
 /// https://github.com/ethereum/go-ethereum/blob/9298d2db884c4e3f9474880e3dcfd080ef9eacfa/beacon/engine/types.go#L253-L256
 pub(crate) fn parse_geth_response(error: &str) -> Option<String> {
-    println!("error: {}", error);
     let re = Regex::new(r"(?:local:|got) ([0-9a-zA-Z]+)").expect("valid regex");
 
     re.captures(error)
@@ -319,7 +319,7 @@ fn build_header_with_hints_and_context(
         withdrawals_root: context.withdrawals_root,
         logs_bloom,
         difficulty: U256::ZERO,
-        number: latest_block.header.number.unwrap_or_default() + 1, // for some reasons we don't need +1 here
+        number: latest_block.header.number.unwrap_or_default() + 1,
         gas_limit: latest_block.header.gas_limit as u64,
         gas_used,
         // TODO: use slot time from beacon chain instead to account for reorgs

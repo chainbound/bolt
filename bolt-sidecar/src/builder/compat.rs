@@ -40,8 +40,6 @@ pub(crate) fn to_alloy_execution_payload(
     block: &SealedBlock,
     block_hash: B256,
 ) -> AlloyExecutionPayload {
-    println!("block hash in to_alloy_execution_payload: {:?}", block_hash);
-
     let alloy_withdrawals = block
         .withdrawals
         .as_ref()
