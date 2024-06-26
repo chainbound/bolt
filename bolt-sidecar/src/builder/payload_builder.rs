@@ -1,6 +1,3 @@
-#![allow(missing_docs)]
-
-use super::compat::{to_alloy_execution_payload, to_reth_withdrawal};
 use alloy_eips::{calc_excess_blob_gas, calc_next_block_base_fee, eip1559::BaseFeeParams};
 use alloy_primitives::{Address, Bytes, B256, U256};
 use alloy_rpc_types::Block;
@@ -9,64 +6,68 @@ use beacon_api_client::{BlockId, StateId};
 use hex::FromHex;
 use regex::Regex;
 use reth_primitives::{
-    constants::BEACON_NONCE, proofs, BlockBody, Bloom, Header, SealedBlock, SealedHeader,
-    TransactionSigned, Withdrawals, EMPTY_OMMER_ROOT_HASH,
+    constants::BEACON_NONCE, proofs, BlockBody, Bloom, Header, SealedBlock, TransactionSigned,
+    Withdrawals, EMPTY_OMMER_ROOT_HASH,
 };
 use reth_rpc_layer::{secret_to_bearer_header, JwtSecret};
 use serde_json::Value;
 
+use super::{
+    compat::{to_alloy_execution_payload, to_reth_withdrawal},
+    BuilderError,
+};
 use crate::RpcClient;
 
-#[derive(Debug, thiserror::Error)]
-#[non_exhaustive]
-#[allow(missing_docs)]
-pub enum PayloadBuilderError {
-    #[error("Failed to parse from integer: {0}")]
-    Parse(#[from] std::num::ParseIntError),
-    #[error("Failed to de/serialize JSON: {0}")]
-    Json(#[from] serde_json::Error),
-    #[error("Failed to decode hex: {0}")]
-    Hex(#[from] hex::FromHexError),
-    #[error("Invalid JWT: {0}")]
-    Jwt(#[from] reth_rpc_layer::JwtError),
-    #[error("Failed HTTP request: {0}")]
-    Reqwest(#[from] reqwest::Error),
-    #[error("Failed while fetching from RPC: {0}")]
-    Transport(#[from] alloy_transport::TransportError),
-    #[error("Failed to build payload: {0}")]
-    Custom(String),
-}
+/// Extra-data payload field used for locally built blocks.
+/// NOTE: must be exactly 32 bytes in hex (=16 chars in utf-8).
+const DEFAULT_EXTRA_DATA: &str = "Selfbuilt w Bolt";
 
+/// The fallback payload builder is responsible for assembling a valid
+/// sealed block from a set of transactions. It (ab)uses the engine API
+/// to fetch "hints" for missing header values, such as the block hash,
+/// gas used, state root, etc.
+///
+/// The builder will keep querying the engine API until it has all the
+/// necessary values to seal the block. This is a temporary solution
+/// until the engine API is able to provide a full sealed block.
+///
+/// Find more information about this process & its reasoning here:
+/// <https://github.com/chainbound/bolt/discussions/59>
 #[derive(Debug)]
 pub struct FallbackPayloadBuilder {
-    fee_recipient: Address,
     extra_data: Bytes,
+    fee_recipient: Address,
     execution_rpc_client: RpcClient,
-
-    // Engine API error hinter
     engine_hinter: EngineHinter,
 }
 
 impl FallbackPayloadBuilder {
+    /// Create a new fallback payload builder
     pub fn new(
-        fee_recipient: Address,
         jwt_hex: &str,
+        fee_recipient: Address,
         engine_rpc_url: &str,
         execution_rpc_url: &str,
     ) -> Self {
+        let engine_hinter = EngineHinter {
+            client: reqwest::Client::new(),
+            jwt_hex: jwt_hex.to_string(),
+            engine_rpc_url: engine_rpc_url.to_string(),
+        };
+
         Self {
             fee_recipient,
-            engine_hinter: EngineHinter {
-                client: reqwest::Client::new(),
-                jwt_hex: jwt_hex.to_string(),
-                engine_rpc_url: engine_rpc_url.to_string(),
-            },
-            extra_data: hex::encode("Selfbuilt w Bolt").into(),
+            engine_hinter,
+            extra_data: hex::encode(DEFAULT_EXTRA_DATA).into(),
             execution_rpc_client: RpcClient::new(execution_rpc_url),
         }
     }
 }
 
+/// Lightweight context struct to hold the necessary values for
+/// building a sealed block. Some of this data is fetched from the
+/// beacon chain, while others are calculated locally or from the
+/// transactions themselves.
 #[derive(Debug, Default)]
 pub struct Context {
     extra_data: Bytes,
@@ -80,6 +81,7 @@ pub struct Context {
 }
 
 #[derive(Debug, Default)]
+#[allow(missing_docs)]
 pub struct Hints {
     pub gas_used: Option<u64>,
     pub receipts_root: Option<B256>,
@@ -90,11 +92,12 @@ pub struct Hints {
 }
 
 impl FallbackPayloadBuilder {
-    /// Build a minimal payload to be used as a fallback
+    /// Build a minimal payload to be used as a fallback in case PBS relays fail
+    /// to provide a valid payload that fulfills the commitments made by Bolt.
     pub async fn build_fallback_payload(
         &self,
         transactions: Vec<TransactionSigned>,
-    ) -> Result<(SealedBlock, SealedHeader), PayloadBuilderError> {
+    ) -> Result<SealedBlock, BuilderError> {
         let latest_block = self.execution_rpc_client.get_block(None, true).await?;
 
         // TODO: refactor this once ConsensusState (https://github.com/chainbound/bolt/issues/58) is ready
@@ -177,8 +180,8 @@ impl FallbackPayloadBuilder {
 
         let mut hints = Hints::default();
         let max_iterations = 5;
-        let mut i = 1;
-        let (sealed_header, sealed_block) = loop {
+        let mut i = 0;
+        loop {
             let header = build_header_with_hints_and_context(&latest_block, &hints, &ctx);
 
             let sealed_header = header.clone().seal_slow();
@@ -199,23 +202,24 @@ impl FallbackPayloadBuilder {
                 EngineApiHint::ReceiptsRoot(hash) => hints.receipts_root = Some(hash),
                 EngineApiHint::LogsBloom(bloom) => hints.logs_bloom = Some(bloom),
 
-                EngineApiHint::ValidPayload => break (sealed_header, sealed_block),
+                EngineApiHint::ValidPayload => return Ok(sealed_block),
             }
 
             if i > max_iterations {
-                return Err(PayloadBuilderError::Custom(
+                return Err(BuilderError::Custom(
                     "Failed to fetch all missing header values from geth error messages"
                         .to_string(),
                 ));
             }
 
             i += 1;
-        };
-
-        Ok((sealed_block, sealed_header))
+        }
     }
 }
 
+/// Engine API hint values that can be fetched from the engine API
+/// to complete the sealed block. These hints are used to fill in
+/// missing values in the block header.
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum EngineApiHint {
@@ -227,6 +231,9 @@ pub(crate) enum EngineApiHint {
     ValidPayload,
 }
 
+/// Engine hinter struct that is responsible for fetching hints from the
+/// engine API to complete the sealed block. This struct is used by the
+/// fallback payload builder to fetch missing header values.
 #[derive(Debug)]
 pub(crate) struct EngineHinter {
     client: reqwest::Client,
@@ -235,12 +242,13 @@ pub(crate) struct EngineHinter {
 }
 
 impl EngineHinter {
+    /// Fetch the next payload hint from the engine API to complete the sealed block.
     pub async fn fetch_next_payload_hint(
         &self,
         exec_payload: &AlloyExecutionPayload,
         versioned_hashes: &[B256],
         parent_beacon_root: B256,
-    ) -> Result<EngineApiHint, PayloadBuilderError> {
+    ) -> Result<EngineApiHint, BuilderError> {
         let auth_jwt = secret_to_bearer_header(&JwtSecret::from_hex(&self.jwt_hex)?);
 
         let body = format!(
@@ -262,15 +270,16 @@ impl EngineHinter {
             .await?;
 
         let Some(hint_value) = parse_geth_response(&raw_hint) else {
+            // If the hint is not found, it means that we likely got a VALID
+            // payload response or an error message that we can't parse.
             if raw_hint.contains("\"status\":\"VALID\"") {
                 return Ok(EngineApiHint::ValidPayload);
             } else {
-                return Err(PayloadBuilderError::Custom(
-                    "Failed to parse hint from engine response".to_string(),
-                ));
+                return Err(BuilderError::InvalidEngineHint(raw_hint));
             }
         };
 
+        // Match the hint value to the corresponding header field and return it
         if raw_hint.contains("blockhash mismatch") {
             return Ok(EngineApiHint::BlockHash(B256::from_hex(hint_value)?));
         } else if raw_hint.contains("invalid gas used") {
@@ -283,26 +292,36 @@ impl EngineHinter {
             return Ok(EngineApiHint::LogsBloom(Bloom::from_hex(&hint_value)?));
         };
 
-        Err(PayloadBuilderError::Custom(
-            "Failed to parse hint from engine response".to_string(),
+        Err(BuilderError::Custom(
+            "Unexpected: failed to parse any hint from engine response".to_string(),
         ))
     }
 }
 
-/// Reference: https://github.com/ethereum/go-ethereum/blob/9298d2db884c4e3f9474880e3dcfd080ef9eacfa/core/block_validator.go#L122-L151,
-/// https://github.com/ethereum/go-ethereum/blob/9298d2db884c4e3f9474880e3dcfd080ef9eacfa/beacon/engine/types.go#L253-L256
+/// Parse the hint value from the engine response.
+/// An example error message from the engine API looks like this:
+/// ```text
+/// {"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"local: blockhash mismatch: got 0x... expected 0x..."}}
+/// ```
+///
+/// Geth Reference:
+/// - [ValidateState](<https://github.com/ethereum/go-ethereum/blob/9298d2db884c4e3f9474880e3dcfd080ef9eacfa/core/block_validator.go#L122-L151>)
+/// - [Blockhash Mismatch](<https://github.com/ethereum/go-ethereum/blob/9298d2db884c4e3f9474880e3dcfd080ef9eacfa/beacon/engine/types.go#L253-L256>)
 pub(crate) fn parse_geth_response(error: &str) -> Option<String> {
+    // Capture either the "local" or "got" value from the error message
     let re = Regex::new(r"(?:local:|got) ([0-9a-zA-Z]+)").expect("valid regex");
 
     re.captures(error)
         .and_then(|capture| capture.get(1).map(|matched| matched.as_str().to_string()))
 }
 
-fn build_header_with_hints_and_context(
+/// Build a header with the given hints and context values.
+pub(crate) fn build_header_with_hints_and_context(
     latest_block: &Block,
     hints: &Hints,
     context: &Context,
 ) -> Header {
+    // Use the available hints, or default to an empty value if not present.
     let gas_used = hints.gas_used.unwrap_or_default();
     let receipts_root = hints.receipts_root.unwrap_or_default();
     let logs_bloom = hints.logs_bloom.unwrap_or_default();
@@ -322,7 +341,7 @@ fn build_header_with_hints_and_context(
         number: latest_block.header.number.unwrap_or_default() + 1,
         gas_limit: latest_block.header.gas_limit as u64,
         gas_used,
-        // TODO: use slot time from beacon chain instead to account for reorgs
+        // TODO: use slot time from beacon chain instead, to account for reorgs
         timestamp: latest_block.header.timestamp + 12,
         mix_hash: context.prev_randao,
         nonce: BEACON_NONCE,
@@ -353,10 +372,11 @@ mod tests {
         let raw_sk = std::env::var("PRIVATE_KEY")?;
         let jwt = std::env::var("ENGINE_JWT")?;
 
+        // TODO: use constants (after #94)
         let execution = "http://remotebeast:8545";
         let engine = "http://remotebeast:8551";
 
-        let builder = FallbackPayloadBuilder::new(Address::default(), &jwt, engine, execution);
+        let builder = FallbackPayloadBuilder::new(&jwt, Address::default(), engine, execution);
 
         let sk = SigningKey::from_slice(hex::decode(raw_sk)?.as_slice())?;
         let signer = PrivateKeySigner::from_signing_key(sk.clone());
@@ -373,6 +393,7 @@ mod tests {
         Ok(())
     }
 
+    // TODO: refactor (after #94)
     fn default_transaction(sender: Address, nonce: u64) -> TransactionRequest {
         TransactionRequest::default()
             .with_from(sender)
