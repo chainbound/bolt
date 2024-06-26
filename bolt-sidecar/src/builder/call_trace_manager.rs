@@ -8,7 +8,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use alloy_primitives::{Address, BlockNumber, U64};
+use alloy_primitives::{BlockNumber, U64};
 use alloy_rpc_types::{
     state::{AccountOverride, StateOverride},
     TransactionRequest,
@@ -115,8 +115,12 @@ impl Future for CallTraceManager {
             }
 
             match this.pending_traces.poll_next_unpin(cx) {
-                Poll::Ready(Some(Ok((block, res)))) => this.handle_trace_result(block, res),
-                Poll::Ready(Some(Err(e))) => tracing::error!(err = ?e, "Error while tracing tx"),
+                Poll::Ready(Some(Ok((block, trace_result)))) => {
+                    this.handle_trace_result(block, trace_result)
+                }
+                Poll::Ready(Some(Err(e))) => {
+                    tracing::error!(err = ?e, "Error while tracing transaction");
+                }
                 Poll::Ready(None) => return Poll::Ready(()),
                 Poll::Pending => return Poll::Pending,
             }
@@ -187,12 +191,12 @@ impl CallTraceManager {
     }
 
     fn handle_trace_result(&mut self, block: BlockNumber, result: TransportResult<GethTrace>) {
-        let post_execution_state_diffs = match result {
+        match result {
             Ok(trace) => {
                 tracing::debug!(block = block, "RPC trace call completed");
 
-                tracing::warn!("{:?}", &trace);
-                let GethTrace::PreStateTracer(PreStateFrame::Default(trace_state)) = trace else {
+                let Ok(PreStateFrame::Default(trace_state)) = trace.try_into_pre_state_frame()
+                else {
                     tracing::error!("Failed to extract pre-state frame from trace result");
                     return;
                 };
@@ -204,26 +208,37 @@ impl CallTraceManager {
                     merge_account_state_in_overrides(account_override, account_state);
                 }
 
-                Some(acc_state_diffs.clone())
+                // If there are more pending trace requests for the same block, process the next one
+                if let Some(transactions) = self.trace_request_queue.get_mut(&block) {
+                    if let Some(transaction) = transactions.pop_front() {
+                        self.start_new_trace_call_with_overrides(transaction, block);
+                        return;
+                    }
+                }
+
+                // If there are no more transactions to process for this block,
+                // send the accumulated state diffs to the response channel if there is
+                // one waiting for it
+                if let Some(res) = self.response_queue.remove(&block) {
+                    let _ = res.send(Some(acc_state_diffs.clone()));
+                    self.accumulated_state_diffs.remove(&block);
+                }
             }
             Err(err) => {
                 tracing::error!(err = ?err, "RPC error while tracing transaction");
-                None
-            }
-        };
 
-        // If there are more pending trace requests for the same block, process the next one
-        if let Some(transactions) = self.trace_request_queue.get_mut(&block) {
-            if let Some(transaction) = transactions.pop_front() {
-                self.start_new_trace_call_with_overrides(transaction, block);
-            }
-        } else {
-            // If there are no more transactions to process for this block,
-            // send the accumulated state diffs to the response channel if there is
-            // one waiting for it
-            if let Some(res) = self.response_queue.remove(&block) {
-                let _ = res.send(post_execution_state_diffs);
-                self.accumulated_state_diffs.remove(&block);
+                // For now, just log the error and continue processing the next trace request
+                // for the same block, if there is one.
+                if let Some(transactions) = self.trace_request_queue.get_mut(&block) {
+                    if let Some(transaction) = transactions.pop_front() {
+                        self.start_new_trace_call_with_overrides(transaction, block);
+                    }
+                }
+
+                if let Some(res) = self.response_queue.remove(&block) {
+                    let _ = res.send(None);
+                    self.accumulated_state_diffs.remove(&block);
+                }
             }
         }
     }
@@ -240,12 +255,17 @@ impl CallTraceManager {
             .cloned()
             .unwrap_or_default();
 
-        let tracing_options = get_trace_options_with_override(state_override);
-
-        // TODO: add js tracer support
-        // tracing_options.tracing_options.tracer = Some(GethDebugTracerType::JsTracer(
-        //     create_js_tracer_script(transaction.from.unwrap_or_default()),
-        // ));
+        let mut tracing_options = get_trace_options_with_override(state_override);
+        tracing_options.tracing_options.tracer = Some(GethDebugTracerType::JsTracer(format!(
+            r#"{{
+                data: [],
+                result: function(ctx, db) {{
+                    var root = db.GetStorageRoot("{:x}");
+                    return root;
+                }},
+            }}"#,
+            transaction.from.unwrap_or_default()
+        )));
 
         self.pending_traces.push_back(tokio::spawn(async move {
             (
@@ -259,7 +279,7 @@ impl CallTraceManager {
 
 fn get_trace_options_with_override(state_override: StateOverride) -> GethDebugTracingCallOptions {
     let mut opts = GethDebugTracingOptions::default().with_tracer(
-        GethDebugTracerType::BuiltInTracer(GethDebugBuiltInTracerType::CallTracer),
+        GethDebugTracerType::BuiltInTracer(GethDebugBuiltInTracerType::PreStateTracer),
     );
 
     opts.config = GethDefaultTracingOptions::default()
@@ -284,21 +304,4 @@ fn merge_account_state_in_overrides(account_override: &mut AccountOverride, valu
             account_override.state_diff = Some(HashMap::from_iter(vec![(key, value)]));
         }
     }
-}
-
-#[allow(dead_code)]
-fn create_js_tracer_script(address: Address) -> String {
-    format!(
-        r#"{{
-            data: [],
-            result: function(ctx, db) {{
-                var root = db.GetStorageRoot("{:x}");
-                return root;
-            }},
-            fault: function(ctx, db) {{
-                return false;
-            }}
-        }}"#,
-        address
-    )
 }

@@ -1,12 +1,9 @@
 #![allow(missing_docs)]
-#![allow(unused)]
 
 use std::str::FromStr;
 
-use alloy_consensus::TxEnvelope;
 use alloy_eips::{
-    calc_excess_blob_gas, calc_next_block_base_fee, eip1559::BaseFeeParams, eip2718::Encodable2718,
-    eip4895::Withdrawal,
+    calc_excess_blob_gas, calc_next_block_base_fee, eip1559::BaseFeeParams, eip4895::Withdrawal,
 };
 use alloy_primitives::{Address, Bytes, B256, U256};
 use alloy_rpc_types::Block;
@@ -14,27 +11,24 @@ use alloy_rpc_types_engine::{
     ExecutionPayload as AlloyExecutionPayload, ExecutionPayloadV1, ExecutionPayloadV2,
     ExecutionPayloadV3,
 };
-
 use beacon_api_client::{BlockId, StateId};
 use ethereum_consensus::{
     capella::spec,
     crypto::bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey},
     deneb::mainnet::ExecutionPayloadHeader as ConsensusExecutionPayloadHeader,
-    ssz::prelude::{ssz_rs, ByteList, ByteVector, HashTreeRoot, List},
+    ssz::prelude::{ssz_rs, ByteList, ByteVector},
     types::mainnet::ExecutionPayload as ConsensusExecutionPayload,
 };
 use hex::FromHex;
 use regex::Regex;
 use reth_primitives::{
-    constants::BEACON_NONCE,
-    proofs::{self},
-    BlockBody, Bloom, Header, SealedBlock, SealedHeader, Transaction, TransactionSigned,
-    Withdrawals, EMPTY_OMMER_ROOT_HASH,
+    constants::BEACON_NONCE, proofs, BlockBody, Bloom, Header, SealedBlock, SealedHeader,
+    TransactionSigned, Withdrawals, EMPTY_OMMER_ROOT_HASH,
 };
 use reth_rpc_layer::{secret_to_bearer_header, JwtSecret};
 use serde_json::Value;
 
-use crate::primitives::{BuilderBid, SignedBuilderBid, Slot};
+use crate::primitives::{BuilderBid, SignedBuilderBid};
 use crate::RpcClient;
 
 #[derive(Debug, thiserror::Error)]
@@ -63,10 +57,6 @@ pub struct FallbackPayloadBuilder {
     extra_data: Bytes,
     execution_rpc_client: RpcClient,
 
-    // keypair used for signing the payload
-    private_key: BlsSecretKey,
-    public_key: BlsPublicKey,
-
     // Engine API error hinter
     engine_hinter: EngineHinter,
 }
@@ -74,16 +64,12 @@ pub struct FallbackPayloadBuilder {
 impl FallbackPayloadBuilder {
     pub fn new(
         fee_recipient: Address,
-        private_key: BlsSecretKey,
         jwt_hex: &str,
         engine_rpc_url: Option<&str>,
         execution_rpc_url: Option<&str>,
     ) -> Self {
-        let public_key = private_key.public_key();
         Self {
             fee_recipient,
-            private_key,
-            public_key,
             engine_hinter: EngineHinter {
                 client: reqwest::Client::new(),
                 jwt_hex: jwt_hex.to_string(),
@@ -101,7 +87,6 @@ impl FallbackPayloadBuilder {
 
 #[derive(Debug, Default)]
 pub struct Context {
-    value: U256,
     extra_data: Bytes,
     base_fee: u64,
     excess_blob_gas: u64,
@@ -127,7 +112,7 @@ impl FallbackPayloadBuilder {
     pub async fn build_fallback_payload(
         &self,
         transactions: Vec<TransactionSigned>,
-    ) -> Result<SealedBlock, PayloadBuilderError> {
+    ) -> Result<(SealedBlock, SealedHeader), PayloadBuilderError> {
         let latest_block = self.execution_rpc_client.get_block(None, true).await?;
 
         // TODO: refactor this once ConsensusState is ready
@@ -183,8 +168,6 @@ impl FallbackPayloadBuilder {
         ) as u64;
 
         let ctx = Context {
-            // NOTE: this should be fine as the beacon node cannot validate it
-            value: U256::from_str("1000000000000000000").expect("valid int"),
             base_fee,
             excess_blob_gas,
             parent_beacon_block_root,
@@ -207,8 +190,6 @@ impl FallbackPayloadBuilder {
         let max_iterations = 12;
         let mut i = 1;
         let (sealed_header, sealed_block) = loop {
-            dbg!(&hints);
-
             let header = build_header_with_hints_and_context(&latest_block, &hints, &ctx);
 
             let sealed_header = header.clone().seal_slow();
@@ -217,9 +198,12 @@ impl FallbackPayloadBuilder {
             let hinted_hash = hints.block_hash.unwrap_or(sealed_block.hash());
             let exec_payload = to_alloy_execution_payload(&sealed_block, hinted_hash);
 
+            // TODO: blob hashes from cl? not sure
+            let versioned_hashes: Vec<B256> = Vec::new();
+
             let engine_hint = self
                 .engine_hinter
-                .fetch_next_payload_hint(&exec_payload, parent_beacon_block_root)
+                .fetch_next_payload_hint(&exec_payload, &versioned_hashes, parent_beacon_block_root)
                 .await?;
 
             match engine_hint {
@@ -242,20 +226,23 @@ impl FallbackPayloadBuilder {
             i += 1;
         };
 
-        let submission = BuilderBid {
-            header: to_execution_payload_header(&sealed_header),
-            blob_kzg_commitments: List::default(),
-            public_key: self.public_key.clone(),
-            value: ctx.value,
-        };
+        // NOTE: this should be fine as the beacon node cannot validate it
+        // let value = U256::from_str("1000000000000000000").expect("valid int");
 
-        let signed_submission = SignedBuilderBid {
-            message: submission,
-            // TODO: sign the message
-            signature: Default::default(),
-        };
+        // let submission = BuilderBid {
+        //     header: to_execution_payload_header(&sealed_header),
+        //     blob_kzg_commitments: List::default(),
+        //     public_key: self.public_key.clone(),
+        //     value: ctx.value,
+        // };
 
-        Ok(sealed_block)
+        // let signed_submission = SignedBuilderBid {
+        //     message: submission,
+        //     // TODO: sign the message
+        //     signature: Default::default(),
+        // };
+
+        Ok((sealed_block, sealed_header))
     }
 }
 
@@ -281,13 +268,15 @@ impl EngineHinter {
     pub async fn fetch_next_payload_hint(
         &self,
         exec_payload: &AlloyExecutionPayload,
+        versioned_hashes: &[B256],
         parent_beacon_root: B256,
     ) -> Result<EngineApiHint, PayloadBuilderError> {
         let auth_jwt = secret_to_bearer_header(&JwtSecret::from_hex(&self.jwt_hex)?);
 
         let body = format!(
-            r#"{{"id":1,"jsonrpc":"2.0","method":"engine_newPayloadV3","params":[{}, [], "{:?}"]}}"#,
+            r#"{{"id":1,"jsonrpc":"2.0","method":"engine_newPayloadV3","params":[{}, {}, "{:?}"]}}"#,
             serde_json::to_string(&exec_payload)?,
+            serde_json::to_string(&versioned_hashes)?,
             parent_beacon_root
         );
 
@@ -320,7 +309,7 @@ impl EngineHinter {
             return Ok(EngineApiHint::GasUsed(hint_value.parse()?));
         } else if raw_hint.contains("invalid merkle root") {
             return Ok(EngineApiHint::StateRoot(B256::from_hex(hint_value)?));
-        } else if raw_hint.contains("invalid receipts root") {
+        } else if raw_hint.contains("invalid receipt root hash") {
             return Ok(EngineApiHint::ReceiptsRoot(B256::from_hex(hint_value)?));
         } else if raw_hint.contains("invalid bloom") {
             return Ok(EngineApiHint::LogsBloom(Bloom::from_hex(&hint_value)?));
@@ -336,7 +325,7 @@ impl EngineHinter {
 /// https://github.com/ethereum/go-ethereum/blob/9298d2db884c4e3f9474880e3dcfd080ef9eacfa/beacon/engine/types.go#L253-L256
 pub(crate) fn parse_geth_response(error: &str) -> Option<String> {
     println!("error: {}", error);
-    let re = Regex::new(r"(?:remote:|got) ([0-9a-zA-Z]+)").expect("valid regex");
+    let re = Regex::new(r"(?:local:|got) ([0-9a-zA-Z]+)").expect("valid regex");
 
     re.captures(error)
         .and_then(|capture| capture.get(1).map(|matched| matched.as_str().to_string()))
@@ -517,30 +506,15 @@ fn to_byte_vector(value: Bloom) -> ByteVector<256> {
 
 #[cfg(test)]
 mod tests {
-    use std::{borrow::BorrowMut, str::FromStr};
-
-    use alloy_consensus::{Transaction, TxEnvelope};
-    use alloy_eips::{
-        calc_excess_blob_gas, calc_next_block_base_fee, eip1559::BaseFeeParams,
-        eip2718::Encodable2718,
-    };
-    use alloy_network::{EthereumWallet, TransactionBuilder, TxSigner};
-    use alloy_primitives::{address, hex, Address, Bytes, B256, U256};
+    use alloy_eips::eip2718::Encodable2718;
+    use alloy_network::{EthereumWallet, TransactionBuilder};
+    use alloy_primitives::{hex, Address, U256};
     use alloy_rpc_types::TransactionRequest;
-    use alloy_rpc_types_engine::{
-        ExecutionPayload, ExecutionPayloadV1, ExecutionPayloadV2, ExecutionPayloadV3,
-    };
     use alloy_signer::k256::ecdsa::SigningKey;
     use alloy_signer_local::PrivateKeySigner;
-    use ethereum_consensus::crypto::bls::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
-    use reth_primitives::{Bloom, TransactionSigned, Withdrawals};
-    use reth_rpc_layer::{secret_to_bearer_header, JwtSecret};
-    use std::io::prelude::*;
+    use reth_primitives::TransactionSigned;
 
-    use crate::{
-        builder::payload_builder::{to_alloy_execution_payload, FallbackPayloadBuilder, Hints},
-        RpcClient,
-    };
+    use crate::builder::payload_builder::FallbackPayloadBuilder;
 
     #[tokio::test]
     async fn test_build_fallback_payload() -> eyre::Result<()> {
@@ -548,34 +522,24 @@ mod tests {
 
         let raw_sk = std::env::var("PRIVATE_KEY")?;
         let jwt = std::env::var("ENGINE_JWT")?;
+
         let execution = "http://remotebeast:8545";
         let engine = "http://remotebeast:8551";
 
-        let pk = BlsSecretKey::random(&mut rand::thread_rng())?;
-
-        let builder = FallbackPayloadBuilder::new(
-            Address::default(),
-            pk,
-            &jwt,
-            Some(engine),
-            Some(execution),
-        );
+        let builder =
+            FallbackPayloadBuilder::new(Address::default(), &jwt, Some(engine), Some(execution));
 
         let sk = SigningKey::from_slice(hex::decode(raw_sk)?.as_slice())?;
         let signer = PrivateKeySigner::from_signing_key(sk.clone());
         let wallet = EthereumWallet::from(signer);
 
         let addy = Address::from_private_key(&sk);
-        let mut tx = default_transaction(addy, 266);
+        let tx = default_transaction(addy, 266);
         let tx_signed = tx.build(&wallet).await?;
-        let mut raw_encoded = tx_signed.encoded_2718();
+        let raw_encoded = tx_signed.encoded_2718();
         let tx_signed_reth = TransactionSigned::decode_enveloped(&mut raw_encoded.as_slice())?;
 
-        let sealed_block = builder.build_fallback_payload(vec![tx_signed_reth]).await?;
-
-        println!("sealed {:?}", sealed_block);
-
-        panic!();
+        builder.build_fallback_payload(vec![tx_signed_reth]).await?;
 
         Ok(())
     }
