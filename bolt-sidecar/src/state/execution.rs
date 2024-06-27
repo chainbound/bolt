@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::{
     builder::BlockTemplate,
-    common::{calculate_max_basefee, validate_transaction},
+    common::validate_transaction,
     primitives::{AccountState, ChainHead, CommitmentRequest, Slot},
 };
 
@@ -117,16 +117,17 @@ impl<C: StateFetcher> ExecutionState<C> {
         tracing::debug!(%sender, target_slot = req.slot, "Trying to commit inclusion request to block template");
 
         // Check if the max_fee_per_gas would cover the maximum possible basefee.
-        let slot_diff = req.slot - self.head.slot();
+        let _slot_diff = req.slot - self.head.slot();
 
-        // Calculate the max possible basefee given the slot diff
-        let max_basefee = calculate_max_basefee(self.basefee, slot_diff)
-            .ok_or(reject_internal("Overflow calculating max basefee"))?;
+        // TODO: readd after #94
+        // // Calculate the max possible basefee given the slot diff
+        // let max_basefee = calculate_max_basefee(self.basefee, slot_diff)
+        //     .ok_or(reject_internal("Overflow calculating max basefee"))?;
 
-        // Validate the base fee
-        if !req.validate_basefee(max_basefee) {
-            return Err(ValidationError::BaseFeeTooLow(max_basefee as u128));
-        }
+        // // Validate the base fee
+        // if !req.validate_basefee(max_basefee) {
+        //     return Err(ValidationError::BaseFeeTooLow(max_basefee as u128));
+        // }
 
         // If we have the account state, use it here
         if let Some(account_state) = self.account_state(&sender) {
