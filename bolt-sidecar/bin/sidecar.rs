@@ -68,14 +68,15 @@ async fn main() -> eyre::Result<()> {
                 tracing::info!("Received commitment request: {:?}", event.request);
                 let request = event.request;
 
-                if let Err(e) = execution_state
-                    .try_commit(&CommitmentRequest::Inclusion(request.clone()))
-                    .await
-                {
-                    tracing::error!("Failed to commit request: {:?}", e);
-                    let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
-                    continue;
-                }
+                // TODO: re-introduce validation after #94
+                // if let Err(e) = execution_state
+                //     .try_commit(&CommitmentRequest::Inclusion(request.clone()))
+                //     .await
+                // {
+                //     tracing::error!("Failed to commit request: {:?}", e);
+                //     let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
+                //     continue;
+                // }
 
                 tracing::info!(
                     tx_hash = %request.tx.tx_hash(),
