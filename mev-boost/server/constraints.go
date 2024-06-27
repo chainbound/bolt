@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -9,8 +10,8 @@ import (
 type BatchedSignedConstraints = []*SignedConstraints
 
 type SignedConstraints struct {
-	Message   ConstraintsMessage `json:"message"`
-	Signature HexBytes           `json:"signature"`
+	Message   ConstraintsMessage  `json:"message"`
+	Signature phase0.BLSSignature `json:"signature"`
 }
 
 type ConstraintsMessage struct {
@@ -22,6 +23,18 @@ type ConstraintsMessage struct {
 type Constraint struct {
 	Tx    Transaction `json:"tx"`
 	Index *uint64     `json:"index"`
+}
+
+func (s *SignedConstraints) String() string {
+	return JSONStringify(s)
+}
+
+func (m *ConstraintsMessage) String() string {
+	return JSONStringify(m)
+}
+
+func (c *Constraint) String() string {
+	return JSONStringify(c)
 }
 
 // ConstraintCache is a cache for constraints.
