@@ -5,7 +5,7 @@ use bolt_sidecar::{
         bls::{from_bls_signature_to_consensus_signature, Signer, SignerBLS},
         SignableBLS,
     },
-    json_rpc::{api::ApiError, start_server},
+    json_rpc::{self, api::ApiError},
     primitives::{
         BatchedSignedConstraints, ChainHead, CommitmentRequest, ConstraintsMessage,
         LocalPayloadFetcher, SignedConstraints,
@@ -30,22 +30,24 @@ async fn main() -> eyre::Result<()> {
 
     let config = Config::parse_from_cli()?;
 
-    let (api_events, mut api_events_rx) = mpsc::channel(1024);
-
     // TODO: support external signers
     let signer = Signer::new(config.private_key.clone().unwrap());
 
-    let state_client = StateClient::new(&config.execution_api, 8);
+    let state_client = StateClient::new(&config.execution_api_url, 8);
     let mevboost_client = MevBoostClient::new(&config.mevboost_url);
 
     let head = state_client.get_head().await?;
     let mut execution_state = ExecutionState::new(state_client, ChainHead::new(0, head)).await?;
 
-    let shutdown_tx = start_server(config, api_events).await?;
+    let (api_events, mut api_events_rx) = mpsc::channel(1024);
+    let shutdown_tx = json_rpc::start_server(&config, api_events).await?;
 
-    let builder_proxy_config = BuilderProxyConfig::default();
+    let builder_proxy_config = BuilderProxyConfig {
+        mevboost_url: config.mevboost_url,
+        server_port: config.mevboost_proxy_port,
+    };
 
-    let (payload_tx, mut payload_rx) = mpsc::channel(1);
+    let (payload_tx, mut payload_rx) = mpsc::channel(16);
     let payload_fetcher = LocalPayloadFetcher::new(payload_tx);
 
     tokio::spawn(async move {

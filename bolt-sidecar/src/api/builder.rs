@@ -15,6 +15,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration,
 };
+use tokio::net::TcpListener;
 
 use super::spec::{
     BuilderApi, BuilderApiError, ConstraintsApi, GET_HEADER_PATH, GET_PAYLOAD_PATH,
@@ -49,7 +50,11 @@ pub struct GetHeaderParams {
     pub public_key: BlsPublicKey,
 }
 
-impl<T: ConstraintsApi, P: PayloadFetcher + Send + Sync> BuilderProxyServer<T, P> {
+impl<T, P> BuilderProxyServer<T, P>
+where
+    T: ConstraintsApi,
+    P: PayloadFetcher + Send + Sync,
+{
     pub fn new(proxy_target: T, payload_fetcher: P) -> Self {
         Self {
             proxy_target,
@@ -194,16 +199,16 @@ impl<T: ConstraintsApi, P: PayloadFetcher + Send + Sync> BuilderProxyServer<T, P
 #[derive(Debug, Clone)]
 pub struct BuilderProxyConfig {
     /// The URL of the target mev-boost server.
-    pub mev_boost_url: String,
+    pub mevboost_url: String,
     /// The port on which the builder proxy should listen.
-    pub port: u16,
+    pub server_port: u16,
 }
 
 impl Default for BuilderProxyConfig {
     fn default() -> Self {
         Self {
-            mev_boost_url: "http://localhost:18550".to_string(),
-            port: 18551,
+            mevboost_url: "http://localhost:18550".to_string(),
+            server_port: 18551,
         }
     }
 }
@@ -214,12 +219,12 @@ pub async fn start_builder_proxy<P: PayloadFetcher + Send + Sync + 'static>(
     config: BuilderProxyConfig,
 ) -> Result<(), eyre::Error> {
     tracing::info!(
-        port = config.port,
-        target = config.mev_boost_url,
+        port = config.server_port,
+        target = config.mevboost_url,
         "Starting builder proxy..."
     );
 
-    let mev_boost = MevBoostClient::new(&config.mev_boost_url);
+    let mev_boost = MevBoostClient::new(&config.mevboost_url);
     let server = Arc::new(BuilderProxyServer::new(mev_boost, payload_fetcher));
     let router = Router::new()
         .route("/", get(index))
@@ -233,7 +238,7 @@ pub async fn start_builder_proxy<P: PayloadFetcher + Send + Sync + 'static>(
         .with_state(server);
 
     // run it
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", config.port)).await?;
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", config.server_port)).await?;
 
     axum::serve(listener, router).await?;
 

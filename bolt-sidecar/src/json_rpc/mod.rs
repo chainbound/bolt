@@ -20,7 +20,7 @@ use self::spec::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 
 /// Start the JSON-RPC server. Returns a sender that can be used to send a shutdown signal.
 pub async fn start_server(
-    config: Config,
+    config: &Config,
     event_tx: mpsc::Sender<ApiEvent>,
 ) -> eyre::Result<mpsc::Sender<()>> {
     let (shutdown_tx, mut shutdown_rx) = mpsc::channel(1);

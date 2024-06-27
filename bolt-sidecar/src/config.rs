@@ -11,15 +11,22 @@ pub struct Opts {
     pub(super) port: Option<u16>,
     /// URL for the beacon client
     #[clap(short = 'c', long)]
-    pub(super) beacon_client_url: String,
+    pub(super) beacon_api_url: String,
     /// URL for the MEV-Boost sidecar client to use
     #[clap(short = 'b', long)]
     pub(super) mevboost_url: String,
     /// Max commitments to accept per block
     #[clap(short = 'm', long)]
     pub(super) max_commitments: Option<usize>,
+    /// Execution client API URL
+    #[clap(short = 'x', long)]
+    pub(super) execution_api_url: String,
+    /// Execution client Engine API URL
     #[clap(short = 'e', long)]
-    pub(super) execution_api: String,
+    pub(super) engine_api_url: String,
+    /// MEV-Boost proxy server port to use
+    #[clap(short = 'y', long)]
+    pub(super) mevboost_proxy_port: u16,
     /// Signing options
     #[clap(flatten)]
     pub(super) signing: SigningOpts,
@@ -41,7 +48,7 @@ pub struct SigningOpts {
 }
 
 /// Configuration options for the sidecar
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
     /// Port to listen on for incoming JSON-RPC requests
     pub rpc_port: u16,
@@ -50,11 +57,15 @@ pub struct Config {
     /// URL for the commit-boost sidecar
     pub commit_boost_url: Option<String>,
     /// URL for the beacon client API URL
-    pub beacon_client_url: String,
+    pub beacon_api_url: String,
     /// Private key to use for signing preconfirmation requests
     pub private_key: Option<SecretKey>,
     /// The execution API url
-    pub execution_api: String,
+    pub execution_api_url: String,
+    /// The engine API url
+    pub engine_api_url: String,
+    /// The MEV-Boost proxy server port to use
+    pub mevboost_proxy_port: u16,
     /// Limits for the sidecar
     pub limits: Limits,
 }
@@ -65,9 +76,11 @@ impl Default for Config {
             rpc_port: 8000,
             mevboost_url: "http://localhost:3030".to_string(),
             commit_boost_url: None,
-            beacon_client_url: "http://localhost:5052".to_string(),
-            execution_api: "http://localhost:8545".to_string(),
+            beacon_api_url: "http://localhost:5052".to_string(),
+            execution_api_url: "http://localhost:8545".to_string(),
+            engine_api_url: "http://localhost:8551".to_string(),
             private_key: Some(random_bls_secret()),
+            mevboost_proxy_port: 18551,
             limits: Limits::default(),
         }
     }
@@ -108,7 +121,10 @@ impl TryFrom<Opts> for Config {
             None
         };
 
-        config.beacon_client_url = opts.beacon_client_url.trim_end_matches('/').to_string();
+        config.mevboost_proxy_port = opts.mevboost_proxy_port;
+        config.engine_api_url = opts.engine_api_url.trim_end_matches('/').to_string();
+        config.execution_api_url = opts.execution_api_url.trim_end_matches('/').to_string();
+        config.beacon_api_url = opts.beacon_api_url.trim_end_matches('/').to_string();
         config.mevboost_url = opts.mevboost_url.trim_end_matches('/').to_string();
 
         Ok(config)
@@ -116,7 +132,7 @@ impl TryFrom<Opts> for Config {
 }
 
 /// Limits for the sidecar.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Limits {
     /// Maximum number of commitments to accept per block
     pub max_commitments_per_slot: usize,
