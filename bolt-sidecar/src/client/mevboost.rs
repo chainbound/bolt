@@ -3,8 +3,9 @@
 //! so most requests are simply proxied to its API.
 
 use axum::http::StatusCode;
+use beacon_api_client::VersionedValue;
 use ethereum_consensus::{
-    builder::SignedValidatorRegistration, deneb::mainnet::SignedBlindedBeaconBlock,
+    builder::SignedValidatorRegistration, deneb::mainnet::SignedBlindedBeaconBlock, Fork,
 };
 
 use crate::{
@@ -15,9 +16,7 @@ use crate::{
             GET_PAYLOAD_PATH, REGISTER_VALIDATORS_PATH, STATUS_PATH,
         },
     },
-    primitives::{
-        BatchedSignedConstraints, GetPayloadResponse, SignedBuilderBid, SignedBuilderBidWithProofs,
-    },
+    primitives::{BatchedSignedConstraints, GetPayloadResponse, SignedBuilderBid},
 };
 
 /// A client for interacting with the MEV-Boost API.
@@ -83,11 +82,14 @@ impl BuilderApi for MevBoostClient {
         &self,
         params: GetHeaderParams,
     ) -> Result<SignedBuilderBid, BuilderApiError> {
+        let parent_hash = format!("0x{}", hex::encode(params.parent_hash.as_ref()));
+        let public_key = format!("0x{}", hex::encode(params.public_key.as_ref()));
+
         let response = self
             .client
             .get(self.endpoint(&format!(
                 "/eth/v1/builder/header/{}/{}/{}",
-                params.slot, params.parent_hash, params.public_key
+                params.slot, parent_hash, public_key
             )))
             .header("content-type", "application/json")
             .send()
@@ -152,12 +154,15 @@ impl ConstraintsApi for MevBoostClient {
     async fn get_header_with_proofs(
         &self,
         params: GetHeaderParams,
-    ) -> Result<SignedBuilderBidWithProofs, BuilderApiError> {
+    ) -> Result<VersionedValue<SignedBuilderBid>, BuilderApiError> {
+        let parent_hash = format!("0x{}", hex::encode(params.parent_hash.as_ref()));
+        let public_key = format!("0x{}", hex::encode(params.public_key.as_ref()));
+
         let response = self
             .client
             .get(self.endpoint(&format!(
                 "/eth/v1/builder/header_with_proofs/{}/{}/{}",
-                params.slot, params.parent_hash, params.public_key
+                params.slot, parent_hash, public_key,
             )))
             .header("content-type", "application/json")
             .send()
@@ -168,7 +173,11 @@ impl ConstraintsApi for MevBoostClient {
             return Err(BuilderApiError::FailedGettingHeader(error));
         }
 
-        let header = response.json::<SignedBuilderBidWithProofs>().await?;
+        let header = response.json::<VersionedValue<SignedBuilderBid>>().await?;
+
+        if !matches!(header.version, Fork::Deneb) {
+            return Err(BuilderApiError::InvalidFork(header.version.to_string()));
+        };
 
         // TODO: verify proofs here?
 

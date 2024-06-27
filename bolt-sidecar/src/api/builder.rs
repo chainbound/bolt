@@ -1,20 +1,20 @@
 use axum::{
-    body::{to_bytes, Body},
+    body::{self, Body},
     extract::{Path, Request, State},
     http::StatusCode,
     response::Html,
     routing::{get, post},
     Json, Router,
 };
+use beacon_api_client::VersionedValue;
 use ethereum_consensus::{
     builder::SignedValidatorRegistration,
     primitives::{BlsPublicKey, Hash32},
+    Fork,
 };
+use parking_lot::Mutex;
 use serde::Deserialize;
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 use tokio::net::TcpListener;
 
 use super::spec::{
@@ -105,49 +105,58 @@ where
     pub async fn get_header(
         State(server): State<Arc<BuilderProxyServer<T, P>>>,
         Path(params): Path<GetHeaderParams>,
-    ) -> Result<Json<SignedBuilderBid>, BuilderApiError> {
+    ) -> Result<Json<VersionedValue<SignedBuilderBid>>, BuilderApiError> {
         let start = std::time::Instant::now();
+
         tracing::debug!("Received get_header request");
         let slot = params.slot;
 
-        match tokio::time::timeout(
+        let err = match tokio::time::timeout(
             GET_HEADER_WITH_PROOFS_TIMEOUT,
             server.proxy_target.get_header_with_proofs(params),
         )
         .await
         {
-            Ok(Ok(header)) => {
-                tracing::debug!(elapsed = ?start.elapsed(), "Returning signed builder bid: {:?}", header);
-                // TODO: verify proofs here. If they are invalid, we should fall back to locally built block
-
-                Ok(Json(header.bid))
-            }
-            Ok(Err(_)) | Err(_) => {
-                // On ANY error, we fall back to locally built block
-                tracing::error!(slot, elapsed = ?start.elapsed(), "Proxy error, fetching local payload instead");
-
-                let payload = server
-                    .payload_fetcher
-                    .fetch_payload(slot)
-                    .await
-                    // TODO: handle failure? In this case, we don't have a fallback block
-                    // which means we haven't made any commitments. This means the beacon client should
-                    // fallback to local block building.
-                    .ok_or(BuilderApiError::FailedToFetchLocalPayload(slot))?;
-
-                let hash = payload.bid.message.header.block_hash.clone();
-                let number = payload.bid.message.header.block_number;
-
-                {
-                    // Set the payload for the following get_payload request
-                    let mut local_payload = server.local_payload.lock().unwrap();
-                    *local_payload = Some(payload.payload);
+            Ok(res) => match res {
+                Err(builder_err) => builder_err,
+                Ok(header) => {
+                    tracing::debug!(elapsed = ?start.elapsed(), "Returning signed builder bid: {:?}", header);
+                    return Ok(Json(header));
                 }
+            },
+            Err(err) => BuilderApiError::Timeout(err),
+        };
 
-                tracing::info!(elapsed = ?start.elapsed(), %hash, number, "Returning locally built header");
-                Ok(Json(payload.bid))
-            }
+        // On ANY error, we fall back to locally built block
+        tracing::error!(slot, elapsed = ?start.elapsed(), err = ?err, "Proxy error, fetching local payload instead");
+
+        let payload = server
+            .payload_fetcher
+            .fetch_payload(slot)
+            .await
+            // TODO: handle failure? In this case, we don't have a fallback block
+            // which means we haven't made any commitments. This means the beacon client should
+            // fallback to local block building.
+            .ok_or(BuilderApiError::FailedToFetchLocalPayload(slot))?;
+
+        let hash = payload.bid.message.header.block_hash.clone();
+        let number = payload.bid.message.header.block_number;
+
+        {
+            // Set the payload for the following get_payload request
+            let mut local_payload = server.local_payload.lock();
+            *local_payload = Some(payload.payload);
         }
+
+        let versioned_bid = VersionedValue::<SignedBuilderBid> {
+            version: Fork::Deneb,
+            data: payload.bid,
+            // TODO: a more elegant way to do this? Can we avoid this meta field?
+            meta: Default::default(),
+        };
+
+        tracing::info!(elapsed = ?start.elapsed(), %hash, number, "Returning locally built header");
+        Ok(Json(versioned_bid))
     }
 
     pub async fn get_payload(
@@ -158,13 +167,12 @@ where
         tracing::debug!("Received get_payload request");
 
         // If we have a locally built payload, return it and clear the cache.
-        if let Some(payload) = server.local_payload.lock().unwrap().take() {
+        if let Some(payload) = server.local_payload.lock().take() {
             tracing::info!("Local block found, returning: {payload:?}");
             return Ok(Json(payload));
         }
 
-        let body = req.into_body();
-        let body_bytes = to_bytes(body, MAX_BLINDED_BLOCK_LENGTH)
+        let body_bytes = body::to_bytes(req.into_body(), MAX_BLINDED_BLOCK_LENGTH)
             .await
             .map_err(|e| {
                 tracing::error!(error = %e, "Failed to read request body");
