@@ -14,6 +14,8 @@ const DEFAULT_API_REQUEST_CACHE_SIZE: usize = 1000;
 
 /// An error that can occur while processing any API request.
 #[derive(Error, Debug)]
+#[allow(missing_docs)]
+#[non_exhaustive]
 pub enum ApiError {
     #[error("failed to parse JSON: {0}")]
     Parse(#[from] serde_json::Error),
@@ -47,10 +49,12 @@ pub trait CommitmentsRpc {
     async fn request_inclusion_commitment(&self, params: Value) -> JsonApiResult;
 }
 
+/// An event that is emitted by the API.
 #[derive(Debug)]
 pub struct ApiEvent {
-    // TODO: change to commitment request
+    /// TODO: change to commitment request
     pub request: InclusionRequest,
+    /// The sender to respond to.
     pub response: oneshot::Sender<JsonApiResult>,
 }
 
@@ -61,6 +65,7 @@ pub struct ApiEvent {
 ///   accepting duplicate commitments from users.
 /// - We also sign each request to irrevocably bind it to this
 ///   sidecar's validator identity.
+#[derive(Debug)]
 pub struct JsonRpcApi {
     /// A cache of commitment requests.
     cache: Arc<RwLock<lru::LruCache<Slot, Vec<CommitmentRequest>>>>,
@@ -80,8 +85,13 @@ impl JsonRpcApi {
     }
 }
 
+#[allow(dead_code)]
 fn internal_error() -> ApiError {
     ApiError::Custom("internal server error".to_string())
+}
+
+fn internal_error_with_message(m: String) -> ApiError {
+    ApiError::Custom(format!("internal server error: {}", m))
 }
 
 #[async_trait::async_trait]
@@ -146,9 +156,16 @@ impl CommitmentsRpc for JsonRpcApi {
                 response: tx,
             })
             .await
-            .map_err(|_| internal_error())?;
+            .map_err(|e| {
+                internal_error_with_message(format!("error sending api event, err = {:?}", e))
+            })?;
 
-        let response = rx.await.map_err(|_| internal_error())?;
+        let _response = rx.await.map_err(|e| {
+            internal_error_with_message(format!(
+                "error receiving api event response, err = {:?}",
+                e
+            ))
+        })?;
 
         Ok(serde_json::to_value("test")?)
     }
