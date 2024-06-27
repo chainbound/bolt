@@ -15,9 +15,6 @@ pub struct Opts {
     /// URL for the MEV-Boost sidecar client to use
     #[clap(short = 'b', long)]
     pub(super) mevboost_url: String,
-    /// Max commitments to accept per block
-    #[clap(short = 'm', long)]
-    pub(super) max_commitments: Option<usize>,
     /// Execution client API URL
     #[clap(short = 'x', long)]
     pub(super) execution_api_url: String,
@@ -27,6 +24,9 @@ pub struct Opts {
     /// MEV-Boost proxy server port to use
     #[clap(short = 'y', long)]
     pub(super) mevboost_proxy_port: u16,
+    /// Max commitments to accept per block
+    #[clap(short = 'm', long)]
+    pub(super) max_commitments: Option<usize>,
     /// Signing options
     #[clap(flatten)]
     pub(super) signing: SigningOpts,
