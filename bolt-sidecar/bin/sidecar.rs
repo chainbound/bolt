@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use bolt_sidecar::{
     crypto::{
-        bls::{from_bls_signature_to_consensus_signature, Signer, SignerBLS},
+        bls::{Signer, SignerBLS},
         SignableBLS,
     },
     json_rpc::{self, api::ApiError},
@@ -86,20 +86,27 @@ async fn main() -> eyre::Result<()> {
                 // TODO: get the validator index from somewhere
                 let message = ConstraintsMessage::build(0, request.slot, request.clone());
 
-                let signature = from_bls_signature_to_consensus_signature(signer.sign(&message.digest())?);
+                let signature = signer.sign(&message.digest())?;
                 let signed_constraints: BatchedSignedConstraints =
                     vec![SignedConstraints { message, signature: signature.to_string() }];
 
                 // TODO: fix retry logic
+                let max_retries = 5;
+                let mut i = 0;
                 while let Err(e) = mevboost_client
                     .submit_constraints(&signed_constraints)
                     .await
                 {
                     tracing::error!(error = ?e, "Error submitting constraints, retrying...");
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    i+=1;
+                    if i >= max_retries {
+                        break
+                    }
                 }
             }
             Some(request) = payload_rx.recv() => {
-                tracing::info!("Received payload request: {:?}", request);
+                tracing::info!("Received local payload request: {:?}", request);
                 let Some(response) = execution_state.get_block_template(request.slot) else {
                     tracing::warn!("No block template found for slot {} when requested", request.slot);
                     let _ = request.response.send(None);
