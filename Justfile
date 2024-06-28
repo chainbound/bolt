@@ -76,6 +76,12 @@ sidecar-dump:
     @id=$(docker ps -n 100 | grep sidecar | awk -F' ' '{print $1}') && \
     docker logs $id 2>&1 | tee sidecar_dump.log
 
+
+# show the logs for the bolt devnet builder
+kill-builder:
+    @id=$(docker ps -n 100 | grep bolt-builder | awk -F' ' '{print $1}') && \
+    docker stop $id
+
 # show the dora explorer in the browser. NOTE: works only for Linux and MacOS at the moment
 dora:
   @url=$(just inspect | grep 'dora\s*http' | awk -F'-> ' '{print $2}' | awk '{print $1}') && \

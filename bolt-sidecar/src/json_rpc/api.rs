@@ -55,7 +55,7 @@ pub struct ApiEvent {
     /// TODO: change to commitment request
     pub request: InclusionRequest,
     /// The sender to respond to.
-    pub response: oneshot::Sender<JsonApiResult>,
+    pub response_tx: oneshot::Sender<JsonApiResult>,
 }
 
 /// The struct that implements handlers for all JSON-RPC API methods.
@@ -85,7 +85,6 @@ impl JsonRpcApi {
     }
 }
 
-#[allow(dead_code)]
 fn internal_error() -> ApiError {
     ApiError::Custom("internal server error".to_string())
 }
@@ -103,25 +102,25 @@ impl CommitmentsRpc for JsonRpcApi {
             ));
         };
 
-        let params = serde_json::from_value::<CommitmentRequest>(params)?;
+        let request = serde_json::from_value::<CommitmentRequest>(params)?;
         #[allow(irrefutable_let_patterns)] // TODO: remove this when we have more request types
-        let CommitmentRequest::Inclusion(params) = params
+        let CommitmentRequest::Inclusion(request) = request
         else {
             return Err(ApiError::Custom(
                 "request must be an inclusion request".to_string(),
             ));
         };
 
-        info!(?params, "received inclusion commitment request");
+        info!(?request, "received inclusion commitment request");
 
-        let tx_sender = params.tx.recover_signer().ok_or(ApiError::Custom(
+        let tx_sender = request.tx.recover_signer().ok_or(ApiError::Custom(
             "failed to recover signer from transaction".to_string(),
         ))?;
 
         // validate the user's signature
-        let signer_address = params
+        let signer_address = request
             .signature
-            .recover_address_from_prehash(&params.digest())?;
+            .recover_address_from_prehash(&request.digest())?;
 
         // TODO: relax this check to allow for external signers to request commitments
         // about transactions that they did not sign themselves
@@ -135,41 +134,41 @@ impl CommitmentsRpc for JsonRpcApi {
         {
             // check for duplicate requests and update the cache if necessary
             let mut cache = self.cache.write();
-            if let Some(commitments) = cache.get_mut(&params.slot) {
+            if let Some(commitments) = cache.get_mut(&request.slot) {
                 if commitments
                     .iter()
-                    .any(|p| matches!(p, CommitmentRequest::Inclusion(req) if req == &params))
+                    .any(|p| matches!(p, CommitmentRequest::Inclusion(req) if req == &request))
                 {
                     return Err(ApiError::DuplicateRequest);
                 }
 
-                commitments.push(params.clone().into());
+                commitments.push(request.clone().into());
             } else {
-                cache.put(params.slot, vec![params.clone().into()]);
+                cache.put(request.slot, vec![request.clone().into()]);
             }
         } // Drop the lock
 
-        let (tx, rx) = oneshot::channel();
+        let (response_tx, response_rx) = oneshot::channel();
 
         // send the request to the event loop
-        self.event_tx
-            .send(ApiEvent {
-                request: params.clone(),
-                response: tx,
-            })
-            .await
-            .map_err(|e| {
-                internal_error_with_message(format!("error sending api event, err = {:?}", e))
-            })?;
-
-        let _response = rx.await.map_err(|e| {
-            internal_error_with_message(format!(
-                "error receiving api event response, err = {:?}",
-                e
-            ))
+        let event = ApiEvent {
+            request,
+            response_tx,
+        };
+        self.event_tx.send(event).await.map_err(|e| {
+            internal_error_with_message(format!("error sending api event, err = {:?}", e))
         })?;
 
-        Ok(serde_json::to_value("test")?)
+        match response_rx.await {
+            // TODO: format the user response to be more clear. Right now it's just the raw
+            // signed constraints object.
+            // Docs: https://chainbound.github.io/bolt-docs/api/commitments-api#bolt_inclusionpreconfirmation
+            Ok(event_response) => event_response,
+            Err(e) => {
+                tracing::error!(err = ?e, "error receiving api event response from event loop");
+                Err(internal_error())
+            }
+        }
     }
 }
 

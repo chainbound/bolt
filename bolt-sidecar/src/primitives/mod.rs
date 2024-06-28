@@ -3,7 +3,7 @@
 
 use std::sync::{atomic::AtomicU64, Arc};
 
-use alloy_primitives::{B256, U256};
+use alloy_primitives::U256;
 use ethereum_consensus::{
     capella,
     crypto::{KzgCommitment, PublicKey as BlsPublicKey, Signature as BlsSignature},
@@ -87,7 +87,7 @@ pub struct MerkleMultiProof {
 #[derive(Debug)]
 pub struct FetchPayloadRequest {
     pub slot: u64,
-    pub response: oneshot::Sender<Option<PayloadAndBid>>,
+    pub response_tx: oneshot::Sender<Option<PayloadAndBid>>,
 }
 
 #[derive(Debug)]
@@ -112,11 +112,34 @@ impl PayloadFetcher for LocalPayloadFetcher {
     async fn fetch_payload(&self, slot: u64) -> Option<PayloadAndBid> {
         let (tx, rx) = oneshot::channel();
 
-        let fetch_params = FetchPayloadRequest { slot, response: tx };
+        let fetch_params = FetchPayloadRequest {
+            slot,
+            response_tx: tx,
+        };
 
         self.tx.send(fetch_params).await.ok()?;
 
-        rx.await.ok().flatten()
+        match rx.await {
+            Ok(Some(payload_and_bid)) => {
+                tracing::debug!("LocalPayloadFetcher -- fetched payload for slot {}", slot);
+                Some(payload_and_bid)
+            }
+            Ok(None) => {
+                tracing::warn!(
+                    "LocalPayloadFetcher -- no payload fetched for slot {}",
+                    slot
+                );
+                None
+            }
+            Err(e) => {
+                tracing::error!(
+                    "LocalPayloadFetcher -- error fetching payload for slot {}: {:?}",
+                    slot,
+                    e
+                );
+                None
+            }
+        }
     }
 }
 
