@@ -6,10 +6,10 @@ use bolt_sidecar::{
         bls::{Signer, SignerBLS},
         SignableBLS,
     },
-    json_rpc,
+    json_rpc::{self, api::ApiEvent},
     primitives::{
-        BatchedSignedConstraints, ChainHead, ConstraintsMessage, LocalPayloadFetcher,
-        SignedConstraints,
+        BatchedSignedConstraints, ChainHead, ConstraintsMessage, FetchPayloadRequest,
+        LocalPayloadFetcher, SignedConstraints,
     },
     spec::ConstraintsApi,
     start_builder_proxy,
@@ -53,11 +53,14 @@ async fn main() -> eyre::Result<()> {
     let (payload_tx, mut payload_rx) = mpsc::channel(16);
     let payload_fetcher = LocalPayloadFetcher::new(payload_tx);
 
+    tracing::info!("JWT secret: {}", config.jwt_hex);
+
     let mut local_builder = LocalBuilder::new(
         BlsSecretKey::try_from(config.builder_private_key.to_bytes().as_ref())?,
         &config.execution_api_url,
         &config.engine_api_url,
         &config.jwt_hex,
+        &config.beacon_api_url,
         config.fee_recipient,
     );
 
@@ -75,9 +78,8 @@ async fn main() -> eyre::Result<()> {
     // TODO: parallelize this
     loop {
         tokio::select! {
-            Some(event) = api_events_rx.recv() => {
-                tracing::info!("Received commitment request: {:?}", event.request);
-                let request = event.request;
+            Some(ApiEvent { request, response_tx }) = api_events_rx.recv() => {
+                tracing::info!("Received commitment request: {:?}", request);
 
                 let validator_index = match consensus_state.validate_request(&CommitmentRequest::Inclusion(request.clone())) {
                     Ok(index) => index,
@@ -93,7 +95,7 @@ async fn main() -> eyre::Result<()> {
                 //     .await
                 // {
                 //     tracing::error!("Failed to commit request: {:?}", e);
-                //     let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
+                //     let _ = response_tx.send(Err(ApiError::Custom(e.to_string())));
                 //     continue;
                 // }
                 execution_state.commit_transaction(request.slot, request.tx.clone());
@@ -113,7 +115,7 @@ async fn main() -> eyre::Result<()> {
                 // TODO: fix retry logic
                 let max_retries = 5;
                 let mut i = 0;
-                while let Err(e) = mevboost_client
+                'inner: while let Err(e) = mevboost_client
                     .submit_constraints(&signed_constraints)
                     .await
                 {
@@ -121,15 +123,19 @@ async fn main() -> eyre::Result<()> {
                     tokio::time::sleep(Duration::from_millis(100)).await;
                     i+=1;
                     if i >= max_retries {
-                        break
+                        break 'inner
                     }
                 }
+
+                let res = serde_json::to_value(signed_constraints).map_err(Into::into);
+                let _ = response_tx.send(res).ok();
             }
-            Some(request) = payload_rx.recv() => {
-                tracing::info!("Received local payload request: {:?}", request);
-                let Some(response) = execution_state.get_block_template(request.slot) else {
-                    tracing::warn!("No block template found for slot {} when requested", request.slot);
-                    let _ = request.response.send(None);
+            Some(FetchPayloadRequest { slot, response_tx }) = payload_rx.recv() => {
+                tracing::info!(slot, "Received local payload request");
+
+                let Some(template) = execution_state.get_block_template(slot) else {
+                    tracing::warn!("No block template found for slot {slot} when requested");
+                    let _ = response_tx.send(None);
                     continue;
                 };
 
@@ -138,17 +144,28 @@ async fn main() -> eyre::Result<()> {
                 // Once we have that, we need to send it as response to the validator via the pending get_header RPC call.
                 // The validator will then call get_payload with the corresponding SignedBlindedBeaconBlock. We then need to
                 // respond with the full ExecutionPayload inside the BeaconBlock (+ blobs if any).
-                let payload_and_bid = local_builder.build_new_local_payload(response.transactions).await?;
+                let payload_and_bid = match local_builder.build_new_local_payload(template.transactions).await {
+                    Ok(res) => res,
+                    Err(e) => {
+                        tracing::error!(err = ?e, "CRITICAL: Error while building local payload for slot {slot}");
+                        let _ = response_tx.send(None);
+                        continue;
+                    }
+                };
 
-                let _ = request.response.send(Some(payload_and_bid));
+                if let Err(e) = response_tx.send(Some(payload_and_bid)) {
+                    tracing::error!(err = ?e, "Failed to send payload and bid in response channel");
+                } else {
+                    tracing::debug!("Sent payload and bid to response channel");
+                }
+            },
+            Ok(_) = tokio::signal::ctrl_c() => {
+                tracing::info!("Received SIGINT, shutting down...");
+                shutdown_tx.send(()).await.ok();
+                break;
             }
-
-            else => break,
         }
     }
-
-    tokio::signal::ctrl_c().await?;
-    shutdown_tx.send(()).await.ok();
 
     Ok(())
 }

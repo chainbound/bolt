@@ -74,6 +74,7 @@ impl LocalBuilder {
         execution_rpc_url: &str,
         engine_rpc_url: &str,
         engine_jwt_secret: &str,
+        beacon_api_url: &str,
         fee_recipient: Address,
     ) -> Self {
         Self {
@@ -81,8 +82,9 @@ impl LocalBuilder {
             fallback_builder: FallbackPayloadBuilder::new(
                 engine_jwt_secret,
                 fee_recipient,
-                execution_rpc_url,
                 engine_rpc_url,
+                execution_rpc_url,
+                beacon_api_url,
             ),
         }
     }

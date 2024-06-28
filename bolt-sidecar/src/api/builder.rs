@@ -129,16 +129,21 @@ where
         };
 
         // On ANY error, we fall back to locally built block
-        tracing::error!(slot, elapsed = ?start.elapsed(), err = ?err, "Proxy error, fetching local payload instead");
+        tracing::warn!(slot, elapsed = ?start.elapsed(), err = ?err, "Proxy error, fetching local payload instead");
 
-        let payload = server
-            .payload_fetcher
-            .fetch_payload(slot)
-            .await
-            // TODO: handle failure? In this case, we don't have a fallback block
-            // which means we haven't made any commitments. This means the beacon client should
-            // fallback to local block building.
-            .ok_or(BuilderApiError::FailedToFetchLocalPayload(slot))?;
+        let payload = match server.payload_fetcher.fetch_payload(slot).await {
+            Some(payload) => {
+                tracing::info!(elapsed = ?start.elapsed(), "Fetched local payload for slot {slot}");
+                payload
+            }
+            None => {
+                // TODO: handle failure? In this case, we don't have a fallback block
+                // which means we haven't made any commitments. This means the beacon client should
+                // fallback to local block building.
+                tracing::error!("No local payload produced for slot {slot}");
+                return Err(BuilderApiError::FailedToFetchLocalPayload(slot));
+            }
+        };
 
         let hash = payload.bid.message.header.block_hash.clone();
         let number = payload.bid.message.header.block_number;
