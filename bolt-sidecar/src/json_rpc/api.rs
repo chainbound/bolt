@@ -114,7 +114,9 @@ impl CommitmentsRpc for JsonRpcApi {
 
         info!(?params, "received inclusion commitment request");
 
-        let tx_sender = params.tx.recover_signer()?;
+        let tx_sender = params.tx.recover_signer().ok_or(ApiError::Custom(
+            "failed to recover signer from transaction".to_string(),
+        ))?;
 
         // validate the user's signature
         let signer_address = params

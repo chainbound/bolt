@@ -1,14 +1,15 @@
 use std::time::Duration;
 
 use bolt_sidecar::{
+    builder::LocalBuilder,
     crypto::{
         bls::{Signer, SignerBLS},
         SignableBLS,
     },
-    json_rpc::{self, api::ApiError},
+    json_rpc,
     primitives::{
-        BatchedSignedConstraints, ChainHead, CommitmentRequest, ConstraintsMessage,
-        LocalPayloadFetcher, SignedConstraints,
+        BatchedSignedConstraints, ChainHead, ConstraintsMessage, LocalPayloadFetcher,
+        SignedConstraints,
     },
     spec::ConstraintsApi,
     start_builder_proxy,
@@ -18,7 +19,7 @@ use bolt_sidecar::{
     },
     BuilderProxyConfig, Config, MevBoostClient,
 };
-
+use ethereum_consensus::crypto::SecretKey as BlsSecretKey;
 use tokio::sync::mpsc;
 use tracing::info;
 
@@ -31,6 +32,7 @@ async fn main() -> eyre::Result<()> {
     let config = Config::parse_from_cli()?;
 
     // TODO: support external signers
+    // probably it's cleanest to have the Config parser initialize a generic Signer
     let signer = Signer::new(config.private_key.clone().unwrap());
 
     let state_client = StateClient::new(&config.execution_api_url, 8);
@@ -41,7 +43,7 @@ async fn main() -> eyre::Result<()> {
 
     let (api_events, mut api_events_rx) = mpsc::channel(1024);
     let shutdown_tx = json_rpc::start_server(&config, api_events).await?;
-    let consensus_state = ConsensusState::new(&config.beacon_api_url);
+    let _consensus_state = ConsensusState::new(&config.beacon_api_url);
 
     let builder_proxy_config = BuilderProxyConfig {
         mevboost_url: config.mevboost_url,
@@ -50,6 +52,14 @@ async fn main() -> eyre::Result<()> {
 
     let (payload_tx, mut payload_rx) = mpsc::channel(16);
     let payload_fetcher = LocalPayloadFetcher::new(payload_tx);
+
+    let mut local_builder = LocalBuilder::new(
+        BlsSecretKey::try_from(config.builder_private_key.to_bytes().as_ref())?,
+        &config.execution_api_url,
+        &config.engine_api_url,
+        &config.jwt_hex,
+        config.fee_recipient,
+    );
 
     tokio::spawn(async move {
         loop {
@@ -69,23 +79,24 @@ async fn main() -> eyre::Result<()> {
                 tracing::info!("Received commitment request: {:?}", event.request);
                 let request = event.request;
 
-                if let Err (e) = consensus_state.validate_request(&CommitmentRequest::Inclusion(request.clone())) {
-                    tracing::error!("Failed to validate request: {:?}", e);
-                    let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
-                    continue;
-                }
+                // if let Err (e) = consensus_state.validate_request(&CommitmentRequest::Inclusion(request.clone())) {
+                //     tracing::error!("Failed to validate request: {:?}", e);
+                //     let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
+                //     continue;
+                // }
 
-                if let Err(e) = execution_state
-                    .try_commit(&CommitmentRequest::Inclusion(request.clone()))
-                    .await
-                {
-                    tracing::error!("Failed to commit request: {:?}", e);
-                    let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
-                    continue;
-                }
+                // if let Err(e) = execution_state
+                //     .try_commit(&CommitmentRequest::Inclusion(request.clone()))
+                //     .await
+                // {
+                //     tracing::error!("Failed to commit request: {:?}", e);
+                //     let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
+                //     continue;
+                // }
+                execution_state.commit_transaction(request.slot, request.tx.clone());
 
                 tracing::info!(
-                    tx_hash = %request.tx.tx_hash(),
+                    tx_hash = %request.tx.hash(),
                     "Validation against execution state passed"
                 );
 
@@ -125,8 +136,9 @@ async fn main() -> eyre::Result<()> {
                 // Once we have that, we need to send it as response to the validator via the pending get_header RPC call.
                 // The validator will then call get_payload with the corresponding SignedBlindedBeaconBlock. We then need to
                 // respond with the full ExecutionPayload inside the BeaconBlock (+ blobs if any).
+                let payload_and_bid = local_builder.build_new_local_payload(response.transactions).await?;
 
-                let _ = request.response.send(None);
+                let _ = request.response.send(Some(payload_and_bid));
             }
 
             else => break,

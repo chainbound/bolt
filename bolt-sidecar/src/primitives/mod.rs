@@ -3,7 +3,7 @@
 
 use std::sync::{atomic::AtomicU64, Arc};
 
-use alloy_primitives::U256;
+use alloy_primitives::{B256, U256};
 use ethereum_consensus::{
     capella,
     crypto::{KzgCommitment, PublicKey as BlsPublicKey, Signature as BlsSignature},
@@ -27,10 +27,6 @@ pub use commitment::{CommitmentRequest, InclusionRequest};
 /// for validation.
 pub mod constraint;
 pub use constraint::{BatchedSignedConstraints, ConstraintsMessage, SignedConstraints};
-
-/// Transaction primitives and utilities.
-pub mod transaction;
-pub use transaction::TxInfo;
 
 /// An alias for a Beacon Chain slot number
 pub type Slot = u64;
@@ -178,6 +174,14 @@ impl GetPayloadResponse {
             )),
             Fork::Deneb => Some(GetPayloadResponse::Deneb(exec_payload.clone())),
             _ => None,
+        }
+    }
+
+    pub fn block_hash(&self) -> &Hash32 {
+        match self {
+            GetPayloadResponse::Capella(payload) => payload.block_hash(),
+            GetPayloadResponse::Bellatrix(payload) => payload.block_hash(),
+            GetPayloadResponse::Deneb(payload) => payload.execution_payload.block_hash(),
         }
     }
 }

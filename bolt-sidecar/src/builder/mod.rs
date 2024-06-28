@@ -1,15 +1,14 @@
-use std::collections::HashMap;
-
-use alloy_primitives::{Address, B256, U256};
+use alloy_primitives::{Address, U256};
 use ethereum_consensus::{
     crypto::SecretKey as BlsSecretKey,
     ssz::prelude::{HashTreeRoot, List, MerkleizationError},
-    types::mainnet::ExecutionPayload,
 };
 use payload_builder::FallbackPayloadBuilder;
 use reth_primitives::{SealedHeader, TransactionSigned};
 
-use crate::primitives::{BuilderBid, SignedBuilderBid};
+use crate::primitives::{
+    BuilderBid, GetPayloadResponse, PayloadAndBid, PayloadAndBlobs, SignedBuilderBid,
+};
 
 /// Basic block template handler that can keep track of
 /// the local commitments according to protocol validity rules.
@@ -66,9 +65,6 @@ pub struct LocalBuilder {
     /// Async fallback payload builder to generate valid payloads with
     /// the engine API's `engine_newPayloadV3` response error.
     fallback_builder: FallbackPayloadBuilder,
-    /// Cached payloads by block hash. This is used to respond to
-    /// the builder API `getPayload` requests with the full block.
-    cached_payloads: HashMap<B256, ExecutionPayload>,
 }
 
 impl LocalBuilder {
@@ -82,7 +78,6 @@ impl LocalBuilder {
     ) -> Self {
         Self {
             secret_key,
-            cached_payloads: Default::default(),
             fallback_builder: FallbackPayloadBuilder::new(
                 engine_jwt_secret,
                 fee_recipient,
@@ -94,10 +89,10 @@ impl LocalBuilder {
 
     /// Build a new payload with the given transactions. This method will
     /// return a signed builder bid that can be submitted to the Builder API.
-    pub async fn build_new_payload(
+    pub async fn build_new_local_payload(
         &mut self,
         transactions: Vec<TransactionSigned>,
-    ) -> Result<SignedBuilderBid, BuilderError> {
+    ) -> Result<PayloadAndBid, BuilderError> {
         // 1. build a fallback payload with the given transactions, on top of
         // the current head of the chain
         let sealed_block = self
@@ -110,18 +105,29 @@ impl LocalBuilder {
         // an external relay as this block is self-built, so the fake bid value is fine.
         let value = U256::from(1_000_000_000_000_000_000u128);
 
-        let block_hash = sealed_block.header.hash();
         let eth_payload = compat::to_consensus_execution_payload(&sealed_block);
+        let payload_and_blobs = PayloadAndBlobs {
+            execution_payload: eth_payload,
+            // TODO: add included blobs here
+            blobs_bundle: None,
+        };
 
-        // 2. create a signed builder bid with the sealed block header
-        // we just created
+        // 2. create a signed builder bid with the sealed block header we just created
         let signed_bid = self.create_signed_builder_bid(value, sealed_block.header)?;
 
-        // 3. insert the payload into the cache for retrieval by the
-        // builder API getPayload requests.
-        self.insert_payload(block_hash, eth_payload);
+        // 3. prepare a get_payload response for when the beacon node will ask for it
+        let Some(get_payload_res) =
+            GetPayloadResponse::try_from_execution_payload(&payload_and_blobs)
+        else {
+            return Err(BuilderError::Custom(
+                "Failed to build get_payload response: invalid fork version".to_string(),
+            ));
+        };
 
-        Ok(signed_bid)
+        Ok(PayloadAndBid {
+            bid: signed_bid,
+            payload: get_payload_res,
+        })
     }
 
     /// transform a sealed header into a signed builder bid using
@@ -144,15 +150,5 @@ impl LocalBuilder {
             message: submission,
             signature,
         })
-    }
-
-    /// Insert a payload into the cache.
-    fn insert_payload(&mut self, hash: B256, payload: ExecutionPayload) {
-        self.cached_payloads.insert(hash, payload);
-    }
-
-    /// Get the cached payload for the slot.
-    pub fn get_cached_payload(&self, hash: B256) -> Option<&ExecutionPayload> {
-        self.cached_payloads.get(&hash)
     }
 }

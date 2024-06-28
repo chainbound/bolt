@@ -9,6 +9,7 @@ use axum::{
 use beacon_api_client::VersionedValue;
 use ethereum_consensus::{
     builder::SignedValidatorRegistration,
+    deneb::mainnet::SignedBlindedBeaconBlock,
     primitives::{BlsPublicKey, Hash32},
     Fork,
 };
@@ -37,7 +38,7 @@ pub struct BuilderProxyServer<T: BuilderApi, P> {
     // TODO: fill with local payload when we fetch a payload
     // in failed get_header
     // This will only be some in case of a failed get_header
-    local_payload: Mutex<Option<GetPayloadResponse>>,
+    local_payload: Mutex<Option<VersionedValue<GetPayloadResponse>>>,
     /// The payload fetcher to get locally built payloads.
     payload_fetcher: P,
 }
@@ -145,7 +146,13 @@ where
         {
             // Set the payload for the following get_payload request
             let mut local_payload = server.local_payload.lock();
-            *local_payload = Some(payload.payload);
+            let versioned_payload = VersionedValue {
+                version: Fork::Deneb,
+                data: payload.payload,
+                meta: Default::default(),
+            };
+
+            *local_payload = Some(versioned_payload);
         }
 
         let versioned_bid = VersionedValue::<SignedBuilderBid> {
@@ -162,15 +169,9 @@ where
     pub async fn get_payload(
         State(server): State<Arc<BuilderProxyServer<T, P>>>,
         req: Request<Body>,
-    ) -> Result<Json<GetPayloadResponse>, BuilderApiError> {
+    ) -> Result<Json<VersionedValue<GetPayloadResponse>>, BuilderApiError> {
         let start = std::time::Instant::now();
         tracing::debug!("Received get_payload request");
-
-        // If we have a locally built payload, return it and clear the cache.
-        if let Some(payload) = server.local_payload.lock().take() {
-            tracing::info!("Local block found, returning: {payload:?}");
-            return Ok(Json(payload));
-        }
 
         let body_bytes = body::to_bytes(req.into_body(), MAX_BLINDED_BLOCK_LENGTH)
             .await
@@ -180,16 +181,44 @@ where
             })?;
 
         // Convert to signed blinded beacon block
-        let signed_block = serde_json::from_slice(&body_bytes).map_err(|e| {
-            tracing::error!(error = %e, "Failed to parse signed blinded block");
-            e
-        })?;
+        let signed_blinded_block = serde_json::from_slice::<SignedBlindedBeaconBlock>(&body_bytes)
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to parse signed blinded block");
+                e
+            })?;
+
+        // If we have a locally built payload, return it and clear the cache.
+        if let Some(payload) = server.local_payload.lock().take() {
+            let requested_block = &signed_blinded_block
+                .message
+                .body
+                .execution_payload_header
+                .block_hash;
+
+            // WARNING: this is an important check. If the local block does not match what the
+            // beacon node has signed, we are at risk of equivocation and slashing.
+            if payload.data.block_hash() != requested_block {
+                tracing::error!(
+                    expected = requested_block.to_string(),
+                    have = payload.data.block_hash().to_string(),
+                    "Local block hash does not match requested block hash"
+                );
+
+                return Err(BuilderApiError::InvalidLocalPayloadBlockHash {
+                    expected: requested_block.to_string(),
+                    have: payload.data.block_hash().to_string(),
+                });
+            };
+
+            tracing::info!("Local block found, returning: {payload:?}");
+            return Ok(Json(payload));
+        }
 
         // TODO: how do we deal with failures here? What if we submit the signed blinded block but don't get a response?
         // should we ignore the error or proceed with a local block (highly risky -> equivocation risk)
         let payload = server
             .proxy_target
-            .get_payload(signed_block)
+            .get_payload(signed_blinded_block)
             .await
             .map(Json)
             .map_err(|e| {

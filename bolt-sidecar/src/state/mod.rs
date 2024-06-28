@@ -25,6 +25,7 @@ pub enum StateError {
 }
 
 #[derive(Debug, Clone)]
+#[allow(unused)]
 struct ProposerDuties {
     assigned_slots: Vec<u64>,
 }
@@ -40,6 +41,7 @@ mod tests {
     use alloy_signer_local::PrivateKeySigner;
     use execution::{ExecutionState, ValidationError};
     use fetcher::StateClient;
+    use reth_primitives::TransactionSigned;
     use tracing_subscriber::fmt;
 
     use crate::{
@@ -72,9 +74,14 @@ mod tests {
         let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            tx: signed,
+            tx: tx_signed,
             signature: sig,
         });
 
@@ -103,9 +110,14 @@ mod tests {
         let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            tx: signed,
+            tx: tx_signed,
             signature: sig,
         });
 
@@ -138,9 +150,14 @@ mod tests {
         let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            tx: signed,
+            tx: tx_signed,
             signature: sig,
         });
 
@@ -174,9 +191,14 @@ mod tests {
         let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            tx: signed,
+            tx: tx_signed,
             signature: sig,
         });
 
@@ -208,9 +230,14 @@ mod tests {
         let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            tx: signed.clone(),
+            tx: tx_signed,
             signature: sig,
         });
 

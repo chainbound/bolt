@@ -6,13 +6,10 @@
 
 use std::collections::HashMap;
 
-use alloy_consensus::{TxEnvelope, TxType};
 use alloy_primitives::{Address, U256};
+use reth_primitives::{TransactionSigned, TxType};
 
-use crate::{
-    common::max_transaction_cost,
-    primitives::{AccountState, TxInfo},
-};
+use crate::{common::max_transaction_cost, primitives::AccountState};
 
 /// A block template that serves as a fallback block, but is also used
 /// to keep intermediary state for new commitment requests.
@@ -27,7 +24,8 @@ use crate::{
 pub struct BlockTemplate {
     /// The state diffs per address given the list of commitments.
     state_diff: StateDiff,
-    transactions: Vec<TxEnvelope>,
+    /// The list of transactions in the block template.
+    pub transactions: Vec<TransactionSigned>,
 }
 
 impl BlockTemplate {
@@ -37,13 +35,13 @@ impl BlockTemplate {
     }
 
     /// Adds a transaction to the block template and updates the state diff.
-    pub fn add_transaction(&mut self, transaction: TxEnvelope) {
+    pub fn add_transaction(&mut self, transaction: TransactionSigned) {
         let max_cost = max_transaction_cost(&transaction);
 
         // Update intermediate state
         self.state_diff
             .diffs
-            .entry(transaction.from().expect("Passed validation"))
+            .entry(transaction.recover_signer().expect("Passed validation"))
             .and_modify(|(nonce, balance)| {
                 *nonce += 1;
                 *balance += max_cost;
@@ -62,7 +60,7 @@ impl BlockTemplate {
     pub fn blob_count(&self) -> usize {
         self.transactions.iter().fold(0, |mut acc, tx| {
             if tx.tx_type() == TxType::Eip4844 {
-                acc += tx.blob_count();
+                acc += tx.blob_versioned_hashes().unwrap_or_default().len();
             }
 
             acc
@@ -77,7 +75,7 @@ impl BlockTemplate {
         // Update intermediate state
         self.state_diff
             .diffs
-            .entry(tx.from().expect("Passed validation"))
+            .entry(tx.recover_signer().expect("Passed validation"))
             .and_modify(|(nonce, balance)| {
                 *nonce = nonce.saturating_sub(1);
                 *balance += max_cost;
@@ -90,7 +88,7 @@ impl BlockTemplate {
 
         for (index, tx) in self.transactions.iter().enumerate() {
             let max_cost = max_transaction_cost(tx);
-            if tx.from().unwrap() == address
+            if tx.recover_signer().expect("passed validation") == address
                 && (state.balance < max_cost || state.transaction_count > tx.nonce())
             {
                 tracing::trace!(
