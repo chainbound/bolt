@@ -67,6 +67,8 @@ pub enum BuilderApiError {
     Timeout(#[from] tokio::time::error::Elapsed),
     #[error("Invalid fork: {0}")]
     InvalidFork(String),
+    #[error("Invalid local payload block hash. expected: {expected}, got: {have}")]
+    InvalidLocalPayloadBlockHash { expected: String, have: String },
 }
 
 impl IntoResponse for BuilderApiError {
@@ -108,6 +110,9 @@ impl IntoResponse for BuilderApiError {
             BuilderApiError::InvalidFork(err) => {
                 (StatusCode::BAD_REQUEST, Json(err)).into_response()
             }
+            BuilderApiError::InvalidLocalPayloadBlockHash { .. } => {
+                (StatusCode::BAD_REQUEST, self.to_string()).into_response()
+            }
         }
     }
 }
@@ -131,7 +136,7 @@ pub trait BuilderApi {
     async fn get_payload(
         &self,
         signed_block: SignedBlindedBeaconBlock,
-    ) -> Result<GetPayloadResponse, BuilderApiError>;
+    ) -> Result<VersionedValue<GetPayloadResponse>, BuilderApiError>;
 }
 
 #[async_trait::async_trait]
