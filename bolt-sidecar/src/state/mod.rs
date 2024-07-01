@@ -11,6 +11,7 @@ pub use execution::{ExecutionState, ValidationError};
 pub mod fetcher;
 
 pub mod consensus;
+pub use consensus::ConsensusState;
 
 /// Module to track the head of the chain.
 pub mod head_tracker;

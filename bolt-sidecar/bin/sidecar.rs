@@ -14,7 +14,7 @@ use bolt_sidecar::{
     start_builder_proxy,
     state::{
         fetcher::{StateClient, StateFetcher},
-        ExecutionState,
+        ConsensusState, ExecutionState,
     },
     BuilderProxyConfig, Config, MevBoostClient,
 };
@@ -41,6 +41,7 @@ async fn main() -> eyre::Result<()> {
 
     let (api_events, mut api_events_rx) = mpsc::channel(1024);
     let shutdown_tx = json_rpc::start_server(&config, api_events).await?;
+    let consensus_state = ConsensusState::new(&config.beacon_api_url);
 
     let builder_proxy_config = BuilderProxyConfig {
         mevboost_url: config.mevboost_url,
@@ -68,15 +69,20 @@ async fn main() -> eyre::Result<()> {
                 tracing::info!("Received commitment request: {:?}", event.request);
                 let request = event.request;
 
-                // TODO: re-introduce validation after #94
-                // if let Err(e) = execution_state
-                //     .try_commit(&CommitmentRequest::Inclusion(request.clone()))
-                //     .await
-                // {
-                //     tracing::error!("Failed to commit request: {:?}", e);
-                //     let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
-                //     continue;
-                // }
+                if let Err (e) = consensus_state.validate_request(&CommitmentRequest::Inclusion(request.clone())) {
+                    tracing::error!("Failed to validate request: {:?}", e);
+                    let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
+                    continue;
+                }
+
+                if let Err(e) = execution_state
+                    .try_commit(&CommitmentRequest::Inclusion(request.clone()))
+                    .await
+                {
+                    tracing::error!("Failed to commit request: {:?}", e);
+                    let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
+                    continue;
+                }
 
                 tracing::info!(
                     tx_hash = %request.tx.tx_hash(),
