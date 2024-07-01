@@ -1,10 +1,13 @@
 //! The `state` module is responsible for keeping a local copy of relevant state that is needed
 //! to simulate commitments against. It is updated on every block. It has both execution state and consensus state.
 
-use alloy_transport::TransportError;
-use thiserror::Error;
-
 mod execution;
+use std::{
+    pin::Pin,
+    task::{Context, Poll},
+    time::Duration,
+};
+
 pub use execution::{ExecutionState, ValidationError};
 
 /// Module to fetch state from the Execution layer.
@@ -12,21 +15,34 @@ pub mod fetcher;
 
 pub mod consensus;
 pub use consensus::ConsensusState;
+use futures::Future;
+use tokio::time::Sleep;
 
 /// Module to track the head of the chain.
 pub mod head_tracker;
 
-/// Errors that can occur in the state module.
-#[derive(Debug, Error)]
-pub enum StateError {
-    /// An error occurred while fetching from an RPC client.
-    #[error("RPC error: {0:?}")]
-    Rpc(#[from] TransportError),
+#[derive(Debug)]
+pub struct CommitmentDeadline {
+    slot: u64,
+    sleep: Pin<Box<Sleep>>,
 }
 
-#[derive(Debug, Clone)]
-struct ProposerDuties {
-    assigned_slots: Vec<u64>,
+impl CommitmentDeadline {
+    pub fn new(slot: u64, duration: Duration) -> Self {
+        let sleep = Box::pin(tokio::time::sleep(duration));
+        Self { slot, sleep }
+    }
+}
+
+impl Future for CommitmentDeadline {
+    type Output = u64;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match self.sleep.as_mut().poll(cx) {
+            Poll::Ready(_) => Poll::Ready(self.slot),
+            Poll::Pending => Poll::Pending,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -40,6 +56,7 @@ mod tests {
     use alloy_signer_local::PrivateKeySigner;
     use execution::{ExecutionState, ValidationError};
     use fetcher::StateClient;
+    use reth_primitives::TransactionSigned;
     use tracing_subscriber::fmt;
 
     use crate::{
@@ -72,9 +89,14 @@ mod tests {
         let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            tx: signed,
+            tx: tx_signed,
             signature: sig,
         });
 
@@ -103,9 +125,14 @@ mod tests {
         let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            tx: signed,
+            tx: tx_signed,
             signature: sig,
         });
 
@@ -138,9 +165,14 @@ mod tests {
         let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            tx: signed,
+            tx: tx_signed,
             signature: sig,
         });
 
@@ -174,9 +206,14 @@ mod tests {
         let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            tx: signed,
+            tx: tx_signed,
             signature: sig,
         });
 
@@ -208,9 +245,14 @@ mod tests {
         let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            tx: signed.clone(),
+            tx: tx_signed,
             signature: sig,
         });
 

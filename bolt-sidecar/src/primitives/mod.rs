@@ -28,10 +28,6 @@ pub use commitment::{CommitmentRequest, InclusionRequest};
 pub mod constraint;
 pub use constraint::{BatchedSignedConstraints, ConstraintsMessage, SignedConstraints};
 
-/// Transaction primitives and utilities.
-pub mod transaction;
-pub use transaction::TxInfo;
-
 /// An alias for a Beacon Chain slot number
 pub type Slot = u64;
 
@@ -91,7 +87,7 @@ pub struct MerkleMultiProof {
 #[derive(Debug)]
 pub struct FetchPayloadRequest {
     pub slot: u64,
-    pub response: oneshot::Sender<Option<PayloadAndBid>>,
+    pub response_tx: oneshot::Sender<Option<PayloadAndBid>>,
 }
 
 #[derive(Debug)]
@@ -114,13 +110,18 @@ impl LocalPayloadFetcher {
 #[async_trait::async_trait]
 impl PayloadFetcher for LocalPayloadFetcher {
     async fn fetch_payload(&self, slot: u64) -> Option<PayloadAndBid> {
-        let (tx, rx) = oneshot::channel();
+        let (response_tx, response_rx) = oneshot::channel();
 
-        let fetch_params = FetchPayloadRequest { slot, response: tx };
-
+        let fetch_params = FetchPayloadRequest { response_tx, slot };
         self.tx.send(fetch_params).await.ok()?;
 
-        rx.await.ok().flatten()
+        match response_rx.await {
+            Ok(res) => res,
+            Err(e) => {
+                tracing::error!(err = ?e, "Failed to fetch payload");
+                None
+            }
+        }
     }
 }
 
@@ -180,6 +181,14 @@ impl GetPayloadResponse {
             _ => None,
         }
     }
+
+    pub fn block_hash(&self) -> &Hash32 {
+        match self {
+            GetPayloadResponse::Capella(payload) => payload.block_hash(),
+            GetPayloadResponse::Bellatrix(payload) => payload.block_hash(),
+            GetPayloadResponse::Deneb(payload) => payload.execution_payload.block_hash(),
+        }
+    }
 }
 
 impl<'de> serde::Deserialize<'de> for GetPayloadResponse {
@@ -207,9 +216,9 @@ impl<'de> serde::Deserialize<'de> for GetPayloadResponse {
 #[derive(Debug, Clone)]
 pub struct ChainHead {
     /// The current slot number.
-    slot: Arc<AtomicU64>,
+    pub slot: Arc<AtomicU64>,
     /// The current block number.
-    block: Arc<AtomicU64>,
+    pub block: Arc<AtomicU64>,
 }
 
 impl ChainHead {

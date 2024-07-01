@@ -37,6 +37,7 @@ const DEFAULT_EXTRA_DATA: &str = "Selfbuilt w Bolt";
 pub struct FallbackPayloadBuilder {
     extra_data: Bytes,
     fee_recipient: Address,
+    beacon_api_url: String,
     execution_rpc_client: RpcClient,
     engine_hinter: EngineHinter,
 }
@@ -48,6 +49,7 @@ impl FallbackPayloadBuilder {
         fee_recipient: Address,
         engine_rpc_url: &str,
         execution_rpc_url: &str,
+        beacon_api_url: &str,
     ) -> Self {
         let engine_hinter = EngineHinter {
             client: reqwest::Client::new(),
@@ -58,6 +60,7 @@ impl FallbackPayloadBuilder {
         Self {
             fee_recipient,
             engine_hinter,
+            beacon_api_url: beacon_api_url.to_string(),
             extra_data: hex::encode(DEFAULT_EXTRA_DATA).into(),
             execution_rpc_client: RpcClient::new(execution_rpc_url),
         }
@@ -99,9 +102,10 @@ impl FallbackPayloadBuilder {
         transactions: Vec<TransactionSigned>,
     ) -> Result<SealedBlock, BuilderError> {
         let latest_block = self.execution_rpc_client.get_block(None, true).await?;
+        tracing::info!(num = ?latest_block.header.number, "got latest block");
 
         // TODO: refactor this once ConsensusState (https://github.com/chainbound/bolt/issues/58) is ready
-        let beacon_api_endpoint = reqwest::Url::parse("http://remotebeast:3500").unwrap();
+        let beacon_api_endpoint = reqwest::Url::parse(&self.beacon_api_url).unwrap();
         let beacon_api = beacon_api_client::mainnet::Client::new(beacon_api_endpoint);
 
         let withdrawals = beacon_api
@@ -111,6 +115,7 @@ impl FallbackPayloadBuilder {
             .into_iter()
             .map(to_reth_withdrawal)
             .collect::<Vec<_>>();
+        tracing::info!(amount = ?withdrawals.len(), "got withdrawals");
 
         let withdrawals = if withdrawals.is_empty() {
             None
@@ -122,7 +127,10 @@ impl FallbackPayloadBuilder {
         // when using the beacon_api_client crate directly, so we use reqwest temporarily.
         // this is to be refactored.
         let prev_randao = reqwest::Client::new()
-            .get("http://remotebeast:3500/eth/v1/beacon/states/head/randao")
+            .get(format!(
+                "{}/eth/v1/beacon/states/head/randao",
+                self.beacon_api_url
+            ))
             .send()
             .await
             .unwrap()
@@ -135,17 +143,20 @@ impl FallbackPayloadBuilder {
             .as_str()
             .unwrap();
         let prev_randao = B256::from_hex(prev_randao).unwrap();
+        tracing::info!("got prev_randao");
 
         let parent_beacon_block_root = beacon_api
             .get_beacon_block_root(BlockId::Head)
             .await
             .unwrap();
+        tracing::info!(parent = ?parent_beacon_block_root, "got parent_beacon_block_root");
 
         let versioned_hashes = transactions
             .iter()
             .flat_map(|tx| tx.blob_versioned_hashes())
             .flatten()
             .collect::<Vec<_>>();
+        tracing::info!(amount = ?versioned_hashes.len(), "got versioned_hashes");
 
         let base_fee = calc_next_block_base_fee(
             latest_block.header.gas_used,
@@ -179,7 +190,7 @@ impl FallbackPayloadBuilder {
         };
 
         let mut hints = Hints::default();
-        let max_iterations = 5;
+        let max_iterations = 10;
         let mut i = 0;
         loop {
             let header = build_header_with_hints_and_context(&latest_block, &hints, &ctx);
@@ -187,8 +198,7 @@ impl FallbackPayloadBuilder {
             let sealed_header = header.clone().seal_slow();
             let sealed_block = SealedBlock::new(sealed_header.clone(), body.clone());
 
-            let hinted_hash = hints.block_hash.unwrap_or(sealed_block.hash());
-            let exec_payload = to_alloy_execution_payload(&sealed_block, hinted_hash);
+            let exec_payload = to_alloy_execution_payload(&sealed_block);
 
             let engine_hint = self
                 .engine_hinter
@@ -196,18 +206,34 @@ impl FallbackPayloadBuilder {
                 .await?;
 
             match engine_hint {
-                EngineApiHint::BlockHash(hash) => hints.block_hash = Some(hash),
-                EngineApiHint::GasUsed(gas) => hints.gas_used = Some(gas),
-                EngineApiHint::StateRoot(hash) => hints.state_root = Some(hash),
-                EngineApiHint::ReceiptsRoot(hash) => hints.receipts_root = Some(hash),
-                EngineApiHint::LogsBloom(bloom) => hints.logs_bloom = Some(bloom),
+                EngineApiHint::BlockHash(hash) => {
+                    tracing::warn!("Should not receive block hash hint {:?}", hash);
+                    hints.block_hash = Some(hash)
+                }
+
+                EngineApiHint::GasUsed(gas) => {
+                    hints.gas_used = Some(gas);
+                    hints.block_hash = None;
+                }
+                EngineApiHint::StateRoot(hash) => {
+                    hints.state_root = Some(hash);
+                    hints.block_hash = None
+                }
+                EngineApiHint::ReceiptsRoot(hash) => {
+                    hints.receipts_root = Some(hash);
+                    hints.block_hash = None
+                }
+                EngineApiHint::LogsBloom(bloom) => {
+                    hints.logs_bloom = Some(bloom);
+                    hints.block_hash = None
+                }
 
                 EngineApiHint::ValidPayload => return Ok(sealed_block),
             }
 
             if i > max_iterations {
                 return Err(BuilderError::Custom(
-                    "Failed to fetch all missing header values from geth error messages"
+                    "Too many iterations: Failed to fetch all missing header values from geth error messages"
                         .to_string(),
                 ));
             }
@@ -249,6 +275,8 @@ impl EngineHinter {
         versioned_hashes: &[B256],
         parent_beacon_root: B256,
     ) -> Result<EngineApiHint, BuilderError> {
+        tracing::info!("jwt_hex: {:?}", self.jwt_hex);
+
         let auth_jwt = secret_to_bearer_header(&JwtSecret::from_hex(&self.jwt_hex)?);
 
         let body = format!(
@@ -278,6 +306,8 @@ impl EngineHinter {
                 return Err(BuilderError::InvalidEngineHint(raw_hint));
             }
         };
+
+        tracing::info!("raw hint: {:?}", raw_hint);
 
         // Match the hint value to the corresponding header field and return it
         if raw_hint.contains("blockhash mismatch") {
@@ -376,7 +406,7 @@ mod tests {
         let execution = "http://remotebeast:8545";
         let engine = "http://remotebeast:8551";
 
-        let builder = FallbackPayloadBuilder::new(&jwt, Address::default(), engine, execution);
+        let builder = FallbackPayloadBuilder::new(&jwt, Address::default(), engine, execution, "");
 
         let sk = SigningKey::from_slice(hex::decode(raw_sk)?.as_slice())?;
         let signer = PrivateKeySigner::from_signing_key(sk.clone());

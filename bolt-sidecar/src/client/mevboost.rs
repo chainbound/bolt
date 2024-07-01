@@ -109,7 +109,7 @@ impl BuilderApi for MevBoostClient {
     async fn get_payload(
         &self,
         signed_block: SignedBlindedBeaconBlock,
-    ) -> Result<GetPayloadResponse, BuilderApiError> {
+    ) -> Result<VersionedValue<GetPayloadResponse>, BuilderApiError> {
         let response = self
             .client
             .post(self.endpoint(GET_PAYLOAD_PATH))
@@ -123,7 +123,7 @@ impl BuilderApi for MevBoostClient {
             return Err(BuilderApiError::FailedGettingPayload(error));
         }
 
-        let payload = response.json::<GetPayloadResponse>().await?;
+        let payload = response.json().await?;
 
         Ok(payload)
     }

@@ -1,11 +1,8 @@
 use std::str::FromStr;
 
-use alloy_consensus::TxEnvelope;
-use alloy_eips::eip2718::{Decodable2718, Encodable2718};
 use alloy_primitives::{keccak256, Signature, B256};
+use reth_primitives::TransactionSigned;
 use serde::{de, Deserialize, Deserializer, Serialize};
-
-use super::transaction::TxInfo;
 
 /// Commitment requests sent by users or RPC proxies to the sidecar.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -22,10 +19,10 @@ pub struct InclusionRequest {
     pub slot: u64,
     /// The transaction to be included.
     #[serde(
-        deserialize_with = "deserialize_tx_envelope",
-        serialize_with = "serialize_tx_envelope"
+        deserialize_with = "deserialize_tx_signed",
+        serialize_with = "serialize_tx_signed"
     )]
-    pub tx: TxEnvelope,
+    pub tx: TransactionSigned,
     /// The signature over the "slot" and "tx" fields by the user.
     /// A valid signature is the only proof that the user actually requested
     /// this specific commitment to be included at the given slot.
@@ -40,37 +37,28 @@ impl InclusionRequest {
     /// Validates the transaction fee against a minimum basefee.
     /// Returns true if the fee is greater than or equal to the min, false otherwise.
     pub fn validate_basefee(&self, min: u128) -> bool {
-        if let Some(max_fee) = self.tx.max_fee_per_gas() {
-            if max_fee < min {
-                return false;
-            }
-        } else if let Some(fee) = self.tx.gas_price() {
-            if fee < min {
-                return false;
-            }
-        } else {
-            unreachable!("Transaction must have a fee");
+        if self.tx.max_fee_per_gas() < min {
+            return false;
         }
-
         true
     }
 }
 
-fn deserialize_tx_envelope<'de, D>(deserializer: D) -> Result<TxEnvelope, D::Error>
+fn deserialize_tx_signed<'de, D>(deserializer: D) -> Result<TransactionSigned, D::Error>
 where
     D: Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
-    let s = hex::decode(s.trim_start_matches("0x")).map_err(de::Error::custom)?;
-    TxEnvelope::decode_2718(&mut s.as_slice()).map_err(de::Error::custom)
+    let data = hex::decode(s.trim_start_matches("0x")).map_err(de::Error::custom)?;
+    TransactionSigned::decode_enveloped(&mut data.as_slice()).map_err(de::Error::custom)
 }
 
-fn serialize_tx_envelope<S>(tx: &TxEnvelope, serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_tx_signed<S>(tx: &TransactionSigned, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
     let mut data = Vec::new();
-    tx.encode_2718(&mut data);
+    tx.encode_enveloped(&mut data);
     serializer.serialize_str(&format!("0x{}", hex::encode(&data)))
 }
 
@@ -100,7 +88,7 @@ impl InclusionRequest {
     pub fn digest(&self) -> B256 {
         let mut data = Vec::new();
         data.extend_from_slice(&self.slot.to_le_bytes());
-        data.extend_from_slice(self.tx.tx_hash().as_slice());
+        data.extend_from_slice(self.tx.hash.as_slice());
 
         keccak256(&data)
     }

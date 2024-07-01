@@ -1,9 +1,12 @@
+use alloy_primitives::Address;
 use blst::min_pk::SecretKey;
 use clap::{ArgGroup, Args, Parser};
 
 use crate::crypto::bls::random_bls_secret;
 
-/// Command-line options for the sidecar
+pub const DEFAULT_COMMITMENT_DEADLINE: u64 = 8;
+
+/// Command-line options for the Bolt sidecar
 #[derive(Parser, Debug)]
 pub struct Opts {
     /// Port to listen on for incoming JSON-RPC requests
@@ -24,12 +27,29 @@ pub struct Opts {
     /// MEV-Boost proxy server port to use
     #[clap(short = 'y', long)]
     pub(super) mevboost_proxy_port: u16,
-    /// Max commitments to accept per block
+    /// Max number of commitments to accept per block
     #[clap(short = 'm', long)]
     pub(super) max_commitments: Option<usize>,
-    /// Signing options
+    /// The JWT secret token to authenticate calls to the engine API.
+    ///
+    /// It can either be a hex-encoded string or a file path to a file
+    /// containing the hex-encoded secret.
+    #[clap(short = 'j', long)]
+    pub(super) jwt_hex: String,
+    /// The fee recipient address for fallback blocks
+    #[clap(short = 'f', long)]
+    pub(super) fee_recipient: Address,
+    /// Commitment signing options.
     #[clap(flatten)]
     pub(super) signing: SigningOpts,
+    /// Secret BLS key to sign fallback payloads with
+    /// (If not provided, a random key will be used)
+    #[clap(short = 'k', long)]
+    pub(super) builder_private_key: Option<String>,
+    /// The deadline in the slot at which the sidecar will stop accepting
+    /// new commitments for the next block (in seconds)
+    #[clap(short = 'd', long)]
+    pub(super) commitment_deadline: Option<u64>,
 }
 
 /// Command-line options for signing
@@ -66,8 +86,17 @@ pub struct Config {
     pub engine_api_url: String,
     /// The MEV-Boost proxy server port to use
     pub mevboost_proxy_port: u16,
+    /// The jwt.hex secret to authenticate calls to the engine API
+    pub jwt_hex: String,
+    /// The fee recipient address for fallback blocks
+    pub fee_recipient: Address,
     /// Limits for the sidecar
     pub limits: Limits,
+    /// Local bulider private key
+    pub builder_private_key: SecretKey,
+    /// The deadline in the slot at which the sidecar will stop accepting
+    /// new commitments for the next block (in seconds)
+    pub commitment_deadline: u64,
 }
 
 impl Default for Config {
@@ -81,7 +110,11 @@ impl Default for Config {
             engine_api_url: "http://localhost:8551".to_string(),
             private_key: Some(random_bls_secret()),
             mevboost_proxy_port: 18551,
+            jwt_hex: String::new(),
+            fee_recipient: Address::ZERO,
+            builder_private_key: random_bls_secret(),
             limits: Limits::default(),
+            commitment_deadline: DEFAULT_COMMITMENT_DEADLINE,
         }
     }
 }
@@ -120,6 +153,33 @@ impl TryFrom<Opts> for Config {
         } else {
             None
         };
+
+        if let Some(builder_private_key) = opts.builder_private_key {
+            let sk = SecretKey::from_bytes(&hex::decode(builder_private_key)?)
+                .map_err(|e| eyre::eyre!("Failed decoding BLS secret key: {:?}", e))?;
+            config.builder_private_key = sk;
+        }
+
+        config.jwt_hex = if opts.jwt_hex.starts_with("0x") {
+            opts.jwt_hex.trim_start_matches("0x").to_string()
+        } else if std::path::Path::new(&opts.jwt_hex).exists() {
+            std::fs::read_to_string(opts.jwt_hex)?
+                .trim_start_matches("0x")
+                .to_string()
+        } else {
+            opts.jwt_hex
+        };
+
+        // Validate the JWT secret
+        if config.jwt_hex.len() != 64 {
+            eyre::bail!("JWT secret must be a 32 byte hex string");
+        } else {
+            tracing::info!("JWT secret loaded successfully");
+        }
+
+        if let Some(deadline) = opts.commitment_deadline {
+            config.commitment_deadline = deadline;
+        }
 
         config.mevboost_proxy_port = opts.mevboost_proxy_port;
         config.engine_api_url = opts.engine_api_url.trim_end_matches('/').to_string();

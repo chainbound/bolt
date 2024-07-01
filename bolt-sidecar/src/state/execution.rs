@@ -1,6 +1,7 @@
-use alloy_consensus::{TxEnvelope, TxType};
 use alloy_eips::eip4844::MAX_BLOBS_PER_BLOCK;
 use alloy_primitives::{Address, SignatureError};
+use alloy_transport::TransportError;
+use reth_primitives::{transaction::TxType, TransactionSigned};
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -10,7 +11,7 @@ use crate::{
     primitives::{AccountState, ChainHead, CommitmentRequest, Slot},
 };
 
-use super::{fetcher::StateFetcher, StateError};
+use super::fetcher::StateFetcher;
 
 /// Possible commitment validation errors.
 #[derive(Debug, Error)]
@@ -33,6 +34,9 @@ pub enum ValidationError {
     /// The signature is invalid.
     #[error("Signature error: {0:?}")]
     Signature(#[from] SignatureError),
+    /// Could not recover signature,
+    #[error("Could not recover signer")]
+    RecoverSigner,
     /// NOTE: this should not be exposed to the user.
     #[error("Internal error: {0}")]
     Internal(String),
@@ -79,7 +83,7 @@ pub struct ExecutionState<C> {
 impl<C: StateFetcher> ExecutionState<C> {
     /// Creates a new state with the given client. Initializes the `head` and `basefee` fields
     /// with the current head and basefee.
-    pub async fn new(client: C, head: ChainHead) -> Result<Self, StateError> {
+    pub async fn new(client: C, head: ChainHead) -> Result<Self, TransportError> {
         let basefee = client.get_basefee(Some(head.block())).await?;
 
         Ok(Self {
@@ -112,7 +116,9 @@ impl<C: StateFetcher> ExecutionState<C> {
     pub async fn try_commit(&mut self, request: &CommitmentRequest) -> Result<(), ValidationError> {
         let CommitmentRequest::Inclusion(req) = request;
 
-        let sender = req.tx.recover_signer()?;
+        let sender = req.tx.recover_signer().ok_or(ValidationError::Internal(
+            "Failed to recover signer from transaction".to_string(),
+        ))?;
 
         tracing::debug!(%sender, target_slot = req.slot, "Trying to commit inclusion request to block template");
 
@@ -169,7 +175,8 @@ impl<C: StateFetcher> ExecutionState<C> {
 
     /// Commits the transaction to the target block. Initializes a new block template
     /// if one does not exist for said block number.
-    fn commit_transaction(&mut self, target_slot: u64, transaction: TxEnvelope) {
+    /// TODO: remove `pub` modifier once `try_commit` is fully implemented.
+    pub fn commit_transaction(&mut self, target_slot: u64, transaction: TransactionSigned) {
         if let Some(template) = self.block_templates.get_mut(&target_slot) {
             template.add_transaction(transaction);
         } else {
@@ -180,7 +187,7 @@ impl<C: StateFetcher> ExecutionState<C> {
     }
 
     /// Updates the state with a new head
-    pub async fn update_head(&mut self, head: ChainHead) -> Result<(), StateError> {
+    pub async fn update_head(&mut self, head: ChainHead) -> Result<(), TransportError> {
         // TODO: invalidate any state that we don't need anymore (will be based on block template)
         let update = self
             .client
