@@ -2,21 +2,38 @@
 #![allow(unused_variables)]
 #![allow(missing_debug_implementations)]
 
-use beacon_api_client::{mainnet::Client, BlockId};
+use beacon_api_client::{mainnet::Client, BlockId, ProposerDuty};
 use ethereum_consensus::deneb::BeaconBlockHeader;
 use reqwest::Url;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::primitives::ChainHead;
+use crate::primitives::{ChainHead, CommitmentRequest, Slot};
+
+// The slot inclusion deadline in seconds
+const INCLUSION_DEADLINE: u64 = 6;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConsensusError {
-    #[error("beacon API error: {0}")]
+    #[error("Beacon API error: {0}")]
     BeaconApiError(#[from] beacon_api_client::Error),
+    #[error("Invalid slot: {0}")]
+    InvalidSlot(Slot),
+    #[error("Inclusion deadline exceeded")]
+    DeadlineExceeded,
+}
+
+pub struct Epoch {
+    pub value: u64,
+    pub start_slot: Slot,
+    pub proposer_duties: Vec<ProposerDuty>,
 }
 
 pub struct ConsensusState {
     beacon_api_client: Client,
     header: BeaconBlockHeader,
+    epoch: Epoch,
+    // Timestamp when the current slot is received
+    timestamp: u64,
 }
 
 impl ConsensusState {
@@ -28,7 +45,34 @@ impl ConsensusState {
         Self {
             beacon_api_client,
             header: BeaconBlockHeader::default(),
+            epoch: Epoch {
+                value: 0,
+                start_slot: 0,
+                proposer_duties: vec![],
+            },
+            timestamp: 0,
         }
+    }
+
+    /// This function validates the state of the chain against a block. It checks 2 things:
+    /// 1. The target slot is one of our proposer slots. (TODO)
+    /// 2. The request hasn't passed the slot deadline.
+    ///
+    /// TODO: Integrate with the registry to check if we are registered.
+    pub fn validate_request(&self, request: &CommitmentRequest) -> Result<(), ConsensusError> {
+        let CommitmentRequest::Inclusion(req) = request;
+
+        // Check if the slot is in the current epoch
+        if req.slot < self.epoch.start_slot || req.slot >= self.epoch.start_slot + 32 {
+            return Err(ConsensusError::InvalidSlot(req.slot));
+        }
+
+        // Check if the request is within the slot inclusion deadline
+        if self.timestamp + INCLUSION_DEADLINE < current_timestamp() {
+            return Err(ConsensusError::DeadlineExceeded);
+        }
+
+        Ok(())
     }
 
     /// Update the latest head and fetch the relevant data from the beacon chain.
@@ -40,6 +84,37 @@ impl ConsensusState {
 
         self.header = update.header.message;
 
+        // Update the timestamp with current time
+        self.timestamp = current_timestamp();
+
+        // Get the current value of slot and epoch
+        let slot = self.header.slot;
+        let epoch = slot / 32;
+
+        // If the epoch has changed, update the proposer duties
+        if epoch != self.epoch.value {
+            self.epoch.value = epoch;
+            self.epoch.start_slot = epoch * 32;
+
+            self.fetch_proposer_duties(epoch).await?;
+        }
+
         Ok(())
     }
+
+    /// Fetch proposer duties for the given epoch.
+    async fn fetch_proposer_duties(&mut self, epoch: u64) -> Result<(), ConsensusError> {
+        let duties = self.beacon_api_client.get_proposer_duties(epoch).await?;
+
+        self.epoch.proposer_duties = duties.1;
+        Ok(())
+    }
+}
+
+/// Get the current timestamp.
+fn current_timestamp() -> u64 {
+    return SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
 }
