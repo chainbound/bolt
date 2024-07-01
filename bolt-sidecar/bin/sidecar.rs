@@ -13,6 +13,7 @@ use bolt_sidecar::{
     spec::ConstraintsApi,
     start_builder_proxy,
     state::{
+        consensus,
         fetcher::{StateClient, StateFetcher},
         ExecutionState,
     },
@@ -41,6 +42,8 @@ async fn main() -> eyre::Result<()> {
     let head = state_client.get_head().await?;
     let mut execution_state = ExecutionState::new(state_client, ChainHead::new(0, head)).await?;
 
+    let mut consensus_state = consensus::ConsensusState::new(&config.beacon_client_url);
+
     let shutdown_tx = start_server(config, api_events).await?;
 
     let builder_proxy_config = BuilderProxyConfig::default();
@@ -65,6 +68,12 @@ async fn main() -> eyre::Result<()> {
             Some(event) = api_events_rx.recv() => {
                 tracing::info!("Received commitment request: {:?}", event.request);
                 let request = event.request;
+
+                if let Err (e) = consensus_state.validate_request(&CommitmentRequest::Inclusion(request.clone())) {
+                    tracing::error!("Failed to validate request: {:?}", e);
+                    let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
+                    continue;
+                }
 
                 if let Err(e) = execution_state
                     .try_commit(&CommitmentRequest::Inclusion(request.clone()))
