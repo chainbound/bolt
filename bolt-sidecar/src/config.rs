@@ -1,7 +1,6 @@
+use crate::crypto::bls::random_bls_secret;
 use blst::min_pk::SecretKey;
 use clap::{ArgGroup, Args, Parser};
-
-use crate::crypto::bls::random_bls_secret;
 
 /// Command-line options for the sidecar
 #[derive(Parser, Debug)]
@@ -27,6 +26,9 @@ pub struct Opts {
     /// Max commitments to accept per block
     #[clap(short = 'm', long)]
     pub(super) max_commitments: Option<usize>,
+    /// Validator indexes
+    #[clap(short = 'v', long)]
+    pub(super) validator_index: Option<String>,
     /// Signing options
     #[clap(flatten)]
     pub(super) signing: SigningOpts,
@@ -68,6 +70,8 @@ pub struct Config {
     pub mevboost_proxy_port: u16,
     /// Limits for the sidecar
     pub limits: Limits,
+    /// Validator indexes
+    pub validator_indexes: Vec<u64>,
 }
 
 impl Default for Config {
@@ -82,6 +86,7 @@ impl Default for Config {
             private_key: Some(random_bls_secret()),
             mevboost_proxy_port: 18551,
             limits: Limits::default(),
+            validator_indexes: Vec::new(),
         }
     }
 }
@@ -127,8 +132,24 @@ impl TryFrom<Opts> for Config {
         config.beacon_api_url = opts.beacon_api_url.trim_end_matches('/').to_string();
         config.mevboost_url = opts.mevboost_url.trim_end_matches('/').to_string();
 
+        if let Some(validator_index) = opts.validator_index {
+            config.validator_indexes = parse_validator_indexes(&validator_index)?;
+        }
+
         Ok(config)
     }
+}
+
+/// Parse the validator indexes from the command-line argument
+fn parse_validator_indexes(input: &str) -> eyre::Result<Vec<u64>> {
+    input
+        .split(',')
+        .map(|s| {
+            s.trim()
+                .parse()
+                .map_err(|e| eyre::eyre!("Invalid index: {}: {:?}", s, e))
+        })
+        .collect()
 }
 
 /// Limits for the sidecar.
