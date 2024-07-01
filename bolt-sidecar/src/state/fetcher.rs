@@ -1,3 +1,7 @@
+#![allow(missing_docs)]
+#![allow(unused_variables)]
+#![allow(missing_debug_implementations)]
+
 use std::{collections::HashMap, time::Duration};
 
 use alloy_eips::BlockNumberOrTag;
@@ -15,7 +19,9 @@ const MAX_RETRIES: u32 = 8;
 /// The retry backoff in milliseconds.
 const RETRY_BACKOFF_MS: u64 = 200;
 
-pub(super) trait StateFetcher {
+/// A trait for fetching state updates.
+#[async_trait::async_trait]
+pub trait StateFetcher {
     async fn get_state_update(
         &self,
         addresses: Vec<&Address>,
@@ -23,7 +29,9 @@ pub(super) trait StateFetcher {
     ) -> Result<StateUpdate, TransportError>;
 
     async fn get_head(&self) -> Result<u64, TransportError>;
+
     async fn get_basefee(&self, block_number: Option<u64>) -> Result<u128, TransportError>;
+
     async fn get_account_state(
         &self,
         address: &Address,
@@ -31,13 +39,15 @@ pub(super) trait StateFetcher {
     ) -> Result<AccountState, TransportError>;
 }
 
-#[derive(Clone)]
-pub(super) struct StateClient {
+/// A basic state fetcher that uses an RPC client to fetch state updates.
+#[derive(Clone, Debug)]
+pub struct StateClient {
     client: RpcClient,
     retry_backoff: Duration,
 }
 
 impl StateClient {
+    /// Create a new `StateClient` with the given URL and maximum retries.
     pub fn new(url: &str, max_retries: u32) -> Self {
         let client = RpcClient::new(url);
         Self {
@@ -47,6 +57,7 @@ impl StateClient {
     }
 }
 
+#[async_trait::async_trait]
 impl StateFetcher for StateClient {
     // TODO: should this be durable i.e. retries?
     // Yes
@@ -159,5 +170,28 @@ impl StateFetcher for StateClient {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_util::launch_anvil;
+
+    #[tokio::test]
+    async fn test_state_client() {
+        let anvil = launch_anvil();
+        let client = StateClient::new(&anvil.endpoint(), 8);
+
+        let address = anvil.addresses().first().unwrap();
+        let state = client.get_account_state(address, None).await.unwrap();
+        assert_eq!(state.balance, U256::from(10000000000000000000000u128));
+        assert_eq!(state.transaction_count, 0);
+
+        let head = client.get_head().await.unwrap();
+        assert_eq!(head, 0);
+
+        let basefee = client.get_basefee(None).await.unwrap();
+        assert_eq!(basefee, 1_000_000_000);
     }
 }

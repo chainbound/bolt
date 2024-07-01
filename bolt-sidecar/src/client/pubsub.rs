@@ -15,6 +15,7 @@ use reqwest::Url;
 pub struct PubsubClient(alloy::RpcClient<PubSubFrontend>);
 
 impl PubsubClient {
+    /// Create a new `PubsubClient` with the given URL.
     pub async fn new(url: &str) -> Result<Self, RpcError<TransportError>> {
         let url = Url::from_str(url).unwrap();
 
