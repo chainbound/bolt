@@ -51,6 +51,8 @@ async fn main() -> eyre::Result<()> {
     let (payload_tx, mut payload_rx) = mpsc::channel(16);
     let payload_fetcher = LocalPayloadFetcher::new(payload_tx);
 
+    let validator_indexes = config.validator_indexes;
+
     tokio::spawn(async move {
         loop {
             if let Err(e) =
@@ -90,8 +92,7 @@ async fn main() -> eyre::Result<()> {
                 );
 
                 // parse the request into constraints and sign them with the sidecar signer
-                // TODO: get the validator index from somewhere
-                let message = ConstraintsMessage::build(0, request.slot, request.clone());
+                let message = ConstraintsMessage::build(validator_indexes[0], request.slot, request.clone());
 
                 let signature = signer.sign(&message.digest())?;
                 let signed_constraints: BatchedSignedConstraints =
