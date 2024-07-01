@@ -201,12 +201,10 @@ impl FallbackPayloadBuilder {
             let hinted_hash = hints.block_hash.unwrap_or(sealed_block.hash());
             let exec_payload = to_alloy_execution_payload(&sealed_block, hinted_hash);
 
-            tracing::info!("pre hint fetch");
             let engine_hint = self
                 .engine_hinter
                 .fetch_next_payload_hint(&exec_payload, &versioned_hashes, parent_beacon_block_root)
                 .await?;
-            tracing::info!(hint = ?engine_hint, "post hint fetch");
 
             match engine_hint {
                 EngineApiHint::BlockHash(hash) => hints.block_hash = Some(hash),
@@ -277,8 +275,6 @@ impl EngineHinter {
         tracing::info!("jwt_hex: {:?}", self.jwt_hex);
 
         let auth_jwt = secret_to_bearer_header(&JwtSecret::from_hex(&self.jwt_hex)?);
-
-        tracing::info!("auth_jwt: {:?}", auth_jwt);
 
         let body = format!(
             r#"{{"id":1,"jsonrpc":"2.0","method":"engine_newPayloadV3","params":[{}, {}, "{:?}"]}}"#,
