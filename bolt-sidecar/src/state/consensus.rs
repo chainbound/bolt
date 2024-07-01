@@ -52,9 +52,11 @@ impl ConsensusState {
 
         self.header = update.header.message;
 
+        // Get the current value of slot and epoch
         let slot = self.header.slot;
         let epoch = slot / 32;
 
+        // If the epoch has changed, update the proposer duties
         if epoch != self.epoch.value {
             self.epoch.value = epoch;
             self.epoch.start_slot = epoch * 32;
