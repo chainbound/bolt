@@ -198,8 +198,7 @@ impl FallbackPayloadBuilder {
             let sealed_header = header.clone().seal_slow();
             let sealed_block = SealedBlock::new(sealed_header.clone(), body.clone());
 
-            let hinted_hash = hints.block_hash.unwrap_or(sealed_block.hash());
-            let exec_payload = to_alloy_execution_payload(&sealed_block, hinted_hash);
+            let exec_payload = to_alloy_execution_payload(&sealed_block);
 
             let engine_hint = self
                 .engine_hinter
@@ -207,7 +206,11 @@ impl FallbackPayloadBuilder {
                 .await?;
 
             match engine_hint {
-                EngineApiHint::BlockHash(hash) => hints.block_hash = Some(hash),
+                EngineApiHint::BlockHash(hash) => {
+                    tracing::warn!("Should not receive block hash hint {:?}", hash);
+                    hints.block_hash = Some(hash)
+                }
+
                 EngineApiHint::GasUsed(gas) => {
                     hints.gas_used = Some(gas);
                     hints.block_hash = None;
@@ -303,6 +306,8 @@ impl EngineHinter {
                 return Err(BuilderError::InvalidEngineHint(raw_hint));
             }
         };
+
+        tracing::info!("raw hint: {:?}", raw_hint);
 
         // Match the hint value to the corresponding header field and return it
         if raw_hint.contains("blockhash mismatch") {

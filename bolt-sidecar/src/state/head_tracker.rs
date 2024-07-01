@@ -33,8 +33,8 @@ impl Topic for NewHeadsTopic {
 impl HeadTracker {
     /// Create a new `HeadTracker` with the given beacon client HTTP URL and
     /// start listening for new head events in the background
-    pub fn start(beacon_url: &str) -> Self {
-        let beacon_client = Client::new(Url::parse(beacon_url).expect("valid beacon url"));
+    pub fn start(beacon_api_url: &str) -> Self {
+        let beacon_client = Client::new(Url::parse(beacon_api_url).expect("Valid beacon API url"));
         let (new_heads_tx, new_heads_rx) = broadcast::channel(32);
 
         let task = tokio::spawn(async move {

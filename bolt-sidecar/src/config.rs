@@ -4,6 +4,8 @@ use clap::{ArgGroup, Args, Parser};
 
 use crate::crypto::bls::random_bls_secret;
 
+pub const DEFAULT_COMMITMENT_DEADLINE: u64 = 8;
+
 /// Command-line options for the Bolt sidecar
 #[derive(Parser, Debug)]
 pub struct Opts {
@@ -44,6 +46,10 @@ pub struct Opts {
     /// (If not provided, a random key will be used)
     #[clap(short = 'k', long)]
     pub(super) builder_private_key: Option<String>,
+    /// The deadline in the slot at which the sidecar will stop accepting
+    /// new commitments for the next block (in seconds)
+    #[clap(short = 'd', long)]
+    pub(super) commitment_deadline: Option<u64>,
 }
 
 /// Command-line options for signing
@@ -88,6 +94,9 @@ pub struct Config {
     pub limits: Limits,
     /// Local bulider private key
     pub builder_private_key: SecretKey,
+    /// The deadline in the slot at which the sidecar will stop accepting
+    /// new commitments for the next block (in seconds)
+    pub commitment_deadline: u64,
 }
 
 impl Default for Config {
@@ -105,6 +114,7 @@ impl Default for Config {
             fee_recipient: Address::ZERO,
             builder_private_key: random_bls_secret(),
             limits: Limits::default(),
+            commitment_deadline: DEFAULT_COMMITMENT_DEADLINE,
         }
     }
 }
@@ -165,6 +175,10 @@ impl TryFrom<Opts> for Config {
             eyre::bail!("JWT secret must be a 32 byte hex string");
         } else {
             tracing::info!("JWT secret loaded successfully");
+        }
+
+        if let Some(deadline) = opts.commitment_deadline {
+            config.commitment_deadline = deadline;
         }
 
         config.mevboost_proxy_port = opts.mevboost_proxy_port;
