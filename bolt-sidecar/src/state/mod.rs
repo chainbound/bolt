@@ -10,6 +10,12 @@ pub use execution::{ExecutionState, ValidationError};
 /// Module to fetch state from the Execution layer.
 pub mod fetcher;
 
+pub mod consensus;
+pub use consensus::ConsensusState;
+
+/// Module to track the head of the chain.
+pub mod head_tracker;
+
 /// Errors that can occur in the state module.
 #[derive(Debug, Error)]
 pub enum StateError {
@@ -28,36 +34,20 @@ mod tests {
     use alloy_consensus::constants::ETH_TO_WEI;
     use alloy_eips::eip2718::Encodable2718;
     use alloy_network::EthereumWallet;
-    use alloy_node_bindings::{Anvil, AnvilInstance};
-    use alloy_primitives::{hex, uint, Address, Uint, U256};
+    use alloy_primitives::{hex, uint, Uint};
     use alloy_provider::{network::TransactionBuilder, Provider, ProviderBuilder};
-    use alloy_rpc_types::TransactionRequest;
     use alloy_signer::SignerSync;
     use alloy_signer_local::PrivateKeySigner;
     use execution::{ExecutionState, ValidationError};
     use fetcher::StateClient;
     use tracing_subscriber::fmt;
 
-    use crate::primitives::{ChainHead, CommitmentRequest, InclusionRequest};
+    use crate::{
+        primitives::{ChainHead, CommitmentRequest, InclusionRequest},
+        test_util::{default_test_transaction, launch_anvil},
+    };
 
     use super::*;
-
-    fn launch_anvil() -> AnvilInstance {
-        Anvil::new().block_time(1).chain_id(1337).spawn()
-    }
-
-    fn default_transaction(sender: Address) -> TransactionRequest {
-        TransactionRequest::default()
-            .with_from(sender)
-            // Burn it
-            .with_to(Address::ZERO)
-            .with_chain_id(1337)
-            .with_nonce(0)
-            .with_value(U256::from(100))
-            .with_gas_limit(21_000)
-            .with_max_priority_fee_per_gas(1_000_000_000)
-            .with_max_fee_per_gas(20_000_000_000)
-    }
 
     #[tokio::test]
     async fn test_valid_inclusion_request() {
@@ -75,7 +65,7 @@ mod tests {
 
         let sender = anvil.addresses()[0];
 
-        let tx = default_transaction(sender);
+        let tx = default_test_transaction(sender);
 
         let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
 
@@ -106,7 +96,7 @@ mod tests {
 
         let sender = anvil.addresses()[0];
 
-        let tx = default_transaction(sender).with_nonce(1);
+        let tx = default_test_transaction(sender).with_nonce(1);
 
         let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
 
@@ -140,8 +130,8 @@ mod tests {
 
         let sender = anvil.addresses()[0];
 
-        let tx =
-            default_transaction(sender).with_value(uint!(11_000_U256 * Uint::from(ETH_TO_WEI)));
+        let tx = default_test_transaction(sender)
+            .with_value(uint!(11_000_U256 * Uint::from(ETH_TO_WEI)));
 
         let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
 
@@ -177,7 +167,7 @@ mod tests {
 
         let sender = anvil.addresses()[0];
 
-        let tx = default_transaction(sender).with_max_fee_per_gas(basefee - 1);
+        let tx = default_test_transaction(sender).with_max_fee_per_gas(basefee - 1);
 
         let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
 
@@ -211,7 +201,7 @@ mod tests {
 
         let sender = anvil.addresses()[0];
 
-        let tx = default_transaction(sender);
+        let tx = default_test_transaction(sender);
 
         let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
 

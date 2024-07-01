@@ -179,16 +179,13 @@ impl DerefMut for RpcClient {
 #[cfg(test)]
 mod tests {
     use alloy_consensus::constants::ETH_TO_WEI;
-    use alloy_node_bindings::{Anvil, AnvilInstance};
     use alloy_primitives::{uint, Uint};
     use alloy_rpc_types::EIP1186AccountProofResponse;
     use reth_primitives::B256;
 
-    use super::*;
+    use crate::test_util::launch_anvil;
 
-    fn launch_anvil() -> AnvilInstance {
-        Anvil::new().block_time(1).spawn()
-    }
+    use super::*;
 
     #[tokio::test]
     async fn test_rpc_client() {

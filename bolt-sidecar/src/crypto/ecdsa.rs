@@ -55,21 +55,20 @@ impl ECDSASigner {
 
 #[cfg(test)]
 mod tests {
-    use super::{ECDSASigner, SignableECDSA};
+    use crate::test_util::TestSignableData;
+
+    use super::ECDSASigner;
     use secp256k1::{PublicKey, SecretKey};
 
-    impl SignableECDSA for String {
-        fn digest(&self) -> secp256k1::Message {
-            secp256k1::Message::from_digest_slice(self.as_bytes()).unwrap()
-        }
-    }
-
     #[test]
-    fn test_signer() {
+    fn test_ecdsa_signer() {
         let secp256k1_key = SecretKey::from_slice(&[1; 32]).unwrap();
         let signer = ECDSASigner::new(secp256k1_key);
 
-        let message = "hello world".to_string();
+        let message = TestSignableData {
+            data: vec![1, 2, 3, 4],
+        };
+
         let signature = signer.sign_ecdsa(&message);
         let pubkey = PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &secp256k1_key);
 
