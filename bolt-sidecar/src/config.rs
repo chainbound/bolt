@@ -158,10 +158,21 @@ impl TryFrom<Opts> for Config {
         }
 
         config.jwt_hex = if opts.jwt_hex.starts_with("0x") {
-            opts.jwt_hex[2..].to_string()
-        } else {
+            opts.jwt_hex.trim_start_matches("0x").to_string()
+        } else if std::path::Path::new(&opts.jwt_hex).exists() {
             std::fs::read_to_string(opts.jwt_hex)?
+                .trim_start_matches("0x")
+                .to_string()
+        } else {
+            opts.jwt_hex
         };
+
+        // Validate the JWT secret
+        if config.jwt_hex.len() != 64 {
+            eyre::bail!("JWT secret must be a 32 byte hex string");
+        } else {
+            tracing::info!("JWT secret loaded successfully");
+        }
 
         config.mevboost_proxy_port = opts.mevboost_proxy_port;
         config.engine_api_url = opts.engine_api_url.trim_end_matches('/').to_string();

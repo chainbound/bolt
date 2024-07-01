@@ -53,8 +53,6 @@ async fn main() -> eyre::Result<()> {
     let (payload_tx, mut payload_rx) = mpsc::channel(16);
     let payload_fetcher = LocalPayloadFetcher::new(payload_tx);
 
-    tracing::info!("JWT secret: {}", config.jwt_hex);
-
     let mut local_builder = LocalBuilder::new(
         BlsSecretKey::try_from(config.builder_private_key.to_bytes().as_ref())?,
         &config.execution_api_url,
@@ -65,13 +63,8 @@ async fn main() -> eyre::Result<()> {
     );
 
     tokio::spawn(async move {
-        loop {
-            if let Err(e) =
-                start_builder_proxy(payload_fetcher.clone(), builder_proxy_config.clone()).await
-            {
-                tracing::error!("Builder API proxy failed: {:?}", e);
-                tokio::time::sleep(Duration::from_secs(5)).await;
-            }
+        if let Err(e) = start_builder_proxy(payload_fetcher, builder_proxy_config).await {
+            tracing::error!("Builder API proxy failed: {:?}", e);
         }
     });
 

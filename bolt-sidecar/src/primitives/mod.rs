@@ -110,33 +110,15 @@ impl LocalPayloadFetcher {
 #[async_trait::async_trait]
 impl PayloadFetcher for LocalPayloadFetcher {
     async fn fetch_payload(&self, slot: u64) -> Option<PayloadAndBid> {
-        let (tx, rx) = oneshot::channel();
+        let (response_tx, response_rx) = oneshot::channel();
 
-        let fetch_params = FetchPayloadRequest {
-            slot,
-            response_tx: tx,
-        };
-
+        let fetch_params = FetchPayloadRequest { response_tx, slot };
         self.tx.send(fetch_params).await.ok()?;
 
-        match rx.await {
-            Ok(Some(payload_and_bid)) => {
-                tracing::debug!("LocalPayloadFetcher -- fetched payload for slot {}", slot);
-                Some(payload_and_bid)
-            }
-            Ok(None) => {
-                tracing::warn!(
-                    "LocalPayloadFetcher -- no payload fetched for slot {}",
-                    slot
-                );
-                None
-            }
+        match response_rx.await {
+            Ok(res) => res,
             Err(e) => {
-                tracing::error!(
-                    "LocalPayloadFetcher -- error fetching payload for slot {}: {:?}",
-                    slot,
-                    e
-                );
+                tracing::error!(err = ?e, "Failed to fetch payload");
                 None
             }
         }
