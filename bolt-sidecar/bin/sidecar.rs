@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use alloy_rpc_types_beacon::events::HeadEvent;
 use bolt_sidecar::{
     builder::LocalBuilder,
     crypto::{
@@ -15,7 +16,8 @@ use bolt_sidecar::{
     start_builder_proxy,
     state::{
         fetcher::{StateClient, StateFetcher},
-        ConsensusState, ExecutionState,
+        head_tracker::HeadTracker,
+        CommitmentDeadline, ConsensusState, ExecutionState,
     },
     BuilderProxyConfig, Config, MevBoostClient,
 };
@@ -43,7 +45,13 @@ async fn main() -> eyre::Result<()> {
 
     let (api_events, mut api_events_rx) = mpsc::channel(1024);
     let shutdown_tx = json_rpc::start_server(&config, api_events).await?;
-    let consensus_state = ConsensusState::new(&config.beacon_api_url, &config.validator_indexes);
+    let consensus_state = ConsensusState::new(
+        &config.beacon_api_url,
+        &config.validator_indexes,
+        config.commitment_deadline,
+    );
+
+    let mut head_tracker = HeadTracker::start(&config.beacon_api_url);
 
     let builder_proxy_config = BuilderProxyConfig {
         mevboost_url: config.mevboost_url,
@@ -123,6 +131,10 @@ async fn main() -> eyre::Result<()> {
                 let res = serde_json::to_value(signed_constraints).map_err(Into::into);
                 let _ = response_tx.send(res).ok();
             }
+            Ok(HeadEvent { slot, .. }) = head_tracker.next_head() => {
+                tracing::info!(slot, "Received new head");
+                next_commitment_deadline = CommitmentDeadline::new(slot, Duration::from_secs(config.commitment_deadline));
+            },
             Some(FetchPayloadRequest { slot, response_tx }) = payload_rx.recv() => {
                 tracing::info!(slot, "Received local payload request");
 

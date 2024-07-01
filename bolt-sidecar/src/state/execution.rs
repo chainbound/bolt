@@ -1,5 +1,6 @@
 use alloy_eips::eip4844::MAX_BLOBS_PER_BLOCK;
 use alloy_primitives::{Address, SignatureError};
+use alloy_transport::TransportError;
 use reth_primitives::{transaction::TxType, TransactionSigned};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -10,7 +11,7 @@ use crate::{
     primitives::{AccountState, ChainHead, CommitmentRequest, Slot},
 };
 
-use super::{fetcher::StateFetcher, StateError};
+use super::fetcher::StateFetcher;
 
 /// Possible commitment validation errors.
 #[derive(Debug, Error)]
@@ -82,7 +83,7 @@ pub struct ExecutionState<C> {
 impl<C: StateFetcher> ExecutionState<C> {
     /// Creates a new state with the given client. Initializes the `head` and `basefee` fields
     /// with the current head and basefee.
-    pub async fn new(client: C, head: ChainHead) -> Result<Self, StateError> {
+    pub async fn new(client: C, head: ChainHead) -> Result<Self, TransportError> {
         let basefee = client.get_basefee(Some(head.block())).await?;
 
         Ok(Self {
@@ -186,7 +187,7 @@ impl<C: StateFetcher> ExecutionState<C> {
     }
 
     /// Updates the state with a new head
-    pub async fn update_head(&mut self, head: ChainHead) -> Result<(), StateError> {
+    pub async fn update_head(&mut self, head: ChainHead) -> Result<(), TransportError> {
         // TODO: invalidate any state that we don't need anymore (will be based on block template)
         let update = self
             .client

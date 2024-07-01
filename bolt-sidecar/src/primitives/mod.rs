@@ -216,9 +216,9 @@ impl<'de> serde::Deserialize<'de> for GetPayloadResponse {
 #[derive(Debug, Clone)]
 pub struct ChainHead {
     /// The current slot number.
-    slot: Arc<AtomicU64>,
+    pub slot: Arc<AtomicU64>,
     /// The current block number.
-    block: Arc<AtomicU64>,
+    pub block: Arc<AtomicU64>,
 }
 
 impl ChainHead {
