@@ -67,6 +67,7 @@ async fn main() -> eyre::Result<()> {
         &config.jwt_hex,
         &config.beacon_api_url,
         config.fee_recipient,
+        config.slot_time_in_seconds,
     );
 
     tokio::spawn(async move {
