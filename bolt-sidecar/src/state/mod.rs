@@ -28,28 +28,38 @@ pub use head_tracker::HeadTracker;
 #[derive(Debug)]
 pub struct CommitmentDeadline {
     slot: u64,
-    sleep: Pin<Box<Sleep>>,
+    sleep: Option<Pin<Box<Sleep>>>,
 }
 
 impl CommitmentDeadline {
     /// Create a new deadline for a given slot and duration.
     pub fn new(slot: u64, duration: Duration) -> Self {
-        let sleep = Box::pin(tokio::time::sleep(duration));
+        let sleep = Some(Box::pin(tokio::time::sleep(duration)));
         Self { slot, sleep }
     }
 
     /// Poll the deadline until it is reached.
-    pub async fn wait(&mut self) -> u64 {
-        poll_fn(|cx| self.poll_unpin(cx)).await
+    pub async fn wait(&mut self) -> Option<u64> {
+        let slot = poll_fn(|cx| self.poll_unpin(cx)).await;
+        self.sleep = None;
+        slot
     }
 }
 
+/// Poll the deadline until it is reached.
+///
+/// - If already reached, the future will return `None` immediately.
+/// - If not reached, the future will return `Some(slot)` when the deadline is reached.
 impl Future for CommitmentDeadline {
-    type Output = u64;
+    type Output = Option<u64>;
 
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.sleep.as_mut().poll(cx) {
-            Poll::Ready(_) => Poll::Ready(self.slot),
+        let Some(ref mut sleep) = self.sleep else {
+            return Poll::Ready(None);
+        };
+
+        match sleep.as_mut().poll(cx) {
+            Poll::Ready(_) => Poll::Ready(Some(self.slot)),
             Poll::Pending => Poll::Pending,
         }
     }
@@ -78,12 +88,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_commitment_deadline() {
+        let time = std::time::Instant::now();
         let mut deadline = CommitmentDeadline::new(0, Duration::from_secs(1));
+
+        let slot = deadline.wait().await;
+        println!("Deadline reached. Passed {:?}", time.elapsed());
+        assert_eq!(slot, Some(0));
+
         let time = std::time::Instant::now();
         let slot = deadline.wait().await;
         println!("Deadline reached. Passed {:?}", time.elapsed());
-
-        assert_eq!(slot, 0);
+        assert_eq!(slot, None);
     }
 
     #[tokio::test]
