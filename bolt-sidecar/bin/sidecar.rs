@@ -145,7 +145,7 @@ async fn main() -> eyre::Result<()> {
                     tracing::error!(err = ?e, "Failed to update consensus state head");
                 }
             },
-            slot = consensus_state.commitment_deadline.wait() => {
+            Some(slot) = consensus_state.commitment_deadline.wait() => {
                 tracing::info!(slot, "Commitment deadline reached, starting to build local block");
                 let Some(template) = execution_state.get_block_template(slot) else {
                     tracing::warn!("No block template found for slot {slot} when requested");
