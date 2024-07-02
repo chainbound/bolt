@@ -109,6 +109,10 @@ impl ConsensusState {
         self.epoch.proposer_duties = duties.1;
         Ok(())
     }
+
+    pub fn get_epoch(&self) -> &Epoch {
+        &self.epoch
+    }
 }
 
 /// Get the current timestamp.

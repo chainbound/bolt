@@ -24,11 +24,6 @@ pub enum StateError {
     Rpc(#[from] TransportError),
 }
 
-#[derive(Debug, Clone)]
-struct ProposerDuties {
-    assigned_slots: Vec<u64>,
-}
-
 #[cfg(test)]
 mod tests {
     use alloy_consensus::constants::ETH_TO_WEI;
