@@ -2,14 +2,14 @@
 #![allow(unused_variables)]
 #![allow(missing_debug_implementations)]
 
-use crate::primitives::{CommitmentRequest, Slot};
+use std::time::{Duration, Instant};
+
 use beacon_api_client::{mainnet::Client, BlockId, ProposerDuty};
 use ethereum_consensus::{deneb::BeaconBlockHeader, phase0::mainnet::SLOTS_PER_EPOCH};
 use reqwest::Url;
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
 use super::CommitmentDeadline;
+use crate::primitives::{CommitmentRequest, Slot};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConsensusError {
@@ -36,7 +36,7 @@ pub struct ConsensusState {
     epoch: Epoch,
     validator_indexes: Vec<u64>,
     // Timestamp of when the latest slot was received
-    latest_slot_timestamp: u64,
+    latest_slot_timestamp: Instant,
     /// The deadline (expressed in seconds) in the slot for which to
     /// stop accepting commitments.
     ///
@@ -66,7 +66,7 @@ impl ConsensusState {
                 proposer_duties: vec![],
             },
             validator_indexes: validator_indexes.to_vec(),
-            latest_slot_timestamp: 0,
+            latest_slot_timestamp: Instant::now(),
             commitment_deadline: CommitmentDeadline::new(0, commitment_deadline_duration),
             commitment_deadline_duration,
         }
@@ -86,9 +86,7 @@ impl ConsensusState {
         }
 
         // Check if the request is within the slot commitment deadline
-        if self.latest_slot_timestamp + self.commitment_deadline_duration.as_secs()
-            < current_timestamp()
-        {
+        if self.latest_slot_timestamp + self.commitment_deadline_duration < Instant::now() {
             return Err(ConsensusError::DeadlineExceeded);
         }
 
@@ -111,7 +109,7 @@ impl ConsensusState {
         self.header = update.header.message;
 
         // Update the timestamp with current time
-        self.latest_slot_timestamp = current_timestamp();
+        self.latest_slot_timestamp = Instant::now();
 
         // Get the current value of slot and epoch
         let slot = self.header.slot;
@@ -191,7 +189,7 @@ mod tests {
                 start_slot: 0,
                 proposer_duties,
             },
-            latest_slot_timestamp: 0,
+            latest_slot_timestamp: Instant::now(),
             commitment_deadline: CommitmentDeadline::new(0, Duration::from_secs(1)),
             validator_indexes,
             commitment_deadline_duration: Duration::from_secs(1),

@@ -30,7 +30,9 @@ pub enum CommitBoostError {
     NoSignature(String),
 }
 
+#[allow(unused)]
 impl CommitBoostClient {
+    /// Create a new [CommitBoostClient] instance
     pub async fn new(base_url: impl Into<String>) -> Result<Self, CommitBoostError> {
         let client = Self {
             base_url: base_url.into(),
@@ -46,6 +48,7 @@ impl CommitBoostClient {
         Ok(client)
     }
 
+    /// Load public keys from the remote commit-boost client and store them locally
     async fn load_pubkeys(&mut self) -> Result<(), CommitBoostError> {
         loop {
             let url = self.url_from_path(PUBKEYS_PATH);

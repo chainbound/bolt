@@ -6,7 +6,18 @@ use clap::{ArgGroup, Args, Parser};
 
 use crate::crypto::bls::random_bls_secret;
 
+/// Default commitment deadline duration.
+///
+/// The sidecar will stop accepting new commitments for the next block
+/// after this deadline has passed. This is to ensure that builders and
+/// relays have enough time to build valid payloads.
 pub const DEFAULT_COMMITMENT_DEADLINE: Duration = Duration::from_secs(8);
+
+/// Default port for the JSON-RPC server exposed by the sidecar.
+pub const DEFAULT_RPC_PORT: u16 = 8000;
+
+/// Default port for the MEV-Boost proxy server.
+pub const DEFAULT_MEV_BOOST_PROXY_PORT: u16 = 18551;
 
 /// Command-line options for the Bolt sidecar
 #[derive(Parser, Debug)]
@@ -53,7 +64,7 @@ pub struct Opts {
     #[clap(short = 'k', long)]
     pub(super) builder_private_key: Option<String>,
     /// The deadline in the slot at which the sidecar will stop accepting
-    /// new commitments for the next block (in seconds)
+    /// new commitments for the next block (parsed as milliseconds)
     #[clap(short = 'd', long)]
     pub(super) commitment_deadline: Option<u64>,
 }
@@ -110,14 +121,14 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            rpc_port: 8000,
-            mevboost_url: "http://localhost:3030".to_string(),
+            rpc_port: DEFAULT_RPC_PORT,
             commit_boost_url: None,
+            mevboost_url: "http://localhost:3030".to_string(),
             beacon_api_url: "http://localhost:5052".to_string(),
             execution_api_url: "http://localhost:8545".to_string(),
             engine_api_url: "http://localhost:8551".to_string(),
             private_key: Some(random_bls_secret()),
-            mevboost_proxy_port: 18551,
+            mevboost_proxy_port: DEFAULT_MEV_BOOST_PROXY_PORT,
             jwt_hex: String::new(),
             fee_recipient: Address::ZERO,
             builder_private_key: random_bls_secret(),
@@ -179,15 +190,15 @@ impl TryFrom<Opts> for Config {
             opts.jwt_hex
         };
 
+        if let Some(deadline_ms) = opts.commitment_deadline {
+            config.commitment_deadline = Duration::from_millis(deadline_ms);
+        }
+
         // Validate the JWT secret
         if config.jwt_hex.len() != 64 {
             eyre::bail!("JWT secret must be a 32 byte hex string");
         } else {
             tracing::info!("JWT secret loaded successfully");
-        }
-
-        if let Some(deadline) = opts.commitment_deadline {
-            config.commitment_deadline = Duration::from_secs(deadline);
         }
 
         config.mevboost_proxy_port = opts.mevboost_proxy_port;

@@ -81,11 +81,11 @@ async fn main() -> eyre::Result<()> {
             Some(ApiEvent { request, response_tx }) = api_events_rx.recv() => {
                 tracing::info!("Received commitment request: {:?}", request);
 
-                let validator_index = match consensus_state.validate_request(&CommitmentRequest::Inclusion(request.clone())) {
+                let validator_index = match consensus_state.validate_request(&request) {
                     Ok(index) => index,
                     Err(e) => {
                         tracing::error!("Failed to validate request: {:?}", e);
-                        let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
+                        let _ = response_tx.send(Err(ApiError::Custom(e.to_string())));
                         continue;
                     }
                 };
@@ -110,7 +110,7 @@ async fn main() -> eyre::Result<()> {
                 );
 
                 // parse the request into constraints and sign them with the sidecar signer
-                let message = ConstraintsMessage::build(validator_index, request.slot, request.clone());
+                let message = ConstraintsMessage::build(validator_index, request.slot, request);
 
                 let signature = signer.sign(&message.digest())?.to_string();
                 let signed_constraints = vec![SignedConstraints { message, signature }];
