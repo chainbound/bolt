@@ -1,19 +1,27 @@
-use alloy_primitives::{Address, U256};
+use alloy_primitives::U256;
+use blst::min_pk::SecretKey;
 use ethereum_consensus::{
-    crypto::SecretKey as BlsSecretKey,
-    ssz::prelude::{HashTreeRoot, List, MerkleizationError},
+    crypto::PublicKey,
+    ssz::prelude::{List, MerkleizationError},
 };
 use payload_builder::FallbackPayloadBuilder;
 use reth_primitives::{SealedHeader, TransactionSigned};
+use signature::sign_builder_message;
 
-use crate::primitives::{
-    BuilderBid, GetPayloadResponse, PayloadAndBid, PayloadAndBlobs, SignedBuilderBid,
+use crate::{
+    primitives::{
+        BuilderBid, GetPayloadResponse, PayloadAndBid, PayloadAndBlobs, SignedBuilderBid,
+    },
+    Chain, Config,
 };
 
 /// Basic block template handler that can keep track of
 /// the local commitments according to protocol validity rules.
 pub mod template;
 pub use template::BlockTemplate;
+
+/// Builder payload signing utilities
+pub mod signature;
 
 /// Compatibility types and utilities between Alloy, Reth,
 /// Ethereum-consensus and other crates.
@@ -61,7 +69,10 @@ pub enum BuilderError {
 pub struct LocalBuilder {
     /// BLS credentials for the local builder. We use this to sign the
     /// payload bid submissions built by the sidecar.
-    secret_key: BlsSecretKey,
+    secret_key: SecretKey,
+    /// Chain configuration
+    /// (necessary for signing messages with the correct domain)
+    chain: Chain,
     /// Async fallback payload builder to generate valid payloads with
     /// the engine API's `engine_newPayloadV3` response error.
     fallback_builder: FallbackPayloadBuilder,
@@ -71,26 +82,12 @@ pub struct LocalBuilder {
 
 impl LocalBuilder {
     /// Create a new local builder with the given secret key.
-    pub fn new(
-        secret_key: BlsSecretKey,
-        execution_rpc_url: &str,
-        engine_rpc_url: &str,
-        engine_jwt_secret: &str,
-        beacon_api_url: &str,
-        fee_recipient: Address,
-        slot_time_in_seconds: u64,
-    ) -> Self {
+    pub fn new(config: &Config) -> Self {
         Self {
-            secret_key,
             payload_and_bid: None,
-            fallback_builder: FallbackPayloadBuilder::new(
-                engine_jwt_secret,
-                fee_recipient,
-                engine_rpc_url,
-                execution_rpc_url,
-                beacon_api_url,
-                slot_time_in_seconds,
-            ),
+            fallback_builder: FallbackPayloadBuilder::new(config),
+            secret_key: config.builder_private_key.clone(),
+            chain: config.chain.clone(),
         }
     }
 
@@ -148,23 +145,26 @@ impl LocalBuilder {
 
     /// transform a sealed header into a signed builder bid using
     /// the local builder's BLS key.
+    ///
+    /// TODO: add blobs bundle
     fn create_signed_builder_bid(
         &self,
         value: U256,
         header: SealedHeader,
     ) -> Result<SignedBuilderBid, BuilderError> {
-        let submission = BuilderBid {
+        // compat: convert from blst to ethereum consensus types
+        let pubkey = self.secret_key.sk_to_pk().to_bytes();
+        let consensus_pubkey = PublicKey::try_from(pubkey.as_slice()).expect("valid pubkey bytes");
+
+        let message = BuilderBid {
             header: compat::to_execution_payload_header(&header),
             blob_kzg_commitments: List::default(),
-            public_key: self.secret_key.public_key(),
+            public_key: consensus_pubkey,
             value,
         };
 
-        let signature = self.secret_key.sign(submission.hash_tree_root()?.as_ref());
+        let signature = sign_builder_message(&self.chain, &self.secret_key, &message)?;
 
-        Ok(SignedBuilderBid {
-            message: submission,
-            signature,
-        })
+        Ok(SignedBuilderBid { message, signature })
     }
 }
