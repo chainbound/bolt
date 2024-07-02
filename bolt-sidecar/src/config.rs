@@ -28,8 +28,8 @@ pub struct Opts {
     #[clap(short = 'm', long)]
     pub(super) max_commitments: Option<usize>,
     /// Validator indexes
-    #[clap(short = 'v', long)]
-    pub(super) validator_indexes: Option<String>,
+    #[clap(short = 'v', long, value_parser, num_args = 0.., value_delimiter = ',')]
+    pub(super) validator_indexes: Vec<String>,
     /// Signing options
     #[clap(flatten)]
     pub(super) signing: SigningOpts,
