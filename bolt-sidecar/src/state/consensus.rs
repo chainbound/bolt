@@ -20,6 +20,8 @@ pub enum ConsensusError {
     InvalidSlot(Slot),
     #[error("Inclusion deadline exceeded")]
     DeadlineExceeded,
+    #[error("Validator not found in the slot")]
+    ValidatorNotFound,
 }
 
 pub struct Epoch {
@@ -34,11 +36,12 @@ pub struct ConsensusState {
     epoch: Epoch,
     // Timestamp when the current slot is received
     timestamp: u64,
+    validator_indexes: Vec<u64>,
 }
 
 impl ConsensusState {
     /// Create a new `ConsensusState` with the given beacon client HTTP URL.
-    pub fn new(url: &str) -> Self {
+    pub fn new(url: &str, validator_indexes: &[u64]) -> Self {
         let url = Url::parse(url).expect("valid beacon client URL");
         let beacon_api_client = Client::new(url);
 
@@ -51,6 +54,7 @@ impl ConsensusState {
                 proposer_duties: vec![],
             },
             timestamp: 0,
+            validator_indexes: validator_indexes.to_vec(),
         }
     }
 
@@ -59,15 +63,8 @@ impl ConsensusState {
     /// 2. The request hasn't passed the slot deadline.
     ///
     /// TODO: Integrate with the registry to check if we are registered.
-    pub fn validate_request(
-        &self,
-        request: &CommitmentRequest,
-        validator_indexes: &[u64],
-    ) -> Result<u64, ConsensusError> {
+    pub fn validate_request(&self, request: &CommitmentRequest) -> Result<u64, ConsensusError> {
         let CommitmentRequest::Inclusion(req) = request;
-
-        let validator_index =
-            find_validator_index_for_slot(validator_indexes, &self.epoch.proposer_duties, req.slot);
 
         // Check if the slot is in the current epoch
         if req.slot < self.epoch.start_slot || req.slot >= self.epoch.start_slot + 32 {
@@ -78,6 +75,13 @@ impl ConsensusState {
         if self.timestamp + INCLUSION_DEADLINE < current_timestamp() {
             return Err(ConsensusError::DeadlineExceeded);
         }
+
+        // Find the validator index for the given slot
+        let validator_index = find_validator_index_for_slot(
+            &self.validator_indexes,
+            &self.epoch.proposer_duties,
+            req.slot,
+        )?;
 
         Ok(validator_index)
     }
@@ -136,13 +140,14 @@ pub fn find_validator_index_for_slot(
     validator_indexes: &[u64],
     proposer_duties: &[ProposerDuty],
     slot: u64,
-) -> u64 {
-    for duty in proposer_duties {
-        if duty.slot == slot && validator_indexes.contains(&(duty.validator_index as u64)) {
-            return duty.validator_index as u64;
-        }
-    }
-    0
+) -> Result<u64, ConsensusError> {
+    proposer_duties
+        .iter()
+        .find(|&duty| {
+            duty.slot == slot && validator_indexes.contains(&(duty.validator_index as u64))
+        })
+        .map(|duty| duty.validator_index as u64)
+        .ok_or(ConsensusError::ValidatorNotFound)
 }
 
 #[cfg(test)]
@@ -172,6 +177,6 @@ mod tests {
         ];
 
         let result = find_validator_index_for_slot(&validator_indexes, &proposer_duties, 2);
-        assert_eq!(result, 22);
+        assert_eq!(result.unwrap(), 22);
     }
 }

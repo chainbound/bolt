@@ -41,7 +41,7 @@ async fn main() -> eyre::Result<()> {
 
     let (api_events, mut api_events_rx) = mpsc::channel(1024);
     let shutdown_tx = json_rpc::start_server(&config, api_events).await?;
-    let consensus_state = ConsensusState::new(&config.beacon_api_url);
+    let consensus_state = ConsensusState::new(&config.beacon_api_url, &config.validator_indexes);
 
     let builder_proxy_config = BuilderProxyConfig {
         mevboost_url: config.mevboost_url,
@@ -50,8 +50,6 @@ async fn main() -> eyre::Result<()> {
 
     let (payload_tx, mut payload_rx) = mpsc::channel(16);
     let payload_fetcher = LocalPayloadFetcher::new(payload_tx);
-
-    let validator_indexes = &config.validator_indexes;
 
     tokio::spawn(async move {
         loop {
@@ -71,7 +69,7 @@ async fn main() -> eyre::Result<()> {
                 tracing::info!("Received commitment request: {:?}", event.request);
                 let request = event.request;
 
-                let validator_index = match consensus_state.validate_request(&CommitmentRequest::Inclusion(request.clone()), validator_indexes) {
+                let validator_index = match consensus_state.validate_request(&CommitmentRequest::Inclusion(request.clone())) {
                     Ok(index) => index,
                     Err(e) => {
                         tracing::error!("Failed to validate request: {:?}", e);
