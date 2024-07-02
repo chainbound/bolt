@@ -9,6 +9,7 @@ pub use ethereum_consensus::deneb::BlsSignature;
 /// The BLS Domain Separator used in Ethereum 2.0.
 pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
 
+/// A fixed-size byte array for BLS signatures.
 pub type BLSBytes = FixedBytes<96>;
 
 /// Trait for any types that can be signed and verified with BLS.
@@ -35,13 +36,17 @@ pub trait SignableBLS {
     }
 }
 
+/// A generic signing trait to generate BLS signatures.
 #[allow(dead_code)]
 pub trait SignerBLS {
+    /// Sign the given data and return the signature.
     fn sign(&self, data: &[u8]) -> eyre::Result<BLSBytes>;
 }
 
+/// A generic signing trait to generate BLS signatures asynchronously.
 #[async_trait::async_trait]
 pub trait SignerBLSAsync: Send + Sync {
+    /// Sign the given data and return the signature.
     async fn sign(&self, data: &[u8]) -> eyre::Result<BLSBytes>;
 }
 

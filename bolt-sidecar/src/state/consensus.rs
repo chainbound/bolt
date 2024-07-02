@@ -2,13 +2,14 @@
 #![allow(unused_variables)]
 #![allow(missing_debug_implementations)]
 
-use crate::primitives::{CommitmentRequest, Slot};
+use std::time::{Duration, Instant};
+
 use beacon_api_client::{mainnet::Client, BlockId, ProposerDuty};
 use ethereum_consensus::deneb::BeaconBlockHeader;
 use reqwest::Url;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::CommitmentDeadline;
+use crate::primitives::{CommitmentRequest, Slot};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConsensusError {
@@ -32,7 +33,7 @@ pub struct ConsensusState {
     header: BeaconBlockHeader,
     epoch: Epoch,
     // Timestamp of when the latest slot was received
-    latest_slot_timestamp: u64,
+    latest_slot_timestamp: Instant,
     /// The deadline (expressed in seconds) in the slot for which to
     /// stop accepting commitments.
     ///
@@ -57,7 +58,7 @@ impl ConsensusState {
                 start_slot: 0,
                 proposer_duties: vec![],
             },
-            latest_slot_timestamp: 0,
+            latest_slot_timestamp: Instant::now(),
             commitment_deadline: CommitmentDeadline::new(0, commitment_deadline_duration),
             commitment_deadline_duration,
         }
@@ -77,9 +78,7 @@ impl ConsensusState {
         }
 
         // Check if the request is within the slot commitment deadline
-        if self.latest_slot_timestamp + self.commitment_deadline_duration.as_secs()
-            < current_timestamp()
-        {
+        if self.latest_slot_timestamp + self.commitment_deadline_duration < Instant::now() {
             return Err(ConsensusError::DeadlineExceeded);
         }
 
@@ -99,7 +98,7 @@ impl ConsensusState {
         self.header = update.header.message;
 
         // Update the timestamp with current time
-        self.latest_slot_timestamp = current_timestamp();
+        self.latest_slot_timestamp = Instant::now();
 
         // Get the current value of slot and epoch
         let slot = self.header.slot;
@@ -123,12 +122,4 @@ impl ConsensusState {
         self.epoch.proposer_duties = duties.1;
         Ok(())
     }
-}
-
-/// Get the current timestamp.
-fn current_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
 }
