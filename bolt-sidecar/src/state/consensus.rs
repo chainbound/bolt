@@ -88,8 +88,9 @@ impl ConsensusState {
 
     /// Update the latest head and fetch the relevant data from the beacon chain.
     pub async fn update_head(&mut self, head: u64) -> Result<(), ConsensusError> {
-        // Reset the commitment deadline to start counting for the current slot
-        self.commitment_deadline = CommitmentDeadline::new(head, self.commitment_deadline_duration);
+        // Reset the commitment deadline to start counting for the next slot.
+        self.commitment_deadline =
+            CommitmentDeadline::new(head + 1, self.commitment_deadline_duration);
 
         let update = self
             .beacon_api_client

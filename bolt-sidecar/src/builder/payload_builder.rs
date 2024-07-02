@@ -40,6 +40,7 @@ pub struct FallbackPayloadBuilder {
     beacon_api_url: String,
     execution_rpc_client: RpcClient,
     engine_hinter: EngineHinter,
+    slot_time_in_seconds: u64,
 }
 
 impl FallbackPayloadBuilder {
@@ -50,6 +51,7 @@ impl FallbackPayloadBuilder {
         engine_rpc_url: &str,
         execution_rpc_url: &str,
         beacon_api_url: &str,
+        slot_time_in_seconds: u64,
     ) -> Self {
         let engine_hinter = EngineHinter {
             client: reqwest::Client::new(),
@@ -63,6 +65,7 @@ impl FallbackPayloadBuilder {
             beacon_api_url: beacon_api_url.to_string(),
             extra_data: hex::encode(DEFAULT_EXTRA_DATA).into(),
             execution_rpc_client: RpcClient::new(execution_rpc_url),
+            slot_time_in_seconds,
         }
     }
 }
@@ -81,6 +84,7 @@ pub struct Context {
     transactions_root: B256,
     withdrawals_root: Option<B256>,
     parent_beacon_block_root: B256,
+    slot_time_in_seconds: u64,
 }
 
 #[derive(Debug, Default)]
@@ -181,6 +185,7 @@ impl FallbackPayloadBuilder {
             withdrawals_root: withdrawals
                 .as_ref()
                 .map(|w| proofs::calculate_withdrawals_root(w)),
+            slot_time_in_seconds: self.slot_time_in_seconds,
         };
 
         let body = BlockBody {
@@ -376,7 +381,7 @@ pub(crate) fn build_header_with_hints_and_context(
         gas_limit: latest_block.header.gas_limit as u64,
         gas_used,
         // TODO: use slot time from beacon chain instead, to account for reorgs
-        timestamp: latest_block.header.timestamp + 12,
+        timestamp: latest_block.header.timestamp + context.slot_time_in_seconds,
         mix_hash: context.prev_randao,
         nonce: BEACON_NONCE,
         base_fee_per_gas: Some(context.base_fee),
@@ -426,7 +431,7 @@ mod tests {
         };
 
         let builder =
-            FallbackPayloadBuilder::new(&jwt, Address::default(), engine, execution, beacon);
+            FallbackPayloadBuilder::new(&jwt, Address::default(), engine, execution, beacon, 12);
 
         let sk = SigningKey::from_slice(hex::decode(raw_sk)?.as_slice())?;
         let signer = PrivateKeySigner::from_signing_key(sk.clone());

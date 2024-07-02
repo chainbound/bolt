@@ -78,6 +78,7 @@ impl LocalBuilder {
         engine_jwt_secret: &str,
         beacon_api_url: &str,
         fee_recipient: Address,
+        slot_time_in_seconds: u64,
     ) -> Self {
         Self {
             secret_key,
@@ -88,6 +89,7 @@ impl LocalBuilder {
                 engine_rpc_url,
                 execution_rpc_url,
                 beacon_api_url,
+                slot_time_in_seconds,
             ),
         }
     }

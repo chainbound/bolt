@@ -63,6 +63,9 @@ pub struct Opts {
     /// new commitments for the next block (parsed as milliseconds)
     #[clap(short = 'd', long)]
     pub(super) commitment_deadline: Option<u64>,
+    /// The slot time in seconds
+    #[clap(short = 't', long)]
+    pub(super) slot_time_in_seconds: Option<u64>,
 }
 
 /// Command-line options for signing
@@ -110,6 +113,8 @@ pub struct Config {
     /// The deadline in the slot at which the sidecar will stop accepting
     /// new commitments for the next block
     pub commitment_deadline: Duration,
+    /// The beacon chain slot time in seconds
+    pub slot_time_in_seconds: u64,
 }
 
 impl Default for Config {
@@ -128,6 +133,7 @@ impl Default for Config {
             builder_private_key: random_bls_secret(),
             limits: Limits::default(),
             commitment_deadline: DEFAULT_COMMITMENT_DEADLINE,
+            slot_time_in_seconds: 12,
         }
     }
 }
@@ -185,6 +191,10 @@ impl TryFrom<Opts> for Config {
 
         if let Some(deadline_ms) = opts.commitment_deadline {
             config.commitment_deadline = Duration::from_millis(deadline_ms);
+        }
+
+        if let Some(slot_time_in_seconds) = opts.slot_time_in_seconds {
+            config.slot_time_in_seconds = slot_time_in_seconds;
         }
 
         // Validate the JWT secret
