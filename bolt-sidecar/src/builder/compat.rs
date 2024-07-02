@@ -36,7 +36,10 @@ pub(crate) fn to_execution_payload_header(value: &SealedHeader) -> ConsensusExec
 }
 
 /// Compatibility: convert a sealed block into an Alloy execution payload
-pub(crate) fn to_alloy_execution_payload(block: &SealedBlock) -> AlloyExecutionPayload {
+pub(crate) fn to_alloy_execution_payload(
+    block: &SealedBlock,
+    block_hash: B256,
+) -> AlloyExecutionPayload {
     let alloy_withdrawals = block
         .withdrawals
         .as_ref()
@@ -59,7 +62,7 @@ pub(crate) fn to_alloy_execution_payload(block: &SealedBlock) -> AlloyExecutionP
         payload_inner: ExecutionPayloadV2 {
             payload_inner: ExecutionPayloadV1 {
                 base_fee_per_gas: U256::from(block.base_fee_per_gas.unwrap_or_default()),
-                block_hash: block.hash(),
+                block_hash,
                 block_number: block.number,
                 extra_data: block.extra_data.clone(),
                 transactions: block.raw_transactions(),

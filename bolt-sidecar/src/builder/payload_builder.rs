@@ -190,15 +190,17 @@ impl FallbackPayloadBuilder {
         };
 
         let mut hints = Hints::default();
-        let max_iterations = 10;
+        let max_iterations = 20;
         let mut i = 0;
         loop {
             let header = build_header_with_hints_and_context(&latest_block, &hints, &ctx);
 
-            let sealed_header = header.clone().seal_slow();
+            let sealed_header = header.seal_slow();
             let sealed_block = SealedBlock::new(sealed_header.clone(), body.clone());
 
-            let exec_payload = to_alloy_execution_payload(&sealed_block);
+            let block_hash = hints.block_hash.unwrap_or(sealed_block.hash());
+
+            let exec_payload = to_alloy_execution_payload(&sealed_block, block_hash);
 
             let engine_hint = self
                 .engine_hinter
