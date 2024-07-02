@@ -29,7 +29,7 @@ pub struct Opts {
     pub(super) max_commitments: Option<usize>,
     /// Validator indexes
     #[clap(short = 'v', long, value_parser, num_args = 0.., value_delimiter = ',')]
-    pub(super) validator_indexes: Vec<String>,
+    pub(super) validator_indexes: Vec<u64>,
     /// Signing options
     #[clap(flatten)]
     pub(super) signing: SigningOpts,
@@ -133,25 +133,10 @@ impl TryFrom<Opts> for Config {
         config.beacon_api_url = opts.beacon_api_url.trim_end_matches('/').to_string();
         config.mevboost_url = opts.mevboost_url.trim_end_matches('/').to_string();
 
-        if let Some(validator_indexes) = opts.validator_indexes {
-            config.validator_indexes = parse_validator_indexes(&validator_indexes)?;
-        }
+        config.validator_indexes = opts.validator_indexes;
 
         Ok(config)
     }
-}
-
-/// Parse the validator indexes input of the form - "1,2,3,4"
-fn parse_validator_indexes(input: &str) -> eyre::Result<Vec<u64>> {
-    input
-        .trim_matches(|c| c == '"' || c == '"')
-        .split(',')
-        .map(|s| {
-            s.trim()
-                .parse()
-                .map_err(|e| eyre::eyre!("Invalid index: {}: {:?}", s, e))
-        })
-        .collect()
 }
 
 /// Limits for the sidecar.
