@@ -5,7 +5,10 @@ use alloy_rpc_types::TransactionRequest;
 use blst::min_pk::SecretKey;
 use secp256k1::Message;
 
-use crate::crypto::{ecdsa::SignableECDSA, SignableBLS};
+use crate::{
+    crypto::{ecdsa::SignableECDSA, SignableBLS},
+    Config,
+};
 
 /// The URL of the test execution client HTTP API.
 ///
@@ -47,6 +50,32 @@ pub(crate) async fn try_get_beacon_api_url() -> Option<&'static str> {
     } else {
         None
     }
+}
+
+/// Return a mock configuration for testing purposes. Contains:
+/// - The URL of the test execution client HTTP API.
+/// - The URL of the test engine client HTTP API.
+/// - The URL of the test beacon client HTTP API.
+/// - The JWT token used to authenticate with the test engine API
+/// - The default values for the remaining configuration fields.
+///
+/// If any of the above values can't be found, the function will return `None`.
+pub(crate) async fn get_test_config() -> Option<Config> {
+    let _ = dotenvy::dotenv();
+
+    let jwt = std::env::var("ENGINE_JWT").ok()?;
+
+    let execution = try_get_execution_api_url().await?;
+    let beacon = try_get_beacon_api_url().await?;
+    let engine = try_get_engine_api_url().await?;
+
+    Some(Config {
+        execution_api_url: execution.to_string(),
+        engine_api_url: engine.to_string(),
+        beacon_api_url: beacon.to_string(),
+        jwt_hex: jwt,
+        ..Default::default()
+    })
 }
 
 /// Launch a local instance of the Anvil test chain.

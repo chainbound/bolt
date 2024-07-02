@@ -19,9 +19,6 @@ pub const STATUS_PATH: &str = "/eth/v1/builder/status";
 pub const REGISTER_VALIDATORS_PATH: &str = "/eth/v1/builder/validators";
 /// The path to the builder API get header endpoint.
 pub const GET_HEADER_PATH: &str = "/eth/v1/builder/header/:slot/:parent_hash/:pubkey";
-/// The path to the constriants API get header with proofs endpoint.
-pub const GET_HEADER_WITH_PROOFS_PATH: &str =
-    "/eth/v1/builder/header_with_proofs/:slot/:parent_hash/:pubkey";
 /// The path to the builder API get payload endpoint.
 pub const GET_PAYLOAD_PATH: &str = "/eth/v1/builder/blinded_blocks";
 /// The path to the constraints API submit constraints endpoint.

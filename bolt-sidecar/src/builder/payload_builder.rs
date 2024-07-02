@@ -16,7 +16,7 @@ use super::{
     compat::{to_alloy_execution_payload, to_reth_withdrawal},
     BuilderError,
 };
-use crate::RpcClient;
+use crate::{Config, RpcClient};
 
 /// Extra-data payload field used for locally built blocks.
 /// NOTE: must be exactly 32 bytes in hex (=16 chars in utf-8).
@@ -45,27 +45,20 @@ pub struct FallbackPayloadBuilder {
 
 impl FallbackPayloadBuilder {
     /// Create a new fallback payload builder
-    pub fn new(
-        jwt_hex: &str,
-        fee_recipient: Address,
-        engine_rpc_url: &str,
-        execution_rpc_url: &str,
-        beacon_api_url: &str,
-        slot_time_in_seconds: u64,
-    ) -> Self {
+    pub fn new(config: &Config) -> Self {
         let engine_hinter = EngineHinter {
             client: reqwest::Client::new(),
-            jwt_hex: jwt_hex.to_string(),
-            engine_rpc_url: engine_rpc_url.to_string(),
+            jwt_hex: config.jwt_hex.to_string(),
+            engine_rpc_url: config.engine_api_url.to_string(),
         };
 
         Self {
-            fee_recipient,
             engine_hinter,
-            beacon_api_url: beacon_api_url.to_string(),
+            fee_recipient: config.fee_recipient,
+            beacon_api_url: config.beacon_api_url.to_string(),
             extra_data: hex::encode(DEFAULT_EXTRA_DATA).into(),
-            execution_rpc_client: RpcClient::new(execution_rpc_url),
-            slot_time_in_seconds,
+            execution_rpc_client: RpcClient::new(&config.execution_api_url),
+            slot_time_in_seconds: config.chain.slot_time(),
         }
     }
 }
@@ -403,35 +396,21 @@ mod tests {
 
     use crate::{
         builder::payload_builder::FallbackPayloadBuilder,
-        test_util::{
-            default_test_transaction, try_get_beacon_api_url, try_get_engine_api_url,
-            try_get_execution_api_url,
-        },
+        test_util::{default_test_transaction, get_test_config},
     };
 
     #[tokio::test]
     async fn test_build_fallback_payload() -> eyre::Result<()> {
         let _ = tracing_subscriber::fmt::try_init();
-        dotenvy::dotenv().ok();
+
+        let Some(cfg) = get_test_config().await else {
+            tracing::warn!("Skipping test: missing test config");
+            return Ok(());
+        };
 
         let raw_sk = std::env::var("PRIVATE_KEY")?;
-        let jwt = std::env::var("ENGINE_JWT")?;
 
-        let Some(execution) = try_get_execution_api_url().await else {
-            tracing::warn!("skipping test: execution API URL is not reachable");
-            return Ok(());
-        };
-        let Some(engine) = try_get_engine_api_url().await else {
-            tracing::warn!("skipping test: engine API URL is not reachable");
-            return Ok(());
-        };
-        let Some(beacon) = try_get_beacon_api_url().await else {
-            tracing::warn!("skipping test: beacon API URL is not reachable");
-            return Ok(());
-        };
-
-        let builder =
-            FallbackPayloadBuilder::new(&jwt, Address::default(), engine, execution, beacon, 12);
+        let builder = FallbackPayloadBuilder::new(&cfg);
 
         let sk = SigningKey::from_slice(hex::decode(raw_sk)?.as_slice())?;
         let signer = PrivateKeySigner::from_signing_key(sk.clone());

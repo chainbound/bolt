@@ -1,8 +1,8 @@
 use std::time::Duration;
 
-use alloy_primitives::Address;
+use alloy_primitives::{b256, Address};
 use blst::min_pk::SecretKey;
-use clap::{ArgGroup, Args, Parser};
+use clap::{ArgGroup, Args, Parser, ValueEnum};
 
 use crate::crypto::bls::random_bls_secret;
 
@@ -52,9 +52,6 @@ pub struct Opts {
     /// The fee recipient address for fallback blocks
     #[clap(short = 'f', long)]
     pub(super) fee_recipient: Address,
-    /// Commitment signing options.
-    #[clap(flatten)]
-    pub(super) signing: SigningOpts,
     /// Secret BLS key to sign fallback payloads with
     /// (If not provided, a random key will be used)
     #[clap(short = 'k', long)]
@@ -63,9 +60,85 @@ pub struct Opts {
     /// new commitments for the next block (parsed as milliseconds)
     #[clap(short = 'd', long)]
     pub(super) commitment_deadline: Option<u64>,
-    /// The slot time in seconds
-    #[clap(short = 't', long)]
-    pub(super) slot_time_in_seconds: Option<u64>,
+    /// Chain on which the sidecar is running
+    #[clap(short = 'C', long, default_value = "mainnet")]
+    pub(super) chain: Chain,
+    /// Commitment signing options.
+    #[clap(flatten)]
+    pub(super) signing: SigningOpts,
+}
+
+/// Supported chains for the sidecar
+#[derive(Debug, Clone, ValueEnum)]
+#[clap(rename_all = "kebab_case")]
+#[allow(missing_docs)]
+pub enum Chain {
+    Mainnet,
+    Holesky,
+    Kurtosis,
+    Helder,
+}
+
+impl Chain {
+    /// Get the chain ID for the given chain.
+    pub fn chain_id(&self) -> u64 {
+        match self {
+            Chain::Mainnet => 1,
+            Chain::Holesky => 17000,
+            Chain::Kurtosis => 3151908,
+            Chain::Helder => 7014190335,
+        }
+    }
+
+    /// Get the chain name for the given chain.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Chain::Mainnet => "mainnet",
+            Chain::Holesky => "holesky",
+            Chain::Kurtosis => "kurtosis",
+            Chain::Helder => "helder",
+        }
+    }
+
+    /// Get the slot time for the given chain in seconds.
+    pub fn slot_time(&self) -> u64 {
+        match self {
+            Chain::Mainnet => 12,
+            Chain::Holesky => 12,
+            Chain::Kurtosis => 2,
+            Chain::Helder => 12,
+        }
+    }
+
+    /// Get the domain for signing messages on the given chain.
+    pub fn builder_domain(&self) -> [u8; 32] {
+        match self {
+            Chain::Mainnet => {
+                b256!("00000001f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9").0
+            }
+            Chain::Holesky => {
+                b256!("000000015b83a23759c560b2d0c64576e1dcfc34ea94c4988f3e0d9f77f05387").0
+            }
+            Chain::Kurtosis => {
+                // TODO: verify this
+                b256!("00000001f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9").0
+                // b256!("000000013e2b3354ba8a4ebaed231d0ae887bf5c974f080dbc63f09a57da1637").0
+            }
+            Chain::Helder => {
+                b256!("0000000194c41af484fff7964969e0bdd922f82dff0f4be87a60d0664cc9d1ff").0
+            }
+        }
+    }
+
+    /// Get the fork version for the given chain.
+    pub fn fork_version(&self) -> [u8; 4] {
+        match self {
+            Chain::Mainnet => [0u8; 4],
+            Chain::Holesky => [1, 1, 112, 0],
+            Chain::Kurtosis => [0u8; 4], // TODO
+            Chain::Helder => [16, 0, 0, 0],
+        }
+    }
 }
 
 /// Command-line options for signing
@@ -113,8 +186,8 @@ pub struct Config {
     /// The deadline in the slot at which the sidecar will stop accepting
     /// new commitments for the next block
     pub commitment_deadline: Duration,
-    /// The beacon chain slot time in seconds
-    pub slot_time_in_seconds: u64,
+    /// The chain on which the sidecar is running
+    pub chain: Chain,
 }
 
 impl Default for Config {
@@ -133,13 +206,28 @@ impl Default for Config {
             builder_private_key: random_bls_secret(),
             limits: Limits::default(),
             commitment_deadline: DEFAULT_COMMITMENT_DEADLINE,
-            slot_time_in_seconds: 12,
+            chain: Chain::Mainnet,
+        }
+    }
+}
+
+/// Limits for the sidecar.
+#[derive(Debug, Clone)]
+pub struct Limits {
+    /// Maximum number of commitments to accept per block
+    pub max_commitments_per_slot: usize,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            max_commitments_per_slot: 6,
         }
     }
 }
 
 impl Config {
-    /// Parse the command-line options and return a new `Config` instance
+    /// Parse the command-line options and return a new [`Config`] instance
     pub fn parse_from_cli() -> eyre::Result<Self> {
         let opts = Opts::parse();
         Self::try_from(opts)
@@ -149,7 +237,7 @@ impl Config {
 impl TryFrom<Opts> for Config {
     type Error = eyre::Report;
 
-    fn try_from(opts: Opts) -> eyre::Result<Self> {
+    fn try_from(opts: Opts) -> Result<Self, Self::Error> {
         let mut config = Config::default();
 
         if let Some(port) = opts.port {
@@ -193,10 +281,6 @@ impl TryFrom<Opts> for Config {
             config.commitment_deadline = Duration::from_millis(deadline_ms);
         }
 
-        if let Some(slot_time_in_seconds) = opts.slot_time_in_seconds {
-            config.slot_time_in_seconds = slot_time_in_seconds;
-        }
-
         // Validate the JWT secret
         if config.jwt_hex.len() != 64 {
             eyre::bail!("JWT secret must be a 32 byte hex string");
@@ -209,22 +293,8 @@ impl TryFrom<Opts> for Config {
         config.execution_api_url = opts.execution_api_url.trim_end_matches('/').to_string();
         config.beacon_api_url = opts.beacon_api_url.trim_end_matches('/').to_string();
         config.mevboost_url = opts.mevboost_url.trim_end_matches('/').to_string();
+        config.chain = opts.chain;
 
         Ok(config)
-    }
-}
-
-/// Limits for the sidecar.
-#[derive(Debug, Clone)]
-pub struct Limits {
-    /// Maximum number of commitments to accept per block
-    pub max_commitments_per_slot: usize,
-}
-
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            max_commitments_per_slot: 6,
-        }
     }
 }

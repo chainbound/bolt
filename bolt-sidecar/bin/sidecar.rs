@@ -1,34 +1,28 @@
 use std::time::Duration;
 
 use alloy_rpc_types_beacon::events::HeadEvent;
-use ethereum_consensus::crypto::SecretKey as BlsSecretKey;
 use tokio::sync::mpsc;
 use tracing::info;
 
 use bolt_sidecar::{
-    builder::LocalBuilder,
     crypto::{bls::Signer, SignableBLS, SignerBLS},
-    json_rpc::{
-        self,
-        api::{ApiError, ApiEvent},
-    },
+    json_rpc::api::{ApiError, ApiEvent},
     primitives::{
         CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
         SignedConstraints,
     },
-    spec::ConstraintsApi,
-    start_builder_proxy,
+    start_builder_proxy_server, start_rpc_server,
     state::{ConsensusState, ExecutionState, HeadTracker, StateClient},
-    BuilderProxyConfig, Config, MevBoostClient,
+    BuilderProxyConfig, Config, ConstraintsApi, LocalBuilder, MevBoostClient,
 };
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     tracing_subscriber::fmt::init();
 
-    info!("Starting sidecar");
-
     let config = Config::parse_from_cli()?;
+
+    info!(chain = config.chain.name(), "Starting Bolt sidecar");
 
     // TODO: support external signers
     // probably it's cleanest to have the Config parser initialize a generic Signer
@@ -40,7 +34,7 @@ async fn main() -> eyre::Result<()> {
     let mevboost_client = MevBoostClient::new(&config.mevboost_url);
 
     let (api_events, mut api_events_rx) = mpsc::channel(1024);
-    let shutdown_tx = json_rpc::start_server(&config, api_events).await?;
+    let shutdown_tx = start_rpc_server(&config, api_events).await?;
 
     let mut consensus_state =
         ConsensusState::new(&config.beacon_api_url, config.commitment_deadline);
@@ -51,25 +45,17 @@ async fn main() -> eyre::Result<()> {
     let mut head_tracker = HeadTracker::start(&config.beacon_api_url);
 
     let builder_proxy_config = BuilderProxyConfig {
-        mevboost_url: config.mevboost_url,
+        mevboost_url: config.mevboost_url.clone(),
         server_port: config.mevboost_proxy_port,
     };
 
     let (payload_tx, mut payload_rx) = mpsc::channel(16);
     let payload_fetcher = LocalPayloadFetcher::new(payload_tx);
 
-    let mut local_builder = LocalBuilder::new(
-        BlsSecretKey::try_from(config.builder_private_key.to_bytes().as_ref())?,
-        &config.execution_api_url,
-        &config.engine_api_url,
-        &config.jwt_hex,
-        &config.beacon_api_url,
-        config.fee_recipient,
-        config.slot_time_in_seconds,
-    );
+    let mut local_builder = LocalBuilder::new(&config);
 
     tokio::spawn(async move {
-        if let Err(e) = start_builder_proxy(payload_fetcher, builder_proxy_config).await {
+        if let Err(e) = start_builder_proxy_server(payload_fetcher, builder_proxy_config).await {
             tracing::error!("Builder API proxy failed: {:?}", e);
         }
     });

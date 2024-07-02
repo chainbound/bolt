@@ -32,7 +32,8 @@ const MAX_BLINDED_BLOCK_LENGTH: usize = 1024 * 1024;
 /// TODO: determine value
 const GET_HEADER_WITH_PROOFS_TIMEOUT: Duration = Duration::from_millis(500);
 
-/// A proxy server for the builder API. Forwards all requests to the target after interception.
+/// A proxy server for the builder API.
+/// Forwards all requests to the target after interception.
 pub struct BuilderProxyServer<T: BuilderApi, P> {
     proxy_target: T,
     // TODO: fill with local payload when we fetch a payload
@@ -83,7 +84,9 @@ where
         status
     }
 
-    /// Registers the validators. Just forwards the request to mev-boost and returns the status.
+    /// Registers the validators. Just forwards the request to mev-boost
+    /// and returns the status.
+    ///
     /// TODO: intercept this to register Bolt validators on-chain as well.
     pub async fn register_validators(
         State(server): State<Arc<BuilderProxyServer<T, P>>>,
@@ -100,9 +103,11 @@ where
         response.map(|_| StatusCode::OK)
     }
 
-    /// Gets the header. NOTE: converts this request to a get_header_with_proofs request to the modified mev-boost.
-    /// If we get an error response / timeout, we return the locally built block header and store the actual payload
-    /// so we can return it later.
+    /// Gets the header. NOTE: converts this request to a get_header_with_proofs
+    /// request to the modified mev-boost.
+    ///
+    /// In case of a builder or relay failure, we return the locally built block header
+    /// and store the actual payload so we can return it later.
     pub async fn get_header(
         State(server): State<Arc<BuilderProxyServer<T, P>>>,
         Path(params): Path<GetHeaderParams>,
@@ -246,20 +251,14 @@ pub struct BuilderProxyConfig {
     pub server_port: u16,
 }
 
-impl Default for BuilderProxyConfig {
-    fn default() -> Self {
-        Self {
-            mevboost_url: "http://localhost:18550".to_string(),
-            server_port: 18551,
-        }
-    }
-}
-
 /// Start the builder proxy with the given payload fetcher and configuration.
-pub async fn start_builder_proxy<P: PayloadFetcher + Send + Sync + 'static>(
+pub async fn start_builder_proxy_server<P>(
     payload_fetcher: P,
     config: BuilderProxyConfig,
-) -> Result<(), eyre::Error> {
+) -> eyre::Result<()>
+where
+    P: PayloadFetcher + Send + Sync + 'static,
+{
     tracing::info!(
         port = config.server_port,
         target = config.mevboost_url,
@@ -268,6 +267,7 @@ pub async fn start_builder_proxy<P: PayloadFetcher + Send + Sync + 'static>(
 
     let mev_boost = MevBoostClient::new(&config.mevboost_url);
     let server = Arc::new(BuilderProxyServer::new(mev_boost, payload_fetcher));
+
     let router = Router::new()
         .route("/", get(index))
         .route(STATUS_PATH, get(BuilderProxyServer::status))
@@ -279,9 +279,7 @@ pub async fn start_builder_proxy<P: PayloadFetcher + Send + Sync + 'static>(
         .route(GET_PAYLOAD_PATH, post(BuilderProxyServer::get_payload))
         .with_state(server);
 
-    // run it
     let listener = TcpListener::bind(format!("0.0.0.0:{}", config.server_port)).await?;
-
     axum::serve(listener, router).await?;
 
     Ok(())
