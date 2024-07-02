@@ -28,7 +28,7 @@ pub struct Opts {
     pub(super) max_commitments: Option<usize>,
     /// Validator indexes
     #[clap(short = 'v', long)]
-    pub(super) validator_index: Option<String>,
+    pub(super) validator_indexes: Option<String>,
     /// Signing options
     #[clap(flatten)]
     pub(super) signing: SigningOpts,
@@ -86,7 +86,7 @@ impl Default for Config {
             private_key: Some(random_bls_secret()),
             mevboost_proxy_port: 18551,
             limits: Limits::default(),
-            validator_indexes: vec![0], // Default to 0 index
+            validator_indexes: Vec::new(),
         }
     }
 }
@@ -132,17 +132,18 @@ impl TryFrom<Opts> for Config {
         config.beacon_api_url = opts.beacon_api_url.trim_end_matches('/').to_string();
         config.mevboost_url = opts.mevboost_url.trim_end_matches('/').to_string();
 
-        if let Some(validator_index) = opts.validator_index {
-            config.validator_indexes = parse_validator_indexes(&validator_index)?;
+        if let Some(validator_indexes) = opts.validator_indexes {
+            config.validator_indexes = parse_validator_indexes(&validator_indexes)?;
         }
 
         Ok(config)
     }
 }
 
-/// Parse the validator indexes to seperate them by commas
+/// Parse the validator indexes input of the form - "1,2,3,4"
 fn parse_validator_indexes(input: &str) -> eyre::Result<Vec<u64>> {
     input
+        .trim_matches(|c| c == '"' || c == '"') // Remove the surrounding brackets
         .split(',')
         .map(|s| {
             s.trim()

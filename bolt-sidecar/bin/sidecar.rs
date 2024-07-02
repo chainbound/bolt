@@ -52,7 +52,7 @@ async fn main() -> eyre::Result<()> {
     let (payload_tx, mut payload_rx) = mpsc::channel(16);
     let payload_fetcher = LocalPayloadFetcher::new(payload_tx);
 
-    let validator_indexes = config.validator_indexes;
+    let validator_indexes = &config.validator_indexes;
 
     tokio::spawn(async move {
         loop {
@@ -92,7 +92,7 @@ async fn main() -> eyre::Result<()> {
                     "Validation against execution state passed"
                 );
 
-                let validator_index = find_validator_index_for_slot(&validator_indexes, &consensus_state.get_epoch().proposer_duties, request.slot);
+                let validator_index = find_validator_index_for_slot(validator_indexes, &consensus_state.get_epoch().proposer_duties, request.slot);
 
                 // parse the request into constraints and sign them with the sidecar signer
                 let message = ConstraintsMessage::build(validator_index, request.slot, request.clone());
