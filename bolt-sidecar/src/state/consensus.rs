@@ -59,8 +59,15 @@ impl ConsensusState {
     /// 2. The request hasn't passed the slot deadline.
     ///
     /// TODO: Integrate with the registry to check if we are registered.
-    pub fn validate_request(&self, request: &CommitmentRequest) -> Result<(), ConsensusError> {
+    pub fn validate_request(
+        &self,
+        request: &CommitmentRequest,
+        validator_indexes: &[u64],
+    ) -> Result<u64, ConsensusError> {
         let CommitmentRequest::Inclusion(req) = request;
+
+        let validator_index =
+            find_validator_index_for_slot(validator_indexes, &self.epoch.proposer_duties, req.slot);
 
         // Check if the slot is in the current epoch
         if req.slot < self.epoch.start_slot || req.slot >= self.epoch.start_slot + 32 {
@@ -72,7 +79,7 @@ impl ConsensusState {
             return Err(ConsensusError::DeadlineExceeded);
         }
 
-        Ok(())
+        Ok(validator_index)
     }
 
     /// Update the latest head and fetch the relevant data from the beacon chain.
@@ -121,4 +128,50 @@ fn current_timestamp() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs()
+}
+
+/// Filters the proposer duties and returns the validator index for a given slot
+/// if it doesn't exists then returns 0 by default.
+pub fn find_validator_index_for_slot(
+    validator_indexes: &[u64],
+    proposer_duties: &[ProposerDuty],
+    slot: u64,
+) -> u64 {
+    for duty in proposer_duties {
+        if duty.slot == slot && validator_indexes.contains(&(duty.validator_index as u64)) {
+            return duty.validator_index as u64;
+        }
+    }
+    0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use beacon_api_client::ProposerDuty;
+
+    #[test]
+    fn test_filter_index() {
+        let validator_indexes = vec![11, 22, 33];
+        let proposer_duties = vec![
+            ProposerDuty {
+                public_key: Default::default(),
+                slot: 1,
+                validator_index: 11,
+            },
+            ProposerDuty {
+                public_key: Default::default(),
+                slot: 2,
+                validator_index: 22,
+            },
+            ProposerDuty {
+                public_key: Default::default(),
+                slot: 3,
+                validator_index: 33,
+            },
+        ];
+
+        let result = find_validator_index_for_slot(&validator_indexes, &proposer_duties, 2);
+        assert_eq!(result, 22);
+    }
 }

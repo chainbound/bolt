@@ -19,7 +19,6 @@ use bolt_sidecar::{
     BuilderProxyConfig, Config, MevBoostClient,
 };
 
-use beacon_api_client::ProposerDuty;
 use tokio::sync::mpsc;
 use tracing::info;
 
@@ -72,11 +71,14 @@ async fn main() -> eyre::Result<()> {
                 tracing::info!("Received commitment request: {:?}", event.request);
                 let request = event.request;
 
-                if let Err (e) = consensus_state.validate_request(&CommitmentRequest::Inclusion(request.clone())) {
-                    tracing::error!("Failed to validate request: {:?}", e);
-                    let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
-                    continue;
-                }
+                let validator_index = match consensus_state.validate_request(&CommitmentRequest::Inclusion(request.clone()), validator_indexes) {
+                    Ok(index) => index,
+                    Err(e) => {
+                        tracing::error!("Failed to validate request: {:?}", e);
+                        let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
+                        continue;
+                    }
+                };
 
                 if let Err(e) = execution_state
                     .try_commit(&CommitmentRequest::Inclusion(request.clone()))
@@ -91,8 +93,6 @@ async fn main() -> eyre::Result<()> {
                     tx_hash = %request.tx.tx_hash(),
                     "Validation against execution state passed"
                 );
-
-                let validator_index = find_validator_index_for_slot(validator_indexes, &consensus_state.get_epoch().proposer_duties, request.slot);
 
                 // parse the request into constraints and sign them with the sidecar signer
                 let message = ConstraintsMessage::build(validator_index, request.slot, request.clone());
@@ -141,50 +141,4 @@ async fn main() -> eyre::Result<()> {
     shutdown_tx.send(()).await.ok();
 
     Ok(())
-}
-
-/// Filters the proposer duties and returns the validator index for a given slot
-/// if it doesn't exists then returns 0 by default.
-pub fn find_validator_index_for_slot(
-    validator_indexes: &[u64],
-    proposer_duties: &[ProposerDuty],
-    slot: u64,
-) -> u64 {
-    for duty in proposer_duties {
-        if duty.slot == slot && validator_indexes.contains(&(duty.validator_index as u64)) {
-            return duty.validator_index as u64;
-        }
-    }
-    0
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::find_validator_index_for_slot;
-    use beacon_api_client::ProposerDuty;
-
-    #[test]
-    fn test_filter_index() {
-        let validator_indexes = vec![11, 22, 33];
-        let proposer_duties = vec![
-            ProposerDuty {
-                public_key: Default::default(),
-                slot: 1,
-                validator_index: 11,
-            },
-            ProposerDuty {
-                public_key: Default::default(),
-                slot: 2,
-                validator_index: 22,
-            },
-            ProposerDuty {
-                public_key: Default::default(),
-                slot: 3,
-                validator_index: 33,
-            },
-        ];
-
-        let result = find_validator_index_for_slot(&validator_indexes, &proposer_duties, 2);
-        assert_eq!(result, 22);
-    }
 }

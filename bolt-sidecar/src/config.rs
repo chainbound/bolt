@@ -1,6 +1,7 @@
-use crate::crypto::bls::random_bls_secret;
 use blst::min_pk::SecretKey;
 use clap::{ArgGroup, Args, Parser};
+
+use crate::crypto::bls::random_bls_secret;
 
 /// Command-line options for the sidecar
 #[derive(Parser, Debug)]
