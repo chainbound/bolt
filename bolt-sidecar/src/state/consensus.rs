@@ -23,7 +23,7 @@ pub enum ConsensusError {
     ValidatorNotFound,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Epoch {
     pub value: u64,
     pub start_slot: Slot,
@@ -37,6 +37,8 @@ pub struct ConsensusState {
     validator_indexes: Vec<u64>,
     // Timestamp of when the latest slot was received
     latest_slot_timestamp: Instant,
+    // The latest slot received
+    latest_slot: Slot,
     /// The deadline (expressed in seconds) in the slot for which to
     /// stop accepting commitments.
     ///
@@ -60,11 +62,8 @@ impl ConsensusState {
         ConsensusState {
             beacon_api_client,
             header: BeaconBlockHeader::default(),
-            epoch: Epoch {
-                value: 0,
-                start_slot: 0,
-                proposer_duties: vec![],
-            },
+            epoch: Epoch::default(),
+            latest_slot: Default::default(),
             validator_indexes: validator_indexes.to_vec(),
             latest_slot_timestamp: Instant::now(),
             commitment_deadline: CommitmentDeadline::new(0, commitment_deadline_duration),
@@ -85,8 +84,10 @@ impl ConsensusState {
             return Err(ConsensusError::InvalidSlot(req.slot));
         }
 
-        // Check if the request is within the slot commitment deadline
-        if self.latest_slot_timestamp + self.commitment_deadline_duration < Instant::now() {
+        // If the request is for the next slot, check if it's within the commitment deadline
+        if req.slot == self.latest_slot + 1
+            && self.latest_slot_timestamp + self.commitment_deadline_duration < Instant::now()
+        {
             return Err(ConsensusError::DeadlineExceeded);
         }
 
@@ -110,6 +111,7 @@ impl ConsensusState {
 
         // Update the timestamp with current time
         self.latest_slot_timestamp = Instant::now();
+        self.latest_slot = head;
 
         // Get the current value of slot and epoch
         let slot = self.header.slot;
@@ -193,6 +195,7 @@ mod tests {
             commitment_deadline: CommitmentDeadline::new(0, Duration::from_secs(1)),
             validator_indexes,
             commitment_deadline_duration: Duration::from_secs(1),
+            latest_slot: 0,
         };
 
         // Test finding a valid slot
