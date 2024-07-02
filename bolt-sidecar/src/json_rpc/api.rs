@@ -7,7 +7,7 @@ use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tracing::info;
 
-use crate::primitives::{CommitmentRequest, InclusionRequest, Slot};
+use crate::primitives::{CommitmentRequest, Slot};
 
 /// Default size of the api request cache (implemented as a LRU).
 const DEFAULT_API_REQUEST_CACHE_SIZE: usize = 1000;
@@ -52,8 +52,8 @@ pub trait CommitmentsRpc {
 /// An event that is emitted by the API.
 #[derive(Debug)]
 pub struct ApiEvent {
-    /// TODO: change to commitment request
-    pub request: InclusionRequest,
+    /// The request to process.
+    pub request: CommitmentRequest,
     /// The sender to respond to.
     pub response_tx: oneshot::Sender<JsonApiResult>,
 }
@@ -152,7 +152,7 @@ impl CommitmentsRpc for JsonRpcApi {
 
         // send the request to the event loop
         let event = ApiEvent {
-            request,
+            request: CommitmentRequest::Inclusion(request),
             response_tx,
         };
         self.event_tx.send(event).await.map_err(|e| {

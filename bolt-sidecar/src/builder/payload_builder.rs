@@ -205,6 +205,8 @@ impl FallbackPayloadBuilder {
                 .fetch_next_payload_hint(&exec_payload, &versioned_hashes, parent_beacon_block_root)
                 .await?;
 
+            tracing::info!("engine_hint: {:?}", engine_hint);
+
             match engine_hint {
                 EngineApiHint::BlockHash(hash) => {
                     tracing::warn!("Should not receive block hash hint {:?}", hash);
@@ -387,53 +389,56 @@ pub(crate) fn build_header_with_hints_and_context(
 mod tests {
     use alloy_eips::eip2718::Encodable2718;
     use alloy_network::{EthereumWallet, TransactionBuilder};
-    use alloy_primitives::{hex, Address, U256};
-    use alloy_rpc_types::TransactionRequest;
+    use alloy_primitives::{hex, Address};
     use alloy_signer::k256::ecdsa::SigningKey;
     use alloy_signer_local::PrivateKeySigner;
     use reth_primitives::TransactionSigned;
 
-    use crate::builder::payload_builder::FallbackPayloadBuilder;
+    use crate::{
+        builder::payload_builder::FallbackPayloadBuilder,
+        test_util::{
+            default_test_transaction, try_get_beacon_api_url, try_get_engine_api_url,
+            try_get_execution_api_url,
+        },
+    };
 
     #[tokio::test]
     async fn test_build_fallback_payload() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
         dotenvy::dotenv().ok();
 
         let raw_sk = std::env::var("PRIVATE_KEY")?;
         let jwt = std::env::var("ENGINE_JWT")?;
 
-        // TODO: use constants (after #94)
-        let execution = "http://remotebeast:8545";
-        let engine = "http://remotebeast:8551";
+        let Some(execution) = try_get_execution_api_url().await else {
+            tracing::warn!("skipping test: execution API URL is not reachable");
+            return Ok(());
+        };
+        let Some(engine) = try_get_engine_api_url().await else {
+            tracing::warn!("skipping test: engine API URL is not reachable");
+            return Ok(());
+        };
+        let Some(beacon) = try_get_beacon_api_url().await else {
+            tracing::warn!("skipping test: beacon API URL is not reachable");
+            return Ok(());
+        };
 
-        let builder = FallbackPayloadBuilder::new(&jwt, Address::default(), engine, execution, "");
+        let builder =
+            FallbackPayloadBuilder::new(&jwt, Address::default(), engine, execution, beacon);
 
         let sk = SigningKey::from_slice(hex::decode(raw_sk)?.as_slice())?;
         let signer = PrivateKeySigner::from_signing_key(sk.clone());
         let wallet = EthereumWallet::from(signer);
 
         let addy = Address::from_private_key(&sk);
-        let tx = default_transaction(addy, 266);
+        let tx = default_test_transaction(addy, Some(1)).with_chain_id(1);
         let tx_signed = tx.build(&wallet).await?;
         let raw_encoded = tx_signed.encoded_2718();
         let tx_signed_reth = TransactionSigned::decode_enveloped(&mut raw_encoded.as_slice())?;
 
-        builder.build_fallback_payload(vec![tx_signed_reth]).await?;
+        let block = builder.build_fallback_payload(vec![tx_signed_reth]).await?;
+        assert_eq!(block.body.len(), 1);
 
         Ok(())
-    }
-
-    // TODO: refactor (after #94)
-    fn default_transaction(sender: Address, nonce: u64) -> TransactionRequest {
-        TransactionRequest::default()
-            .with_from(sender)
-            // Burn it
-            .with_to(Address::ZERO)
-            .with_chain_id(1)
-            .with_nonce(nonce)
-            .with_value(U256::from(100))
-            .with_gas_limit(21_000)
-            .with_max_priority_fee_per_gas(1_000_000_000)
-            .with_max_fee_per_gas(20_000_000_000)
     }
 }

@@ -17,10 +17,24 @@ const EXECUTION_API_URL: &str = "http://remotebeast:8545";
 /// NOTE: this DNS is only available through the Chainbound Tailnet
 const BEACON_API_URL: &str = "http://remotebeast:3500";
 
+/// The URL of the test engine client HTTP API.
+///
+/// NOTE: this DNS is only available through the Chainbound Tailnet
+const ENGINE_API_URL: &str = "http://remotebeast:8551";
+
 /// Check if the test execution client is reachable by sending a GET request to it.
 pub(crate) async fn try_get_execution_api_url() -> Option<&'static str> {
     if reqwest::get(EXECUTION_API_URL).await.is_ok() {
         Some(EXECUTION_API_URL)
+    } else {
+        None
+    }
+}
+
+/// Check if the test engine client is reachable by sending a GET request to it.
+pub(crate) async fn try_get_engine_api_url() -> Option<&'static str> {
+    if reqwest::get(ENGINE_API_URL).await.is_ok() {
+        Some(ENGINE_API_URL)
     } else {
         None
     }
@@ -41,13 +55,13 @@ pub(crate) fn launch_anvil() -> AnvilInstance {
 }
 
 /// Create a default transaction template to use for tests
-pub(crate) fn default_test_transaction(sender: Address) -> TransactionRequest {
+pub(crate) fn default_test_transaction(sender: Address, nonce: Option<u64>) -> TransactionRequest {
     TransactionRequest::default()
         .with_from(sender)
         // Burn it
         .with_to(Address::ZERO)
         .with_chain_id(1337)
-        .with_nonce(0)
+        .with_nonce(nonce.unwrap_or(0))
         .with_value(U256::from(100))
         .with_gas_limit(21_000)
         .with_max_priority_fee_per_gas(1_000_000_000)
