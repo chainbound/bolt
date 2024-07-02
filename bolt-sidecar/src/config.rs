@@ -86,7 +86,7 @@ impl Default for Config {
             private_key: Some(random_bls_secret()),
             mevboost_proxy_port: 18551,
             limits: Limits::default(),
-            validator_indexes: vec![0], // Default to the first validator
+            validator_indexes: vec![0], // Default to 0 index
         }
     }
 }
