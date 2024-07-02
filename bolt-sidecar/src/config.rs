@@ -1,10 +1,12 @@
+use std::time::Duration;
+
 use alloy_primitives::Address;
 use blst::min_pk::SecretKey;
 use clap::{ArgGroup, Args, Parser};
 
 use crate::crypto::bls::random_bls_secret;
 
-pub const DEFAULT_COMMITMENT_DEADLINE: u64 = 8;
+pub const DEFAULT_COMMITMENT_DEADLINE: Duration = Duration::from_secs(8);
 
 /// Command-line options for the Bolt sidecar
 #[derive(Parser, Debug)]
@@ -101,8 +103,8 @@ pub struct Config {
     /// Local bulider private key
     pub builder_private_key: SecretKey,
     /// The deadline in the slot at which the sidecar will stop accepting
-    /// new commitments for the next block (in seconds)
-    pub commitment_deadline: u64,
+    /// new commitments for the next block
+    pub commitment_deadline: Duration,
 }
 
 impl Default for Config {
@@ -185,7 +187,7 @@ impl TryFrom<Opts> for Config {
         }
 
         if let Some(deadline) = opts.commitment_deadline {
-            config.commitment_deadline = deadline;
+            config.commitment_deadline = Duration::from_secs(deadline);
         }
 
         config.mevboost_proxy_port = opts.mevboost_proxy_port;

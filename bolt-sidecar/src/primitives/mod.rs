@@ -223,10 +223,10 @@ pub struct ChainHead {
 
 impl ChainHead {
     /// Create a new ChainHead instance.
-    pub fn new(slot: u64, head: u64) -> Self {
+    pub fn new(slot: u64, block: u64) -> Self {
         Self {
             slot: Arc::new(AtomicU64::new(slot)),
-            block: Arc::new(AtomicU64::new(head)),
+            block: Arc::new(AtomicU64::new(block)),
         }
     }
 

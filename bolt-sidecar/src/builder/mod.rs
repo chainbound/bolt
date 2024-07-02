@@ -65,6 +65,8 @@ pub struct LocalBuilder {
     /// Async fallback payload builder to generate valid payloads with
     /// the engine API's `engine_newPayloadV3` response error.
     fallback_builder: FallbackPayloadBuilder,
+    /// The last payload and bid that was built by the local builder.
+    payload_and_bid: Option<PayloadAndBid>,
 }
 
 impl LocalBuilder {
@@ -79,6 +81,7 @@ impl LocalBuilder {
     ) -> Self {
         Self {
             secret_key,
+            payload_and_bid: None,
             fallback_builder: FallbackPayloadBuilder::new(
                 engine_jwt_secret,
                 fee_recipient,
@@ -90,11 +93,12 @@ impl LocalBuilder {
     }
 
     /// Build a new payload with the given transactions. This method will
-    /// return a signed builder bid that can be submitted to the Builder API.
+    /// cache the payload in the local builder instance, and make it available
+    ///
     pub async fn build_new_local_payload(
         &mut self,
         transactions: Vec<TransactionSigned>,
-    ) -> Result<PayloadAndBid, BuilderError> {
+    ) -> Result<(), BuilderError> {
         // 1. build a fallback payload with the given transactions, on top of
         // the current head of the chain
         let sealed_block = self
@@ -126,10 +130,18 @@ impl LocalBuilder {
             ));
         };
 
-        Ok(PayloadAndBid {
+        self.payload_and_bid = Some(PayloadAndBid {
             bid: signed_bid,
             payload: get_payload_res,
-        })
+        });
+
+        Ok(())
+    }
+
+    /// Get the cached payload and bid from the local builder, consuming the value.
+    #[inline]
+    pub fn get_cached_payload(&mut self) -> Option<PayloadAndBid> {
+        self.payload_and_bid.take()
     }
 
     /// transform a sealed header into a signed builder bid using

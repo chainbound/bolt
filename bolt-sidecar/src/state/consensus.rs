@@ -2,14 +2,14 @@
 #![allow(unused_variables)]
 #![allow(missing_debug_implementations)]
 
+use crate::primitives::{CommitmentRequest, Slot};
 use beacon_api_client::{mainnet::Client, BlockId, ProposerDuty};
 use ethereum_consensus::{deneb::BeaconBlockHeader, phase0::mainnet::SLOTS_PER_EPOCH};
 use reqwest::Url;
 
-use crate::{
-    common::unix_seconds,
-    primitives::{ChainHead, CommitmentRequest, Slot},
-};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use super::CommitmentDeadline;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConsensusError {
@@ -42,12 +42,18 @@ pub struct ConsensusState {
     ///
     /// This is used to prevent the sidecar from accepting commitments
     /// which won't have time to be included by the PBS pipeline.
-    commitment_deadline: u64,
+    // commitment_deadline: u64,
+    pub commitment_deadline: CommitmentDeadline,
+    pub commitment_deadline_duration: Duration,
 }
 
 impl ConsensusState {
     /// Create a new `ConsensusState` with the given configuration.
-    pub fn new(beacon_api_url: &str, validator_indexes: &[u64], commitment_deadline: u64) -> Self {
+    pub fn new(
+        beacon_api_url: &str,
+        validator_indexes: &[u64],
+        commitment_deadline_duration: Duration,
+    ) -> Self {
         let url = Url::parse(beacon_api_url).expect("valid beacon client URL");
         let beacon_api_client = Client::new(url);
 
@@ -61,7 +67,8 @@ impl ConsensusState {
             },
             validator_indexes: validator_indexes.to_vec(),
             latest_slot_timestamp: 0,
-            commitment_deadline,
+            commitment_deadline: CommitmentDeadline::new(0, commitment_deadline_duration),
+            commitment_deadline_duration,
         }
     }
 
@@ -79,7 +86,9 @@ impl ConsensusState {
         }
 
         // Check if the request is within the slot commitment deadline
-        if self.latest_slot_timestamp + self.commitment_deadline < current_timestamp() {
+        if self.latest_slot_timestamp + self.commitment_deadline_duration.as_secs()
+            < current_timestamp()
+        {
             return Err(ConsensusError::DeadlineExceeded);
         }
 
@@ -90,10 +99,13 @@ impl ConsensusState {
     }
 
     /// Update the latest head and fetch the relevant data from the beacon chain.
-    pub async fn update_head(&mut self, head: ChainHead) -> Result<(), ConsensusError> {
+    pub async fn update_head(&mut self, head: u64) -> Result<(), ConsensusError> {
+        // Reset the commitment deadline to start counting for the current slot
+        self.commitment_deadline = CommitmentDeadline::new(head, self.commitment_deadline_duration);
+
         let update = self
             .beacon_api_client
-            .get_beacon_header(BlockId::Slot(head.slot()))
+            .get_beacon_header(BlockId::Slot(head))
             .await?;
 
         self.header = update.header.message;
@@ -180,8 +192,9 @@ mod tests {
                 proposer_duties,
             },
             latest_slot_timestamp: 0,
-            commitment_deadline: 0,
+            commitment_deadline: CommitmentDeadline::new(0, Duration::from_secs(1)),
             validator_indexes,
+            commitment_deadline_duration: Duration::from_secs(1),
         };
 
         // Test finding a valid slot

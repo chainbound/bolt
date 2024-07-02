@@ -25,7 +25,7 @@ pub trait StateFetcher {
     async fn get_state_update(
         &self,
         addresses: Vec<&Address>,
-        block_number: Option<u64>,
+        head: Option<u64>,
     ) -> Result<StateUpdate, TransportError>;
 
     async fn get_head(&self) -> Result<u64, TransportError>;
@@ -48,7 +48,7 @@ pub struct StateClient {
 
 impl StateClient {
     /// Create a new `StateClient` with the given URL and maximum retries.
-    pub fn new(url: &str, max_retries: u32) -> Self {
+    pub fn new(url: &str) -> Self {
         let client = RpcClient::new(url);
         Self {
             client,
@@ -57,10 +57,9 @@ impl StateClient {
     }
 }
 
+/// Get state updates for the specified block number or latest block if not provided.
 #[async_trait::async_trait]
 impl StateFetcher for StateClient {
-    // TODO: should this be durable i.e. retries?
-    // Yes
     async fn get_state_update(
         &self,
         addresses: Vec<&Address>,
@@ -75,6 +74,12 @@ impl StateFetcher for StateClient {
 
         let mut nonce_futs = FuturesOrdered::new();
         let mut balance_futs = FuturesOrdered::new();
+
+        let block_number = if let Some(block_number) = block_number {
+            block_number
+        } else {
+            self.client.get_head().await?
+        };
 
         // TODO: add block number in params
         for addr in &addresses {
@@ -97,13 +102,13 @@ impl StateFetcher for StateClient {
         // Note that requests may error separately!
         batch.send().await?;
 
-        let basefee = self.client.get_basefee(block_number);
+        let basefee = self.client.get_basefee(None);
 
         // Collect the results
         let (nonce_vec, balance_vec, basefee) = tokio::join!(
             nonce_futs.collect::<Vec<_>>(),
             balance_futs.collect::<Vec<_>>(),
-            basefee
+            basefee,
         );
 
         // Insert the results
@@ -138,6 +143,7 @@ impl StateFetcher for StateClient {
         Ok(StateUpdate {
             account_states,
             min_basefee: basefee?,
+            block_number,
         })
     }
 
@@ -181,7 +187,7 @@ mod tests {
     #[tokio::test]
     async fn test_state_client() {
         let anvil = launch_anvil();
-        let client = StateClient::new(&anvil.endpoint(), 8);
+        let client = StateClient::new(&anvil.endpoint());
 
         let address = anvil.addresses().first().unwrap();
         let state = client.get_account_state(address, None).await.unwrap();
