@@ -144,7 +144,7 @@ impl TryFrom<Opts> for Config {
 /// Parse the validator indexes input of the form - "1,2,3,4"
 fn parse_validator_indexes(input: &str) -> eyre::Result<Vec<u64>> {
     input
-        .trim_matches(|c| c == '"' || c == '"') // Remove the surrounding brackets
+        .trim_matches(|c| c == '"' || c == '"')
         .split(',')
         .map(|s| {
             s.trim()
