@@ -86,7 +86,7 @@ impl Default for Config {
             private_key: Some(random_bls_secret()),
             mevboost_proxy_port: 18551,
             limits: Limits::default(),
-            validator_indexes: Vec::new(),
+            validator_indexes: vec![0], // Default to the first validator
         }
     }
 }
@@ -140,7 +140,7 @@ impl TryFrom<Opts> for Config {
     }
 }
 
-/// Parse the validator indexes from the command-line argument
+/// Parse the validator indexes to seperate them by commas
 fn parse_validator_indexes(input: &str) -> eyre::Result<Vec<u64>> {
     input
         .split(',')
