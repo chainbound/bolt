@@ -109,6 +109,9 @@ impl LocalBuilder {
         // NOTE: we use a big value for the bid to ensure it gets chosen by mev-boost.
         // the client has no way to actually verify this, and we don't need to trust
         // an external relay as this block is self-built, so the fake bid value is fine.
+        //
+        // NOTE: we don't strictly need this. The validator & beacon nodes have options
+        // to ALWAYS prefer PBS blocks. This is a safety measure that doesn't hurt to keep.
         let value = U256::from(1_000_000_000_000_000_000u128);
 
         let eth_payload = compat::to_consensus_execution_payload(&sealed_block);
