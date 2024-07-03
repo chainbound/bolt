@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use alloy_consensus::TxEnvelope;
 use alloy_primitives::U256;
 
@@ -64,6 +66,14 @@ pub fn validate_transaction(
     }
 
     Ok(())
+}
+
+/// Get the current timestamp.
+pub fn unix_seconds() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
 
 #[cfg(test)]

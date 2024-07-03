@@ -3,11 +3,13 @@
 #![allow(missing_debug_implementations)]
 
 use beacon_api_client::{mainnet::Client, BlockId, ProposerDuty};
-use ethereum_consensus::deneb::BeaconBlockHeader;
+use ethereum_consensus::{deneb::BeaconBlockHeader, phase0::mainnet::SLOTS_PER_EPOCH};
 use reqwest::Url;
-use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::primitives::{ChainHead, CommitmentRequest, Slot};
+use crate::{
+    common::unix_seconds,
+    primitives::{ChainHead, CommitmentRequest, Slot},
+};
 
 // The slot inclusion deadline in seconds
 const INCLUSION_DEADLINE: u64 = 6;
@@ -53,7 +55,7 @@ impl ConsensusState {
                 start_slot: 0,
                 proposer_duties: vec![],
             },
-            timestamp: 0,
+            timestamp: unix_seconds(),
             validator_indexes: validator_indexes.to_vec(),
         }
     }
@@ -67,12 +69,12 @@ impl ConsensusState {
         let CommitmentRequest::Inclusion(req) = request;
 
         // Check if the slot is in the current epoch
-        if req.slot < self.epoch.start_slot || req.slot >= self.epoch.start_slot + 32 {
+        if req.slot < self.epoch.start_slot || req.slot >= self.epoch.start_slot + SLOTS_PER_EPOCH {
             return Err(ConsensusError::InvalidSlot(req.slot));
         }
 
         // Check if the request is within the slot inclusion deadline
-        if self.timestamp + INCLUSION_DEADLINE < current_timestamp() {
+        if self.timestamp + INCLUSION_DEADLINE < unix_seconds() {
             return Err(ConsensusError::DeadlineExceeded);
         }
 
@@ -96,16 +98,16 @@ impl ConsensusState {
         self.header = update.header.message;
 
         // Update the timestamp with current time
-        self.timestamp = current_timestamp();
+        self.timestamp = unix_seconds();
 
         // Get the current value of slot and epoch
         let slot = self.header.slot;
-        let epoch = slot / 32;
+        let epoch = slot / SLOTS_PER_EPOCH;
 
         // If the epoch has changed, update the proposer duties
         if epoch != self.epoch.value {
             self.epoch.value = epoch;
-            self.epoch.start_slot = epoch * 32;
+            self.epoch.start_slot = epoch * SLOTS_PER_EPOCH;
 
             self.fetch_proposer_duties(epoch).await?;
         }
@@ -124,14 +126,6 @@ impl ConsensusState {
     pub fn get_epoch(&self) -> &Epoch {
         &self.epoch
     }
-}
-
-/// Get the current timestamp.
-fn current_timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
 }
 
 /// Filters the proposer duties and returns the validator index for a given slot
