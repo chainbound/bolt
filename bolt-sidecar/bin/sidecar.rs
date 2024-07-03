@@ -77,14 +77,14 @@ async fn main() -> eyre::Result<()> {
                     }
                 };
 
-                // if let Err(e) = execution_state
-                //     .try_commit(&request)
-                //     .await
-                // {
-                //     tracing::error!("Failed to commit request: {:?}", e);
-                //     let _ = response_tx.send(Err(ApiError::Custom(e.to_string())));
-                //     continue;
-                // }
+                if let Err(e) = execution_state
+                    .try_commit(&request)
+                    .await
+                {
+                    tracing::error!("Failed to commit request: {:?}", e);
+                    let _ = response_tx.send(Err(ApiError::Custom(e.to_string())));
+                    continue;
+                }
 
                 // TODO: match when we have more request types
                 let CommitmentRequest::Inclusion(request) = request;
