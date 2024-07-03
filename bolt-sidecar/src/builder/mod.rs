@@ -115,7 +115,7 @@ impl LocalBuilder {
         let payload_and_blobs = PayloadAndBlobs {
             execution_payload: eth_payload,
             // TODO: add included blobs here
-            blobs_bundle: None,
+            blobs_bundle: Default::default(),
         };
 
         // 2. create a signed builder bid with the sealed block header we just created

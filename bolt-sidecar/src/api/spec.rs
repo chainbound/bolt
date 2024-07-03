@@ -133,7 +133,7 @@ pub trait BuilderApi {
     async fn get_payload(
         &self,
         signed_block: SignedBlindedBeaconBlock,
-    ) -> Result<VersionedValue<GetPayloadResponse>, BuilderApiError>;
+    ) -> Result<GetPayloadResponse, BuilderApiError>;
 }
 
 #[async_trait::async_trait]

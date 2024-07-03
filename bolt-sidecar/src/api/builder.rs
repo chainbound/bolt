@@ -39,7 +39,7 @@ pub struct BuilderProxyServer<T: BuilderApi, P> {
     // TODO: fill with local payload when we fetch a payload
     // in failed get_header
     // This will only be some in case of a failed get_header
-    local_payload: Mutex<Option<VersionedValue<GetPayloadResponse>>>,
+    local_payload: Mutex<Option<GetPayloadResponse>>,
     /// The payload fetcher to get locally built payloads.
     payload_fetcher: P,
 }
@@ -156,13 +156,7 @@ where
         {
             // Set the payload for the following get_payload request
             let mut local_payload = server.local_payload.lock();
-            let versioned_payload = VersionedValue {
-                version: Fork::Deneb,
-                data: payload.payload,
-                meta: Default::default(),
-            };
-
-            *local_payload = Some(versioned_payload);
+            *local_payload = Some(payload.payload);
         }
 
         let versioned_bid = VersionedValue::<SignedBuilderBid> {
@@ -179,7 +173,7 @@ where
     pub async fn get_payload(
         State(server): State<Arc<BuilderProxyServer<T, P>>>,
         req: Request<Body>,
-    ) -> Result<Json<VersionedValue<GetPayloadResponse>>, BuilderApiError> {
+    ) -> Result<Json<GetPayloadResponse>, BuilderApiError> {
         let start = std::time::Instant::now();
         tracing::debug!("Received get_payload request");
 
@@ -207,16 +201,16 @@ where
 
             // WARNING: this is an important check. If the local block does not match what the
             // beacon node has signed, we are at risk of equivocation and slashing.
-            if payload.data.block_hash() != requested_block {
+            if payload.block_hash() != requested_block {
                 tracing::error!(
                     expected = requested_block.to_string(),
-                    have = payload.data.block_hash().to_string(),
+                    have = payload.block_hash().to_string(),
                     "Local block hash does not match requested block hash"
                 );
 
                 return Err(BuilderApiError::InvalidLocalPayloadBlockHash {
                     expected: requested_block.to_string(),
-                    have: payload.data.block_hash().to_string(),
+                    have: payload.block_hash().to_string(),
                 });
             };
 
