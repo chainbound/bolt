@@ -2,10 +2,11 @@ use alloy_primitives::U256;
 use blst::min_pk::SecretKey;
 use ethereum_consensus::{
     crypto::PublicKey,
+    deneb::mainnet::ExecutionPayloadHeader,
     ssz::prelude::{List, MerkleizationError},
 };
 use payload_builder::FallbackPayloadBuilder;
-use reth_primitives::{SealedHeader, TransactionSigned};
+use reth_primitives::TransactionSigned;
 use signature::sign_builder_message;
 
 use crate::{
@@ -102,7 +103,7 @@ impl LocalBuilder {
         // the current head of the chain
         let sealed_block = self
             .fallback_builder
-            .build_fallback_payload(transactions)
+            .build_fallback_payload(&transactions)
             .await?;
 
         // NOTE: we use a big value for the bid to ensure it gets chosen by mev-boost.
@@ -118,9 +119,16 @@ impl LocalBuilder {
         };
 
         // 2. create a signed builder bid with the sealed block header we just created
-        let signed_bid = self.create_signed_builder_bid(value, sealed_block.header)?;
+        let eth_header = compat::to_execution_payload_header(
+            &sealed_block.header,
+            transactions,
+            sealed_block.withdrawals.unwrap_or_default(),
+        );
 
-        // 3. prepare a get_payload response for when the beacon node will ask for it
+        // 3. sign the bid with the local builder's BLS key
+        let signed_bid = self.create_signed_builder_bid(value, eth_header)?;
+
+        // 4. prepare a get_payload response for when the beacon node will ask for it
         let Some(get_payload_res) =
             GetPayloadResponse::try_from_execution_payload(&payload_and_blobs)
         else {
@@ -150,14 +158,14 @@ impl LocalBuilder {
     fn create_signed_builder_bid(
         &self,
         value: U256,
-        header: SealedHeader,
+        header: ExecutionPayloadHeader,
     ) -> Result<SignedBuilderBid, BuilderError> {
         // compat: convert from blst to ethereum consensus types
         let pubkey = self.secret_key.sk_to_pk().to_bytes();
         let consensus_pubkey = PublicKey::try_from(pubkey.as_slice()).expect("valid pubkey bytes");
 
         let message = BuilderBid {
-            header: compat::to_execution_payload_header(&header),
+            header,
             blob_kzg_commitments: List::default(),
             public_key: consensus_pubkey,
             value,

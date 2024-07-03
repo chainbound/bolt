@@ -75,7 +75,7 @@ pub struct Context {
     prev_randao: B256,
     fee_recipient: Address,
     transactions_root: B256,
-    withdrawals_root: Option<B256>,
+    withdrawals_root: B256,
     parent_beacon_block_root: B256,
     slot_time_in_seconds: u64,
 }
@@ -96,7 +96,7 @@ impl FallbackPayloadBuilder {
     /// to provide a valid payload that fulfills the commitments made by Bolt.
     pub async fn build_fallback_payload(
         &self,
-        transactions: Vec<TransactionSigned>,
+        transactions: &[TransactionSigned],
     ) -> Result<SealedBlock, BuilderError> {
         let latest_block = self.execution_rpc_client.get_block(None, true).await?;
         tracing::info!(num = ?latest_block.header.number, "got latest block");
@@ -106,19 +106,21 @@ impl FallbackPayloadBuilder {
         let beacon_api = beacon_api_client::mainnet::Client::new(beacon_api_endpoint);
 
         let withdrawals = beacon_api
+            // Slot: Defaults to the slot after the parent state if not specified.
             .get_expected_withdrawals(StateId::Head, None)
             .await
             .unwrap()
             .into_iter()
             .map(to_reth_withdrawal)
             .collect::<Vec<_>>();
+
         tracing::info!(amount = ?withdrawals.len(), "got withdrawals");
 
-        let withdrawals = if withdrawals.is_empty() {
-            None
-        } else {
-            Some(withdrawals)
-        };
+        // let withdrawals = if withdrawals.is_empty() {
+        //     None
+        // } else {
+        //     Some(withdrawals)
+        // };
 
         // NOTE: for some reason, this call fails with an ApiResult deserialization error
         // when using the beacon_api_client crate directly, so we use reqwest temporarily.
@@ -174,17 +176,15 @@ impl FallbackPayloadBuilder {
             prev_randao,
             extra_data: self.extra_data.clone(),
             fee_recipient: self.fee_recipient,
-            transactions_root: proofs::calculate_transaction_root(&transactions),
-            withdrawals_root: withdrawals
-                .as_ref()
-                .map(|w| proofs::calculate_withdrawals_root(w)),
+            transactions_root: proofs::calculate_transaction_root(transactions),
+            withdrawals_root: proofs::calculate_withdrawals_root(&withdrawals),
             slot_time_in_seconds: self.slot_time_in_seconds,
         };
 
         let body = BlockBody {
-            transactions,
             ommers: Vec::new(),
-            withdrawals: withdrawals.map(Withdrawals::new),
+            transactions: transactions.to_vec(),
+            withdrawals: Some(Withdrawals::new(withdrawals)),
         };
 
         let mut hints = Hints::default();
@@ -367,7 +367,7 @@ pub(crate) fn build_header_with_hints_and_context(
         state_root,
         transactions_root: context.transactions_root,
         receipts_root,
-        withdrawals_root: context.withdrawals_root,
+        withdrawals_root: Some(context.withdrawals_root),
         logs_bloom,
         difficulty: U256::ZERO,
         number: latest_block.header.number.unwrap_or_default() + 1,
@@ -422,9 +422,19 @@ mod tests {
         let raw_encoded = tx_signed.encoded_2718();
         let tx_signed_reth = TransactionSigned::decode_enveloped(&mut raw_encoded.as_slice())?;
 
-        let block = builder.build_fallback_payload(vec![tx_signed_reth]).await?;
+        let block = builder.build_fallback_payload(&[tx_signed_reth]).await?;
         assert_eq!(block.body.len(), 1);
 
         Ok(())
+    }
+
+    #[test]
+    fn test_empty_withdrawals_root() {
+        let withdrawals = Vec::new();
+        let withdrawals_root = reth_primitives::proofs::calculate_withdrawals_root(&withdrawals);
+        assert_eq!(
+            withdrawals_root,
+            reth_primitives::constants::EMPTY_WITHDRAWALS
+        );
     }
 }

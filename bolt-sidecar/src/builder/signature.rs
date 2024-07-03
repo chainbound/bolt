@@ -118,7 +118,7 @@ mod tests {
     use crate::{builder::signature::compute_builder_domain, config::Chain};
 
     #[test]
-    pub fn test_compute_builder_domain() {
+    fn test_compute_builder_domain() {
         let mainnet = Chain::Mainnet;
         assert_eq!(
             compute_builder_domain(mainnet.fork_version(), None),
