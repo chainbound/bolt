@@ -7,7 +7,7 @@ use ethereum_consensus::ssz::prelude::{HashTreeRoot, MerkleizationError};
 use tree_hash::TreeHash;
 use tree_hash_derive::TreeHash;
 
-use crate::Chain;
+use crate::ChainConfig;
 
 /// Sign a SSZ object a BLS secret key, using the Application Builder domain
 /// for signing arbitrary builder-api messages in the out-of-protocol specifications.
@@ -15,7 +15,7 @@ use crate::Chain;
 /// Fun Note: we use a `blst` secret key to sign a message, and produce an `alloy` signature,
 /// which is then converted to an `ethereum-consensus` signature.
 pub fn sign_builder_message<T: HashTreeRoot>(
-    chain: &Chain,
+    chain: &ChainConfig,
     sk: &SecretKey,
     msg: &T,
 ) -> Result<Signature, MerkleizationError> {
@@ -33,7 +33,7 @@ pub fn sign_builder_message<T: HashTreeRoot>(
 /// Verify a SSZ object signed with a BLS public key, using the Application Builder domain
 /// for signing arbitrary builder-api messages in the out-of-protocol specifications.
 pub fn verify_signed_builder_message<T: HashTreeRoot>(
-    chain: &Chain,
+    chain: &ChainConfig,
     pubkey: &PublicKey,
     msg: &T,
     signature: &BlsSignature,
@@ -115,29 +115,29 @@ pub fn compute_builder_domain(
 
 #[cfg(test)]
 mod tests {
-    use crate::{builder::signature::compute_builder_domain, config::Chain};
+    use crate::{builder::signature::compute_builder_domain, ChainConfig};
 
     #[test]
     fn test_compute_builder_domain() {
-        let mainnet = Chain::Mainnet;
+        let mainnet = ChainConfig::mainnet();
         assert_eq!(
             compute_builder_domain(mainnet.fork_version(), None),
             mainnet.builder_domain()
         );
 
-        let holesky = Chain::Holesky;
+        let holesky = ChainConfig::holesky();
         assert_eq!(
             compute_builder_domain(holesky.fork_version(), None),
             holesky.builder_domain()
         );
 
-        let kurtosis = Chain::Kurtosis;
+        let kurtosis = ChainConfig::kurtosis(0, 0);
         assert_eq!(
             compute_builder_domain(kurtosis.fork_version(), None),
             kurtosis.builder_domain()
         );
 
-        let helder = Chain::Helder;
+        let helder = ChainConfig::helder();
         assert_eq!(
             compute_builder_domain(helder.fork_version(), None),
             helder.builder_domain()

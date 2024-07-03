@@ -38,7 +38,7 @@ async fn main() -> eyre::Result<()> {
     let mut consensus_state = ConsensusState::new(
         &config.beacon_api_url,
         &config.validator_indexes,
-        config.commitment_deadline,
+        config.chain.commitment_deadline(),
     );
 
     // TODO: this can be replaced with ethereum_consensus::clock::from_system_time()
