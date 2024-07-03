@@ -18,9 +18,13 @@ use super::{
 };
 use crate::RpcClient;
 
-/// Extra-data payload field used for locally built blocks.
-/// NOTE: must be exactly 32 bytes in hex (=16 chars in utf-8).
-const DEFAULT_EXTRA_DATA: &str = "Selfbuilt w Bolt";
+/// Extra-data payload field used for locally built blocks, decoded in UTF-8.
+///
+/// Corresponds to the string "Self-built with Bolt". It can be max 32 bytes
+const DEFAULT_EXTRA_DATA: [u8; 20] = [
+    0x53, 0x65, 0x6c, 0x66, 0x2d, 0x62, 0x75, 0x69, 0x6c, 0x74, 0x20, 0x77, 0x69, 0x74, 0x68, 0x20,
+    0x42, 0x6f, 0x6c, 0x74,
+];
 
 /// The fallback payload builder is responsible for assembling a valid
 /// sealed block from a set of transactions. It (ab)uses the engine API
@@ -58,7 +62,7 @@ impl FallbackPayloadBuilder {
         Self {
             fee_recipient,
             engine_hinter,
-            extra_data: hex::encode(DEFAULT_EXTRA_DATA).into(),
+            extra_data: DEFAULT_EXTRA_DATA.into(),
             execution_rpc_client: RpcClient::new(execution_rpc_url),
         }
     }
