@@ -41,6 +41,12 @@ interface IBoltRegistry {
     /// @notice Event to log the status change of a based proposer
     event StatusChange(address indexed operator, Status status);
 
+    event Registered(
+        address indexed operator,
+        uint64[] validatorIndexes,
+        MetaData metadata
+    );
+
     function register(
         uint64[] calldata validatorIndexes,
         MetaData calldata metadata

@@ -44,7 +44,7 @@ contract BoltRegistry is IBoltRegistry {
             metadata
         );
 
-        emit StatusChange(msg.sender, Status.ACTIVE);
+        emit Registered(msg.sender, validatorIndexes, metadata);
     }
 
     /// @notice Allows a based proposer to exit out of the protocol.
@@ -61,6 +61,8 @@ contract BoltRegistry is IBoltRegistry {
         }
 
         registrant.exitInitiatedAt = block.timestamp;
+
+        emit StatusChange(msg.sender, Status.EXITING);
     }
 
     /// @notice Completes the exit process for a based proposer
