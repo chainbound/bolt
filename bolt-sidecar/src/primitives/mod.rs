@@ -5,9 +5,9 @@ use std::sync::{atomic::AtomicU64, Arc};
 
 use alloy_primitives::U256;
 use ethereum_consensus::{
-    capella,
     crypto::{KzgCommitment, PublicKey as BlsPublicKey, Signature as BlsSignature},
     deneb::{
+        self,
         mainnet::{BlobsBundle, MAX_BLOB_COMMITMENTS_PER_BLOCK},
         presets::mainnet::ExecutionPayloadHeader,
         Hash32,
@@ -145,14 +145,14 @@ impl PayloadFetcher for NoopPayloadFetcher {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PayloadAndBlobs {
     pub execution_payload: ExecutionPayload,
-    pub blobs_bundle: Option<BlobsBundle>,
+    pub blobs_bundle: BlobsBundle,
 }
 
 impl Default for PayloadAndBlobs {
     fn default() -> Self {
         Self {
-            execution_payload: ExecutionPayload::Capella(capella::ExecutionPayload::default()),
-            blobs_bundle: None,
+            execution_payload: ExecutionPayload::Deneb(deneb::ExecutionPayload::default()),
+            blobs_bundle: BlobsBundle::default(),
         }
     }
 }
