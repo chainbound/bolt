@@ -90,12 +90,7 @@ impl ChainConfig {
 
     /// Get the slot time for the given chain in seconds.
     pub fn slot_time(&self) -> u64 {
-        match self.chain {
-            Chain::Mainnet => DEFAULT_SLOT_TIME_IN_SECONDS,
-            Chain::Holesky => DEFAULT_SLOT_TIME_IN_SECONDS,
-            Chain::Helder => DEFAULT_SLOT_TIME_IN_SECONDS,
-            Chain::Kurtosis => self.slot_time_in_seconds,
-        }
+        self.slot_time_in_seconds
     }
 
     /// Get the domain for signing messages on the given chain.
@@ -120,12 +115,7 @@ impl ChainConfig {
 
     /// Get the commitment deadline duration for the given chain.
     pub fn commitment_deadline(&self) -> Duration {
-        match self.chain {
-            Chain::Mainnet => Duration::from_millis(DEFAULT_COMMITMENT_DEADLINE_IN_MILLIS),
-            Chain::Holesky => Duration::from_millis(DEFAULT_COMMITMENT_DEADLINE_IN_MILLIS),
-            Chain::Helder => Duration::from_millis(DEFAULT_COMMITMENT_DEADLINE_IN_MILLIS),
-            Chain::Kurtosis => Duration::from_millis(self.commitment_deadline),
-        }
+        Duration::from_millis(self.commitment_deadline)
     }
 }
 
