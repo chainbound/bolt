@@ -102,8 +102,9 @@ impl FallbackPayloadBuilder {
         &self,
         transactions: &[TransactionSigned],
     ) -> Result<SealedBlock, BuilderError> {
+        // TODO: what if the latest block ends up being reorged out?
         let latest_block = self.execution_rpc_client.get_block(None, true).await?;
-        tracing::info!(num = ?latest_block.header.number, "got latest block");
+        tracing::debug!(num = ?latest_block.header.number, "got latest block");
 
         // TODO: refactor this once ConsensusState (https://github.com/chainbound/bolt/issues/58) is ready
         let beacon_api_endpoint = reqwest::Url::parse(&self.beacon_api_url).unwrap();
@@ -118,13 +119,7 @@ impl FallbackPayloadBuilder {
             .map(to_reth_withdrawal)
             .collect::<Vec<_>>();
 
-        tracing::info!(amount = ?withdrawals.len(), "got withdrawals");
-
-        // let withdrawals = if withdrawals.is_empty() {
-        //     None
-        // } else {
-        //     Some(withdrawals)
-        // };
+        tracing::debug!(amount = ?withdrawals.len(), "got withdrawals");
 
         // NOTE: for some reason, this call fails with an ApiResult deserialization error
         // when using the beacon_api_client crate directly, so we use reqwest temporarily.
@@ -146,13 +141,13 @@ impl FallbackPayloadBuilder {
             .as_str()
             .unwrap();
         let prev_randao = B256::from_hex(prev_randao).unwrap();
-        tracing::info!("got prev_randao");
+        tracing::debug!("got prev_randao");
 
         let parent_beacon_block_root = beacon_api
             .get_beacon_block_root(BlockId::Head)
             .await
             .unwrap();
-        tracing::info!(parent = ?parent_beacon_block_root, "got parent_beacon_block_root");
+        tracing::debug!(parent = ?parent_beacon_block_root, "got parent_beacon_block_root");
 
         let versioned_hashes = transactions
             .iter()
@@ -209,7 +204,7 @@ impl FallbackPayloadBuilder {
                 .fetch_next_payload_hint(&exec_payload, &versioned_hashes, parent_beacon_block_root)
                 .await?;
 
-            tracing::info!("engine_hint: {:?}", engine_hint);
+            tracing::debug!("engine_hint: {:?}", engine_hint);
 
             match engine_hint {
                 EngineApiHint::BlockHash(hash) => {
@@ -281,8 +276,6 @@ impl EngineHinter {
         versioned_hashes: &[B256],
         parent_beacon_root: B256,
     ) -> Result<EngineApiHint, BuilderError> {
-        tracing::info!("jwt_hex: {:?}", self.jwt_hex);
-
         let auth_jwt = secret_to_bearer_header(&JwtSecret::from_hex(&self.jwt_hex)?);
 
         let body = format!(
@@ -313,7 +306,7 @@ impl EngineHinter {
             }
         };
 
-        tracing::info!("raw hint: {:?}", raw_hint);
+        tracing::trace!("raw hint: {:?}", raw_hint);
 
         // Match the hint value to the corresponding header field and return it
         if raw_hint.contains("blockhash mismatch") {
@@ -377,7 +370,6 @@ pub(crate) fn build_header_with_hints_and_context(
         number: latest_block.header.number.unwrap_or_default() + 1,
         gas_limit: latest_block.header.gas_limit as u64,
         gas_used,
-        // TODO: use slot time from beacon chain instead, to account for reorgs
         timestamp: latest_block.header.timestamp + context.slot_time_in_seconds,
         mix_hash: context.prev_randao,
         nonce: BEACON_NONCE,
@@ -433,11 +425,10 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_withdrawals_root() {
-        let withdrawals = Vec::new();
-        let withdrawals_root = reth_primitives::proofs::calculate_withdrawals_root(&withdrawals);
+    fn test_empty_el_withdrawals_root() {
+        // Withdrawal root in the execution layer header is MPT.
         assert_eq!(
-            withdrawals_root,
+            reth_primitives::proofs::calculate_withdrawals_root(&Vec::new()),
             reth_primitives::constants::EMPTY_WITHDRAWALS
         );
     }

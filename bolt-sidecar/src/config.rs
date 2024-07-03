@@ -124,8 +124,6 @@ impl Chain {
                 b256!("000000015b83a23759c560b2d0c64576e1dcfc34ea94c4988f3e0d9f77f05387").0
             }
             Chain::Kurtosis => {
-                // TODO: verify this
-                // b256!("00000001f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9").0
                 b256!("000000010b41be4cdb34d183dddca5398337626dcdcfaf1720c1202d3b95f84e").0
             }
             Chain::Helder => {
