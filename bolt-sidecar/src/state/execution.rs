@@ -81,12 +81,12 @@ pub struct ExecutionState<C> {
 }
 
 impl<C: StateFetcher> ExecutionState<C> {
-    /// Creates a new state with the given client. Does not initialize the state
-    /// with any head block number or state. This should be done with [`update_head`].
+    /// Creates a new state with the given client, initializing the
+    /// basefee and head block number.
     pub async fn new(client: C) -> Result<Self, TransportError> {
         Ok(Self {
-            basefee: 0,
-            block_number: 0,
+            basefee: client.get_basefee(None).await?,
+            block_number: client.get_head().await?,
             account_states: HashMap::new(),
             block_templates: HashMap::new(),
             client,
