@@ -3,23 +3,35 @@ pragma solidity ^0.8.13;
 
 interface IBoltRegistry {
     /// @notice Struct to hold opted-in proposer information
-    struct BasedProposer {
-        // The address of the proposer opted in
-        address addr;
-        // The status of the proposer in the protocol
-        BoltStatus status;
-        // A flag to indicate if the proposer is opting out
-        bool isOptingOut;
+    struct Registrant {
+        // The address of the operator
+        address operator;
+        // The validator indexes this registrant is responsible for
+        uint64[] validatorIndexes;
+        uint256 enteredAt;
+        uint256 exitInitiatedAt;
+        uint256 balance;
+        Status status;
+        MetaData metadata;
+    }
+
+    struct MetaData {
+        string rpc;
+        bytes extra;
     }
 
     /// @notice Enum to hold the status of the based proposers
-    enum BoltStatus {
-        Active,
-        Inactive
+    enum Status {
+        // Default INACTIVE
+        INACTIVE,
+        ACTIVE,
+        FROZEN,
+        EXITING
     }
 
     // Error messages
     error AlreadyOptedIn();
+    error InsufficientCollateral();
     error BasedProposerDoesNotExist();
     error InvalidStatusChange();
     error CooldownNotElapsed();
@@ -27,15 +39,24 @@ interface IBoltRegistry {
     error NotFound();
 
     /// @notice Event to log the status change of a based proposer
-    event BasedProposerStatusChanged(address indexed basedProposer, BoltStatus status);
+    event StatusChange(address indexed operator, Status status);
 
-    function isActiveBasedProposer(address _basedProposer) external view returns (bool);
+    function register(
+        uint64[] calldata validatorIndexes,
+        MetaData calldata metadata
+    ) external payable;
 
-    function getBasedProposerStatus(address _basedProposers) external view returns (BoltStatus);
+    function isActiveOperator(address _operator) external view returns (bool);
 
-    function optIn() external;
+    function getOperatorStatus(
+        address _operator
+    ) external view returns (Status);
 
-    function beginOptOut() external;
+    function getOperatorForValidator(
+        uint64 _validatorIndex
+    ) external view returns (Registrant memory);
 
-    function confirmOptOut() external;
+    function startExit() external;
+
+    function confirmExit(address payable recipient) external;
 }

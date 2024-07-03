@@ -4,80 +4,115 @@ pragma solidity ^0.8.13;
 import {IBoltRegistry} from "../interfaces/IBoltRegistry.sol";
 
 contract BoltRegistry is IBoltRegistry {
-    uint256 public constant OPT_OUT_COOLDOWN = 1 days;
+    // Cooldown period after which a based proposer can complete the exit process
+    uint256 public constant EXIT_COOLDOWN = 1 days;
 
-    // Mapping to hold the based proposers
-    mapping(address => BasedProposer) public basedProposers;
+    // Minimum collateral per operator
+    uint256 public immutable MINIMUM_COLLATERAL;
 
-    mapping(address => uint256) private optOutTimestamps;
+    // Mapping to hold the registrants
+    mapping(address => Registrant) public registrants;
 
-    /// @notice Constructor
-    constructor() {}
+    // Mapping that holds the relationship between validator index and operator address
+    mapping(uint64 => address) public delegations;
+
+    /// @notice Constructor which can set the minimum collateral required to register
+    constructor(uint256 _minimumCollateral) {
+        MINIMUM_COLLATERAL = _minimumCollateral;
+    }
 
     /// @notice Allows a based proposer to opt-in to the protocol
-    function optIn() external {
-        if (basedProposers[msg.sender].addr != address(0)) {
+    function register(
+        uint64[] calldata validatorIndexes,
+        MetaData calldata metadata
+    ) external payable {
+        if (msg.value < MINIMUM_COLLATERAL) {
+            revert InsufficientCollateral();
+        }
+
+        if (registrants[msg.sender].operator != address(0)) {
             revert AlreadyOptedIn();
         }
 
-        basedProposers[msg.sender] = BasedProposer(msg.sender, BoltStatus.Active, false);
-        emit BasedProposerStatusChanged(msg.sender, BoltStatus.Active);
+        registrants[msg.sender] = Registrant(
+            msg.sender,
+            validatorIndexes,
+            block.timestamp,
+            0,
+            msg.value,
+            Status.ACTIVE,
+            metadata
+        );
+
+        emit StatusChange(msg.sender, Status.ACTIVE);
     }
 
-    /// @notice Allows a based proposer to opt-out of the protocol.
-    /// @dev Requires a second transaction after the cooldown period to complete the opt-out process.
-    function beginOptOut() external {
-        BasedProposer storage basedProposer = basedProposers[msg.sender];
+    /// @notice Allows a based proposer to exit out of the protocol.
+    /// @dev Requires a second transaction after the cooldown period to complete the exit process.
+    function startExit() external {
+        Registrant storage registrant = registrants[msg.sender];
 
-        if (basedProposer.addr != msg.sender) {
+        if (registrant.operator != msg.sender) {
             revert BasedProposerDoesNotExist();
         }
-        if (basedProposer.status == BoltStatus.Inactive) {
+
+        if (registrant.status == Status.EXITING) {
             revert InvalidStatusChange();
         }
 
-        basedProposer.isOptingOut = true;
-        optOutTimestamps[msg.sender] = block.timestamp;
+        registrant.exitInitiatedAt = block.timestamp;
     }
 
-    /// @notice Completes the opt-out process for a based proposer
-    function confirmOptOut() external {
-        BasedProposer storage basedProposer = basedProposers[msg.sender];
+    /// @notice Completes the exit process for a based proposer
+    /// and sends the funds back to the `returnTo` address.
+    function confirmExit(address payable recipient) external {
+        Registrant storage registrant = registrants[msg.sender];
 
-        if (basedProposer.addr != msg.sender) {
+        if (registrant.operator != msg.sender) {
             revert BasedProposerDoesNotExist();
         }
-        if (!basedProposer.isOptingOut) {
+        if (registrant.exitInitiatedAt == 0) {
             revert InvalidStatusChange();
         }
-        if (basedProposer.status == BoltStatus.Inactive) {
+        if (registrant.status == Status.INACTIVE) {
             revert InvalidStatusChange();
         }
-        if (block.timestamp < optOutTimestamps[msg.sender] + OPT_OUT_COOLDOWN) {
+
+        if (block.timestamp < registrant.exitInitiatedAt + EXIT_COOLDOWN) {
             revert CooldownNotElapsed();
         }
 
-        basedProposer.isOptingOut = false;
-        basedProposer.status = BoltStatus.Inactive;
-        emit BasedProposerStatusChanged(msg.sender, BoltStatus.Inactive);
+        delete registrants[msg.sender];
+
+        recipient.transfer(registrant.balance);
+
+        emit StatusChange(msg.sender, Status.INACTIVE);
     }
 
     /// @notice Check if an address is a based proposer opted into the protocol
-    /// @param _basedProposer The address to check
+    /// @param _operator The address to check
     /// @return True if the address is an active based proposer, false otherwise
-    function isActiveBasedProposer(address _basedProposer) external view returns (bool) {
-        if (basedProposers[_basedProposer].addr == address(0)) return false;
-        return basedProposers[_basedProposer].status == BoltStatus.Active;
+    function isActiveOperator(address _operator) external view returns (bool) {
+        return registrants[_operator].status == Status.ACTIVE;
     }
 
     /// @notice Get the status of a based proposer
-    /// @param _basedProposer The address of the based proposer
+    /// @param _operator The address of the operator
     /// @return The status of the based proposer
-    function getBasedProposerStatus(address _basedProposer) external view returns (BoltStatus) {
-        if (basedProposers[_basedProposer].addr == address(0)) {
-            revert BasedProposerDoesNotExist();
+    function getOperatorStatus(
+        address _operator
+    ) external view returns (Status) {
+        // Will return INACTIVE if the operator is not registered
+        return registrants[_operator].status;
+    }
+
+    function getOperatorForValidator(
+        uint64 _validatorIndex
+    ) external view returns (Registrant memory) {
+        if (delegations[_validatorIndex] != address(0)) {
+            return registrants[delegations[_validatorIndex]];
         }
 
-        return basedProposers[_basedProposer].status;
+        revert NotFound();
     }
 }
