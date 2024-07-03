@@ -125,8 +125,8 @@ impl Chain {
             }
             Chain::Kurtosis => {
                 // TODO: verify this
-                b256!("00000001f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9").0
-                // b256!("000000013e2b3354ba8a4ebaed231d0ae887bf5c974f080dbc63f09a57da1637").0
+                // b256!("00000001f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a9").0
+                b256!("000000010b41be4cdb34d183dddca5398337626dcdcfaf1720c1202d3b95f84e").0
             }
             Chain::Helder => {
                 b256!("0000000194c41af484fff7964969e0bdd922f82dff0f4be87a60d0664cc9d1ff").0
@@ -139,7 +139,7 @@ impl Chain {
         match self {
             Chain::Mainnet => [0u8; 4],
             Chain::Holesky => [1, 1, 112, 0],
-            Chain::Kurtosis => [0u8; 4], // TODO
+            Chain::Kurtosis => [16, 0, 0, 56],
             Chain::Helder => [16, 0, 0, 0],
         }
     }
