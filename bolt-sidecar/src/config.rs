@@ -28,7 +28,7 @@ pub struct Opts {
     #[clap(short = 'm', long)]
     pub(super) max_commitments: Option<usize>,
     /// Validator indexes
-    #[clap(short = 'v', long, value_parser, num_args = 0.., value_delimiter = ',')]
+    #[clap(short = 'v', long, value_parser, num_args = 1.., value_delimiter = ',')]
     pub(super) validator_indexes: Vec<u64>,
     /// Signing options
     #[clap(flatten)]

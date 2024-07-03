@@ -79,11 +79,7 @@ impl ConsensusState {
         }
 
         // Find the validator index for the given slot
-        let validator_index = find_validator_index_for_slot(
-            &self.validator_indexes,
-            &self.epoch.proposer_duties,
-            req.slot,
-        )?;
+        let validator_index = self.find_validator_index_for_slot(req.slot)?;
 
         Ok(validator_index)
     }
@@ -123,25 +119,21 @@ impl ConsensusState {
         Ok(())
     }
 
-    pub fn get_epoch(&self) -> &Epoch {
-        &self.epoch
+    /// Filters the proposer duties and returns the validator index for a given slot
+    /// if it doesn't exists then returns error.
+    pub fn find_validator_index_for_slot(&self, slot: u64) -> Result<u64, ConsensusError> {
+        self.epoch
+            .proposer_duties
+            .iter()
+            .find(|&duty| {
+                duty.slot == slot
+                    && self
+                        .validator_indexes
+                        .contains(&(duty.validator_index as u64))
+            })
+            .map(|duty| duty.validator_index as u64)
+            .ok_or(ConsensusError::ValidatorNotFound)
     }
-}
-
-/// Filters the proposer duties and returns the validator index for a given slot
-/// if it doesn't exists then returns 0 by default.
-pub fn find_validator_index_for_slot(
-    validator_indexes: &[u64],
-    proposer_duties: &[ProposerDuty],
-    slot: u64,
-) -> Result<u64, ConsensusError> {
-    proposer_duties
-        .iter()
-        .find(|&duty| {
-            duty.slot == slot && validator_indexes.contains(&(duty.validator_index as u64))
-        })
-        .map(|duty| duty.validator_index as u64)
-        .ok_or(ConsensusError::ValidatorNotFound)
 }
 
 #[cfg(test)]
@@ -149,28 +141,51 @@ mod tests {
     use super::*;
     use beacon_api_client::ProposerDuty;
 
-    #[test]
-    fn test_filter_index() {
-        let validator_indexes = vec![11, 22, 33];
+    #[tokio::test]
+    async fn test_find_validator_index_for_slot() {
+        // Sample proposer duties
         let proposer_duties = vec![
             ProposerDuty {
                 public_key: Default::default(),
                 slot: 1,
-                validator_index: 11,
+                validator_index: 100,
             },
             ProposerDuty {
                 public_key: Default::default(),
                 slot: 2,
-                validator_index: 22,
+                validator_index: 101,
             },
             ProposerDuty {
                 public_key: Default::default(),
                 slot: 3,
-                validator_index: 33,
+                validator_index: 102,
             },
         ];
 
-        let result = find_validator_index_for_slot(&validator_indexes, &proposer_duties, 2);
-        assert_eq!(result.unwrap(), 22);
+        // Validator indexes that we are interested in
+        let validator_indexes = vec![100, 102];
+
+        // Create a ConsensusState with the sample proposer duties and validator indexes
+        let mut state = ConsensusState {
+            beacon_api_client: Client::new(Url::parse("http://localhost").unwrap()),
+            header: BeaconBlockHeader::default(),
+            epoch: Epoch {
+                value: 0,
+                start_slot: 0,
+                proposer_duties,
+            },
+            timestamp: unix_seconds(),
+            validator_indexes,
+        };
+
+        // Test finding a valid slot
+        assert_eq!(state.find_validator_index_for_slot(1).unwrap(), 100);
+        assert_eq!(state.find_validator_index_for_slot(3).unwrap(), 102);
+
+        // Test finding an invalid slot (not in proposer duties)
+        assert!(matches!(
+            state.find_validator_index_for_slot(4),
+            Err(ConsensusError::ValidatorNotFound)
+        ));
     }
 }
