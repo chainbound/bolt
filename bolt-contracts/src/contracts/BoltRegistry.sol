@@ -44,6 +44,11 @@ contract BoltRegistry is IBoltRegistry {
             metadata
         );
 
+        // Set the delegations
+        for (uint256 i = 0; i < validatorIndexes.length; i++) {
+            delegations[validatorIndexes[i]] = msg.sender;
+        }
+
         emit Registered(msg.sender, validatorIndexes, metadata);
     }
 
