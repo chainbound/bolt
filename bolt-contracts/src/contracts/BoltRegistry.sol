@@ -71,7 +71,7 @@ contract BoltRegistry is IBoltRegistry {
     }
 
     /// @notice Completes the exit process for a based proposer
-    /// and sends the funds back to the `returnTo` address.
+    /// and sends the funds back to the `recipient` address.
     function confirmExit(address payable recipient) external {
         Registrant storage registrant = registrants[msg.sender];
 
@@ -90,6 +90,10 @@ contract BoltRegistry is IBoltRegistry {
         }
 
         delete registrants[msg.sender];
+
+        for (uint256 i = 0; i < registrant.validatorIndexes.length; i++) {
+            delete delegations[registrant.validatorIndexes[i]];
+        }
 
         recipient.transfer(registrant.balance);
 
