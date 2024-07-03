@@ -41,7 +41,7 @@ async fn main() -> eyre::Result<()> {
 
     let (api_events, mut api_events_rx) = mpsc::channel(1024);
     let shutdown_tx = json_rpc::start_server(&config, api_events).await?;
-    let consensus_state = ConsensusState::new(&config.beacon_api_url);
+    let consensus_state = ConsensusState::new(&config.beacon_api_url, &config.validator_indexes);
 
     let builder_proxy_config = BuilderProxyConfig {
         mevboost_url: config.mevboost_url,
@@ -69,11 +69,14 @@ async fn main() -> eyre::Result<()> {
                 tracing::info!("Received commitment request: {:?}", event.request);
                 let request = event.request;
 
-                if let Err (e) = consensus_state.validate_request(&CommitmentRequest::Inclusion(request.clone())) {
-                    tracing::error!("Failed to validate request: {:?}", e);
-                    let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
-                    continue;
-                }
+                let validator_index = match consensus_state.validate_request(&CommitmentRequest::Inclusion(request.clone())) {
+                    Ok(index) => index,
+                    Err(e) => {
+                        tracing::error!("Failed to validate request: {:?}", e);
+                        let _ = event.response.send(Err(ApiError::Custom(e.to_string())));
+                        continue;
+                    }
+                };
 
                 if let Err(e) = execution_state
                     .try_commit(&CommitmentRequest::Inclusion(request.clone()))
@@ -90,8 +93,7 @@ async fn main() -> eyre::Result<()> {
                 );
 
                 // parse the request into constraints and sign them with the sidecar signer
-                // TODO: get the validator index from somewhere
-                let message = ConstraintsMessage::build(0, request.slot, request.clone());
+                let message = ConstraintsMessage::build(validator_index, request.slot, request.clone());
 
                 let signature = signer.sign(&message.digest())?;
                 let signed_constraints: BatchedSignedConstraints =

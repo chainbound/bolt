@@ -27,6 +27,9 @@ pub struct Opts {
     /// Max commitments to accept per block
     #[clap(short = 'm', long)]
     pub(super) max_commitments: Option<usize>,
+    /// Validator indexes
+    #[clap(short = 'v', long, value_parser, num_args = 1.., value_delimiter = ',')]
+    pub(super) validator_indexes: Vec<u64>,
     /// Signing options
     #[clap(flatten)]
     pub(super) signing: SigningOpts,
@@ -68,6 +71,8 @@ pub struct Config {
     pub mevboost_proxy_port: u16,
     /// Limits for the sidecar
     pub limits: Limits,
+    /// Validator indexes
+    pub validator_indexes: Vec<u64>,
 }
 
 impl Default for Config {
@@ -82,6 +87,7 @@ impl Default for Config {
             private_key: Some(random_bls_secret()),
             mevboost_proxy_port: 18551,
             limits: Limits::default(),
+            validator_indexes: Vec::new(),
         }
     }
 }
@@ -126,6 +132,8 @@ impl TryFrom<Opts> for Config {
         config.execution_api_url = opts.execution_api_url.trim_end_matches('/').to_string();
         config.beacon_api_url = opts.beacon_api_url.trim_end_matches('/').to_string();
         config.mevboost_url = opts.mevboost_url.trim_end_matches('/').to_string();
+
+        config.validator_indexes = opts.validator_indexes;
 
         Ok(config)
     }
