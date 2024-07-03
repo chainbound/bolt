@@ -121,7 +121,7 @@ impl ConsensusState {
 
     /// Filters the proposer duties and returns the validator index for a given slot
     /// if it doesn't exists then returns error.
-    pub fn find_validator_index_for_slot(&self, slot: u64) -> Result<u64, ConsensusError> {
+    fn find_validator_index_for_slot(&self, slot: u64) -> Result<u64, ConsensusError> {
         self.epoch
             .proposer_duties
             .iter()
@@ -166,7 +166,7 @@ mod tests {
         let validator_indexes = vec![100, 102];
 
         // Create a ConsensusState with the sample proposer duties and validator indexes
-        let mut state = ConsensusState {
+        let state = ConsensusState {
             beacon_api_client: Client::new(Url::parse("http://localhost").unwrap()),
             header: BeaconBlockHeader::default(),
             epoch: Epoch {
