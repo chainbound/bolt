@@ -46,7 +46,7 @@ impl BlockTemplate {
                 *nonce += 1;
                 *balance += max_cost;
             })
-            .or_insert((transaction.nonce(), max_cost));
+            .or_insert((1, max_cost));
 
         self.transactions.push(transaction);
     }

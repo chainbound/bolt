@@ -89,8 +89,6 @@ async fn main() -> eyre::Result<()> {
                 // TODO: match when we have more request types
                 let CommitmentRequest::Inclusion(request) = request;
 
-                execution_state.commit_transaction(request.slot, request.tx.clone());
-
                 tracing::info!(
                     tx_hash = %request.tx.hash(),
                     "Validation against execution state passed"
