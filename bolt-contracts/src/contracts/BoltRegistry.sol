@@ -24,7 +24,8 @@ contract BoltRegistry is IBoltRegistry {
     /// @notice Allows a based proposer to opt-in to the protocol
     function register(
         uint64[] calldata validatorIndexes,
-        MetaData calldata metadata
+        string calldata rpc,
+        bytes calldata extra
     ) external payable {
         if (msg.value < MINIMUM_COLLATERAL) {
             revert InsufficientCollateral();
@@ -33,6 +34,8 @@ contract BoltRegistry is IBoltRegistry {
         if (registrants[msg.sender].operator != address(0)) {
             revert AlreadyOptedIn();
         }
+
+        MetaData memory metadata = MetaData(rpc, extra);
 
         registrants[msg.sender] = Registrant(
             msg.sender,

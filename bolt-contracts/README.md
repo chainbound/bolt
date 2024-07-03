@@ -9,18 +9,12 @@ to register by providing a list of validator indexes and depositing some collate
 ```js
 function register(
     uint64[] calldata validatorIndexes,
-    MetaData calldata metadata
+    string calldata rpc,
+    bytes calldata extra
 ) external payable;
 
 ```
-
-The `MetaData` object holds information about the RPC and optionally some other information in `extra`:
-```rs
-struct MetaData {
-    string rpc;
-    bytes extra;
-}
-```
+Besides validatorIndexes, `register` also registers an RPC endpoint and some optional other information in `extra`.
 
 ### Exiting
 The exit process is a 2-step process. The first step is triggering the exit, which will put the registrant into an `EXITING` status after which the registrant should be considered inactive. After the `EXIT_COOLDOWN` of 1 day, the exit can be confirmed and the deposit will be returned. 
@@ -47,3 +41,22 @@ function getOperatorForValidator(
 ## Challenger
 WIP
 
+## Deploying
+```bash
+# Example for Helder devnet. Set PRIVATE_KEY to your hex-encoded private key.
+PRIVATE_KEY=$PRIVATE_KEY forge script script/DeployRegistry.s.sol --rpc-url https://rpc.helder-devnets.xyz --broadcast --legacy
+```
+
+## Registering
+```bash
+# Example for Helder devnet. Set PRIVATE_KEY to your hex-encoded private key.
+export PRIVATE_KEY="0x..."
+export RPC_ADDR="http://test.com"
+export VALIDATOR_INDEXES="1,2,3,4"
+forge script script/RegisterValidators.s.sol --rpc-url https://rpc.helder-devnets.xyz --broadcast --legacy
+```
+
+## Deployments
+| Contract | Network | Address |
+| -------- | ------- | ------- |
+| `BoltRegistry.sol` | Helder (7014190335) | 0xdF11D829eeC4C192774F3Ec171D822f6Cb4C14d9 |

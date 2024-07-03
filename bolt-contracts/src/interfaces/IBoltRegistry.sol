@@ -49,7 +49,8 @@ interface IBoltRegistry {
 
     function register(
         uint64[] calldata validatorIndexes,
-        MetaData calldata metadata
+        string calldata rpc,
+        bytes calldata extra
     ) external payable;
 
     function isActiveOperator(address _operator) external view returns (bool);
