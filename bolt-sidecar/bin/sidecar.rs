@@ -104,7 +104,7 @@ async fn main() -> eyre::Result<()> {
                 let signature = signer.sign(&message.digest())?.to_string();
                 let signed_constraints = SignedConstraints { message, signature };
 
-                execution_state.commit_transaction(request.slot, request.tx, signed_constraints.clone());
+                execution_state.add_constraint(request.slot, signed_constraints.clone());
 
 
                 let res = serde_json::to_value(signed_constraints).map_err(Into::into);
@@ -130,22 +130,24 @@ async fn main() -> eyre::Result<()> {
                     continue;
                 };
 
-                // TODO: fix retry logic
+                // TODO: fix retry logic, and move this to separate task
                 let max_retries = 5;
                 let mut i = 0;
                 'inner: while let Err(e) = mevboost_client
                     .submit_constraints(&template.signed_constraints_list)
-                    .await
+                .await
                 {
                     tracing::error!(err = ?e, "Error submitting constraints, retrying...");
                     tokio::time::sleep(Duration::from_millis(100)).await;
                     i+=1;
                     if i >= max_retries {
+                        tracing::error!("Max retries reached while submitting to MEV-Boost");
                         break 'inner
                     }
                 }
 
-                if let Err(e) = local_builder.build_new_local_payload(template.transactions).await {
+
+                if let Err(e) = local_builder.build_new_local_payload(template.transactions()).await {
                     tracing::error!(err = ?e, "CRITICAL: Error while building local payload at slot deadline for {slot}");
                 };
             },
