@@ -13,7 +13,7 @@ use crate::{
     primitives::{
         BuilderBid, GetPayloadResponse, PayloadAndBid, PayloadAndBlobs, SignedBuilderBid,
     },
-    Chain, Config,
+    ChainConfig, Config,
 };
 
 /// Basic block template handler that can keep track of
@@ -73,7 +73,7 @@ pub struct LocalBuilder {
     secret_key: SecretKey,
     /// Chain configuration
     /// (necessary for signing messages with the correct domain)
-    chain: Chain,
+    chain: ChainConfig,
     /// Async fallback payload builder to generate valid payloads with
     /// the engine API's `engine_newPayloadV3` response error.
     fallback_builder: FallbackPayloadBuilder,
