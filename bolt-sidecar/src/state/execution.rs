@@ -8,7 +8,7 @@ use thiserror::Error;
 use crate::{
     builder::BlockTemplate,
     common::{calculate_max_basefee, validate_transaction},
-    primitives::{AccountState, CommitmentRequest, Slot},
+    primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot},
 };
 
 use super::fetcher::StateFetcher;
@@ -129,7 +129,10 @@ impl<C: StateFetcher> ExecutionState<C> {
     /// If the commitment is valid, it will be added to the block template and its account state
     /// will be cached. If this is succesful, any callers can be sure that the commitment is valid
     /// and SHOULD sign it and respond to the requester.
-    pub async fn try_commit(&mut self, request: &CommitmentRequest) -> Result<(), ValidationError> {
+    pub async fn check_commitment_validity(
+        &mut self,
+        request: &CommitmentRequest,
+    ) -> Result<(), ValidationError> {
         let CommitmentRequest::Inclusion(req) = request;
 
         // Validate the chain ID
@@ -198,20 +201,23 @@ impl<C: StateFetcher> ExecutionState<C> {
             // TODO: check max_fee_per_blob_gas against the blob_base_fee
         }
 
-        self.commit_transaction(req.slot, req.tx.clone());
-
         Ok(())
     }
 
     /// Commits the transaction to the target block. Initializes a new block template
     /// if one does not exist for said block number.
     /// TODO: remove `pub` modifier once `try_commit` is fully implemented.
-    pub fn commit_transaction(&mut self, target_slot: u64, transaction: TransactionSigned) {
+    pub fn commit_transaction(
+        &mut self,
+        target_slot: u64,
+        transaction: TransactionSigned,
+        signed_constraints: SignedConstraints,
+    ) {
         if let Some(template) = self.block_templates.get_mut(&target_slot) {
-            template.add_transaction(transaction);
+            template.add_constraints(transaction, signed_constraints);
         } else {
             let mut template = BlockTemplate::default();
-            template.add_transaction(transaction);
+            template.add_constraints(transaction, signed_constraints);
             self.block_templates.insert(target_slot, template);
         }
     }

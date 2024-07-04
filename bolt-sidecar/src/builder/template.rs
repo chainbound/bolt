@@ -9,7 +9,10 @@ use std::collections::HashMap;
 use alloy_primitives::{Address, U256};
 use reth_primitives::{TransactionSigned, TxType};
 
-use crate::{common::max_transaction_cost, primitives::AccountState};
+use crate::{
+    common::max_transaction_cost,
+    primitives::{AccountState, SignedConstraints},
+};
 
 /// A block template that serves as a fallback block, but is also used
 /// to keep intermediary state for new commitment requests.
@@ -37,7 +40,11 @@ impl BlockTemplate {
     }
 
     /// Adds a transaction to the block template and updates the state diff.
-    pub fn add_transaction(&mut self, transaction: TransactionSigned) {
+    pub fn add_constraints(
+        &mut self,
+        transaction: TransactionSigned,
+        signed_constraints: SignedConstraints,
+    ) {
         let max_cost = max_transaction_cost(&transaction);
 
         // Update intermediate state
@@ -51,6 +58,7 @@ impl BlockTemplate {
             .or_insert((1, max_cost));
 
         self.transactions.push(transaction);
+        self.signed_constraints_list.push(signed_constraints);
     }
 
     /// Returns the length of the transactions in the block template.
