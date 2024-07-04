@@ -1,0 +1,15 @@
+services:
+  sidecar:
+    image: ghcr.io/chainbound/bolt-sidecar:v0.1.1-alpha
+    restart: always
+    ports:
+      # Bolt RPC port (should be opened on your firewall!)
+      - "8000:8000"
+    env_file: ./launch.env
+    entrypoint: /bin/sh -c '/bolt-sidecar --port 8000 --beacon-api-url $$BEACON_API_URL --execution-api-url $$EXECUTION_API_URL --engine-api-url $$ENGINE_API_URL --private-key $$SIGNING_KEY --mevboost-url http://bolt-boost:18500 --mevboost-proxy-port 18551 --jwt-hex $$JWT_HEX --fee-recipient $$FEE_RECIPIENT'
+
+  bolt-boost:
+    image: ghcr.io/chainbound/bolt-boost:v0.1.1-alpha
+    restart: always
+    env_file: ./launch.env
+    entrypoint: /bin/sh -c '/app/mev-boost -relay-check -relay $$BOLT_RELAY'
