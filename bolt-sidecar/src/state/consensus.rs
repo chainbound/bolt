@@ -2,17 +2,14 @@
 #![allow(unused_variables)]
 #![allow(missing_debug_implementations)]
 
+use std::time::{Duration, Instant};
+
 use beacon_api_client::{mainnet::Client, BlockId, ProposerDuty};
 use ethereum_consensus::{deneb::BeaconBlockHeader, phase0::mainnet::SLOTS_PER_EPOCH};
 use reqwest::Url;
 
-use crate::{
-    common::unix_seconds,
-    primitives::{ChainHead, CommitmentRequest, Slot},
-};
-
-// The slot inclusion deadline in seconds
-const INCLUSION_DEADLINE: u64 = 6;
+use super::CommitmentDeadline;
+use crate::primitives::{CommitmentRequest, Slot};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConsensusError {
@@ -26,6 +23,7 @@ pub enum ConsensusError {
     ValidatorNotFound,
 }
 
+#[derive(Debug, Default)]
 pub struct Epoch {
     pub value: u64,
     pub start_slot: Slot,
@@ -36,27 +34,40 @@ pub struct ConsensusState {
     beacon_api_client: Client,
     header: BeaconBlockHeader,
     epoch: Epoch,
-    // Timestamp when the current slot is received
-    timestamp: u64,
     validator_indexes: Vec<u64>,
+    // Timestamp of when the latest slot was received
+    latest_slot_timestamp: Instant,
+    // The latest slot received
+    latest_slot: Slot,
+    /// The deadline (expressed in seconds) in the slot for which to
+    /// stop accepting commitments.
+    ///
+    /// This is used to prevent the sidecar from accepting commitments
+    /// which won't have time to be included by the PBS pipeline.
+    // commitment_deadline: u64,
+    pub commitment_deadline: CommitmentDeadline,
+    pub commitment_deadline_duration: Duration,
 }
 
 impl ConsensusState {
-    /// Create a new `ConsensusState` with the given beacon client HTTP URL.
-    pub fn new(url: &str, validator_indexes: &[u64]) -> Self {
-        let url = Url::parse(url).expect("valid beacon client URL");
+    /// Create a new `ConsensusState` with the given configuration.
+    pub fn new(
+        beacon_api_url: &str,
+        validator_indexes: &[u64],
+        commitment_deadline_duration: Duration,
+    ) -> Self {
+        let url = Url::parse(beacon_api_url).expect("valid beacon client URL");
         let beacon_api_client = Client::new(url);
 
         ConsensusState {
             beacon_api_client,
             header: BeaconBlockHeader::default(),
-            epoch: Epoch {
-                value: 0,
-                start_slot: 0,
-                proposer_duties: vec![],
-            },
-            timestamp: unix_seconds(),
+            epoch: Epoch::default(),
+            latest_slot: Default::default(),
             validator_indexes: validator_indexes.to_vec(),
+            latest_slot_timestamp: Instant::now(),
+            commitment_deadline: CommitmentDeadline::new(0, commitment_deadline_duration),
+            commitment_deadline_duration,
         }
     }
 
@@ -73,8 +84,10 @@ impl ConsensusState {
             return Err(ConsensusError::InvalidSlot(req.slot));
         }
 
-        // Check if the request is within the slot inclusion deadline
-        if self.timestamp + INCLUSION_DEADLINE < unix_seconds() {
+        // If the request is for the next slot, check if it's within the commitment deadline
+        if req.slot == self.latest_slot + 1
+            && self.latest_slot_timestamp + self.commitment_deadline_duration < Instant::now()
+        {
             return Err(ConsensusError::DeadlineExceeded);
         }
 
@@ -85,16 +98,21 @@ impl ConsensusState {
     }
 
     /// Update the latest head and fetch the relevant data from the beacon chain.
-    pub async fn update_head(&mut self, head: ChainHead) -> Result<(), ConsensusError> {
+    pub async fn update_head(&mut self, head: u64) -> Result<(), ConsensusError> {
+        // Reset the commitment deadline to start counting for the next slot.
+        self.commitment_deadline =
+            CommitmentDeadline::new(head + 1, self.commitment_deadline_duration);
+
         let update = self
             .beacon_api_client
-            .get_beacon_header(BlockId::Slot(head.slot()))
+            .get_beacon_header(BlockId::Slot(head))
             .await?;
 
         self.header = update.header.message;
 
         // Update the timestamp with current time
-        self.timestamp = unix_seconds();
+        self.latest_slot_timestamp = Instant::now();
+        self.latest_slot = head;
 
         // Get the current value of slot and epoch
         let slot = self.header.slot;
@@ -174,8 +192,11 @@ mod tests {
                 start_slot: 0,
                 proposer_duties,
             },
-            timestamp: unix_seconds(),
+            latest_slot_timestamp: Instant::now(),
+            commitment_deadline: CommitmentDeadline::new(0, Duration::from_secs(1)),
             validator_indexes,
+            commitment_deadline_duration: Duration::from_secs(1),
+            latest_slot: 0,
         };
 
         // Test finding a valid slot

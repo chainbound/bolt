@@ -5,15 +5,55 @@ use alloy_rpc_types_engine::{
     ExecutionPayloadV3,
 };
 use ethereum_consensus::{
+    bellatrix::mainnet::Transaction,
     capella::spec,
-    deneb::mainnet::ExecutionPayloadHeader as ConsensusExecutionPayloadHeader,
-    ssz::prelude::{ssz_rs, ByteList, ByteVector},
+    deneb::{
+        mainnet::{
+            ExecutionPayloadHeader as ConsensusExecutionPayloadHeader,
+            Withdrawal as ConsensusWithdrawal, MAX_TRANSACTIONS_PER_PAYLOAD,
+            MAX_WITHDRAWALS_PER_PAYLOAD,
+        },
+        ExecutionAddress, ExecutionPayload as DenebExecutionPayload,
+    },
+    ssz::prelude::{ssz_rs, ByteList, ByteVector, HashTreeRoot, List},
     types::mainnet::ExecutionPayload as ConsensusExecutionPayload,
 };
-use reth_primitives::{SealedBlock, SealedHeader, Withdrawals};
+use reth_primitives::{SealedBlock, SealedHeader, TransactionSigned, Withdrawals};
 
-/// Compatibility: convert a sealed header into an ethereum-consensus execution payload header
-pub(crate) fn to_execution_payload_header(value: &SealedHeader) -> ConsensusExecutionPayloadHeader {
+/// Compatibility: convert a sealed header into an ethereum-consensus execution payload header.
+/// This requires recalculating the withdrals and transactions roots as SSZ instead of MPT roots.
+pub(crate) fn to_execution_payload_header(
+    value: &SealedHeader,
+    transactions: Vec<TransactionSigned>,
+    withdrawals: reth_primitives::Withdrawals,
+) -> ConsensusExecutionPayloadHeader {
+    // Transactions and withdrawals are treated as opaque byte arrays in consensus types
+    let transactions_bytes = transactions
+        .iter()
+        .map(|t| t.envelope_encoded())
+        .collect::<Vec<_>>();
+
+    let mut transactions_ssz: List<Transaction, MAX_TRANSACTIONS_PER_PAYLOAD> = List::default();
+
+    for tx in transactions_bytes {
+        transactions_ssz.push(Transaction::try_from(tx.as_ref()).unwrap());
+    }
+
+    let transactions_root = transactions_ssz
+        .hash_tree_root()
+        .expect("valid transactions root");
+
+    let mut withdrawals_ssz: List<ConsensusWithdrawal, MAX_WITHDRAWALS_PER_PAYLOAD> =
+        List::default();
+
+    for w in withdrawals.iter() {
+        withdrawals_ssz.push(to_consensus_withdrawal(w));
+    }
+
+    let withdrawals_root = withdrawals_ssz
+        .hash_tree_root()
+        .expect("valid withdrawals root");
+
     ConsensusExecutionPayloadHeader {
         parent_hash: to_bytes32(value.parent_hash),
         fee_recipient: to_bytes20(value.beneficiary),
@@ -28,10 +68,10 @@ pub(crate) fn to_execution_payload_header(value: &SealedHeader) -> ConsensusExec
         extra_data: ByteList::try_from(value.extra_data.as_ref()).unwrap(),
         base_fee_per_gas: ssz_rs::U256::from(value.base_fee_per_gas.unwrap_or_default()),
         block_hash: to_bytes32(value.hash()),
-        transactions_root: value.transactions_root,
-        withdrawals_root: value.withdrawals_root.unwrap_or_default(),
         blob_gas_used: value.blob_gas_used.unwrap_or_default(),
         excess_blob_gas: value.excess_blob_gas.unwrap_or_default(),
+        transactions_root,
+        withdrawals_root,
     }
 }
 
@@ -103,7 +143,7 @@ pub(crate) fn to_consensus_execution_payload(value: &SealedBlock) -> ConsensusEx
         })
         .collect::<Vec<_>>();
 
-    let payload = spec::ExecutionPayload {
+    let payload = DenebExecutionPayload {
         parent_hash: to_bytes32(header.parent_hash),
         fee_recipient: to_bytes20(header.beneficiary),
         state_root: to_bytes32(header.state_root),
@@ -119,8 +159,10 @@ pub(crate) fn to_consensus_execution_payload(value: &SealedBlock) -> ConsensusEx
         block_hash: to_bytes32(hash),
         transactions: TryFrom::try_from(transactions).unwrap(),
         withdrawals: TryFrom::try_from(withdrawals).unwrap(),
+        blob_gas_used: value.blob_gas_used(),
+        excess_blob_gas: value.excess_blob_gas.unwrap_or_default(),
     };
-    ConsensusExecutionPayload::Capella(payload)
+    ConsensusExecutionPayload::Deneb(payload)
 }
 
 /// Compatibility: convert a withdrawal from ethereum-consensus to a Reth withdrawal
@@ -131,6 +173,18 @@ pub(crate) fn to_reth_withdrawal(
         index: value.index as u64,
         validator_index: value.validator_index as u64,
         address: Address::from_slice(value.address.as_ref()),
+        amount: value.amount,
+    }
+}
+
+/// Compatibility: convert a withdrawal from Reth to ethereum-consensus
+pub(crate) fn to_consensus_withdrawal(
+    value: &reth_primitives::Withdrawal,
+) -> ethereum_consensus::capella::Withdrawal {
+    ethereum_consensus::capella::Withdrawal {
+        index: value.index as usize,
+        validator_index: value.validator_index as usize,
+        address: ExecutionAddress::try_from(value.address.as_ref()).unwrap(),
         amount: value.amount,
     }
 }

@@ -5,9 +5,9 @@ use std::sync::{atomic::AtomicU64, Arc};
 
 use alloy_primitives::U256;
 use ethereum_consensus::{
-    capella,
     crypto::{KzgCommitment, PublicKey as BlsPublicKey, Signature as BlsSignature},
     deneb::{
+        self,
         mainnet::{BlobsBundle, MAX_BLOB_COMMITMENTS_PER_BLOCK},
         presets::mainnet::ExecutionPayloadHeader,
         Hash32,
@@ -27,10 +27,6 @@ pub use commitment::{CommitmentRequest, InclusionRequest};
 /// for validation.
 pub mod constraint;
 pub use constraint::{BatchedSignedConstraints, ConstraintsMessage, SignedConstraints};
-
-/// Transaction primitives and utilities.
-pub mod transaction;
-pub use transaction::TxInfo;
 
 /// An alias for a Beacon Chain slot number
 pub type Slot = u64;
@@ -91,7 +87,7 @@ pub struct MerkleMultiProof {
 #[derive(Debug)]
 pub struct FetchPayloadRequest {
     pub slot: u64,
-    pub response: oneshot::Sender<Option<PayloadAndBid>>,
+    pub response_tx: oneshot::Sender<Option<PayloadAndBid>>,
 }
 
 #[derive(Debug)]
@@ -114,13 +110,18 @@ impl LocalPayloadFetcher {
 #[async_trait::async_trait]
 impl PayloadFetcher for LocalPayloadFetcher {
     async fn fetch_payload(&self, slot: u64) -> Option<PayloadAndBid> {
-        let (tx, rx) = oneshot::channel();
+        let (response_tx, response_rx) = oneshot::channel();
 
-        let fetch_params = FetchPayloadRequest { slot, response: tx };
-
+        let fetch_params = FetchPayloadRequest { response_tx, slot };
         self.tx.send(fetch_params).await.ok()?;
 
-        rx.await.ok().flatten()
+        match response_rx.await {
+            Ok(res) => res,
+            Err(e) => {
+                tracing::error!(err = ?e, "Failed to fetch payload");
+                None
+            }
+        }
     }
 }
 
@@ -144,14 +145,14 @@ impl PayloadFetcher for NoopPayloadFetcher {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PayloadAndBlobs {
     pub execution_payload: ExecutionPayload,
-    pub blobs_bundle: Option<BlobsBundle>,
+    pub blobs_bundle: BlobsBundle,
 }
 
 impl Default for PayloadAndBlobs {
     fn default() -> Self {
         Self {
-            execution_payload: ExecutionPayload::Capella(capella::ExecutionPayload::default()),
-            blobs_bundle: None,
+            execution_payload: ExecutionPayload::Deneb(deneb::ExecutionPayload::default()),
+            blobs_bundle: BlobsBundle::default(),
         }
     }
 }
@@ -178,6 +179,14 @@ impl GetPayloadResponse {
             )),
             Fork::Deneb => Some(GetPayloadResponse::Deneb(exec_payload.clone())),
             _ => None,
+        }
+    }
+
+    pub fn block_hash(&self) -> &Hash32 {
+        match self {
+            GetPayloadResponse::Capella(payload) => payload.block_hash(),
+            GetPayloadResponse::Bellatrix(payload) => payload.block_hash(),
+            GetPayloadResponse::Deneb(payload) => payload.execution_payload.block_hash(),
         }
     }
 }
@@ -207,17 +216,17 @@ impl<'de> serde::Deserialize<'de> for GetPayloadResponse {
 #[derive(Debug, Clone)]
 pub struct ChainHead {
     /// The current slot number.
-    slot: Arc<AtomicU64>,
+    pub slot: Arc<AtomicU64>,
     /// The current block number.
-    block: Arc<AtomicU64>,
+    pub block: Arc<AtomicU64>,
 }
 
 impl ChainHead {
     /// Create a new ChainHead instance.
-    pub fn new(slot: u64, head: u64) -> Self {
+    pub fn new(slot: u64, block: u64) -> Self {
         Self {
             slot: Arc::new(AtomicU64::new(slot)),
-            block: Arc::new(AtomicU64::new(head)),
+            block: Arc::new(AtomicU64::new(block)),
         }
     }
 

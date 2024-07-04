@@ -16,7 +16,7 @@ use super::{
     compat::{to_alloy_execution_payload, to_reth_withdrawal},
     BuilderError,
 };
-use crate::RpcClient;
+use crate::{Config, RpcClient};
 
 /// Extra-data payload field used for locally built blocks, decoded in UTF-8.
 ///
@@ -41,29 +41,28 @@ const DEFAULT_EXTRA_DATA: [u8; 20] = [
 pub struct FallbackPayloadBuilder {
     extra_data: Bytes,
     fee_recipient: Address,
+    beacon_api_url: String,
     execution_rpc_client: RpcClient,
     engine_hinter: EngineHinter,
+    slot_time_in_seconds: u64,
 }
 
 impl FallbackPayloadBuilder {
     /// Create a new fallback payload builder
-    pub fn new(
-        jwt_hex: &str,
-        fee_recipient: Address,
-        engine_rpc_url: &str,
-        execution_rpc_url: &str,
-    ) -> Self {
+    pub fn new(config: &Config) -> Self {
         let engine_hinter = EngineHinter {
             client: reqwest::Client::new(),
-            jwt_hex: jwt_hex.to_string(),
-            engine_rpc_url: engine_rpc_url.to_string(),
+            jwt_hex: config.jwt_hex.to_string(),
+            engine_rpc_url: config.engine_api_url.to_string(),
         };
 
         Self {
-            fee_recipient,
             engine_hinter,
             extra_data: DEFAULT_EXTRA_DATA.into(),
-            execution_rpc_client: RpcClient::new(execution_rpc_url),
+            fee_recipient: config.fee_recipient,
+            beacon_api_url: config.beacon_api_url.to_string(),
+            execution_rpc_client: RpcClient::new(&config.execution_api_url),
+            slot_time_in_seconds: config.chain.slot_time(),
         }
     }
 }
@@ -80,8 +79,9 @@ pub struct Context {
     prev_randao: B256,
     fee_recipient: Address,
     transactions_root: B256,
-    withdrawals_root: Option<B256>,
+    withdrawals_root: B256,
     parent_beacon_block_root: B256,
+    slot_time_in_seconds: u64,
 }
 
 #[derive(Debug, Default)]
@@ -100,15 +100,18 @@ impl FallbackPayloadBuilder {
     /// to provide a valid payload that fulfills the commitments made by Bolt.
     pub async fn build_fallback_payload(
         &self,
-        transactions: Vec<TransactionSigned>,
+        transactions: &[TransactionSigned],
     ) -> Result<SealedBlock, BuilderError> {
+        // TODO: what if the latest block ends up being reorged out?
         let latest_block = self.execution_rpc_client.get_block(None, true).await?;
+        tracing::debug!(num = ?latest_block.header.number, "got latest block");
 
         // TODO: refactor this once ConsensusState (https://github.com/chainbound/bolt/issues/58) is ready
-        let beacon_api_endpoint = reqwest::Url::parse("http://remotebeast:3500").unwrap();
+        let beacon_api_endpoint = reqwest::Url::parse(&self.beacon_api_url).unwrap();
         let beacon_api = beacon_api_client::mainnet::Client::new(beacon_api_endpoint);
 
         let withdrawals = beacon_api
+            // Slot: Defaults to the slot after the parent state if not specified.
             .get_expected_withdrawals(StateId::Head, None)
             .await
             .unwrap()
@@ -116,17 +119,16 @@ impl FallbackPayloadBuilder {
             .map(to_reth_withdrawal)
             .collect::<Vec<_>>();
 
-        let withdrawals = if withdrawals.is_empty() {
-            None
-        } else {
-            Some(withdrawals)
-        };
+        tracing::debug!(amount = ?withdrawals.len(), "got withdrawals");
 
         // NOTE: for some reason, this call fails with an ApiResult deserialization error
         // when using the beacon_api_client crate directly, so we use reqwest temporarily.
         // this is to be refactored.
         let prev_randao = reqwest::Client::new()
-            .get("http://remotebeast:3500/eth/v1/beacon/states/head/randao")
+            .get(format!(
+                "{}/eth/v1/beacon/states/head/randao",
+                self.beacon_api_url
+            ))
             .send()
             .await
             .unwrap()
@@ -139,17 +141,20 @@ impl FallbackPayloadBuilder {
             .as_str()
             .unwrap();
         let prev_randao = B256::from_hex(prev_randao).unwrap();
+        tracing::debug!("got prev_randao");
 
         let parent_beacon_block_root = beacon_api
             .get_beacon_block_root(BlockId::Head)
             .await
             .unwrap();
+        tracing::debug!(parent = ?parent_beacon_block_root, "got parent_beacon_block_root");
 
         let versioned_hashes = transactions
             .iter()
             .flat_map(|tx| tx.blob_versioned_hashes())
             .flatten()
             .collect::<Vec<_>>();
+        tracing::info!(amount = ?versioned_hashes.len(), "got versioned_hashes");
 
         let base_fee = calc_next_block_base_fee(
             latest_block.header.gas_used,
@@ -170,48 +175,66 @@ impl FallbackPayloadBuilder {
             prev_randao,
             extra_data: self.extra_data.clone(),
             fee_recipient: self.fee_recipient,
-            transactions_root: proofs::calculate_transaction_root(&transactions),
-            withdrawals_root: withdrawals
-                .as_ref()
-                .map(|w| proofs::calculate_withdrawals_root(w)),
+            transactions_root: proofs::calculate_transaction_root(transactions),
+            withdrawals_root: proofs::calculate_withdrawals_root(&withdrawals),
+            slot_time_in_seconds: self.slot_time_in_seconds,
         };
 
         let body = BlockBody {
-            transactions,
             ommers: Vec::new(),
-            withdrawals: withdrawals.map(Withdrawals::new),
+            transactions: transactions.to_vec(),
+            withdrawals: Some(Withdrawals::new(withdrawals)),
         };
 
         let mut hints = Hints::default();
-        let max_iterations = 5;
+        let max_iterations = 20;
         let mut i = 0;
         loop {
             let header = build_header_with_hints_and_context(&latest_block, &hints, &ctx);
 
-            let sealed_header = header.clone().seal_slow();
+            let sealed_header = header.seal_slow();
             let sealed_block = SealedBlock::new(sealed_header.clone(), body.clone());
 
-            let hinted_hash = hints.block_hash.unwrap_or(sealed_block.hash());
-            let exec_payload = to_alloy_execution_payload(&sealed_block, hinted_hash);
+            let block_hash = hints.block_hash.unwrap_or(sealed_block.hash());
+
+            let exec_payload = to_alloy_execution_payload(&sealed_block, block_hash);
 
             let engine_hint = self
                 .engine_hinter
                 .fetch_next_payload_hint(&exec_payload, &versioned_hashes, parent_beacon_block_root)
                 .await?;
 
+            tracing::debug!("engine_hint: {:?}", engine_hint);
+
             match engine_hint {
-                EngineApiHint::BlockHash(hash) => hints.block_hash = Some(hash),
-                EngineApiHint::GasUsed(gas) => hints.gas_used = Some(gas),
-                EngineApiHint::StateRoot(hash) => hints.state_root = Some(hash),
-                EngineApiHint::ReceiptsRoot(hash) => hints.receipts_root = Some(hash),
-                EngineApiHint::LogsBloom(bloom) => hints.logs_bloom = Some(bloom),
+                EngineApiHint::BlockHash(hash) => {
+                    tracing::warn!("Should not receive block hash hint {:?}", hash);
+                    hints.block_hash = Some(hash)
+                }
+
+                EngineApiHint::GasUsed(gas) => {
+                    hints.gas_used = Some(gas);
+                    hints.block_hash = None;
+                }
+                EngineApiHint::StateRoot(hash) => {
+                    hints.state_root = Some(hash);
+                    hints.block_hash = None
+                }
+                EngineApiHint::ReceiptsRoot(hash) => {
+                    hints.receipts_root = Some(hash);
+                    hints.block_hash = None
+                }
+                EngineApiHint::LogsBloom(bloom) => {
+                    hints.logs_bloom = Some(bloom);
+                    hints.block_hash = None
+                }
 
                 EngineApiHint::ValidPayload => return Ok(sealed_block),
             }
 
             if i > max_iterations {
                 return Err(BuilderError::Custom(
-                    "Failed to fetch all missing header values from geth error messages"
+                    "Too many iterations: Failed to fetch all missing header values from geth error messages"
                         .to_string(),
                 ));
             }
@@ -283,6 +306,8 @@ impl EngineHinter {
             }
         };
 
+        tracing::trace!("raw hint: {:?}", raw_hint);
+
         // Match the hint value to the corresponding header field and return it
         if raw_hint.contains("blockhash mismatch") {
             return Ok(EngineApiHint::BlockHash(B256::from_hex(hint_value)?));
@@ -339,14 +364,13 @@ pub(crate) fn build_header_with_hints_and_context(
         state_root,
         transactions_root: context.transactions_root,
         receipts_root,
-        withdrawals_root: context.withdrawals_root,
+        withdrawals_root: Some(context.withdrawals_root),
         logs_bloom,
         difficulty: U256::ZERO,
         number: latest_block.header.number.unwrap_or_default() + 1,
         gas_limit: latest_block.header.gas_limit as u64,
         gas_used,
-        // TODO: use slot time from beacon chain instead, to account for reorgs
-        timestamp: latest_block.header.timestamp + 12,
+        timestamp: latest_block.header.timestamp + context.slot_time_in_seconds,
         mix_hash: context.prev_randao,
         nonce: BEACON_NONCE,
         base_fee_per_gas: Some(context.base_fee),
@@ -361,53 +385,51 @@ pub(crate) fn build_header_with_hints_and_context(
 mod tests {
     use alloy_eips::eip2718::Encodable2718;
     use alloy_network::{EthereumWallet, TransactionBuilder};
-    use alloy_primitives::{hex, Address, U256};
-    use alloy_rpc_types::TransactionRequest;
+    use alloy_primitives::{hex, Address};
     use alloy_signer::k256::ecdsa::SigningKey;
     use alloy_signer_local::PrivateKeySigner;
     use reth_primitives::TransactionSigned;
 
-    use crate::builder::payload_builder::FallbackPayloadBuilder;
+    use crate::{
+        builder::payload_builder::FallbackPayloadBuilder,
+        test_util::{default_test_transaction, get_test_config},
+    };
 
     #[tokio::test]
     async fn test_build_fallback_payload() -> eyre::Result<()> {
-        dotenvy::dotenv().ok();
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let Some(cfg) = get_test_config().await else {
+            tracing::warn!("Skipping test: missing test config");
+            return Ok(());
+        };
 
         let raw_sk = std::env::var("PRIVATE_KEY")?;
-        let jwt = std::env::var("ENGINE_JWT")?;
 
-        // TODO: use constants (after #94)
-        let execution = "http://remotebeast:8545";
-        let engine = "http://remotebeast:8551";
-
-        let builder = FallbackPayloadBuilder::new(&jwt, Address::default(), engine, execution);
+        let builder = FallbackPayloadBuilder::new(&cfg);
 
         let sk = SigningKey::from_slice(hex::decode(raw_sk)?.as_slice())?;
         let signer = PrivateKeySigner::from_signing_key(sk.clone());
         let wallet = EthereumWallet::from(signer);
 
         let addy = Address::from_private_key(&sk);
-        let tx = default_transaction(addy, 266);
+        let tx = default_test_transaction(addy, Some(1)).with_chain_id(1);
         let tx_signed = tx.build(&wallet).await?;
         let raw_encoded = tx_signed.encoded_2718();
         let tx_signed_reth = TransactionSigned::decode_enveloped(&mut raw_encoded.as_slice())?;
 
-        builder.build_fallback_payload(vec![tx_signed_reth]).await?;
+        let block = builder.build_fallback_payload(&[tx_signed_reth]).await?;
+        assert_eq!(block.body.len(), 1);
 
         Ok(())
     }
 
-    // TODO: refactor (after #94)
-    fn default_transaction(sender: Address, nonce: u64) -> TransactionRequest {
-        TransactionRequest::default()
-            .with_from(sender)
-            // Burn it
-            .with_to(Address::ZERO)
-            .with_chain_id(1)
-            .with_nonce(nonce)
-            .with_value(U256::from(100))
-            .with_gas_limit(21_000)
-            .with_max_priority_fee_per_gas(1_000_000_000)
-            .with_max_fee_per_gas(20_000_000_000)
+    #[test]
+    fn test_empty_el_withdrawals_root() {
+        // Withdrawal root in the execution layer header is MPT.
+        assert_eq!(
+            reth_primitives::proofs::calculate_withdrawals_root(&Vec::new()),
+            reth_primitives::constants::EMPTY_WITHDRAWALS
+        );
     }
 }

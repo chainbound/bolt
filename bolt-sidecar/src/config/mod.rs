@@ -1,9 +1,22 @@
+use alloy_primitives::Address;
 use blst::min_pk::SecretKey;
-use clap::{ArgGroup, Args, Parser};
+use clap::Parser;
 
 use crate::crypto::bls::random_bls_secret;
 
-/// Command-line options for the sidecar
+pub mod chain;
+pub use chain::ChainConfig;
+
+pub mod signing;
+pub use signing::SigningOpts;
+
+/// Default port for the JSON-RPC server exposed by the sidecar.
+pub const DEFAULT_RPC_PORT: u16 = 8000;
+
+/// Default port for the MEV-Boost proxy server.
+pub const DEFAULT_MEV_BOOST_PROXY_PORT: u16 = 18551;
+
+/// Command-line options for the Bolt sidecar
 #[derive(Parser, Debug)]
 pub struct Opts {
     /// Port to listen on for incoming JSON-RPC requests
@@ -24,33 +37,35 @@ pub struct Opts {
     /// MEV-Boost proxy server port to use
     #[clap(short = 'y', long)]
     pub(super) mevboost_proxy_port: u16,
-    /// Max commitments to accept per block
+    /// Max number of commitments to accept per block
     #[clap(short = 'm', long)]
     pub(super) max_commitments: Option<usize>,
     /// Validator indexes
     #[clap(short = 'v', long, value_parser, num_args = 1.., value_delimiter = ',')]
     pub(super) validator_indexes: Vec<u64>,
-    /// Signing options
+    /// The JWT secret token to authenticate calls to the engine API.
+    ///
+    /// It can either be a hex-encoded string or a file path to a file
+    /// containing the hex-encoded secret.
+    #[clap(short = 'j', long)]
+    pub(super) jwt_hex: String,
+    /// The fee recipient address for fallback blocks
+    #[clap(short = 'f', long)]
+    pub(super) fee_recipient: Address,
+    /// Secret BLS key to sign fallback payloads with
+    /// (If not provided, a random key will be used)
+    #[clap(short = 'k', long)]
+    pub(super) builder_private_key: Option<String>,
+    /// Chain config for the chain on which the sidecar is running
+    #[clap(flatten)]
+    pub(super) chain: ChainConfig,
+    /// Commitment signing options.
     #[clap(flatten)]
     pub(super) signing: SigningOpts,
 }
 
-/// Command-line options for signing
-#[derive(Debug, Clone, Args)]
-#[clap(
-    group = ArgGroup::new("signing-opts").required(true)
-        .args(&["private_key", "commit_boost_url"])
-)]
-pub struct SigningOpts {
-    /// Private key to use for signing preconfirmation requests
-    #[clap(short = 'k', long)]
-    pub(super) private_key: Option<String>,
-    /// URL for the commit-boost sidecar
-    #[clap(short = 'C', long, conflicts_with("private_key"))]
-    pub(super) commit_boost_url: Option<String>,
-}
-
-/// Configuration options for the sidecar
+/// Configuration options for the sidecar. These are parsed from
+/// command-line options in the form of [`Opts`].
 #[derive(Debug, Clone)]
 pub struct Config {
     /// Port to listen on for incoming JSON-RPC requests
@@ -69,31 +84,58 @@ pub struct Config {
     pub engine_api_url: String,
     /// The MEV-Boost proxy server port to use
     pub mevboost_proxy_port: u16,
+    /// The jwt.hex secret to authenticate calls to the engine API
+    pub jwt_hex: String,
+    /// The fee recipient address for fallback blocks
+    pub fee_recipient: Address,
     /// Limits for the sidecar
     pub limits: Limits,
     /// Validator indexes
     pub validator_indexes: Vec<u64>,
+    /// Local bulider private key
+    pub builder_private_key: SecretKey,
+    /// The chain on which the sidecar is running
+    pub chain: ChainConfig,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            rpc_port: 8000,
-            mevboost_url: "http://localhost:3030".to_string(),
+            rpc_port: DEFAULT_RPC_PORT,
             commit_boost_url: None,
+            mevboost_url: "http://localhost:3030".to_string(),
             beacon_api_url: "http://localhost:5052".to_string(),
             execution_api_url: "http://localhost:8545".to_string(),
             engine_api_url: "http://localhost:8551".to_string(),
             private_key: Some(random_bls_secret()),
-            mevboost_proxy_port: 18551,
+            mevboost_proxy_port: DEFAULT_MEV_BOOST_PROXY_PORT,
+            jwt_hex: String::new(),
+            fee_recipient: Address::ZERO,
+            builder_private_key: random_bls_secret(),
             limits: Limits::default(),
             validator_indexes: Vec::new(),
+            chain: ChainConfig::default(),
+        }
+    }
+}
+
+/// Limits for the sidecar.
+#[derive(Debug, Clone)]
+pub struct Limits {
+    /// Maximum number of commitments to accept per block
+    pub max_commitments_per_slot: usize,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            max_commitments_per_slot: 6,
         }
     }
 }
 
 impl Config {
-    /// Parse the command-line options and return a new `Config` instance
+    /// Parse the command-line options and return a new [`Config`] instance
     pub fn parse_from_cli() -> eyre::Result<Self> {
         let opts = Opts::parse();
         Self::try_from(opts)
@@ -103,7 +145,7 @@ impl Config {
 impl TryFrom<Opts> for Config {
     type Error = eyre::Report;
 
-    fn try_from(opts: Opts) -> eyre::Result<Self> {
+    fn try_from(opts: Opts) -> Result<Self, Self::Error> {
         let mut config = Config::default();
 
         if let Some(port) = opts.port {
@@ -127,6 +169,29 @@ impl TryFrom<Opts> for Config {
             None
         };
 
+        if let Some(builder_private_key) = opts.builder_private_key {
+            let sk = SecretKey::from_bytes(&hex::decode(builder_private_key)?)
+                .map_err(|e| eyre::eyre!("Failed decoding BLS secret key: {:?}", e))?;
+            config.builder_private_key = sk;
+        }
+
+        config.jwt_hex = if opts.jwt_hex.starts_with("0x") {
+            opts.jwt_hex.trim_start_matches("0x").to_string()
+        } else if std::path::Path::new(&opts.jwt_hex).exists() {
+            std::fs::read_to_string(opts.jwt_hex)?
+                .trim_start_matches("0x")
+                .to_string()
+        } else {
+            opts.jwt_hex
+        };
+
+        // Validate the JWT secret
+        if config.jwt_hex.len() != 64 {
+            eyre::bail!("JWT secret must be a 32 byte hex string");
+        } else {
+            tracing::info!("JWT secret loaded successfully");
+        }
+
         config.mevboost_proxy_port = opts.mevboost_proxy_port;
         config.engine_api_url = opts.engine_api_url.trim_end_matches('/').to_string();
         config.execution_api_url = opts.execution_api_url.trim_end_matches('/').to_string();
@@ -135,21 +200,8 @@ impl TryFrom<Opts> for Config {
 
         config.validator_indexes = opts.validator_indexes;
 
+        config.chain = opts.chain;
+
         Ok(config)
-    }
-}
-
-/// Limits for the sidecar.
-#[derive(Debug, Clone)]
-pub struct Limits {
-    /// Maximum number of commitments to accept per block
-    pub max_commitments_per_slot: usize,
-}
-
-impl Default for Limits {
-    fn default() -> Self {
-        Self {
-            max_commitments_per_slot: 6,
-        }
     }
 }

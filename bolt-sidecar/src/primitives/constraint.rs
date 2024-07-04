@@ -1,4 +1,3 @@
-use alloy_eips::eip2718::Encodable2718;
 use alloy_primitives::keccak256;
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
@@ -90,7 +89,7 @@ impl Constraint {
     /// Builds a constraint from an inclusion request and an optional index
     pub fn from_inclusion_request(req: InclusionRequest, index: Option<u64>) -> Self {
         let mut encoded_tx = Vec::new();
-        req.tx.encode_2718(&mut encoded_tx);
+        req.tx.encode_enveloped(&mut encoded_tx);
 
         Self {
             tx: format!("0x{}", hex::encode(encoded_tx)),

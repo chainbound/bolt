@@ -1,16 +1,17 @@
-use alloy_consensus::{TxEnvelope, TxType};
 use alloy_eips::eip4844::MAX_BLOBS_PER_BLOCK;
 use alloy_primitives::{Address, SignatureError};
+use alloy_transport::TransportError;
+use reth_primitives::{transaction::TxType, TransactionSigned};
 use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::{
     builder::BlockTemplate,
     common::{calculate_max_basefee, validate_transaction},
-    primitives::{AccountState, ChainHead, CommitmentRequest, Slot},
+    primitives::{AccountState, CommitmentRequest, Slot},
 };
 
-use super::{fetcher::StateFetcher, StateError};
+use super::fetcher::StateFetcher;
 
 /// Possible commitment validation errors.
 #[derive(Debug, Error)]
@@ -33,6 +34,9 @@ pub enum ValidationError {
     /// The signature is invalid.
     #[error("Signature error: {0:?}")]
     Signature(#[from] SignatureError),
+    /// Could not recover signature,
+    #[error("Could not recover signer")]
+    RecoverSigner,
     /// NOTE: this should not be exposed to the user.
     #[error("Internal error: {0}")]
     Internal(String),
@@ -57,8 +61,8 @@ impl ValidationError {
 /// that conflict with the new state so that we NEVER propose an invalid block.
 #[derive(Debug)]
 pub struct ExecutionState<C> {
-    /// The latest head block number.
-    head: ChainHead,
+    /// The latest block number.
+    block_number: u64,
 
     /// The base fee at the head block.
     basefee: u128,
@@ -77,14 +81,12 @@ pub struct ExecutionState<C> {
 }
 
 impl<C: StateFetcher> ExecutionState<C> {
-    /// Creates a new state with the given client. Initializes the `head` and `basefee` fields
-    /// with the current head and basefee.
-    pub async fn new(client: C, head: ChainHead) -> Result<Self, StateError> {
-        let basefee = client.get_basefee(Some(head.block())).await?;
-
+    /// Creates a new state with the given client, initializing the
+    /// basefee and head block number.
+    pub async fn new(client: C) -> Result<Self, TransportError> {
         Ok(Self {
-            head,
-            basefee,
+            basefee: client.get_basefee(None).await?,
+            block_number: client.get_head().await?,
             account_states: HashMap::new(),
             block_templates: HashMap::new(),
             client,
@@ -112,12 +114,14 @@ impl<C: StateFetcher> ExecutionState<C> {
     pub async fn try_commit(&mut self, request: &CommitmentRequest) -> Result<(), ValidationError> {
         let CommitmentRequest::Inclusion(req) = request;
 
-        let sender = req.tx.recover_signer()?;
+        let sender = req.tx.recover_signer().ok_or(ValidationError::Internal(
+            "Failed to recover signer from transaction".to_string(),
+        ))?;
 
         tracing::debug!(%sender, target_slot = req.slot, "Trying to commit inclusion request to block template");
 
         // Check if the max_fee_per_gas would cover the maximum possible basefee.
-        let slot_diff = req.slot - self.head.slot();
+        let slot_diff = req.slot - self.block_number;
 
         // Calculate the max possible basefee given the slot diff
         let max_basefee = calculate_max_basefee(self.basefee, slot_diff)
@@ -169,7 +173,8 @@ impl<C: StateFetcher> ExecutionState<C> {
 
     /// Commits the transaction to the target block. Initializes a new block template
     /// if one does not exist for said block number.
-    fn commit_transaction(&mut self, target_slot: u64, transaction: TxEnvelope) {
+    /// TODO: remove `pub` modifier once `try_commit` is fully implemented.
+    pub fn commit_transaction(&mut self, target_slot: u64, transaction: TransactionSigned) {
         if let Some(template) = self.block_templates.get_mut(&target_slot) {
             template.add_transaction(transaction);
         } else {
@@ -179,25 +184,22 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
     }
 
-    /// Updates the state with a new head
-    pub async fn update_head(&mut self, head: ChainHead) -> Result<(), StateError> {
+    /// Updates the state corresponding to the provided block number if provided, or latest from EL if `None`.
+    pub async fn update_head(&mut self, block_number: Option<u64>) -> Result<(), TransportError> {
         // TODO: invalidate any state that we don't need anymore (will be based on block template)
         let update = self
             .client
-            .get_state_update(
-                self.account_states.keys().collect::<Vec<_>>(),
-                Some(head.block()),
-            )
+            .get_state_update(self.account_states.keys().collect::<Vec<_>>(), block_number)
             .await?;
 
-        self.apply_state_update(head, update);
+        self.apply_state_update(update);
 
         Ok(())
     }
 
-    fn apply_state_update(&mut self, head: ChainHead, update: StateUpdate) {
+    fn apply_state_update(&mut self, update: StateUpdate) {
         // Update head and basefee
-        self.head = head;
+        self.block_number = update.block_number;
         self.basefee = update.min_basefee;
 
         // `extend` will overwrite existing values. This is what we want.
@@ -259,6 +261,7 @@ impl<C: StateFetcher> ExecutionState<C> {
 pub struct StateUpdate {
     pub account_states: HashMap<Address, AccountState>,
     pub min_basefee: u128,
+    pub block_number: u64,
 }
 
 fn reject_internal(reason: &str) -> ValidationError {

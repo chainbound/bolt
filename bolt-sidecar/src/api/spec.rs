@@ -19,9 +19,6 @@ pub const STATUS_PATH: &str = "/eth/v1/builder/status";
 pub const REGISTER_VALIDATORS_PATH: &str = "/eth/v1/builder/validators";
 /// The path to the builder API get header endpoint.
 pub const GET_HEADER_PATH: &str = "/eth/v1/builder/header/:slot/:parent_hash/:pubkey";
-/// The path to the constriants API get header with proofs endpoint.
-pub const GET_HEADER_WITH_PROOFS_PATH: &str =
-    "/eth/v1/builder/header_with_proofs/:slot/:parent_hash/:pubkey";
 /// The path to the builder API get payload endpoint.
 pub const GET_PAYLOAD_PATH: &str = "/eth/v1/builder/blinded_blocks";
 /// The path to the constraints API submit constraints endpoint.
@@ -67,6 +64,8 @@ pub enum BuilderApiError {
     Timeout(#[from] tokio::time::error::Elapsed),
     #[error("Invalid fork: {0}")]
     InvalidFork(String),
+    #[error("Invalid local payload block hash. expected: {expected}, got: {have}")]
+    InvalidLocalPayloadBlockHash { expected: String, have: String },
 }
 
 impl IntoResponse for BuilderApiError {
@@ -107,6 +106,9 @@ impl IntoResponse for BuilderApiError {
                 .into_response(),
             BuilderApiError::InvalidFork(err) => {
                 (StatusCode::BAD_REQUEST, Json(err)).into_response()
+            }
+            BuilderApiError::InvalidLocalPayloadBlockHash { .. } => {
+                (StatusCode::BAD_REQUEST, self.to_string()).into_response()
             }
         }
     }

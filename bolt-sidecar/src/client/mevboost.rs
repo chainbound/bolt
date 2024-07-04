@@ -123,7 +123,7 @@ impl BuilderApi for MevBoostClient {
             return Err(BuilderApiError::FailedGettingPayload(error));
         }
 
-        let payload = response.json::<GetPayloadResponse>().await?;
+        let payload = response.json().await?;
 
         Ok(payload)
     }

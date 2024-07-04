@@ -6,8 +6,8 @@
 /// Builder API proxy and utilities
 mod api;
 pub use api::{
-    builder::{start_builder_proxy, BuilderProxyConfig},
-    spec,
+    builder::{start_builder_proxy_server, BuilderProxyConfig},
+    spec::{BuilderApi, ConstraintsApi},
 };
 
 mod client;
@@ -21,16 +21,18 @@ mod common;
 /// be used as a fallback for proposers. It's also used to keep
 /// any intermediary state that is needed to simulate EVM execution
 pub mod builder;
+pub use builder::LocalBuilder;
 
 /// Configuration and command-line argument parsing
 mod config;
-pub use config::{Config, Opts};
+pub use config::{ChainConfig, Config, Opts};
 
 /// Crypto utilities, including BLS and ECDSA
 pub mod crypto;
 
 /// JSON-RPC server and handlers
 pub mod json_rpc;
+pub use json_rpc::start_rpc_server;
 
 /// Primitive types and utilities
 pub mod primitives;
