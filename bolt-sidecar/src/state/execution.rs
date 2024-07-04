@@ -132,7 +132,7 @@ impl<C: StateFetcher> ExecutionState<C> {
     pub async fn check_commitment_validity(
         &mut self,
         request: &CommitmentRequest,
-    ) -> Result<(), ValidationError> {
+    ) -> Result<Address, ValidationError> {
         let CommitmentRequest::Inclusion(req) = request;
 
         // Validate the chain ID
@@ -201,7 +201,7 @@ impl<C: StateFetcher> ExecutionState<C> {
             // TODO: check max_fee_per_blob_gas against the blob_base_fee
         }
 
-        Ok(())
+        Ok(sender)
     }
 
     /// Commits the transaction to the target block. Initializes a new block template

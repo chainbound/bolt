@@ -1,4 +1,5 @@
-use alloy_primitives::keccak256;
+use alloy_primitives::{keccak256, Address};
+use reth_primitives::TransactionSigned;
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 
@@ -50,8 +51,13 @@ pub struct ConstraintsMessage {
 
 impl ConstraintsMessage {
     /// Builds a constraints message from an inclusion request and metadata
-    pub fn build(validator_index: u64, slot: u64, request: InclusionRequest) -> Self {
-        let constraints = vec![Constraint::from_inclusion_request(request, None)];
+    pub fn build(
+        validator_index: u64,
+        slot: u64,
+        request: InclusionRequest,
+        sender: Address,
+    ) -> Self {
+        let constraints = vec![Constraint::from_inclusion_request(request, None, sender)];
         Self {
             validator_index,
             slot,
@@ -83,17 +89,29 @@ pub struct Constraint {
     pub tx: String,
     /// The optional index at which the transaction needs to be included in the block
     pub index: Option<u64>,
+    /// The decoded transaction for internal use
+    #[serde(skip)]
+    pub(crate) tx_decoded: TransactionSigned,
+    /// The ec-recovered address of the transaction sender for internal use
+    #[serde(skip)]
+    pub(crate) sender: Address,
 }
 
 impl Constraint {
     /// Builds a constraint from an inclusion request and an optional index
-    pub fn from_inclusion_request(req: InclusionRequest, index: Option<u64>) -> Self {
+    pub fn from_inclusion_request(
+        req: InclusionRequest,
+        index: Option<u64>,
+        sender: Address,
+    ) -> Self {
         let mut encoded_tx = Vec::new();
         req.tx.encode_enveloped(&mut encoded_tx);
 
         Self {
             tx: format!("0x{}", hex::encode(encoded_tx)),
             index,
+            tx_decoded: req.tx,
+            sender,
         }
     }
 
