@@ -1,7 +1,7 @@
 use alloy_eips::eip4844::MAX_BLOBS_PER_BLOCK;
 use alloy_primitives::{Address, SignatureError};
 use alloy_transport::TransportError;
-use reth_primitives::{transaction::TxType, TransactionSigned};
+use reth_primitives::transaction::TxType;
 use std::{collections::HashMap, num::NonZero};
 use thiserror::Error;
 
@@ -132,7 +132,7 @@ impl<C: StateFetcher> ExecutionState<C> {
 
         // Check if there is room for more commitments
         if let Some(template) = self.get_block_template(req.slot) {
-            if template.transactions.len() >= self.max_commitments_per_slot.get() {
+            if template.transactions_len() >= self.max_commitments_per_slot.get() {
                 return Err(ValidationError::MaxCommitmentsReachedForSlot(
                     self.max_commitments_per_slot.get(),
                 ));
@@ -197,17 +197,12 @@ impl<C: StateFetcher> ExecutionState<C> {
     /// Commits the transaction to the target block. Initializes a new block template
     /// if one does not exist for said block number.
     /// TODO: remove `pub` modifier once `try_commit` is fully implemented.
-    pub fn commit_transaction(
-        &mut self,
-        target_slot: u64,
-        transaction: TransactionSigned,
-        signed_constraints: SignedConstraints,
-    ) {
+    pub fn add_constraint(&mut self, target_slot: u64, signed_constraints: SignedConstraints) {
         if let Some(template) = self.block_templates.get_mut(&target_slot) {
-            template.add_constraints(transaction, signed_constraints);
+            template.add_constraints(signed_constraints);
         } else {
             let mut template = BlockTemplate::default();
-            template.add_constraints(transaction, signed_constraints);
+            template.add_constraints(signed_constraints);
             self.block_templates.insert(target_slot, template);
         }
     }
@@ -251,7 +246,7 @@ impl<C: StateFetcher> ExecutionState<C> {
             tracing::trace!(%address, ?account_state, "Refreshing template...");
             // Iterate over all block templates and apply the state diff
             for (_, template) in self.block_templates.iter_mut() {
-                // Retain only the transactions that are still valid based on the canonical account states.
+                // Retain only signed constraints where transactions are still valid based on the canonical account states.
                 template.retain(*address, *account_state);
 
                 // Update the account state with the remaining state diff for the next iteration.

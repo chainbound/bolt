@@ -32,7 +32,7 @@ pub use constraint::{BatchedSignedConstraints, ConstraintsMessage, SignedConstra
 pub type Slot = u64;
 
 /// Minimal account state needed for commitment validation.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct AccountState {
     /// The nonce of the account. This is the number of transactions sent from this account
     pub transaction_count: u64,
