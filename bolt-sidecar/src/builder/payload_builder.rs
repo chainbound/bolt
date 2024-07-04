@@ -11,6 +11,7 @@ use reth_primitives::{
     Withdrawals, EMPTY_OMMER_ROOT_HASH,
 };
 use reth_rpc_layer::{secret_to_bearer_header, JwtSecret};
+use serde_json::Value;
 
 use super::{
     compat::{to_alloy_execution_payload, to_reth_withdrawal},
@@ -117,32 +118,32 @@ impl FallbackPayloadBuilder {
 
         tracing::debug!(amount = ?withdrawals.len(), "got withdrawals");
 
-        let prev_randao = self
-            .beacon_api_client
-            .get_randao(StateId::Head, None)
-            .await?;
-        let prev_randao = B256::from_slice(&prev_randao);
+        // let prev_randao = self
+        //     .beacon_api_client
+        //     .get_randao(StateId::Head, None)
+        //     .await?;
+        // let prev_randao = B256::from_slice(&prev_randao);
 
         // NOTE: for some reason, this call fails with an ApiResult deserialization error
         // when using the beacon_api_client crate directly, so we use reqwest temporarily.
         // this is to be refactored.
-        // let prev_randao = reqwest::Client::new()
-        //     .get(format!(
-        //         "{}/eth/v1/beacon/states/head/randao",
-        //         self.beacon_api_url
-        //     ))
-        //     .send()
-        //     .await
-        //     .unwrap()
-        //     .json::<Value>()
-        //     .await
-        //     .unwrap();
-        // let prev_randao = prev_randao
-        //     .pointer("/data/randao")
-        //     .unwrap()
-        //     .as_str()
-        //     .unwrap();
-        // let prev_randao = B256::from_hex(prev_randao).unwrap();
+        let prev_randao = reqwest::Client::new()
+            .get(format!(
+                "{}/eth/v1/beacon/states/head/randao",
+                self.beacon_api_client.endpoint.as_str()
+            ))
+            .send()
+            .await
+            .unwrap()
+            .json::<Value>()
+            .await
+            .unwrap();
+        let prev_randao = prev_randao
+            .pointer("/data/randao")
+            .unwrap()
+            .as_str()
+            .unwrap();
+        let prev_randao = B256::from_hex(prev_randao).unwrap();
         tracing::debug!("got prev_randao");
 
         let parent_beacon_block_root = self

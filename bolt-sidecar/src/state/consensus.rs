@@ -1,7 +1,3 @@
-#![allow(missing_docs)]
-#![allow(unused_variables)]
-#![allow(missing_debug_implementations)]
-
 use std::time::{Duration, Instant};
 
 use beacon_api_client::{mainnet::Client, BlockId, ProposerDuty};
@@ -13,7 +9,10 @@ use crate::{
     BeaconClient,
 };
 
+/// Consensus-related errors
 #[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
+#[non_exhaustive]
 pub enum ConsensusError {
     #[error("Beacon API error: {0}")]
     BeaconApiError(#[from] beacon_api_client::Error),
@@ -25,13 +24,17 @@ pub enum ConsensusError {
     ValidatorNotFound,
 }
 
+/// Represents an epoch in the beacon chain.
 #[derive(Debug, Default)]
+#[allow(missing_docs)]
 pub struct Epoch {
     pub value: u64,
     pub start_slot: Slot,
     pub proposer_duties: Vec<ProposerDuty>,
 }
 
+/// Represents the consensus state container for the sidecar.
+#[allow(missing_debug_implementations)]
 pub struct ConsensusState {
     beacon_api_client: Client,
     header: BeaconBlockHeader,
@@ -48,7 +51,8 @@ pub struct ConsensusState {
     /// which won't have time to be included by the PBS pipeline.
     // commitment_deadline: u64,
     pub commitment_deadline: CommitmentDeadline,
-    pub commitment_deadline_duration: Duration,
+    /// The duration of the commitment deadline.
+    commitment_deadline_duration: Duration,
 }
 
 impl ConsensusState {
