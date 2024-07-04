@@ -6,7 +6,7 @@ ARG BUILDNUM=""
 # Build Geth in a stock Go builder container
 FROM golang:1.21-alpine AS builder
 
-RUN apk add --no-cache gcc=10.2.1_pre1-r3 musl-dev=1.2.2-r7 linux-headers=5.10.41-r0 git=2.30.2-r0
+RUN apk add --no-cache gcc musl-dev linux-headers git
 
 # Get dependencies - will also be cached if we won't change go.mod/go.sum
 COPY go.mod /go-ethereum/
