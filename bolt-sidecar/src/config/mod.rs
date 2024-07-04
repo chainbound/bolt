@@ -4,6 +4,7 @@ use alloy_primitives::Address;
 use blst::min_pk::SecretKey;
 use clap::Parser;
 use reqwest::Url;
+use std::num::NonZero;
 
 use crate::crypto::bls::random_bls_secret;
 
@@ -45,7 +46,7 @@ pub struct Opts {
     pub(super) mevboost_proxy_port: u16,
     /// Max number of commitments to accept per block
     #[clap(short = 'm', long)]
-    pub(super) max_commitments: Option<usize>,
+    pub(super) max_commitments: Option<NonZero<usize>>,
     /// Validator indexes of connected validators that the sidecar
     /// should accept commitments on behalf of. Accepted values:
     /// - a comma-separated list of indexes (e.g. "1,2,3,4")
@@ -135,13 +136,13 @@ impl Default for Config {
 #[derive(Debug, Clone)]
 pub struct Limits {
     /// Maximum number of commitments to accept per block
-    pub max_commitments_per_slot: usize,
+    pub max_commitments_per_slot: NonZero<usize>,
 }
 
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            max_commitments_per_slot: 6,
+            max_commitments_per_slot: NonZero::new(6).expect("Valid non-zero"),
         }
     }
 }
