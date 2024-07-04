@@ -11,6 +11,6 @@ pub struct SigningOpts {
     #[clap(short = 'k', long)]
     pub(super) private_key: Option<String>,
     /// URL for the commit-boost sidecar
-    #[clap(short = 'C', long, conflicts_with("private_key"))]
+    #[clap(short = 'B', long, conflicts_with("private_key"))]
     pub(super) commit_boost_url: Option<String>,
 }
