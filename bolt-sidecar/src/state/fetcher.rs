@@ -1,9 +1,14 @@
+#![allow(missing_docs)]
+#![allow(unused_variables)]
+#![allow(missing_debug_implementations)]
+
 use std::{collections::HashMap, time::Duration};
 
 use alloy_eips::BlockNumberOrTag;
 use alloy_primitives::{Address, U256, U64};
 use alloy_transport::TransportError;
 use futures::{stream::FuturesOrdered, StreamExt};
+use reqwest::Url;
 
 use crate::{client::rpc::RpcClient, primitives::AccountState};
 
@@ -15,15 +20,19 @@ const MAX_RETRIES: u32 = 8;
 /// The retry backoff in milliseconds.
 const RETRY_BACKOFF_MS: u64 = 200;
 
-pub(super) trait StateFetcher {
+/// A trait for fetching state updates.
+#[async_trait::async_trait]
+pub trait StateFetcher {
     async fn get_state_update(
         &self,
         addresses: Vec<&Address>,
-        block_number: Option<u64>,
+        head: Option<u64>,
     ) -> Result<StateUpdate, TransportError>;
 
     async fn get_head(&self) -> Result<u64, TransportError>;
+
     async fn get_basefee(&self, block_number: Option<u64>) -> Result<u128, TransportError>;
+
     async fn get_account_state(
         &self,
         address: &Address,
@@ -31,25 +40,26 @@ pub(super) trait StateFetcher {
     ) -> Result<AccountState, TransportError>;
 }
 
-#[derive(Clone)]
-pub(super) struct StateClient {
+/// A basic state fetcher that uses an RPC client to fetch state updates.
+#[derive(Clone, Debug)]
+pub struct StateClient {
     client: RpcClient,
     retry_backoff: Duration,
 }
 
 impl StateClient {
-    pub fn new(url: &str, max_retries: u32) -> Self {
-        let client = RpcClient::new(url);
+    /// Create a new `StateClient` with the given URL and maximum retries.
+    pub fn new<U: Into<Url>>(url: U) -> Self {
         Self {
-            client,
+            client: RpcClient::new(url),
             retry_backoff: Duration::from_millis(RETRY_BACKOFF_MS),
         }
     }
 }
 
+/// Get state updates for the specified block number or latest block if not provided.
+#[async_trait::async_trait]
 impl StateFetcher for StateClient {
-    // TODO: should this be durable i.e. retries?
-    // Yes
     async fn get_state_update(
         &self,
         addresses: Vec<&Address>,
@@ -64,6 +74,12 @@ impl StateFetcher for StateClient {
 
         let mut nonce_futs = FuturesOrdered::new();
         let mut balance_futs = FuturesOrdered::new();
+
+        let block_number = if let Some(block_number) = block_number {
+            block_number
+        } else {
+            self.client.get_head().await?
+        };
 
         // TODO: add block number in params
         for addr in &addresses {
@@ -86,13 +102,13 @@ impl StateFetcher for StateClient {
         // Note that requests may error separately!
         batch.send().await?;
 
-        let basefee = self.client.get_basefee(block_number);
+        let basefee = self.client.get_basefee(None);
 
         // Collect the results
         let (nonce_vec, balance_vec, basefee) = tokio::join!(
             nonce_futs.collect::<Vec<_>>(),
             balance_futs.collect::<Vec<_>>(),
-            basefee
+            basefee,
         );
 
         // Insert the results
@@ -127,6 +143,7 @@ impl StateFetcher for StateClient {
         Ok(StateUpdate {
             account_states,
             min_basefee: basefee?,
+            block_number,
         })
     }
 
@@ -159,5 +176,28 @@ impl StateFetcher for StateClient {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_util::launch_anvil;
+
+    #[tokio::test]
+    async fn test_state_client() {
+        let anvil = launch_anvil();
+        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
+
+        let address = anvil.addresses().first().unwrap();
+        let state = client.get_account_state(address, None).await.unwrap();
+        assert_eq!(state.balance, U256::from(10000000000000000000000u128));
+        assert_eq!(state.transaction_count, 0);
+
+        let head = client.get_head().await.unwrap();
+        assert_eq!(head, 0);
+
+        let basefee = client.get_basefee(None).await.unwrap();
+        assert_eq!(basefee, 1_000_000_000);
     }
 }

@@ -76,6 +76,12 @@ sidecar-dump:
     @id=$(docker ps -n 100 | grep sidecar | awk -F' ' '{print $1}') && \
     docker logs $id 2>&1 | tee sidecar_dump.log
 
+
+# show the logs for the bolt devnet builder
+kill-builder:
+    @id=$(docker ps -n 100 | grep bolt-builder | awk -F' ' '{print $1}') && \
+    docker stop $id
+
 # show the dora explorer in the browser. NOTE: works only for Linux and MacOS at the moment
 dora:
   @url=$(just inspect | grep 'dora\s*http' | awk -F'-> ' '{print $2}' | awk '{print $1}') && \
@@ -103,19 +109,19 @@ build-images:
 
 # build the docker image for the bolt builder
 _build-builder:
-	cd builder && docker build -t ghcr.io/chainbound/bolt-builder:0.1.0 .
+	cd builder && docker buildx build -t ghcr.io/chainbound/bolt-builder:0.1.0 .
 
 # build the docker image for the bolt relay
 _build-relay:
-	cd mev-boost-relay && docker build -t ghcr.io/chainbound/bolt-relay:0.1.0 .
+	cd mev-boost-relay && docker buildx build -t ghcr.io/chainbound/bolt-relay:0.1.0 .
 
 # build the docker image for the bolt sidecar
 _build-sidecar:
-	cd bolt-sidecar && docker build -t ghcr.io/chainbound/bolt-sidecar:0.1.0 .
+	cd bolt-sidecar && docker buildx build -t ghcr.io/chainbound/bolt-sidecar:0.1.0 .
 
 # build the docker image for the bolt mev-boost sidecar
 _build-mevboost:
-	cd mev-boost && docker build -t ghcr.io/chainbound/bolt-mev-boost:0.1.0 .
+	cd mev-boost && docker buildx build -t ghcr.io/chainbound/bolt-mev-boost:0.1.0 .
 
 # push all the docker images to the private github container registry
 _push-images:

@@ -1,25 +1,21 @@
 use std::{num::NonZeroUsize, sync::Arc};
 
-use beacon_api_client::mainnet::Client as BeaconApiClient;
-use ethereum_consensus::ssz::prelude::{ssz_rs, HashTreeRoot};
+use ethereum_consensus::ssz::prelude::ssz_rs;
 use parking_lot::RwLock;
 use serde_json::Value;
 use thiserror::Error;
+use tokio::sync::{mpsc, oneshot};
 use tracing::info;
 
-use super::mevboost::MevBoostClient;
-use crate::{
-    crypto::bls::{from_bls_signature_to_consensus_signature, SignerBLSAsync},
-    primitives::{
-        BatchedSignedConstraints, CommitmentRequest, ConstraintsMessage, SignedConstraints, Slot,
-    },
-};
+use crate::primitives::{CommitmentRequest, Slot};
 
 /// Default size of the api request cache (implemented as a LRU).
 const DEFAULT_API_REQUEST_CACHE_SIZE: usize = 1000;
 
 /// An error that can occur while processing any API request.
 #[derive(Error, Debug)]
+#[allow(missing_docs)]
+#[non_exhaustive]
 pub enum ApiError {
     #[error("failed to parse JSON: {0}")]
     Parse(#[from] serde_json::Error),
@@ -53,6 +49,15 @@ pub trait CommitmentsRpc {
     async fn request_inclusion_commitment(&self, params: Value) -> JsonApiResult;
 }
 
+/// An event that is emitted by the API.
+#[derive(Debug)]
+pub struct ApiEvent {
+    /// The request to process.
+    pub request: CommitmentRequest,
+    /// The sender to respond to.
+    pub response_tx: oneshot::Sender<JsonApiResult>,
+}
+
 /// The struct that implements handlers for all JSON-RPC API methods.
 ///
 /// # Functionality
@@ -60,35 +65,32 @@ pub trait CommitmentsRpc {
 ///   accepting duplicate commitments from users.
 /// - We also sign each request to irrevocably bind it to this
 ///   sidecar's validator identity.
+#[derive(Debug)]
 pub struct JsonRpcApi {
     /// A cache of commitment requests.
     cache: Arc<RwLock<lru::LruCache<Slot, Vec<CommitmentRequest>>>>,
-    /// The client for the MEV-Boost sidecar.
-    mevboost_client: MevBoostClient,
-    /// The signer for the sidecar.
-    signer: Arc<dyn SignerBLSAsync>,
-    /// The client for the beacon node API.
-    #[allow(dead_code)]
-    beacon_api_client: BeaconApiClient,
+    /// The event sender for API events.
+    event_tx: mpsc::Sender<ApiEvent>,
 }
 
 impl JsonRpcApi {
     /// Create a new instance of the JSON-RPC API.
-    pub fn new(
-        mevboost_url: String,
-        beacon_url: String,
-        signer: Arc<dyn SignerBLSAsync>,
-    ) -> Arc<Self> {
+    pub fn new(event_tx: mpsc::Sender<ApiEvent>) -> Arc<Self> {
         let cap = NonZeroUsize::new(DEFAULT_API_REQUEST_CACHE_SIZE).unwrap();
-        let beacon_url = reqwest::Url::parse(&beacon_url).expect("failed to parse beacon node URL");
 
         Arc::new(Self {
             cache: Arc::new(RwLock::new(lru::LruCache::new(cap))),
-            mevboost_client: MevBoostClient::new(mevboost_url),
-            beacon_api_client: BeaconApiClient::new(beacon_url),
-            signer,
+            event_tx,
         })
     }
+}
+
+fn internal_error() -> ApiError {
+    ApiError::Custom("internal server error".to_string())
+}
+
+fn internal_error_with_message(m: String) -> ApiError {
+    ApiError::Custom(format!("internal server error: {}", m))
 }
 
 #[async_trait::async_trait]
@@ -100,23 +102,25 @@ impl CommitmentsRpc for JsonRpcApi {
             ));
         };
 
-        let params = serde_json::from_value::<CommitmentRequest>(params)?;
+        let request = serde_json::from_value::<CommitmentRequest>(params)?;
         #[allow(irrefutable_let_patterns)] // TODO: remove this when we have more request types
-        let CommitmentRequest::Inclusion(params) = params
+        let CommitmentRequest::Inclusion(request) = request
         else {
             return Err(ApiError::Custom(
                 "request must be an inclusion request".to_string(),
             ));
         };
 
-        info!(?params, "received inclusion commitment request");
+        info!(?request, "received inclusion commitment request");
 
-        let tx_sender = params.tx.recover_signer()?;
+        let tx_sender = request.tx.recover_signer().ok_or(ApiError::Custom(
+            "failed to recover signer from transaction".to_string(),
+        ))?;
 
         // validate the user's signature
-        let signer_address = params
+        let signer_address = request
             .signature
-            .recover_address_from_prehash(&params.digest())?;
+            .recover_address_from_prehash(&request.digest())?;
 
         // TODO: relax this check to allow for external signers to request commitments
         // about transactions that they did not sign themselves
@@ -130,49 +134,46 @@ impl CommitmentsRpc for JsonRpcApi {
         {
             // check for duplicate requests and update the cache if necessary
             let mut cache = self.cache.write();
-            if let Some(commitments) = cache.get_mut(&params.slot) {
+            if let Some(commitments) = cache.get_mut(&request.slot) {
                 if commitments
                     .iter()
-                    .any(|p| matches!(p, CommitmentRequest::Inclusion(req) if req == &params))
+                    .any(|p| matches!(p, CommitmentRequest::Inclusion(req) if req == &request))
                 {
                     return Err(ApiError::DuplicateRequest);
                 }
 
-                commitments.push(params.clone().into());
+                commitments.push(request.clone().into());
             } else {
-                cache.put(params.slot, vec![params.clone().into()]);
+                cache.put(request.slot, vec![request.clone().into()]);
             }
         } // Drop the lock
 
-        // parse the request into constraints and sign them with the sidecar signer
-        // TODO: get the validator index from somewhere
-        // let validator_index = self.beacon_api_client.get_proposer_duties(get_epoch_from_slot(params.slot)).await?;
-        let message = ConstraintsMessage::build(0, params.slot, params.clone())?;
-        let root = message.hash_tree_root()?;
+        let (response_tx, response_rx) = oneshot::channel();
 
-        let bls_signature = self.signer.sign(root.as_ref()).await.unwrap();
+        // send the request to the event loop
+        let event = ApiEvent {
+            request: CommitmentRequest::Inclusion(request),
+            response_tx,
+        };
+        self.event_tx.send(event).await.map_err(|e| {
+            internal_error_with_message(format!("error sending api event, err = {:?}", e))
+        })?;
 
-        let signature = from_bls_signature_to_consensus_signature(bls_signature);
-        let signed_constraints: BatchedSignedConstraints =
-            vec![SignedConstraints { message, signature }];
-
-        // TODO: simulate and check if the transaction can be included in the next block
-        // self.block_builder.try_append(params.slot, params.tx)
-
-        // TODO: check if there is enough time left in the current slot
-
-        // Web demo: push an event to the demo server to notify the frontend
-        emit_bolt_demo_event("commitment request accepted");
-
-        // Forward the constraints to mev-boost's builder API
-        self.mevboost_client
-            .post_constraints(&signed_constraints)
-            .await?;
-
-        Ok(serde_json::to_value(signed_constraints)?)
+        match response_rx.await {
+            // TODO: format the user response to be more clear. Right now it's just the raw
+            // signed constraints object.
+            // Docs: https://chainbound.github.io/bolt-docs/api/commitments-api#bolt_inclusionpreconfirmation
+            Ok(event_response) => event_response,
+            Err(e) => {
+                tracing::error!(err = ?e, "error receiving api event response from event loop");
+                Err(internal_error())
+            }
+        }
     }
 }
 
+/// Emit an event to the demo server webhook. This is only used for demo purposes.
+#[allow(dead_code)]
 fn emit_bolt_demo_event<T: Into<String>>(message: T) {
     let msg = message.into();
     tokio::spawn(async move {

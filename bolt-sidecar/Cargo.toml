@@ -8,43 +8,51 @@ default-run = "bolt-sidecar"
 # core
 clap = { version = "4.5.4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
+axum = { version = "0.7", features = ["macros"] }
 warp = "0.3.7"
 futures = "0.3"
 
 # crypto
 blst = "0.3.12"
+tree_hash = "0.5"
+tree_hash_derive = "0.5"
 secp256k1 = { version = "0.29.0", features = ["rand"] }
 
 # alloy
-alloy-rpc-client = { git = "https://github.com/alloy-rs/alloy", features = [
-  "reqwest",
-  "ws",
-  "pubsub",
-] }
-alloy-provider = { git = "https://github.com/alloy-rs/alloy", features = [
-  "ws",
-] }
-alloy-signer = { git = "https://github.com/alloy-rs/alloy" }
-alloy-signer-wallet = { git = "https://github.com/alloy-rs/alloy" }
-alloy-transport = { git = "https://github.com/alloy-rs/alloy" }
-alloy-eips = { git = "https://github.com/alloy-rs/alloy" }
-alloy-transport-http = { git = "https://github.com/alloy-rs/alloy" }
-alloy-transport-ws = { git = "https://github.com/alloy-rs/alloy" }
-alloy-pubsub = { git = "https://github.com/alloy-rs/alloy" }
-alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy" }
-alloy-rpc-types-beacon = { git = "https://github.com/alloy-rs/alloy" }
-alloy-consensus = { git = "https://github.com/alloy-rs/alloy", features = [
-  "k256",
-] }
-alloy-json-rpc = { git = "https://github.com/alloy-rs/alloy" }
-alloy-primitives = { version = "0.7.1", features = ["rand"] }
-alloy-rlp = "0.3"
+alloy-rpc-client = { version = "0.1.2", features = ["reqwest", "ws", "pubsub"] }
+alloy-consensus = { version = "0.1.2", features = ["k256"] }
+alloy-provider = { version = "0.1.2", features = ["ws"] }
+alloy-signer = { version = "0.1.2" }
+alloy-signer-local = { version = "0.1.2" }
+alloy-transport = { version = "0.1.2" }
+alloy-eips = { version = "0.1.2" }
+alloy-transport-http = { version = "0.1.2" }
+alloy-transport-ws = { version = "0.1.2" }
+alloy-pubsub = { version = "0.1.2" }
+alloy-rpc-types = { version = "0.1.2" }
+alloy-rpc-types-engine = { version = "0.1.2" }
+alloy-rpc-types-beacon = { version = "0.1.2" }
+alloy-rpc-types-trace = { version = "0.1.2" }
+alloy-json-rpc = { version = "0.1.2" }
+alloy-network = { version = "0.1.2" }
+alloy-primitives = { version = "0.7.1" }
+alloy-rlp = { version = "0.3" }
+
+
+# alloy-rpc-types = { git = "https://github.com/chainbound/alloy", branch = "fix/account-override-serialize" }
+
+
+# reth
+reth-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "71c404d" }
+reth-rpc-layer = { git = "https://github.com/paradigmxyz/reth", rev = "6e146e1" }
+# reth-provider = { git = "https://github.com/paradigmxyz/reth", rev = "71c404d" }
 
 reqwest = "0.12"
 ethereum-consensus = { git = "https://github.com/ralexstokes/ethereum-consensus", rev = "cf3c404" }
 beacon-api-client = { git = "https://github.com/ralexstokes/ethereum-consensus", rev = "cf3c404" }
 
 # types
+partial-mpt = { git = "https://github.com/chainbound/partial-mpt", branch = "feat/alloy" }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.115"
 parking_lot = "0.12.1"
@@ -57,6 +65,8 @@ hex = "0.4.3"
 eyre = "0.6.12"
 thiserror = "1.0"
 rand = "0.8.5"
+dotenvy = "0.15.7"
+regex = "1.10.5"
 
 # tracing
 tracing = "0.1.40"
@@ -67,7 +77,7 @@ cb-crypto = { git = "https://github.com/Commit-Boost/commit-boost-client" }
 cb-common = { git = "https://github.com/Commit-Boost/commit-boost-client" }
 
 [dev-dependencies]
-alloy-node-bindings = { git = "https://github.com/alloy-rs/alloy" }
+alloy-node-bindings = "0.1.1"
 
 
 [[bin]]

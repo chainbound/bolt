@@ -6,13 +6,10 @@
 
 use std::collections::HashMap;
 
-use alloy_consensus::{TxEnvelope, TxType};
 use alloy_primitives::{Address, U256};
+use reth_primitives::{TransactionSigned, TxType};
 
-use crate::{
-    common::max_transaction_cost,
-    primitives::{AccountState, TxInfo},
-};
+use crate::{common::max_transaction_cost, primitives::AccountState};
 
 /// A block template that serves as a fallback block, but is also used
 /// to keep intermediary state for new commitment requests.
@@ -23,37 +20,33 @@ use crate::{
 /// - Simulate new commitment requests.
 /// - Update state every block, to invalidate old commitments.
 /// - Make sure we DO NOT accept invalid commitments in any circumstances.
+#[derive(Debug, Default)]
 pub struct BlockTemplate {
     /// The state diffs per address given the list of commitments.
     state_diff: StateDiff,
-    transactions: Vec<TxEnvelope>,
+    /// The list of transactions in the block template.
+    pub transactions: Vec<TransactionSigned>,
 }
 
 impl BlockTemplate {
-    pub fn new() -> Self {
-        Self {
-            state_diff: StateDiff::default(),
-            transactions: Vec::new(),
-        }
-    }
-
+    /// Return the state diff of the block template.
     pub fn state_diff(&self) -> &StateDiff {
         &self.state_diff
     }
 
     /// Adds a transaction to the block template and updates the state diff.
-    pub fn add_transaction(&mut self, transaction: TxEnvelope) {
+    pub fn add_transaction(&mut self, transaction: TransactionSigned) {
         let max_cost = max_transaction_cost(&transaction);
 
         // Update intermediate state
         self.state_diff
             .diffs
-            .entry(transaction.from().expect("Passed validation"))
+            .entry(transaction.recover_signer().expect("Passed validation"))
             .and_modify(|(nonce, balance)| {
                 *nonce += 1;
                 *balance += max_cost;
             })
-            .or_insert((transaction.nonce(), max_cost));
+            .or_insert((1, max_cost));
 
         self.transactions.push(transaction);
     }
@@ -67,7 +60,7 @@ impl BlockTemplate {
     pub fn blob_count(&self) -> usize {
         self.transactions.iter().fold(0, |mut acc, tx| {
             if tx.tx_type() == TxType::Eip4844 {
-                acc += tx.blob_count();
+                acc += tx.blob_versioned_hashes().unwrap_or_default().len();
             }
 
             acc
@@ -82,7 +75,7 @@ impl BlockTemplate {
         // Update intermediate state
         self.state_diff
             .diffs
-            .entry(tx.from().expect("Passed validation"))
+            .entry(tx.recover_signer().expect("Passed validation"))
             .and_modify(|(nonce, balance)| {
                 *nonce = nonce.saturating_sub(1);
                 *balance += max_cost;
@@ -95,7 +88,7 @@ impl BlockTemplate {
 
         for (index, tx) in self.transactions.iter().enumerate() {
             let max_cost = max_transaction_cost(tx);
-            if tx.from().unwrap() == address
+            if tx.recover_signer().expect("passed validation") == address
                 && (state.balance < max_cost || state.transaction_count > tx.nonce())
             {
                 tracing::trace!(
@@ -125,6 +118,8 @@ impl BlockTemplate {
 /// StateDiff tracks the intermediate changes to the state according to the block template.
 #[derive(Debug, Default)]
 pub struct StateDiff {
+    /// Map of diffs per address. Each diff is a tuple of the nonce and balance diff
+    /// that should be applied to the current state.
     diffs: HashMap<Address, (u64, U256)>,
 }
 

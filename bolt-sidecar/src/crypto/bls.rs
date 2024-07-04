@@ -9,6 +9,7 @@ pub use ethereum_consensus::deneb::BlsSignature;
 /// The BLS Domain Separator used in Ethereum 2.0.
 pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
 
+/// A fixed-size byte array for BLS signatures.
 pub type BLSBytes = FixedBytes<96>;
 
 /// Trait for any types that can be signed and verified with BLS.
@@ -35,26 +36,33 @@ pub trait SignableBLS {
     }
 }
 
+/// A generic signing trait to generate BLS signatures.
 #[allow(dead_code)]
 pub trait SignerBLS {
+    /// Sign the given data and return the signature.
     fn sign(&self, data: &[u8]) -> eyre::Result<BLSBytes>;
 }
 
+/// A generic signing trait to generate BLS signatures asynchronously.
 #[async_trait::async_trait]
 pub trait SignerBLSAsync: Send + Sync {
+    /// Sign the given data and return the signature.
     async fn sign(&self, data: &[u8]) -> eyre::Result<BLSBytes>;
 }
 
 /// A BLS signer that can sign any type that implements the `Signable` trait.
+#[derive(Debug, Clone)]
 pub struct Signer {
     key: BlsSecretKey,
 }
 
 impl Signer {
+    /// Create a new signer with the given BLS secret key.
     pub fn new(key: BlsSecretKey) -> Self {
         Self { key }
     }
 
+    /// Verify the signature of the object with the given public key.
     #[allow(dead_code)]
     pub fn verify<T: SignableBLS>(
         &self,
@@ -81,10 +89,12 @@ impl SignerBLSAsync for Signer {
     }
 }
 
+/// Compatibility between ethereum_consensus and blst
 pub fn from_bls_signature_to_consensus_signature(sig_bytes: impl AsRef<[u8]>) -> BlsSignature {
     BlsSignature::try_from(sig_bytes.as_ref()).unwrap()
 }
 
+/// Generate a random BLS secret key.
 pub fn random_bls_secret() -> BlsSecretKey {
     let mut rng = rand::thread_rng();
     let mut ikm = [0u8; 32];
@@ -92,6 +102,7 @@ pub fn random_bls_secret() -> BlsSecretKey {
     BlsSecretKey::key_gen(&ikm, &[]).unwrap()
 }
 
+/// Sign the given data with the given BLS secret key.
 #[inline]
 fn sign_with_prefix(key: &BlsSecretKey, data: &[u8]) -> Signature {
     key.sign(data, BLS_DST_PREFIX, &[])
@@ -99,28 +110,13 @@ fn sign_with_prefix(key: &BlsSecretKey, data: &[u8]) -> Signature {
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::bls::SignerBLS;
-    use blst::min_pk::SecretKey;
-
-    use super::SignableBLS;
-    use super::Signer;
-
-    fn test_bls_secret_key() -> SecretKey {
-        SecretKey::key_gen(&[0u8; 32], &[]).unwrap()
-    }
-
-    struct TestSignableData {
-        data: Vec<u8>,
-    }
-
-    impl SignableBLS for TestSignableData {
-        fn digest(&self) -> Vec<u8> {
-            self.data.clone()
-        }
-    }
+    use crate::{
+        crypto::bls::{SignableBLS, Signer, SignerBLS},
+        test_util::{test_bls_secret_key, TestSignableData},
+    };
 
     #[test]
-    fn test_signer() {
+    fn test_bls_signer() {
         let key = test_bls_secret_key();
         let pubkey = key.sk_to_pk();
         let signer = Signer::new(key);

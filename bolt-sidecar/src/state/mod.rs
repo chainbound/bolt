@@ -1,48 +1,68 @@
 //! The `state` module is responsible for keeping a local copy of relevant state that is needed
 //! to simulate commitments against. It is updated on every block. It has both execution state and consensus state.
-use alloy_transport::TransportError;
-use std::sync::{atomic::AtomicU64, Arc};
-use thiserror::Error;
+
+use std::{
+    pin::Pin,
+    task::{Context, Poll},
+    time::Duration,
+};
+
+use futures::{future::poll_fn, Future, FutureExt};
+use tokio::time::Sleep;
 
 mod execution;
-pub use execution::ValidationError;
-mod fetcher;
+pub use execution::{ExecutionState, ValidationError};
 
-#[derive(Debug, Error)]
-pub enum StateError {
-    #[error("RPC error: {0:?}")]
-    Rpc(#[from] TransportError),
+/// Module to fetch state from the Execution layer.
+pub mod fetcher;
+pub use fetcher::StateClient;
+
+/// Module to track the consensus state.
+pub mod consensus;
+pub use consensus::ConsensusState;
+
+/// Module to track the head of the chain.
+pub mod head_tracker;
+pub use head_tracker::HeadTracker;
+
+/// The deadline for a which a commitment is considered valid.
+#[derive(Debug)]
+pub struct CommitmentDeadline {
+    slot: u64,
+    sleep: Option<Pin<Box<Sleep>>>,
 }
 
-#[derive(Debug, Clone)]
-struct ProposerDuties {
-    assigned_slots: Vec<u64>,
+impl CommitmentDeadline {
+    /// Create a new deadline for a given slot and duration.
+    pub fn new(slot: u64, duration: Duration) -> Self {
+        let sleep = Some(Box::pin(tokio::time::sleep(duration)));
+        Self { slot, sleep }
+    }
+
+    /// Poll the deadline until it is reached.
+    pub async fn wait(&mut self) -> Option<u64> {
+        let slot = poll_fn(|cx| self.poll_unpin(cx)).await;
+        self.sleep = None;
+        slot
+    }
 }
 
-#[derive(Debug, Clone)]
-struct ChainHead {
-    /// The current slot number.
-    slot: Arc<AtomicU64>,
-    /// The current block number.
-    block: Arc<AtomicU64>,
-}
+/// Poll the deadline until it is reached.
+///
+/// - If already reached, the future will return `None` immediately.
+/// - If not reached, the future will return `Some(slot)` when the deadline is reached.
+impl Future for CommitmentDeadline {
+    type Output = Option<u64>;
 
-impl ChainHead {
-    pub fn new(slot: u64, head: u64) -> Self {
-        Self {
-            slot: Arc::new(AtomicU64::new(slot)),
-            block: Arc::new(AtomicU64::new(head)),
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let Some(ref mut sleep) = self.sleep else {
+            return Poll::Ready(None);
+        };
+
+        match sleep.as_mut().poll(cx) {
+            Poll::Ready(_) => Poll::Ready(Some(self.slot)),
+            Poll::Pending => Poll::Pending,
         }
-    }
-
-    /// Get the slot number (consensus layer).
-    pub fn slot(&self) -> u64 {
-        self.slot.load(std::sync::atomic::Ordering::SeqCst)
-    }
-
-    /// Get the block number (execution layer).
-    pub fn block(&self) -> u64 {
-        self.block.load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 
@@ -50,38 +70,37 @@ impl ChainHead {
 mod tests {
     use alloy_consensus::constants::ETH_TO_WEI;
     use alloy_eips::eip2718::Encodable2718;
-    use alloy_node_bindings::{Anvil, AnvilInstance};
-    use alloy_primitives::{hex, uint, Address, Uint, U256};
-    use alloy_provider::{
-        network::{EthereumSigner, TransactionBuilder},
-        Provider, ProviderBuilder,
-    };
-    use alloy_rpc_types::TransactionRequest;
+    use alloy_network::EthereumWallet;
+    use alloy_primitives::{hex, uint, Uint};
+    use alloy_provider::{network::TransactionBuilder, Provider, ProviderBuilder};
     use alloy_signer::SignerSync;
-    use alloy_signer_wallet::LocalWallet;
+    use alloy_signer_local::PrivateKeySigner;
     use execution::{ExecutionState, ValidationError};
     use fetcher::StateClient;
+    use reqwest::Url;
+    use reth_primitives::TransactionSigned;
     use tracing_subscriber::fmt;
 
-    use crate::primitives::{CommitmentRequest, InclusionRequest};
+    use crate::{
+        primitives::{CommitmentRequest, InclusionRequest},
+        test_util::{default_test_transaction, launch_anvil},
+    };
 
     use super::*;
 
-    fn launch_anvil() -> AnvilInstance {
-        Anvil::new().block_time(1).chain_id(1337).spawn()
-    }
+    #[tokio::test]
+    async fn test_commitment_deadline() {
+        let time = std::time::Instant::now();
+        let mut deadline = CommitmentDeadline::new(0, Duration::from_secs(1));
 
-    fn default_transaction(sender: Address) -> TransactionRequest {
-        TransactionRequest::default()
-            .with_from(sender)
-            // Burn it
-            .with_to(Address::ZERO)
-            .with_chain_id(1337)
-            .with_nonce(0)
-            .with_value(U256::from(100))
-            .with_gas_limit(21_000)
-            .with_max_priority_fee_per_gas(1_000_000_000)
-            .with_max_fee_per_gas(20_000_000_000)
+        let slot = deadline.wait().await;
+        println!("Deadline reached. Passed {:?}", time.elapsed());
+        assert_eq!(slot, Some(0));
+
+        let time = std::time::Instant::now();
+        let slot = deadline.wait().await;
+        println!("Deadline reached. Passed {:?}", time.elapsed());
+        assert_eq!(slot, None);
     }
 
     #[tokio::test]
@@ -90,26 +109,29 @@ mod tests {
 
         // let mut state = State::new(get_client()).await.unwrap();
         let anvil = launch_anvil();
-        let client = StateClient::new(&anvil.endpoint(), 1);
+        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
-        let head = ChainHead::new(1, 0);
+        let mut state = ExecutionState::new(client).await.unwrap();
 
-        let mut state = ExecutionState::new(client, head).await.unwrap();
-
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
         let sender = anvil.addresses()[0];
 
-        let tx = default_transaction(sender);
+        let tx = default_test_transaction(sender, None);
 
         let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
 
-        let signer: EthereumSigner = wallet.into();
+        let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
+
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            tx: signed,
+            tx: tx_signed,
             signature: sig,
         });
 
@@ -121,26 +143,29 @@ mod tests {
         let _ = fmt::try_init();
 
         let anvil = launch_anvil();
-        let client = StateClient::new(&anvil.endpoint(), 1);
+        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
-        let head = ChainHead::new(1, 0);
+        let mut state = ExecutionState::new(client).await.unwrap();
 
-        let mut state = ExecutionState::new(client, head).await.unwrap();
-
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
         let sender = anvil.addresses()[0];
 
-        let tx = default_transaction(sender).with_nonce(1);
+        let tx = default_test_transaction(sender, Some(1));
 
         let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
 
-        let signer: EthereumSigner = wallet.into();
+        let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
+
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            tx: signed,
+            tx: tx_signed,
             signature: sig,
         });
 
@@ -155,27 +180,30 @@ mod tests {
         let _ = fmt::try_init();
 
         let anvil = launch_anvil();
-        let client = StateClient::new(&anvil.endpoint(), 1);
+        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
-        let head = ChainHead::new(1, 0);
+        let mut state = ExecutionState::new(client).await.unwrap();
 
-        let mut state = ExecutionState::new(client, head).await.unwrap();
-
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
         let sender = anvil.addresses()[0];
 
-        let tx =
-            default_transaction(sender).with_value(uint!(11_000_U256 * Uint::from(ETH_TO_WEI)));
+        let tx = default_test_transaction(sender, None)
+            .with_value(uint!(11_000_U256 * Uint::from(ETH_TO_WEI)));
 
         let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
 
-        let signer: EthereumSigner = wallet.into();
+        let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
+
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            tx: signed,
+            tx: tx_signed,
             signature: sig,
         });
 
@@ -190,28 +218,31 @@ mod tests {
         let _ = fmt::try_init();
 
         let anvil = launch_anvil();
-        let client = StateClient::new(&anvil.endpoint(), 1);
+        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
-        let head = ChainHead::new(1, 0);
-
-        let mut state = ExecutionState::new(client, head).await.unwrap();
+        let mut state = ExecutionState::new(client).await.unwrap();
 
         let basefee = state.basefee();
 
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
         let sender = anvil.addresses()[0];
 
-        let tx = default_transaction(sender).with_max_fee_per_gas(basefee - 1);
+        let tx = default_test_transaction(sender, None).with_max_fee_per_gas(basefee - 1);
 
         let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
 
-        let signer: EthereumSigner = wallet.into();
+        let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
+
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            tx: signed,
+            tx: tx_signed,
             signature: sig,
         });
 
@@ -226,26 +257,29 @@ mod tests {
         let _ = fmt::try_init();
 
         let anvil = launch_anvil();
-        let client = StateClient::new(&anvil.endpoint(), 1);
+        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
-        let head = ChainHead::new(1, 0);
+        let mut state = ExecutionState::new(client).await.unwrap();
 
-        let mut state = ExecutionState::new(client, head).await.unwrap();
-
-        let wallet: LocalWallet = anvil.keys()[0].clone().into();
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
         let sender = anvil.addresses()[0];
 
-        let tx = default_transaction(sender);
+        let tx = default_test_transaction(sender, None);
 
         let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
 
-        let signer: EthereumSigner = wallet.into();
+        let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
+
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
-            tx: signed.clone(),
+            tx: tx_signed,
             signature: sig,
         });
 
@@ -262,10 +296,8 @@ mod tests {
         // Wait for confirmation
         let receipt = notif.get_receipt().await.unwrap();
 
-        let new_head = ChainHead::new(2, receipt.block_number.unwrap());
-
         // Update the head, which should invalidate the transaction due to a nonce conflict
-        state.update_head(new_head).await.unwrap();
+        state.update_head(receipt.block_number).await.unwrap();
 
         let transactions_len = state.block_templates().get(&10).unwrap().transactions_len();
         assert!(transactions_len == 0);
