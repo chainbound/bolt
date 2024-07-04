@@ -139,7 +139,7 @@ mod tests {
             signature: sig,
         });
 
-        assert!(state.try_commit(&request).await.is_ok());
+        assert!(state.check_commitment_validity(&request).await.is_ok());
     }
 
     #[tokio::test]
@@ -176,7 +176,7 @@ mod tests {
         });
 
         assert!(matches!(
-            state.try_commit(&request).await,
+            state.check_commitment_validity(&request).await,
             Err(ValidationError::NonceTooHigh)
         ));
     }
@@ -216,7 +216,7 @@ mod tests {
         });
 
         assert!(matches!(
-            state.try_commit(&request).await,
+            state.check_commitment_validity(&request).await,
             Err(ValidationError::InsufficientBalance)
         ));
     }
@@ -257,7 +257,7 @@ mod tests {
         });
 
         assert!(matches!(
-            state.try_commit(&request).await,
+            state.check_commitment_validity(&request).await,
             Err(ValidationError::BaseFeeTooLow(_))
         ));
     }
@@ -295,7 +295,7 @@ mod tests {
             signature: sig,
         });
 
-        assert!(state.try_commit(&request).await.is_ok());
+        assert!(state.check_commitment_validity(&request).await.is_ok());
         assert!(state.block_templates().get(&10).unwrap().transactions_len() == 1);
 
         let provider = ProviderBuilder::new().on_http(anvil.endpoint_url());
