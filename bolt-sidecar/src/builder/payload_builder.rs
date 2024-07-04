@@ -5,18 +5,18 @@ use alloy_rpc_types_engine::ExecutionPayload as AlloyExecutionPayload;
 use beacon_api_client::{BlockId, StateId};
 use hex::FromHex;
 use regex::Regex;
+use reqwest::Url;
 use reth_primitives::{
     constants::BEACON_NONCE, proofs, BlockBody, Bloom, Header, SealedBlock, TransactionSigned,
     Withdrawals, EMPTY_OMMER_ROOT_HASH,
 };
 use reth_rpc_layer::{secret_to_bearer_header, JwtSecret};
-use serde_json::Value;
 
 use super::{
     compat::{to_alloy_execution_payload, to_reth_withdrawal},
     BuilderError,
 };
-use crate::{Config, RpcClient};
+use crate::{BeaconClient, Config, RpcClient};
 
 /// Extra-data payload field used for locally built blocks, decoded in UTF-8.
 ///
@@ -37,11 +37,11 @@ const DEFAULT_EXTRA_DATA: [u8; 20] = [
 ///
 /// Find more information about this process & its reasoning here:
 /// <https://github.com/chainbound/bolt/discussions/59>
-#[derive(Debug)]
+#[allow(missing_debug_implementations)]
 pub struct FallbackPayloadBuilder {
     extra_data: Bytes,
     fee_recipient: Address,
-    beacon_api_url: String,
+    beacon_api_client: BeaconClient,
     execution_rpc_client: RpcClient,
     engine_hinter: EngineHinter,
     slot_time_in_seconds: u64,
@@ -53,15 +53,15 @@ impl FallbackPayloadBuilder {
         let engine_hinter = EngineHinter {
             client: reqwest::Client::new(),
             jwt_hex: config.jwt_hex.to_string(),
-            engine_rpc_url: config.engine_api_url.to_string(),
+            engine_rpc_url: config.engine_api_url.clone(),
         };
 
         Self {
             engine_hinter,
             extra_data: DEFAULT_EXTRA_DATA.into(),
             fee_recipient: config.fee_recipient,
-            beacon_api_url: config.beacon_api_url.to_string(),
-            execution_rpc_client: RpcClient::new(&config.execution_api_url),
+            beacon_api_client: BeaconClient::new(config.beacon_api_url.clone()),
+            execution_rpc_client: RpcClient::new(config.execution_api_url.clone()),
             slot_time_in_seconds: config.chain.slot_time(),
         }
     }
@@ -106,47 +106,49 @@ impl FallbackPayloadBuilder {
         let latest_block = self.execution_rpc_client.get_block(None, true).await?;
         tracing::debug!(num = ?latest_block.header.number, "got latest block");
 
-        // TODO: refactor this once ConsensusState (https://github.com/chainbound/bolt/issues/58) is ready
-        let beacon_api_endpoint = reqwest::Url::parse(&self.beacon_api_url).unwrap();
-        let beacon_api = beacon_api_client::mainnet::Client::new(beacon_api_endpoint);
-
-        let withdrawals = beacon_api
+        let withdrawals = self
+            .beacon_api_client
             // Slot: Defaults to the slot after the parent state if not specified.
             .get_expected_withdrawals(StateId::Head, None)
-            .await
-            .unwrap()
+            .await?
             .into_iter()
             .map(to_reth_withdrawal)
             .collect::<Vec<_>>();
 
         tracing::debug!(amount = ?withdrawals.len(), "got withdrawals");
 
+        let prev_randao = self
+            .beacon_api_client
+            .get_randao(StateId::Head, None)
+            .await?;
+        let prev_randao = B256::from_slice(&prev_randao);
+
         // NOTE: for some reason, this call fails with an ApiResult deserialization error
         // when using the beacon_api_client crate directly, so we use reqwest temporarily.
         // this is to be refactored.
-        let prev_randao = reqwest::Client::new()
-            .get(format!(
-                "{}/eth/v1/beacon/states/head/randao",
-                self.beacon_api_url
-            ))
-            .send()
-            .await
-            .unwrap()
-            .json::<Value>()
-            .await
-            .unwrap();
-        let prev_randao = prev_randao
-            .pointer("/data/randao")
-            .unwrap()
-            .as_str()
-            .unwrap();
-        let prev_randao = B256::from_hex(prev_randao).unwrap();
+        // let prev_randao = reqwest::Client::new()
+        //     .get(format!(
+        //         "{}/eth/v1/beacon/states/head/randao",
+        //         self.beacon_api_url
+        //     ))
+        //     .send()
+        //     .await
+        //     .unwrap()
+        //     .json::<Value>()
+        //     .await
+        //     .unwrap();
+        // let prev_randao = prev_randao
+        //     .pointer("/data/randao")
+        //     .unwrap()
+        //     .as_str()
+        //     .unwrap();
+        // let prev_randao = B256::from_hex(prev_randao).unwrap();
         tracing::debug!("got prev_randao");
 
-        let parent_beacon_block_root = beacon_api
+        let parent_beacon_block_root = self
+            .beacon_api_client
             .get_beacon_block_root(BlockId::Head)
-            .await
-            .unwrap();
+            .await?;
         tracing::debug!(parent = ?parent_beacon_block_root, "got parent_beacon_block_root");
 
         let versioned_hashes = transactions
@@ -265,7 +267,7 @@ pub(crate) enum EngineApiHint {
 pub(crate) struct EngineHinter {
     client: reqwest::Client,
     jwt_hex: String,
-    engine_rpc_url: String,
+    engine_rpc_url: Url,
 }
 
 impl EngineHinter {
@@ -287,7 +289,7 @@ impl EngineHinter {
 
         let raw_hint = self
             .client
-            .post(&self.engine_rpc_url)
+            .post(self.engine_rpc_url.as_str())
             .header("Content-Type", "application/json")
             .header("Authorization", auth_jwt.clone())
             .body(body)

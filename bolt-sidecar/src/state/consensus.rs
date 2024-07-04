@@ -6,10 +6,12 @@ use std::time::{Duration, Instant};
 
 use beacon_api_client::{mainnet::Client, BlockId, ProposerDuty};
 use ethereum_consensus::{deneb::BeaconBlockHeader, phase0::mainnet::SLOTS_PER_EPOCH};
-use reqwest::Url;
 
 use super::CommitmentDeadline;
-use crate::primitives::{CommitmentRequest, Slot};
+use crate::{
+    primitives::{CommitmentRequest, Slot},
+    BeaconClient,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConsensusError {
@@ -52,13 +54,10 @@ pub struct ConsensusState {
 impl ConsensusState {
     /// Create a new `ConsensusState` with the given configuration.
     pub fn new(
-        beacon_api_url: &str,
+        beacon_api_client: BeaconClient,
         validator_indexes: &[u64],
         commitment_deadline_duration: Duration,
     ) -> Self {
-        let url = Url::parse(beacon_api_url).expect("valid beacon client URL");
-        let beacon_api_client = Client::new(url);
-
         ConsensusState {
             beacon_api_client,
             header: BeaconBlockHeader::default(),
@@ -158,6 +157,7 @@ impl ConsensusState {
 mod tests {
     use super::*;
     use beacon_api_client::ProposerDuty;
+    use reqwest::Url;
 
     #[tokio::test]
     async fn test_find_validator_index_for_slot() {

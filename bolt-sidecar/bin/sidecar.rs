@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use alloy_rpc_types_beacon::events::HeadEvent;
 use tokio::sync::mpsc;
-use tracing::info;
 
 use bolt_sidecar::{
     crypto::{bls::Signer, SignableBLS, SignerBLS},
@@ -13,7 +12,7 @@ use bolt_sidecar::{
     },
     start_builder_proxy_server, start_rpc_server,
     state::{ConsensusState, ExecutionState, HeadTracker, StateClient},
-    BuilderProxyConfig, Config, ConstraintsApi, LocalBuilder, MevBoostClient,
+    BeaconClient, BuilderProxyConfig, Config, ConstraintsApi, LocalBuilder, MevBoostClient,
 };
 
 #[tokio::main]
@@ -22,21 +21,22 @@ async fn main() -> eyre::Result<()> {
 
     let config = Config::parse_from_cli()?;
 
-    info!(chain = config.chain.name(), "Starting Bolt sidecar");
+    tracing::info!(chain = config.chain.name(), "Starting Bolt sidecar");
 
     // TODO: support external signers
     // probably it's cleanest to have the Config parser initialize a generic Signer
     let signer = Signer::new(config.private_key.clone().unwrap());
 
-    let state_client = StateClient::new(&config.execution_api_url);
+    let state_client = StateClient::new(config.execution_api_url.clone());
     let mut execution_state = ExecutionState::new(state_client).await?;
 
-    let mevboost_client = MevBoostClient::new(&config.mevboost_url);
+    let mevboost_client = MevBoostClient::new(config.mevboost_url.clone());
+    let beacon_client = BeaconClient::new(config.beacon_api_url.clone());
 
     let (api_events, mut api_events_rx) = mpsc::channel(1024);
     let shutdown_tx = start_rpc_server(&config, api_events).await?;
     let mut consensus_state = ConsensusState::new(
-        &config.beacon_api_url,
+        beacon_client.clone(),
         &config.validator_indexes,
         config.chain.commitment_deadline(),
     );
@@ -44,7 +44,7 @@ async fn main() -> eyre::Result<()> {
     // TODO: this can be replaced with ethereum_consensus::clock::from_system_time()
     // but using beacon node events is easier to work on a custom devnet for now
     // (as we don't need to specify genesis time and slot duration)
-    let mut head_tracker = HeadTracker::start(&config.beacon_api_url);
+    let mut head_tracker = HeadTracker::start(beacon_client);
 
     let builder_proxy_config = BuilderProxyConfig {
         mevboost_url: config.mevboost_url.clone(),

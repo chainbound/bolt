@@ -63,16 +63,19 @@ pub(crate) async fn try_get_beacon_api_url() -> Option<&'static str> {
 pub(crate) async fn get_test_config() -> Option<Config> {
     let _ = dotenvy::dotenv();
 
-    let jwt = std::env::var("ENGINE_JWT").ok()?;
+    let Some(jwt) = std::env::var("ENGINE_JWT").ok() else {
+        tracing::warn!("ENGINE_JWT not found in environment variables");
+        return None;
+    };
 
     let execution = try_get_execution_api_url().await?;
     let beacon = try_get_beacon_api_url().await?;
     let engine = try_get_engine_api_url().await?;
 
     Some(Config {
-        execution_api_url: execution.to_string(),
-        engine_api_url: engine.to_string(),
-        beacon_api_url: beacon.to_string(),
+        execution_api_url: execution.parse().ok()?,
+        engine_api_url: engine.parse().ok()?,
+        beacon_api_url: beacon.parse().ok()?,
         jwt_hex: jwt,
         ..Default::default()
     })

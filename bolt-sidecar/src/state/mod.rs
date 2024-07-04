@@ -76,6 +76,7 @@ mod tests {
     use alloy_signer_local::PrivateKeySigner;
     use execution::{ExecutionState, ValidationError};
     use fetcher::StateClient;
+    use reqwest::Url;
     use reth_primitives::TransactionSigned;
     use tracing_subscriber::fmt;
 
@@ -107,7 +108,7 @@ mod tests {
 
         // let mut state = State::new(get_client()).await.unwrap();
         let anvil = launch_anvil();
-        let client = StateClient::new(&anvil.endpoint());
+        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
         let mut state = ExecutionState::new(client).await.unwrap();
 
@@ -141,7 +142,7 @@ mod tests {
         let _ = fmt::try_init();
 
         let anvil = launch_anvil();
-        let client = StateClient::new(&anvil.endpoint());
+        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
         let mut state = ExecutionState::new(client).await.unwrap();
 
@@ -178,7 +179,7 @@ mod tests {
         let _ = fmt::try_init();
 
         let anvil = launch_anvil();
-        let client = StateClient::new(&anvil.endpoint());
+        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
         let mut state = ExecutionState::new(client).await.unwrap();
 
@@ -216,7 +217,7 @@ mod tests {
         let _ = fmt::try_init();
 
         let anvil = launch_anvil();
-        let client = StateClient::new(&anvil.endpoint());
+        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
         let mut state = ExecutionState::new(client).await.unwrap();
 
@@ -255,7 +256,7 @@ mod tests {
         let _ = fmt::try_init();
 
         let anvil = launch_anvil();
-        let client = StateClient::new(&anvil.endpoint());
+        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
         let mut state = ExecutionState::new(client).await.unwrap();
 

@@ -8,6 +8,7 @@ use alloy_eips::BlockNumberOrTag;
 use alloy_primitives::{Address, U256, U64};
 use alloy_transport::TransportError;
 use futures::{stream::FuturesOrdered, StreamExt};
+use reqwest::Url;
 
 use crate::{client::rpc::RpcClient, primitives::AccountState};
 
@@ -48,10 +49,9 @@ pub struct StateClient {
 
 impl StateClient {
     /// Create a new `StateClient` with the given URL and maximum retries.
-    pub fn new(url: &str) -> Self {
-        let client = RpcClient::new(url);
+    pub fn new<U: Into<Url>>(url: U) -> Self {
         Self {
-            client,
+            client: RpcClient::new(url),
             retry_backoff: Duration::from_millis(RETRY_BACKOFF_MS),
         }
     }
@@ -187,7 +187,7 @@ mod tests {
     #[tokio::test]
     async fn test_state_client() {
         let anvil = launch_anvil();
-        let client = StateClient::new(&anvil.endpoint());
+        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
         let address = anvil.addresses().first().unwrap();
         let state = client.get_account_state(address, None).await.unwrap();

@@ -6,7 +6,6 @@ use futures::future::join_all;
 use std::{
     collections::HashSet,
     ops::{Deref, DerefMut},
-    str::FromStr,
 };
 
 use alloy::ClientBuilder;
@@ -28,10 +27,8 @@ pub struct RpcClient(alloy::RpcClient<Http<Client>>);
 
 impl RpcClient {
     /// Create a new `RpcClient` with the given URL.
-    pub fn new(url: &str) -> Self {
-        let url = Url::from_str(url).unwrap();
-
-        let client = ClientBuilder::default().http(url);
+    pub fn new<U: Into<Url>>(url: U) -> Self {
+        let client = ClientBuilder::default().http(url.into());
 
         Self(client)
     }
@@ -178,6 +175,8 @@ impl DerefMut for RpcClient {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use alloy_consensus::constants::ETH_TO_WEI;
     use alloy_primitives::{uint, Uint};
     use alloy_rpc_types::EIP1186AccountProofResponse;
@@ -190,7 +189,8 @@ mod tests {
     #[tokio::test]
     async fn test_rpc_client() {
         let anvil = launch_anvil();
-        let client = RpcClient::new(&anvil.endpoint());
+        let anvil_url = Url::from_str(&anvil.endpoint()).unwrap();
+        let client = RpcClient::new(anvil_url);
 
         let addr = anvil.addresses().first().unwrap();
 
@@ -207,7 +207,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_proof() -> eyre::Result<()> {
-        let rpc_client = RpcClient::new("https://cloudflare-eth.com");
+        let rpc_url = Url::parse("https://cloudflare-eth.com")?;
+        let rpc_client = RpcClient::new(rpc_url);
 
         let proof: EIP1186AccountProofResponse = rpc_client
             .0

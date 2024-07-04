@@ -1,6 +1,9 @@
+use std::{fs::read_to_string, path::Path};
+
 use alloy_primitives::Address;
 use blst::min_pk::SecretKey;
 use clap::Parser;
+use reqwest::Url;
 
 use crate::crypto::bls::random_bls_secret;
 
@@ -70,29 +73,31 @@ pub struct Opts {
 pub struct Config {
     /// Port to listen on for incoming JSON-RPC requests
     pub rpc_port: u16,
+    /// The MEV-Boost proxy server port to listen on
+    pub mevboost_proxy_port: u16,
     /// URL for the MEV-Boost sidecar client to use
-    pub mevboost_url: String,
-    /// URL for the commit-boost sidecar
-    pub commit_boost_url: Option<String>,
+    pub mevboost_url: Url,
     /// URL for the beacon client API URL
-    pub beacon_api_url: String,
+    pub beacon_api_url: Url,
+    /// The execution API url
+    pub execution_api_url: Url,
+    /// The engine API url
+    pub engine_api_url: Url,
+    /// URL for the commit-boost sidecar
+    pub commit_boost_url: Option<Url>,
     /// Private key to use for signing preconfirmation requests
     pub private_key: Option<SecretKey>,
-    /// The execution API url
-    pub execution_api_url: String,
-    /// The engine API url
-    pub engine_api_url: String,
-    /// The MEV-Boost proxy server port to use
-    pub mevboost_proxy_port: u16,
     /// The jwt.hex secret to authenticate calls to the engine API
     pub jwt_hex: String,
     /// The fee recipient address for fallback blocks
     pub fee_recipient: Address,
-    /// Limits for the sidecar
+    /// Operating limits for the sidecar
     pub limits: Limits,
-    /// Validator indexes
+    /// Validator indexes of connected validators that the
+    /// sidecar should accept commitments on behalf of
     pub validator_indexes: Vec<u64>,
-    /// Local bulider private key
+    /// Local bulider private key for signing fallback payloads.
+    /// If not provided, a random key will be used.
     pub builder_private_key: SecretKey,
     /// The chain on which the sidecar is running
     pub chain: ChainConfig,
@@ -102,13 +107,13 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             rpc_port: DEFAULT_RPC_PORT,
-            commit_boost_url: None,
-            mevboost_url: "http://localhost:3030".to_string(),
-            beacon_api_url: "http://localhost:5052".to_string(),
-            execution_api_url: "http://localhost:8545".to_string(),
-            engine_api_url: "http://localhost:8551".to_string(),
-            private_key: Some(random_bls_secret()),
             mevboost_proxy_port: DEFAULT_MEV_BOOST_PROXY_PORT,
+            commit_boost_url: None,
+            mevboost_url: "http://localhost:3030".parse().expect("Valid URL"),
+            beacon_api_url: "http://localhost:5052".parse().expect("Valid URL"),
+            execution_api_url: "http://localhost:8545".parse().expect("Valid URL"),
+            engine_api_url: "http://localhost:8551".parse().expect("Valid URL"),
+            private_key: Some(random_bls_secret()),
             jwt_hex: String::new(),
             fee_recipient: Address::ZERO,
             builder_private_key: random_bls_secret(),
@@ -159,7 +164,9 @@ impl TryFrom<Opts> for Config {
         config.commit_boost_url = opts
             .signing
             .commit_boost_url
-            .map(|url| url.trim_end_matches('/').to_string());
+            .as_ref()
+            .map(|url| Url::parse(url))
+            .transpose()?;
 
         config.private_key = if let Some(sk) = opts.signing.private_key {
             let sk = SecretKey::from_bytes(&hex::decode(sk)?)
@@ -177,8 +184,9 @@ impl TryFrom<Opts> for Config {
 
         config.jwt_hex = if opts.jwt_hex.starts_with("0x") {
             opts.jwt_hex.trim_start_matches("0x").to_string()
-        } else if std::path::Path::new(&opts.jwt_hex).exists() {
-            std::fs::read_to_string(opts.jwt_hex)?
+        } else if Path::new(&opts.jwt_hex).exists() {
+            read_to_string(opts.jwt_hex)
+                .map_err(|e| eyre::eyre!("Failed reading JWT secret file: {:?}", e))?
                 .trim_start_matches("0x")
                 .to_string()
         } else {
@@ -187,16 +195,16 @@ impl TryFrom<Opts> for Config {
 
         // Validate the JWT secret
         if config.jwt_hex.len() != 64 {
-            eyre::bail!("JWT secret must be a 32 byte hex string");
+            eyre::bail!("Engine JWT secret must be a 32 byte hex string");
         } else {
-            tracing::info!("JWT secret loaded successfully");
+            tracing::info!("Engine JWT secret loaded successfully");
         }
 
         config.mevboost_proxy_port = opts.mevboost_proxy_port;
-        config.engine_api_url = opts.engine_api_url.trim_end_matches('/').to_string();
-        config.execution_api_url = opts.execution_api_url.trim_end_matches('/').to_string();
-        config.beacon_api_url = opts.beacon_api_url.trim_end_matches('/').to_string();
-        config.mevboost_url = opts.mevboost_url.trim_end_matches('/').to_string();
+        config.engine_api_url = opts.engine_api_url.parse()?;
+        config.execution_api_url = opts.execution_api_url.parse()?;
+        config.beacon_api_url = opts.beacon_api_url.parse()?;
+        config.mevboost_url = opts.mevboost_url.parse()?;
 
         config.validator_indexes = opts.validator_indexes;
 
