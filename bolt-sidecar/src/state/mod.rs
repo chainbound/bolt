@@ -68,6 +68,8 @@ impl Future for CommitmentDeadline {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZero;
+
     use alloy_consensus::constants::ETH_TO_WEI;
     use alloy_eips::eip2718::Encodable2718;
     use alloy_network::EthereumWallet;
@@ -111,7 +113,9 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
-        let mut state = ExecutionState::new(client).await.unwrap();
+        let mut state = ExecutionState::new(client, NonZero::new(1024).expect("valid non-zero"))
+            .await
+            .unwrap();
 
         let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
@@ -145,7 +149,9 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
-        let mut state = ExecutionState::new(client).await.unwrap();
+        let mut state = ExecutionState::new(client, NonZero::new(1024).expect("valid non-zero"))
+            .await
+            .unwrap();
 
         let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
@@ -182,7 +188,9 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
-        let mut state = ExecutionState::new(client).await.unwrap();
+        let mut state = ExecutionState::new(client, NonZero::new(1024).expect("valid non-zero"))
+            .await
+            .unwrap();
 
         let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
@@ -220,7 +228,9 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
-        let mut state = ExecutionState::new(client).await.unwrap();
+        let mut state = ExecutionState::new(client, NonZero::new(1024).expect("valid non-zero"))
+            .await
+            .unwrap();
 
         let basefee = state.basefee();
 
@@ -259,7 +269,9 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
-        let mut state = ExecutionState::new(client).await.unwrap();
+        let mut state = ExecutionState::new(client, NonZero::new(1024).expect("valid non-zero"))
+            .await
+            .unwrap();
 
         let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
 
