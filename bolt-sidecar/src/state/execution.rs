@@ -2,7 +2,7 @@ use alloy_eips::eip4844::MAX_BLOBS_PER_BLOCK;
 use alloy_primitives::{Address, SignatureError};
 use alloy_transport::TransportError;
 use reth_primitives::{transaction::TxType, TransactionSigned};
-use std::collections::HashMap;
+use std::{collections::HashMap, num::NonZero};
 use thiserror::Error;
 
 use crate::{
@@ -31,6 +31,9 @@ pub enum ValidationError {
     /// There are too many EIP-4844 transactions in the target block.
     #[error("Too many EIP-4844 transactions in target block")]
     Eip4844Limit,
+    /// The maximum commitments have been reached for the slot.
+    #[error("Max commitments reached for slot {0}")]
+    MaxCommitmentsReachedForSlot(usize),
     /// The signature is invalid.
     #[error("Signature error: {0:?}")]
     Signature(#[from] SignatureError),
@@ -79,6 +82,8 @@ pub struct ExecutionState<C> {
     /// proposal duties for a single lookahead.
     block_templates: HashMap<Slot, BlockTemplate>,
 
+    max_commitments_per_slot: NonZero<usize>,
+
     /// The state fetcher client.
     client: C,
 }
@@ -86,13 +91,17 @@ pub struct ExecutionState<C> {
 impl<C: StateFetcher> ExecutionState<C> {
     /// Creates a new state with the given client, initializing the
     /// basefee and head block number.
-    pub async fn new(client: C) -> Result<Self, TransportError> {
+    pub async fn new(
+        client: C,
+        max_commitments_per_slot: NonZero<usize>,
+    ) -> Result<Self, TransportError> {
         Ok(Self {
             basefee: client.get_basefee(None).await?,
             block_number: client.get_head().await?,
             slot: 0,
             account_states: HashMap::new(),
             block_templates: HashMap::new(),
+            max_commitments_per_slot,
             client,
         })
     }
@@ -117,6 +126,15 @@ impl<C: StateFetcher> ExecutionState<C> {
     /// and SHOULD sign it and respond to the requester.
     pub async fn try_commit(&mut self, request: &CommitmentRequest) -> Result<(), ValidationError> {
         let CommitmentRequest::Inclusion(req) = request;
+
+        // Check if there is room for more commitments
+        if let Some(template) = self.get_block_template(req.slot) {
+            if template.transactions.len() >= self.max_commitments_per_slot.get() {
+                return Err(ValidationError::MaxCommitmentsReachedForSlot(
+                    self.max_commitments_per_slot.get(),
+                ));
+            }
+        }
 
         let sender = req.tx.recover_signer().ok_or(ValidationError::Internal(
             "Failed to recover signer from transaction".to_string(),
