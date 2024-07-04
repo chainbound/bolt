@@ -29,7 +29,7 @@ impl SignableECDSA for ConstraintsMessage {
 pub type BatchedSignedConstraints = Vec<SignedConstraints>;
 
 /// A container for a list of constraints and the signature of the proposer sidecar.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct SignedConstraints {
     /// The constraints that need to be signed.
     pub message: ConstraintsMessage,
@@ -38,7 +38,7 @@ pub struct SignedConstraints {
 }
 
 /// A message that contains the constraints that need to be signed by the proposer sidecar.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct ConstraintsMessage {
     /// The validator index of the proposer sidecar.
     pub validator_index: u64,
