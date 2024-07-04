@@ -7,6 +7,7 @@ use beacon_api_client::VersionedValue;
 use ethereum_consensus::{
     builder::SignedValidatorRegistration, deneb::mainnet::SignedBlindedBeaconBlock, Fork,
 };
+use reqwest::Url;
 
 use crate::{
     api::{
@@ -22,15 +23,15 @@ use crate::{
 /// A client for interacting with the MEV-Boost API.
 #[derive(Debug)]
 pub struct MevBoostClient {
-    url: String,
+    url: Url,
     client: reqwest::Client,
 }
 
 impl MevBoostClient {
     /// Creates a new MEV-Boost client with the given URL.
-    pub fn new(url: &str) -> Self {
+    pub fn new<U: Into<Url>>(url: U) -> Self {
         Self {
-            url: url.trim_end_matches('/').to_string(),
+            url: url.into(),
             client: reqwest::ClientBuilder::new()
                 .user_agent("bolt-sidecar")
                 .build()

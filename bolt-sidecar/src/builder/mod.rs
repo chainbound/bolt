@@ -58,6 +58,8 @@ pub enum BuilderError {
     Transport(#[from] alloy_transport::TransportError),
     #[error("Failed in SSZ merkleization: {0}")]
     Merkleization(#[from] MerkleizationError),
+    #[error("Failed while interacting with beacon client: {0}")]
+    BeaconApi(#[from] beacon_api_client::Error),
     #[error("Failed to parse hint from engine response: {0}")]
     InvalidEngineHint(String),
     #[error("Failed to build payload: {0}")]
@@ -66,7 +68,7 @@ pub enum BuilderError {
 
 /// Local builder instance that can ingest a sealed header and
 /// create the corresponding builder bid ready for the Builder API.
-#[derive(Debug)]
+#[allow(missing_debug_implementations)]
 pub struct LocalBuilder {
     /// BLS credentials for the local builder. We use this to sign the
     /// payload bid submissions built by the sidecar.

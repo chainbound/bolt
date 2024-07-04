@@ -11,7 +11,7 @@ pub use api::{
 };
 
 mod client;
-pub use client::{mevboost::MevBoostClient, rpc::RpcClient};
+pub use client::{mevboost::MevBoostClient, rpc::RpcClient, BeaconClient};
 
 /// Common types and compatibility utilities
 /// (To be refactored)

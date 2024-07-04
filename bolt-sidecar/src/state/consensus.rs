@@ -1,17 +1,18 @@
-#![allow(missing_docs)]
-#![allow(unused_variables)]
-#![allow(missing_debug_implementations)]
-
 use std::time::{Duration, Instant};
 
 use beacon_api_client::{mainnet::Client, BlockId, ProposerDuty};
 use ethereum_consensus::{deneb::BeaconBlockHeader, phase0::mainnet::SLOTS_PER_EPOCH};
-use reqwest::Url;
 
 use super::CommitmentDeadline;
-use crate::primitives::{CommitmentRequest, Slot};
+use crate::{
+    primitives::{CommitmentRequest, Slot},
+    BeaconClient,
+};
 
+/// Consensus-related errors
 #[derive(Debug, thiserror::Error)]
+#[allow(missing_docs)]
+#[non_exhaustive]
 pub enum ConsensusError {
     #[error("Beacon API error: {0}")]
     BeaconApiError(#[from] beacon_api_client::Error),
@@ -23,13 +24,17 @@ pub enum ConsensusError {
     ValidatorNotFound,
 }
 
+/// Represents an epoch in the beacon chain.
 #[derive(Debug, Default)]
+#[allow(missing_docs)]
 pub struct Epoch {
     pub value: u64,
     pub start_slot: Slot,
     pub proposer_duties: Vec<ProposerDuty>,
 }
 
+/// Represents the consensus state container for the sidecar.
+#[allow(missing_debug_implementations)]
 pub struct ConsensusState {
     beacon_api_client: Client,
     header: BeaconBlockHeader,
@@ -46,19 +51,17 @@ pub struct ConsensusState {
     /// which won't have time to be included by the PBS pipeline.
     // commitment_deadline: u64,
     pub commitment_deadline: CommitmentDeadline,
-    pub commitment_deadline_duration: Duration,
+    /// The duration of the commitment deadline.
+    commitment_deadline_duration: Duration,
 }
 
 impl ConsensusState {
     /// Create a new `ConsensusState` with the given configuration.
     pub fn new(
-        beacon_api_url: &str,
+        beacon_api_client: BeaconClient,
         validator_indexes: &[u64],
         commitment_deadline_duration: Duration,
     ) -> Self {
-        let url = Url::parse(beacon_api_url).expect("valid beacon client URL");
-        let beacon_api_client = Client::new(url);
-
         ConsensusState {
             beacon_api_client,
             header: BeaconBlockHeader::default(),
@@ -158,6 +161,7 @@ impl ConsensusState {
 mod tests {
     use super::*;
     use beacon_api_client::ProposerDuty;
+    use reqwest::Url;
 
     #[tokio::test]
     async fn test_find_validator_index_for_slot() {

@@ -1,10 +1,11 @@
 use std::time::Duration;
 
 use alloy_rpc_types_beacon::events::HeadEvent;
-use beacon_api_client::{mainnet::Client, Topic};
+use beacon_api_client::Topic;
 use futures::StreamExt;
-use reqwest::Url;
 use tokio::{sync::broadcast, task::AbortHandle};
+
+use crate::BeaconClient;
 
 /// Simple actor to keep track of the most recent head of the beacon chain
 /// and broadcast updates to its subscribers.
@@ -33,8 +34,7 @@ impl Topic for NewHeadsTopic {
 impl HeadTracker {
     /// Create a new `HeadTracker` with the given beacon client HTTP URL and
     /// start listening for new head events in the background
-    pub fn start(beacon_api_url: &str) -> Self {
-        let beacon_client = Client::new(Url::parse(beacon_api_url).expect("Valid beacon API url"));
+    pub fn start(beacon_client: BeaconClient) -> Self {
         let (new_heads_tx, new_heads_rx) = broadcast::channel(32);
 
         let task = tokio::spawn(async move {
@@ -95,7 +95,11 @@ impl HeadTracker {
 
 #[cfg(test)]
 mod tests {
-    use crate::{state::head_tracker::HeadTracker, test_util::try_get_beacon_api_url};
+    use reqwest::Url;
+
+    use crate::{
+        state::head_tracker::HeadTracker, test_util::try_get_beacon_api_url, BeaconClient,
+    };
 
     #[tokio::test]
     async fn test_fetch_next_beacon_head() -> eyre::Result<()> {
@@ -106,7 +110,8 @@ mod tests {
             return Ok(());
         };
 
-        let mut tracker = HeadTracker::start(url);
+        let beacon_client = BeaconClient::new(Url::parse(url).unwrap());
+        let mut tracker = HeadTracker::start(beacon_client);
 
         let head = tracker.next_head().await?;
 

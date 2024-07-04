@@ -8,6 +8,7 @@ mod tests {
 
     use alloy_primitives::{keccak256, B256, U256};
     use partial_mpt::StateTrie;
+    use reqwest::Url;
 
     use crate::{builder::CallTraceManager, client::rpc::RpcClient};
 
@@ -19,9 +20,10 @@ mod tests {
         tracing::info!("Starting test_trace_call");
 
         let rpc_url = std::env::var("RPC_URL").expect("RPC_URL must be set");
-        let client = RpcClient::new(&rpc_url);
+        let rpc_url = Url::parse(&rpc_url).unwrap();
+        let client = RpcClient::new(rpc_url.clone());
 
-        let (call_trace_manager, call_trace_handler) = CallTraceManager::new(&rpc_url);
+        let (call_trace_manager, call_trace_handler) = CallTraceManager::new(rpc_url);
         tokio::spawn(call_trace_manager);
 
         // https://etherscan.io/block/20125606

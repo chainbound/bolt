@@ -19,6 +19,7 @@ use alloy_rpc_types_trace::geth::{
 };
 use alloy_transport::TransportResult;
 use futures::{stream::FuturesOrdered, Future, StreamExt};
+use reqwest::Url;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -131,7 +132,7 @@ impl Future for CallTraceManager {
 impl CallTraceManager {
     /// Creates a new [CallTraceManager] instance, which will listen for incoming
     /// trace requests and process them in the background using the given RPC client.
-    pub fn new(url: &str) -> (Self, CallTraceHandle) {
+    pub fn new<U: Into<Url>>(url: U) -> (Self, CallTraceHandle) {
         let rpc = RpcClient::new(url);
         let (cmd_tx, cmd_rx) = mpsc::channel(512);
 

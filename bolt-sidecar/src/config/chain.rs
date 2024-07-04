@@ -43,7 +43,7 @@ pub struct ChainConfig {
     /// The slot time duration in seconds. If provided,
     /// it overrides the default for the selected [Chain].
     #[clap(short = 's', long, default_value_t = DEFAULT_SLOT_TIME_IN_SECONDS)]
-    slot_time_in_seconds: u64,
+    slot_time: u64,
 }
 
 impl Default for ChainConfig {
@@ -51,7 +51,7 @@ impl Default for ChainConfig {
         Self {
             chain: Chain::Mainnet,
             commitment_deadline: DEFAULT_COMMITMENT_DEADLINE_IN_MILLIS,
-            slot_time_in_seconds: DEFAULT_SLOT_TIME_IN_SECONDS,
+            slot_time: DEFAULT_SLOT_TIME_IN_SECONDS,
         }
     }
 }
@@ -90,7 +90,7 @@ impl ChainConfig {
 
     /// Get the slot time for the given chain in seconds.
     pub fn slot_time(&self) -> u64 {
-        self.slot_time_in_seconds
+        self.slot_time
     }
 
     /// Get the domain for signing messages on the given chain.
@@ -145,7 +145,7 @@ impl ChainConfig {
     pub fn kurtosis(slot_time_in_seconds: u64, commitment_deadline: u64) -> Self {
         Self {
             chain: Chain::Kurtosis,
-            slot_time_in_seconds,
+            slot_time: slot_time_in_seconds,
             commitment_deadline,
         }
     }
