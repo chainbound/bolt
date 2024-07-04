@@ -119,6 +119,8 @@ ENGINE_API_URL=""
 JWT_HEX=""
 # Fee recipient
 FEE_RECIPIENT=""
+# The Bolt RPC port. This port must be exposed!
+BOLT_RPC_PORT="8000"
 
 # BLS commitment signing key, i.e. 0x4d129a19df86a0f5345bad4cc6f249ec2a819ccc3386895beb4f7d98b3db6235
 # Some other random keys:
@@ -132,6 +134,10 @@ BOLT_RELAY="http://0xa55c1285d84ba83a5ad26420cd5ad3091e49c55a813eee651cd467db38a
 ```
 
 Then, simply run `docker compose up`. This will start the sidecar and the modified mev-boost.
+
+> [!IMPORTANT]  
+> The Bolt RPC port must be exposed to the internet to allow users to send commitment requests to it.
+> The RPC will be registered in an on-chain registry in the next step.
 
 ## Validators
 
