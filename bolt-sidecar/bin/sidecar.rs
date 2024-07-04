@@ -78,14 +78,17 @@ async fn main() -> eyre::Result<()> {
                     }
                 };
 
-                if let Err(e) = execution_state
+                let sender = match execution_state
                     .check_commitment_validity(&request)
-                    .await
+                .await
                 {
-                    tracing::error!("Failed to commit request: {:?}", e);
-                    let _ = response_tx.send(Err(ApiError::Custom(e.to_string())));
-                    continue;
-                }
+                    Ok(sender) => { sender },
+                    Err(e) => {
+                        tracing::error!("Failed to commit request: {:?}", e);
+                        let _ = response_tx.send(Err(ApiError::Custom(e.to_string())));
+                        continue;
+                    }
+                };
 
                 // TODO: match when we have more request types
                 let CommitmentRequest::Inclusion(request) = request;
@@ -97,7 +100,7 @@ async fn main() -> eyre::Result<()> {
                 // TODO: review all this `clone` usage
 
                 // parse the request into constraints and sign them with the sidecar signer
-                let message = ConstraintsMessage::build(validator_index, request.slot, request.clone());
+                let message = ConstraintsMessage::build(validator_index, request.slot, request.clone(), sender);
                 let signature = signer.sign(&message.digest())?.to_string();
                 let signed_constraints = SignedConstraints { message, signature };
 
