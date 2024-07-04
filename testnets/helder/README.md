@@ -63,10 +63,8 @@ geth init --datadir=$DATADIR --state.scheme=hash $DEVNET_PATH/genesis.json \
 
 ## Beacon Node
 
-<aside>
-⚠️ The beacon node’s `builder-api` should point to the Bolt sidecar API to activate Bolt!
-
-</aside>
+> [!IMPORTANT]  
+> The beacon node’s `builder-api` should point to the Bolt sidecar API to activate Bolt!
 
 Lighthouse:
 
