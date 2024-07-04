@@ -26,6 +26,8 @@ pub struct BlockTemplate {
     state_diff: StateDiff,
     /// The list of transactions in the block template.
     pub transactions: Vec<TransactionSigned>,
+    /// The signed constraints associated to the block
+    pub signed_constraints_list: Vec<SignedConstraints>,
 }
 
 impl BlockTemplate {
