@@ -129,6 +129,9 @@ BOLT_RPC_PORT="8000"
 # - 0x44bd4ef71104d2a574c21433070c3b18e6888f692f6e8f7b38e8815f42d25528
 SIGNING_KEY=""
 
+# The validator indexes for which to accept commitments. Can be specified as a range i.e. "1..96" (includes 96)
+VALIDATOR_INDEXES=""
+
 # Bolt-enabled relay on Helder
 BOLT_RELAY="http://0xa55c1285d84ba83a5ad26420cd5ad3091e49c55a813eee651cd467db38a8c8e63192f47955e9376f6b42f6d190571cb5@135.181.191.125:9062"
 ```
