@@ -7,11 +7,11 @@ services:
       - "8000:8000" # Bolt RPC port (this should be opened on your firewall!)
       - "18551:18551" # MevBoost proxy port
     env_file: ./launch.env
-    entrypoint: /bin/sh -c '/bolt-sidecar --port $$BOLT_RPC_PORT --chain helder --validator-indexes $$VALIDATOR_INDEXES --beacon-api-url $$BEACON_API_URL --execution-api-url $$EXECUTION_API_URL --engine-api-url $$ENGINE_API_URL --private-key $$SIGNING_KEY --mevboost-url http://bolt-boost:18500 --mevboost-proxy-port 18551 --jwt-hex $$JWT_HEX --fee-recipient $$FEE_RECIPIENT'
+    entrypoint: /bin/sh -c '/bolt-sidecar --port $$BOLT_RPC_PORT --chain helder --validator-indexes $$VALIDATOR_INDEXES --beacon-api-url $$BEACON_API_URL --execution-api-url $$EXECUTION_API_URL --engine-api-url $$ENGINE_API_URL --private-key $$SIGNING_KEY --mevboost-url http://bolt-boost:18550 --mevboost-proxy-port 18551 --jwt-hex $$JWT_HEX --fee-recipient $$FEE_RECIPIENT'
 
   bolt-boost:
     image: ghcr.io/chainbound/bolt-boost:v0.1.1-alpha
     container_name: bolt-boost
     restart: unless-stopped
     env_file: ./launch.env
-    entrypoint: /bin/sh -c '/app/mev-boost -relay-check -relay $$BOLT_RELAY'
+    entrypoint: /bin/sh -c '/app/mev-boost -relay-check -relay $$BOLT_RELAY -addr 0.0.0.0:18550'
