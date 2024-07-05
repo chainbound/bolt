@@ -297,7 +297,10 @@ mod tests {
         let receipt = notif.get_receipt().await.unwrap();
 
         // Update the head, which should invalidate the transaction due to a nonce conflict
-        state.update_head(receipt.block_number).await.unwrap();
+        state
+            .update_head(receipt.block_number, receipt.block_number.unwrap())
+            .await
+            .unwrap();
 
         let transactions_len = state.block_templates().get(&10).unwrap().transactions_len();
         assert!(transactions_len == 0);

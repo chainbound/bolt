@@ -64,6 +64,9 @@ pub struct ExecutionState<C> {
     /// The latest block number.
     block_number: u64,
 
+    /// The latest slot number.
+    slot: u64,
+
     /// The base fee at the head block.
     basefee: u128,
     /// The cached account states. This should never be read directly.
@@ -87,6 +90,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         Ok(Self {
             basefee: client.get_basefee(None).await?,
             block_number: client.get_head().await?,
+            slot: 0,
             account_states: HashMap::new(),
             block_templates: HashMap::new(),
             client,
@@ -121,7 +125,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         tracing::debug!(%sender, target_slot = req.slot, "Trying to commit inclusion request to block template");
 
         // Check if the max_fee_per_gas would cover the maximum possible basefee.
-        let slot_diff = req.slot - self.block_number;
+        let slot_diff = req.slot - self.slot;
 
         // Calculate the max possible basefee given the slot diff
         let max_basefee = calculate_max_basefee(self.basefee, slot_diff)
@@ -184,8 +188,16 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
     }
 
-    /// Updates the state corresponding to the provided block number if provided, or latest from EL if `None`.
-    pub async fn update_head(&mut self, block_number: Option<u64>) -> Result<(), TransportError> {
+    /// Updates the state corresponding to the provided block number or slot.
+    /// If the block number is not provided, the state will be updated to
+    /// the latest head from the EL.
+    pub async fn update_head(
+        &mut self,
+        block_number: Option<u64>,
+        slot: u64,
+    ) -> Result<(), TransportError> {
+        self.slot = slot;
+
         // TODO: invalidate any state that we don't need anymore (will be based on block template)
         let update = self
             .client
