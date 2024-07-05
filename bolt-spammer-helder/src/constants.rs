@@ -1,0 +1,2 @@
+pub const SLOTS_PER_EPOCH: u64 = 32;
+pub const NOICE_GAS_PRICE: u128 = 69_420_000_000_000u128;

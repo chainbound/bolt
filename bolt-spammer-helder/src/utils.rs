@@ -1,47 +1,14 @@
 use beacon_api_client::{mainnet::Client as BeaconApiClient, BlockId};
 use ethers::{
-    abi::Token,
     signers::Signer,
     types::{transaction::eip2718::TypedTransaction, Eip1559TransactionRequest},
     utils::hex,
 };
-use eyre::{eyre, Result};
+use eyre::Result;
 use rand::{thread_rng, Rng};
 use serde_json::Value;
 
-/// Tries to parse the registered validator's sidecars URL from the token returned
-/// by the view call to the registry smart contract
-///
-/// Reference: https://github.com/chainbound/bolt/blob/e71c61aa97dcd7b08fad23067caf18bc90a582cd/bolt-contracts/src/interfaces/IBoltRegistry.sol#L6-L16
-pub fn try_parse_url_from_token(token: Token) -> Result<String> {
-    let Token::Tuple(registrant_struct_fields) = token else {
-        return Err(eyre!("register call result is not a struct"));
-    };
-
-    let Some(metadata_token) = registrant_struct_fields.last() else {
-        return Err(eyre!("register call result is a struct with no fields"));
-    };
-
-    let Token::Tuple(metadata_fields) = metadata_token else {
-        return Err(eyre!(
-            "register call result is a struct without the `metadata` field"
-        ));
-    };
-
-    let Some(rpc_token) = metadata_fields.first() else {
-        return Err(eyre!(
-            "register call result has a `metadata` field, but the struct is empty"
-        ));
-    };
-
-    let Token::String(rpc) = rpc_token else {
-        return Err(eyre!(
-            "register call result has a `metadata` field, but its `rpc` property is not a string"
-        ));
-    };
-
-    Ok(rpc.clone())
-}
+use crate::constants::NOICE_GAS_PRICE;
 
 /// Generates random ETH transfer to 0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD
 pub fn generate_random_tx() -> TypedTransaction {
@@ -49,6 +16,8 @@ pub fn generate_random_tx() -> TypedTransaction {
         .to("0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD")
         .value("0x69420")
         .chain_id(3151908)
+        .max_fee_per_gas(NOICE_GAS_PRICE)
+        .max_priority_fee_per_gas(NOICE_GAS_PRICE)
         .data(vec![thread_rng().gen::<u8>(); 32]);
 
     tx.into()
@@ -80,14 +49,13 @@ pub fn prepare_rpc_request(method: &str, params: Vec<Value>) -> Value {
     })
 }
 
-pub async fn current_epoch(beacon_api_client: &BeaconApiClient) -> Result<u64> {
-    let current_epoch = beacon_api_client
+/// Returns the current slot
+pub async fn current_slot(beacon_api_client: &BeaconApiClient) -> Result<u64> {
+    let current_slot = beacon_api_client
         .get_beacon_header(BlockId::Head)
         .await?
         .header
         .message
-        .slot
-        / 32;
-
-    Ok(current_epoch)
+        .slot;
+    Ok(current_slot)
 }
