@@ -5,6 +5,7 @@ use ethereum_consensus::{deneb::BeaconBlockHeader, phase0::mainnet::SLOTS_PER_EP
 
 use super::CommitmentDeadline;
 use crate::{
+    config::ValidatorIndexes,
     primitives::{CommitmentRequest, Slot},
     BeaconClient,
 };
@@ -39,7 +40,7 @@ pub struct ConsensusState {
     beacon_api_client: Client,
     header: BeaconBlockHeader,
     epoch: Epoch,
-    validator_indexes: Vec<u64>,
+    validator_indexes: ValidatorIndexes,
     // Timestamp of when the latest slot was received
     latest_slot_timestamp: Instant,
     // The latest slot received
@@ -59,15 +60,15 @@ impl ConsensusState {
     /// Create a new `ConsensusState` with the given configuration.
     pub fn new(
         beacon_api_client: BeaconClient,
-        validator_indexes: &[u64],
+        validator_indexes: ValidatorIndexes,
         commitment_deadline_duration: Duration,
     ) -> Self {
         ConsensusState {
             beacon_api_client,
+            validator_indexes,
             header: BeaconBlockHeader::default(),
             epoch: Epoch::default(),
             latest_slot: Default::default(),
-            validator_indexes: validator_indexes.to_vec(),
             latest_slot_timestamp: Instant::now(),
             commitment_deadline: CommitmentDeadline::new(0, commitment_deadline_duration),
             commitment_deadline_duration,
@@ -147,10 +148,7 @@ impl ConsensusState {
             .proposer_duties
             .iter()
             .find(|&duty| {
-                duty.slot == slot
-                    && self
-                        .validator_indexes
-                        .contains(&(duty.validator_index as u64))
+                duty.slot == slot && self.validator_indexes.contains(duty.validator_index as u64)
             })
             .map(|duty| duty.validator_index as u64)
             .ok_or(ConsensusError::ValidatorNotFound)
@@ -185,7 +183,7 @@ mod tests {
         ];
 
         // Validator indexes that we are interested in
-        let validator_indexes = vec![100, 102];
+        let validator_indexes = ValidatorIndexes::from(vec![100, 102]);
 
         // Create a ConsensusState with the sample proposer duties and validator indexes
         let state = ConsensusState {
