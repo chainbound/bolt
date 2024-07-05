@@ -74,13 +74,20 @@ async fn main() -> Result<()> {
         .filter(|duty| duty.slot > current_slot)
         .collect::<Vec<_>>();
 
-    let (proposer_rpc, next_preconfer_slot) = next_preconfer_from_registry(
+    let (proposer_rpc, next_preconfer_slot) = match next_preconfer_from_registry(
         proposer_duties,
         opts.registry_abi_path,
         opts.registry_address,
         eth_provider.clone(),
     )
-    .await?;
+    .await
+    {
+        Ok(res) => res,
+        Err(e) => {
+            tracing::warn!(?e);
+            return Ok(());
+        }
+    };
 
     let mut tx = generate_random_tx();
     transaction_signer.fill_transaction(&mut tx, None).await?;
