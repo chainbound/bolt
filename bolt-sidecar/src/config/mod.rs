@@ -57,7 +57,7 @@ pub struct Opts {
     pub(super) fee_recipient: Address,
     /// Secret BLS key to sign fallback payloads with
     /// (If not provided, a random key will be used)
-    #[clap(short = 'k', long)]
+    #[clap(short = 'K', long)]
     pub(super) builder_private_key: Option<String>,
     /// Chain config for the chain on which the sidecar is running
     #[clap(flatten)]
