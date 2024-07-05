@@ -108,7 +108,7 @@ Modified mev-boost code: https://github.com/chainbound/bolt/tree/unstable/mev-bo
 
 We provide a Docker compose script to run these 2 together in the root directory. First, update the `launch.env` file with your correct values. The relay is set to our Bolt-enabled relay.
 
-> [!INFO]  
+> [!TIP]  
 > If the services below are running on the host machine, the host should be "host.docker.internal".
 
 ```bash
