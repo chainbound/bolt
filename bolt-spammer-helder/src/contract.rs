@@ -9,6 +9,9 @@ use std::{path::PathBuf, sync::Arc};
 
 use beacon_api_client::ProposerDuty;
 
+/// Returns the next pre-confirmation slot and proposer RPC URL from the registry contract
+///
+/// Fails if no registered validators are found in the lookahead
 pub async fn next_preconfer_from_registry(
     proposer_duties: Vec<ProposerDuty>,
     abi_path: PathBuf,

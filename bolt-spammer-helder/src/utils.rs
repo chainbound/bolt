@@ -8,19 +8,21 @@ use eyre::Result;
 use rand::{thread_rng, Rng};
 use serde_json::Value;
 
-use crate::constants::NOICE_GAS_PRICE;
+use crate::constants::{DEAD_ADDRESS, HELDER_TESTNET_CHAIN_ID, NOICE_GAS_PRICE};
 
-/// Generates random ETH transfer to 0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD
+/// Generates random ETH transfer to `DEAD_ADDRESS` with a random payload.
 pub fn generate_random_tx() -> TypedTransaction {
     let tx = Eip1559TransactionRequest::new()
-        .to("0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD")
+        .to(DEAD_ADDRESS)
         .value("0x69420")
-        .chain_id(3151908)
-        .max_fee_per_gas(NOICE_GAS_PRICE)
-        .max_priority_fee_per_gas(NOICE_GAS_PRICE)
+        .chain_id(HELDER_TESTNET_CHAIN_ID)
         .data(vec![thread_rng().gen::<u8>(); 32]);
 
-    tx.into()
+    let mut typed: TypedTransaction = tx.into();
+
+    typed.set_gas_price(NOICE_GAS_PRICE);
+
+    typed
 }
 
 /// Signs a [TypedTransaction] with the given [Signer], returning a tuple
