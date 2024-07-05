@@ -39,8 +39,11 @@ impl MevBoostClient {
         }
     }
 
-    fn endpoint(&self, path: &str) -> String {
-        format!("{}{}", self.url, path)
+    fn endpoint(&self, path: &str) -> Url {
+        self.url.join(path).unwrap_or_else(|e| {
+            tracing::error!(err = ?e, "Failed to join path: {} with url: {}", path, self.url);
+            self.url.clone()
+        })
     }
 }
 
@@ -183,5 +186,26 @@ impl ConstraintsApi for MevBoostClient {
         // TODO: verify proofs here?
 
         Ok(header)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use reqwest::Url;
+
+    use crate::MevBoostClient;
+
+    #[test]
+    fn test_join_endpoints() {
+        let client = MevBoostClient::new(Url::parse("http://localhost:8080/").unwrap());
+        assert_eq!(
+            client.endpoint("/eth/v1/builder/header/1/0x123/0x456"),
+            Url::parse("http://localhost:8080/eth/v1/builder/header/1/0x123/0x456").unwrap()
+        );
+
+        assert_eq!(
+            client.endpoint("eth/v1/builder/validators"),
+            Url::parse("http://localhost:8080/eth/v1/builder/validators").unwrap()
+        );
     }
 }
