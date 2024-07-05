@@ -128,10 +128,12 @@ impl FallbackPayloadBuilder {
         // when using the beacon_api_client crate directly, so we use reqwest temporarily.
         // this is to be refactored.
         let prev_randao = reqwest::Client::new()
-            .get(format!(
-                "{}/eth/v1/beacon/states/head/randao",
-                self.beacon_api_client.endpoint.as_str()
-            ))
+            .get(
+                self.beacon_api_client
+                    .endpoint
+                    .join("/eth/v1/beacon/states/head/randao")
+                    .unwrap(),
+            )
             .send()
             .await
             .unwrap()

@@ -122,7 +122,7 @@ async fn main() -> eyre::Result<()> {
                 tracing::info!(slot, "Received new head event");
 
                 // We use None to signal that we want to fetch the latest EL head
-                if let Err(e) = execution_state.update_head(None).await {
+                if let Err(e) = execution_state.update_head(None, slot).await {
                     tracing::error!(err = ?e, "Failed to update execution state head");
                 }
 
