@@ -1,19 +1,13 @@
 use beacon_api_client::{mainnet::Client as BeaconApiClient, BlockId};
-use clap::Parser;
 use ethers::{
-    abi::{Abi, Token},
-    contract::{Contract, ContractError},
-    middleware::{Middleware, SignerMiddleware},
-    providers::{Http, Provider},
-    signers::{LocalWallet, Signer},
-    types::{transaction::eip2718::TypedTransaction, Address, Eip1559TransactionRequest, H256},
+    abi::Token,
+    signers::Signer,
+    types::{transaction::eip2718::TypedTransaction, Eip1559TransactionRequest},
     utils::hex,
 };
-use eyre::{eyre, Context, OptionExt, Result};
+use eyre::{eyre, Result};
 use rand::{thread_rng, Rng};
-use reqwest::Url;
 use serde_json::Value;
-use tracing::info;
 
 /// Tries to parse the registered validator's sidecars URL from the token returned
 /// by the view call to the registry smart contract
@@ -96,21 +90,4 @@ pub async fn current_epoch(beacon_api_client: &BeaconApiClient) -> Result<u64> {
         / 32;
 
     Ok(current_epoch)
-}
-
-pub async fn get_slot(beacon_url: &str, slot: &str) -> Result<u64> {
-    let url = format!("{}/eth/v1/beacon/headers/{}", beacon_url, slot);
-
-    let res = reqwest::get(url).await?;
-    let json: Value = serde_json::from_str(&res.text().await?)?;
-
-    let slot_num = json
-        .pointer("/data/header/message/slot")
-        .ok_or_eyre("slot not found")?
-        .as_str()
-        .ok_or_eyre("slot is not a string")?
-        .parse::<u64>()
-        .wrap_err("failed to parse slot")?;
-
-    Ok(slot_num)
 }

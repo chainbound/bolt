@@ -1,12 +1,9 @@
 use std::{str::FromStr, sync::Arc};
 
-use beacon_api_client::{mainnet::Client as BeaconApiClient, BlockId};
-use bolt_spammer_helder::{
-    types::Registrant,
-    utils::{
-        current_epoch, generate_random_tx, prepare_rpc_request, sign_transaction,
-        try_parse_url_from_token,
-    },
+use beacon_api_client::mainnet::Client as BeaconApiClient;
+use bolt_spammer_helder::utils::{
+    current_epoch, generate_random_tx, prepare_rpc_request, sign_transaction,
+    try_parse_url_from_token,
 };
 use clap::Parser;
 use ethers::{
@@ -14,14 +11,12 @@ use ethers::{
     contract::{Contract, ContractError},
     middleware::{Middleware, SignerMiddleware},
     providers::{Http, Provider},
-    signers::{LocalWallet, Signer},
-    types::{transaction::eip2718::TypedTransaction, Address, Eip1559TransactionRequest, H256},
+    signers::LocalWallet,
+    types::{Address, H256},
     utils::hex,
 };
-use eyre::{eyre, Context, OptionExt, Result};
-use rand::{thread_rng, Rng};
+use eyre::{eyre, Result};
 use reqwest::Url;
-use serde_json::Value;
 use tracing::info;
 
 #[derive(Parser)]
@@ -116,8 +111,6 @@ async fn main() -> Result<()> {
     let mut tx = generate_random_tx();
     tx.set_gas_price(69_420_000_000_000u128); // 69_420 gwei
     transaction_signer.fill_transaction(&mut tx, None).await?;
-
-    let current_slot = 0;
 
     let (tx_hash, tx_rlp) = sign_transaction(transaction_signer.signer(), tx).await?;
 
