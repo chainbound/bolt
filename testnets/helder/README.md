@@ -154,10 +154,10 @@ In this section we cover how one should configure their validators and register 
 Lighthouse VC:
 
 ```bash
-lighthouse vc ... --prefer-builder-proposals
+lighthouse vc ... --builder-proposals --prefer-builder-proposals
 ```
 
-The `--prefer-builder-proposals` is required so that Lighthouse won’t rely on EL self-building, which in some cases could lead to commitment faults. The Bolt sidecar deals with PBS failures gracefully and will build its own local block in case the relay / builder goes down.
+The `--builder-proposals` and `--prefer-builder-proposals` flags are required so that Lighthouse won’t rely on EL self-building, which in some cases could lead to commitment faults. The Bolt sidecar deals with PBS failures gracefully and will build its own local block in case the relay / builder goes down.
 
 ### Bolt Registration
 
