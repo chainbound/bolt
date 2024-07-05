@@ -45,7 +45,7 @@ services:
     volumes:
       - 'chaindata:/var/lib/chaindata'
       - './shared:/var/lib/shared'
-      - './helder-devnets/network-configs/devnet-0/metadata:/var/lib/network-configs'
+      - './network-configs:/var/lib/network-configs'
       - './scripts/run-builder.sh:/scripts/run-builder.sh'
     ports:
       # - '8545:8545'
@@ -61,7 +61,7 @@ services:
     volumes:
       - 'chaindata:/var/lib/chaindata'
       - './shared:/var/lib/shared'
-      - './helder-devnets/network-configs/devnet-0/metadata:/var/lib/network-configs'
+      - './network-configs:/var/lib/network-configs'
       - './scripts/run-bn.sh:/scripts/run-bn.sh'
     ports:
       - '50050:50050/tcp'
