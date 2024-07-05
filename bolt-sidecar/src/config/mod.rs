@@ -177,7 +177,7 @@ impl TryFrom<Opts> for Config {
 
         config.private_key = if let Some(sk) = opts.signing.private_key {
             // Check if the string starts with "0x" and remove it
-            let hex_sk = if sk.starts_with("0x") { &sk[2..] } else { &sk };
+            let hex_sk = sk.strip_prefix("0x").unwrap_or(&sk);
 
             let sk = SecretKey::from_bytes(&hex::decode(hex_sk)?)
                 .map_err(|e| eyre::eyre!("Failed decoding BLS secret key: {:?}", e))?;
