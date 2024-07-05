@@ -37,7 +37,7 @@ async fn main() -> eyre::Result<()> {
     let shutdown_tx = start_rpc_server(&config, api_events).await?;
     let mut consensus_state = ConsensusState::new(
         beacon_client.clone(),
-        &config.validator_indexes,
+        config.validator_indexes.clone(),
         config.chain.commitment_deadline(),
     );
 
