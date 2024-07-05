@@ -188,7 +188,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
     }
 
-    /// Updates the state corresponding to the provided block number or slot.
+    /// Updates the state corresponding to the provided block number and slot.
     /// If the block number is not provided, the state will be updated to
     /// the latest head from the EL.
     pub async fn update_head(
