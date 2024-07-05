@@ -130,7 +130,7 @@ BOLT_RPC_PORT="8000"
 SIGNING_KEY=""
 
 # Bolt-enabled relay on Helder
-BOLT_RELAY="http://0xa55c1285d84ba83a5ad26420cd5ad3091e49c55a813eee651cd467db38a8c8e63192f47955e9376f6b42f6d190571cb5@136.243.76.36:9062"
+BOLT_RELAY="http://0xa55c1285d84ba83a5ad26420cd5ad3091e49c55a813eee651cd467db38a8c8e63192f47955e9376f6b42f6d190571cb5@135.181.191.125:9062"
 ```
 
 Then, simply run `docker compose up`. This will start the sidecar and the modified mev-boost.
