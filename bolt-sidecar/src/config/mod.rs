@@ -1,4 +1,4 @@
-use std::{fs::read_to_string, path::Path};
+use std::{fs::read_to_string, path::Path, str::FromStr};
 
 use alloy_primitives::Address;
 use blst::min_pk::SecretKey;
@@ -6,6 +6,9 @@ use clap::Parser;
 use reqwest::Url;
 
 use crate::crypto::bls::random_bls_secret;
+
+pub mod validator_indexes;
+pub use validator_indexes::ValidatorIndexes;
 
 pub mod chain;
 pub use chain::ChainConfig;
@@ -43,9 +46,13 @@ pub struct Opts {
     /// Max number of commitments to accept per block
     #[clap(short = 'm', long)]
     pub(super) max_commitments: Option<usize>,
-    /// Validator indexes
-    #[clap(short = 'v', long, value_parser, num_args = 1.., value_delimiter = ',')]
-    pub(super) validator_indexes: Vec<u64>,
+    /// Validator indexes of connected validators that the sidecar
+    /// should accept commitments on behalf of. Accepted values:
+    /// - a comma-separated list of indexes (e.g. "1,2,3,4")
+    /// - a contiguous range of indexes (e.g. "1..4")
+    /// - a mix of the above (e.g. "1,2..4,6..8")
+    #[clap(short = 'v', long, value_parser = ValidatorIndexes::from_str)]
+    pub(super) validator_indexes: ValidatorIndexes,
     /// The JWT secret token to authenticate calls to the engine API.
     ///
     /// It can either be a hex-encoded string or a file path to a file
@@ -95,7 +102,7 @@ pub struct Config {
     pub limits: Limits,
     /// Validator indexes of connected validators that the
     /// sidecar should accept commitments on behalf of
-    pub validator_indexes: Vec<u64>,
+    pub validator_indexes: ValidatorIndexes,
     /// Local bulider private key for signing fallback payloads.
     /// If not provided, a random key will be used.
     pub builder_private_key: SecretKey,
@@ -118,7 +125,7 @@ impl Default for Config {
             fee_recipient: Address::ZERO,
             builder_private_key: random_bls_secret(),
             limits: Limits::default(),
-            validator_indexes: Vec::new(),
+            validator_indexes: ValidatorIndexes::default(),
             chain: ChainConfig::default(),
         }
     }
@@ -169,7 +176,10 @@ impl TryFrom<Opts> for Config {
             .transpose()?;
 
         config.private_key = if let Some(sk) = opts.signing.private_key {
-            let sk = SecretKey::from_bytes(&hex::decode(sk)?)
+            // Check if the string starts with "0x" and remove it
+            let hex_sk = if sk.starts_with("0x") { &sk[2..] } else { &sk };
+
+            let sk = SecretKey::from_bytes(&hex::decode(hex_sk)?)
                 .map_err(|e| eyre::eyre!("Failed decoding BLS secret key: {:?}", e))?;
             Some(sk)
         } else {
@@ -205,6 +215,8 @@ impl TryFrom<Opts> for Config {
         config.execution_api_url = opts.execution_api_url.parse()?;
         config.beacon_api_url = opts.beacon_api_url.parse()?;
         config.mevboost_url = opts.mevboost_url.parse()?;
+
+        config.fee_recipient = opts.fee_recipient;
 
         config.validator_indexes = opts.validator_indexes;
 
