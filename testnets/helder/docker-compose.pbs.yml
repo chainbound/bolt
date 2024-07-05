@@ -40,7 +40,7 @@ services:
       ADMINER_PLUGINS: tables-filter tinymce
 
   builder:
-    image: ghcr.io/chainbound/bolt-builder:0.1.0
+    image: ghcr.io/chainbound/bolt-builder:v0.1.0
     restart: always
     volumes:
       - 'chaindata:/var/lib/chaindata'
@@ -69,7 +69,7 @@ services:
     entrypoint: /scripts/run-bn.sh
 
   relay-housekeeper:
-    image: ghcr.io/chainbound/bolt-relay:0.1.0
+    image: ghcr.io/chainbound/bolt-relay:v0.1.0
     restart: always
     environment:
       GENESIS_FORK_VERSION: "0x10000000"
@@ -91,7 +91,7 @@ services:
       ]
 
   relay-api:
-    image: ghcr.io/chainbound/bolt-relay:0.1.0
+    image: ghcr.io/chainbound/bolt-relay:v0.1.0
     restart: always
     environment:
       GENESIS_FORK_VERSION: "0x10000000"
@@ -121,7 +121,7 @@ services:
       ]
 
   relay-website:
-    image: ghcr.io/chainbound/bolt-relay:0.1.0
+    image: ghcr.io/chainbound/bolt-relay:v0.1.0
     restart: always
     environment:
       GENESIS_FORK_VERSION: "0x10000000"
