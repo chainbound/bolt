@@ -7,19 +7,13 @@ volumes:
 services:
   redis:
     image: redis
-    restart: always
+    restart: unless-stopped
     ports:
       - '6379:6379'
 
-  memcached:
-    image: memcached
-    restart: always
-    ports:
-      - '11211:11211'
-
   db:
     image: postgres
-    restart: always
+    restart: unless-stopped
     volumes:
       - 'psql_data:/var/lib/postgresql/data'
     ports:
@@ -31,7 +25,7 @@ services:
 
   adminer:
     image: adminer
-    restart: always
+    restart: unless-stopped
     depends_on:
       - db
     ports:
@@ -41,12 +35,14 @@ services:
 
   builder:
     image: ghcr.io/chainbound/bolt-builder:v0.1.0
-    restart: always
+    restart: unless-stopped
     volumes:
       - 'chaindata:/var/lib/chaindata'
       - './shared:/var/lib/shared'
       - './network-configs:/var/lib/network-configs'
       - './scripts/run-builder.sh:/scripts/run-builder.sh'
+    environment:
+      BUILDER_TX_SIGNING_KEY: "0x53321db7c1e331d93a11a41d16f004d7ff63972ec8ec7c25db329728ceeb1710"
     ports:
       # - '8545:8545'
       # - '8546:8546'
@@ -57,7 +53,7 @@ services:
 
   beacon:
     image: sigp/lighthouse:latest
-    restart: always
+    restart: unless-stopped
     volumes:
       - 'chaindata:/var/lib/chaindata'
       - './shared:/var/lib/shared'
@@ -70,7 +66,12 @@ services:
 
   relay-housekeeper:
     image: ghcr.io/chainbound/bolt-relay:v0.1.0
-    restart: always
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_started
+      redis:
+        condition: service_started
     environment:
       GENESIS_FORK_VERSION: "0x10000000"
       GENESIS_VALIDATORS_ROOT: "0xa55f9089402f027c67db4a43b6eb7fbb7b2eb79f194a90a2cd4f31913e47b336"
@@ -92,7 +93,10 @@ services:
 
   relay-api:
     image: ghcr.io/chainbound/bolt-relay:v0.1.0
-    restart: always
+    restart: unless-stopped
+    depends_on:
+      relay-housekeeper:
+        condition: service_started
     environment:
       GENESIS_FORK_VERSION: "0x10000000"
       GENESIS_VALIDATORS_ROOT: "0xa55f9089402f027c67db4a43b6eb7fbb7b2eb79f194a90a2cd4f31913e47b336"
@@ -123,6 +127,9 @@ services:
   relay-website:
     image: ghcr.io/chainbound/bolt-relay:v0.1.0
     restart: always
+    depends_on:
+      relay-api:
+        condition: service_started
     environment:
       GENESIS_FORK_VERSION: "0x10000000"
       GENESIS_VALIDATORS_ROOT: "0xa55f9089402f027c67db4a43b6eb7fbb7b2eb79f194a90a2cd4f31913e47b336"
