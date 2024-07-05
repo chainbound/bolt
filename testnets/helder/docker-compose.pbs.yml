@@ -1,0 +1,145 @@
+volumes:
+  psql_data:
+    driver: local
+  chaindata:
+    driver: local
+
+services:
+  redis:
+    image: redis
+    restart: always
+    ports:
+      - '6379:6379'
+
+  memcached:
+    image: memcached
+    restart: always
+    ports:
+      - '11211:11211'
+
+  db:
+    image: postgres
+    restart: always
+    volumes:
+      - 'psql_data:/var/lib/postgresql/data'
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+
+  adminer:
+    image: adminer
+    restart: always
+    depends_on:
+      - db
+    ports:
+      - '8093:8080'
+    environment:
+      ADMINER_PLUGINS: tables-filter tinymce
+
+  builder:
+    image: ghcr.io/chainbound/bolt-builder:0.1.0
+    restart: always
+    volumes:
+      - 'chaindata:/var/lib/chaindata'
+      - './shared:/var/lib/shared'
+      - './helder-devnets/network-configs/devnet-0/metadata:/var/lib/network-configs'
+      - './scripts/run-builder.sh:/scripts/run-builder.sh'
+    ports:
+      # - '8545:8545'
+      # - '8546:8546'
+      - '30310:30303/tcp'
+      - '30310:30303/udp'
+    # entrypoint is builder
+    entrypoint: /scripts/run-builder.sh
+
+  beacon:
+    image: sigp/lighthouse:latest
+    restart: always
+    volumes:
+      - 'chaindata:/var/lib/chaindata'
+      - './shared:/var/lib/shared'
+      - './helder-devnets/network-configs/devnet-0/metadata:/var/lib/network-configs'
+      - './scripts/run-bn.sh:/scripts/run-bn.sh'
+    ports:
+      - '50050:50050/tcp'
+      - '50050:50050/udp'
+    entrypoint: /scripts/run-bn.sh
+
+  relay-housekeeper:
+    image: ghcr.io/chainbound/bolt-relay:0.1.0
+    restart: always
+    environment:
+      GENESIS_FORK_VERSION: "0x10000000"
+      GENESIS_VALIDATORS_ROOT: "0xa55f9089402f027c67db4a43b6eb7fbb7b2eb79f194a90a2cd4f31913e47b336"
+      BELLATRIX_FORK_VERSION: "0x30000000"
+      CAPELLA_FORK_VERSION: "0x40000000"
+      DENEB_FORK_VERSION: "0x50132736"
+    command:
+      [
+        "housekeeper",
+        "--network",
+        "custom",
+        "--db",
+        "postgres://postgres:postgres@db:5432/postgres?sslmode=disable",
+        "--redis-uri",
+        "redis:6379",
+        "--beacon-uris",
+        "http://beacon:4000"
+      ]
+
+  relay-api:
+    image: ghcr.io/chainbound/bolt-relay:0.1.0
+    restart: always
+    environment:
+      GENESIS_FORK_VERSION: "0x10000000"
+      GENESIS_VALIDATORS_ROOT: "0xa55f9089402f027c67db4a43b6eb7fbb7b2eb79f194a90a2cd4f31913e47b336"
+      BELLATRIX_FORK_VERSION: "0x30000000"
+      CAPELLA_FORK_VERSION: "0x40000000"
+      DENEB_FORK_VERSION: "0x50132736"
+    ports:
+      - '9062:9062'
+    command:
+      [
+        "api",
+        "--network",
+        "custom",
+        "--db",
+        "postgres://postgres:postgres@db:5432/postgres?sslmode=disable",
+        "--redis-uri",
+        "redis:6379",
+        "--beacon-uris",
+        "http://beacon:4000",
+        "--blocksim",
+        "http://builder:8545",
+        "--secret-key",
+        "0x607a11b45a7219cc61a3d9c5fd08c7eebd602a6a19a977f8d3771d5711a550f2",
+        "--listen-addr",
+        "0.0.0.0:9062"
+      ]
+
+  relay-website:
+    image: ghcr.io/chainbound/bolt-relay:0.1.0
+    restart: always
+    environment:
+      GENESIS_FORK_VERSION: "0x10000000"
+      GENESIS_VALIDATORS_ROOT: "0xa55f9089402f027c67db4a43b6eb7fbb7b2eb79f194a90a2cd4f31913e47b336"
+      BELLATRIX_FORK_VERSION: "0x30000000"
+      CAPELLA_FORK_VERSION: "0x40000000"
+      DENEB_FORK_VERSION: "0x50132736"
+    ports:
+      - '9060:9060'
+    command:
+      [
+        "website",
+        "--network",
+        "custom",
+        "--db",
+        "postgres://postgres:postgres@db:5432/postgres?sslmode=disable",
+        "--redis-uri",
+        "redis:6379",
+        "--listen-addr",
+        "0.0.0.0:9060"
+      ]
