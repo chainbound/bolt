@@ -1,0 +1,234 @@
+[
+  {
+    "type": "constructor",
+    "inputs": [
+      {
+        "name": "_minimumCollateral",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "EXIT_COOLDOWN",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MINIMUM_COLLATERAL",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "confirmExit",
+    "inputs": [
+      {
+        "name": "recipient",
+        "type": "address",
+        "internalType": "address payable"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "delegations",
+    "inputs": [{ "name": "", "type": "uint64", "internalType": "uint64" }],
+    "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getOperatorForValidator",
+    "inputs": [
+      {
+        "name": "_validatorIndex",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "tuple",
+        "internalType": "struct IBoltRegistry.Registrant",
+        "components": [
+          {
+            "name": "operator",
+            "type": "address",
+            "internalType": "address"
+          },
+          {
+            "name": "validatorIndexes",
+            "type": "uint64[]",
+            "internalType": "uint64[]"
+          },
+          {
+            "name": "enteredAt",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          {
+            "name": "exitInitiatedAt",
+            "type": "uint256",
+            "internalType": "uint256"
+          },
+          { "name": "balance", "type": "uint256", "internalType": "uint256" },
+          {
+            "name": "status",
+            "type": "uint8",
+            "internalType": "enum IBoltRegistry.Status"
+          },
+          {
+            "name": "metadata",
+            "type": "tuple",
+            "internalType": "struct IBoltRegistry.MetaData",
+            "components": [
+              { "name": "rpc", "type": "string", "internalType": "string" },
+              { "name": "extra", "type": "bytes", "internalType": "bytes" }
+            ]
+          }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getOperatorStatus",
+    "inputs": [
+      { "name": "_operator", "type": "address", "internalType": "address" }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "enum IBoltRegistry.Status"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "isActiveOperator",
+    "inputs": [
+      { "name": "_operator", "type": "address", "internalType": "address" }
+    ],
+    "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "register",
+    "inputs": [
+      {
+        "name": "validatorIndexes",
+        "type": "uint64[]",
+        "internalType": "uint64[]"
+      },
+      { "name": "rpc", "type": "string", "internalType": "string" },
+      { "name": "extra", "type": "bytes", "internalType": "bytes" }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "function",
+    "name": "registrants",
+    "inputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "outputs": [
+      { "name": "operator", "type": "address", "internalType": "address" },
+      { "name": "enteredAt", "type": "uint256", "internalType": "uint256" },
+      {
+        "name": "exitInitiatedAt",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      { "name": "balance", "type": "uint256", "internalType": "uint256" },
+      {
+        "name": "status",
+        "type": "uint8",
+        "internalType": "enum IBoltRegistry.Status"
+      },
+      {
+        "name": "metadata",
+        "type": "tuple",
+        "internalType": "struct IBoltRegistry.MetaData",
+        "components": [
+          { "name": "rpc", "type": "string", "internalType": "string" },
+          { "name": "extra", "type": "bytes", "internalType": "bytes" }
+        ]
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "startExit",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "Registered",
+    "inputs": [
+      {
+        "name": "operator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "validatorIndexes",
+        "type": "uint64[]",
+        "indexed": false,
+        "internalType": "uint64[]"
+      },
+      {
+        "name": "metadata",
+        "type": "tuple",
+        "indexed": false,
+        "internalType": "struct IBoltRegistry.MetaData",
+        "components": [
+          { "name": "rpc", "type": "string", "internalType": "string" },
+          { "name": "extra", "type": "bytes", "internalType": "bytes" }
+        ]
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "StatusChange",
+    "inputs": [
+      {
+        "name": "operator",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "status",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "enum IBoltRegistry.Status"
+      }
+    ],
+    "anonymous": false
+  },
+  { "type": "error", "name": "AlreadyOptedIn", "inputs": [] },
+  { "type": "error", "name": "BasedProposerDoesNotExist", "inputs": [] },
+  { "type": "error", "name": "CooldownNotElapsed", "inputs": [] },
+  { "type": "error", "name": "InsufficientCollateral", "inputs": [] },
+  { "type": "error", "name": "InvalidStatusChange", "inputs": [] },
+  { "type": "error", "name": "NotFound", "inputs": [] },
+  { "type": "error", "name": "Unauthorized", "inputs": [] }
+]
