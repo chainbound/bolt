@@ -167,6 +167,7 @@ Next up, we need to register the validators in the Bolt smart contract registry,
 
 ```bash
 curl -L https://foundry.paradigm.xyz | bash
+source $HOME/.bashrc
 foundryup
 ```
 
@@ -175,6 +176,7 @@ foundryup
 ```bash
 git clone https://github.com/chainbound/bolt
 cd bolt-contracts
+forge install
 ```
 
 - Batch register validators (**private key address must be funded with at least 10 ETH**).
