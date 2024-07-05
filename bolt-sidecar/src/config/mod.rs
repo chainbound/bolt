@@ -169,7 +169,10 @@ impl TryFrom<Opts> for Config {
             .transpose()?;
 
         config.private_key = if let Some(sk) = opts.signing.private_key {
-            let sk = SecretKey::from_bytes(&hex::decode(sk)?)
+            // Check if the string starts with "0x" and remove it
+            let hex_sk = if sk.starts_with("0x") { &sk[2..] } else { &sk };
+
+            let sk = SecretKey::from_bytes(&hex::decode(hex_sk)?)
                 .map_err(|e| eyre::eyre!("Failed decoding BLS secret key: {:?}", e))?;
             Some(sk)
         } else {
@@ -205,6 +208,8 @@ impl TryFrom<Opts> for Config {
         config.execution_api_url = opts.execution_api_url.parse()?;
         config.beacon_api_url = opts.beacon_api_url.parse()?;
         config.mevboost_url = opts.mevboost_url.parse()?;
+
+        config.fee_recipient = opts.fee_recipient;
 
         config.validator_indexes = opts.validator_indexes;
 
