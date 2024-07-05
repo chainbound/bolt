@@ -10,8 +10,6 @@ contract RegisterValidators is Script {
     uint64[] public validatorIndexes;
     address public registryAddress = 0xdF11D829eeC4C192774F3Ec171D822f6Cb4C14d9;
 
-    using StringToUintArrayLib for string;
-
     function run() public {
         signerKey = vm.envUint("PRIVATE_KEY");
         string memory rpc = vm.envString("RPC_ADDR");
