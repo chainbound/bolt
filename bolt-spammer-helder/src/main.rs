@@ -14,7 +14,7 @@ use ethers::{
     types::{Address, H256},
     utils::hex,
 };
-use eyre::{eyre, Result};
+use eyre::Result;
 use reqwest::Url;
 use tracing::info;
 
