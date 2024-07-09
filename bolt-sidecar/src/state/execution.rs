@@ -130,6 +130,11 @@ impl<C: StateFetcher> ExecutionState<C> {
     pub async fn try_commit(&mut self, request: &CommitmentRequest) -> Result<(), ValidationError> {
         let CommitmentRequest::Inclusion(req) = request;
 
+        // Validate the chain ID
+        if !req.validate_chain_id(self.chain_id()) {
+            return Err(ValidationError::ChainIdMismatch);
+        }
+
         let sender = req.tx.recover_signer().ok_or(ValidationError::Internal(
             "Failed to recover signer from transaction".to_string(),
         ))?;
@@ -146,11 +151,6 @@ impl<C: StateFetcher> ExecutionState<C> {
         // Validate the base fee
         if !req.validate_basefee(max_basefee) {
             return Err(ValidationError::BaseFeeTooLow(max_basefee as u128));
-        }
-
-        // Validate the chain ID
-        if !req.validate_chain_id(self.chain_id()) {
-            return Err(ValidationError::ChainIdMismatch);
         }
 
         // If we have the account state, use it here
