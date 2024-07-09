@@ -114,11 +114,6 @@ impl<C: StateFetcher> ExecutionState<C> {
         &self.block_templates
     }
 
-    /// Returns the chain ID of the chain
-    pub fn chain_id(&self) -> u64 {
-        self.chain_id
-    }
-
     /// Validates the commitment request against state (historical + intermediate).
     /// NOTE: This function only simulates against execution state, it does not consider
     /// timing or proposer slot targets.
@@ -131,7 +126,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         let CommitmentRequest::Inclusion(req) = request;
 
         // Validate the chain ID
-        if !req.validate_chain_id(self.chain_id()) {
+        if !req.validate_chain_id(self.chain_id) {
             return Err(ValidationError::ChainIdMismatch);
         }
 
