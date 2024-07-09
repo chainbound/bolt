@@ -38,6 +38,8 @@ pub trait StateFetcher {
         address: &Address,
         block_number: Option<u64>,
     ) -> Result<AccountState, TransportError>;
+
+    async fn get_chain_id(&self) -> Result<u64, TransportError>;
 }
 
 /// A basic state fetcher that uses an RPC client to fetch state updates.
@@ -176,6 +178,10 @@ impl StateFetcher for StateClient {
                 }
             }
         }
+    }
+
+    async fn get_chain_id(&self) -> Result<u64, TransportError> {
+        self.client.get_chain_id().await
     }
 }
 

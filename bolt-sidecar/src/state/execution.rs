@@ -37,6 +37,9 @@ pub enum ValidationError {
     /// Could not recover signature,
     #[error("Could not recover signer")]
     RecoverSigner,
+    /// The transaction chain ID does not match the expected chain ID.
+    #[error("Chain ID mismatch")]
+    ChainIdMismatch,
     /// NOTE: this should not be exposed to the user.
     #[error("Internal error: {0}")]
     Internal(String),
@@ -79,6 +82,9 @@ pub struct ExecutionState<C> {
     /// proposal duties for a single lookahead.
     block_templates: HashMap<Slot, BlockTemplate>,
 
+    /// The chain ID of the chain (constant).
+    chain_id: u64,
+
     /// The state fetcher client.
     client: C,
 }
@@ -93,6 +99,7 @@ impl<C: StateFetcher> ExecutionState<C> {
             slot: 0,
             account_states: HashMap::new(),
             block_templates: HashMap::new(),
+            chain_id: client.get_chain_id().await?,
             client,
         })
     }
@@ -105,6 +112,11 @@ impl<C: StateFetcher> ExecutionState<C> {
     /// Returns the current block templates mapped by slot number
     pub fn block_templates(&self) -> &HashMap<u64, BlockTemplate> {
         &self.block_templates
+    }
+
+    /// Returns the chain ID of the chain
+    pub fn chain_id(&self) -> u64 {
+        self.chain_id
     }
 
     /// Validates the commitment request against state (historical + intermediate).
@@ -134,6 +146,11 @@ impl<C: StateFetcher> ExecutionState<C> {
         // Validate the base fee
         if !req.validate_basefee(max_basefee) {
             return Err(ValidationError::BaseFeeTooLow(max_basefee as u128));
+        }
+
+        // Validate the chain ID
+        if !req.validate_chain_id(self.chain_id()) {
+            return Err(ValidationError::ChainIdMismatch);
         }
 
         // If we have the account state, use it here
