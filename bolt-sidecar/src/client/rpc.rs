@@ -33,6 +33,11 @@ impl RpcClient {
         Self(client)
     }
 
+    /// Get the chain ID.
+    pub async fn get_chain_id(&self) -> TransportResult<u64> {
+        self.0.request("eth_chainId", ()).await
+    }
+
     /// Get the basefee of the latest block.
     pub async fn get_basefee(&self, block_number: Option<u64>) -> TransportResult<u128> {
         let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
