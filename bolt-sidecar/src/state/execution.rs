@@ -218,10 +218,8 @@ impl<C: StateFetcher> ExecutionState<C> {
         self.slot = slot;
 
         // TODO: invalidate any state that we don't need anymore (will be based on block template)
-        let update = self
-            .client
-            .get_state_update(self.account_states.keys().collect::<Vec<_>>(), block_number)
-            .await?;
+        let accounts = self.account_states.keys().collect::<Vec<_>>();
+        let update = self.client.get_state_update(accounts, block_number).await?;
 
         self.apply_state_update(update);
 

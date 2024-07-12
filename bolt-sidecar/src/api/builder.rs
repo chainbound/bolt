@@ -20,8 +20,8 @@ use std::{sync::Arc, time::Duration};
 use tokio::net::TcpListener;
 
 use super::spec::{
-    BuilderApi, BuilderApiError, ConstraintsApi, GET_HEADER_PATH, GET_PAYLOAD_PATH,
-    REGISTER_VALIDATORS_PATH, STATUS_PATH,
+    BuilderApiError, ConstraintsApi, GET_HEADER_PATH, GET_PAYLOAD_PATH, REGISTER_VALIDATORS_PATH,
+    STATUS_PATH,
 };
 use crate::{
     client::mevboost::MevBoostClient,
@@ -35,7 +35,7 @@ const GET_HEADER_WITH_PROOFS_TIMEOUT: Duration = Duration::from_millis(500);
 
 /// A proxy server for the builder API.
 /// Forwards all requests to the target after interception.
-pub struct BuilderProxyServer<T: BuilderApi, P> {
+pub struct BuilderProxyServer<T, P> {
     proxy_target: T,
     // TODO: fill with local payload when we fetch a payload
     // in failed get_header
