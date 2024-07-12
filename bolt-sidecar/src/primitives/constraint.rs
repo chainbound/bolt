@@ -110,7 +110,7 @@ impl Constraint {
         Self {
             tx: format!("0x{}", hex::encode(encoded_tx)),
             index,
-            tx_decoded: req.tx,
+            tx_decoded: req.tx.into_transaction(),
             sender,
         }
     }
