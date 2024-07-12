@@ -157,7 +157,7 @@ impl Default for PayloadAndBlobs {
     }
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "version", content = "data")]
 pub enum GetPayloadResponse {
     #[serde(rename = "bellatrix")]
@@ -188,27 +188,6 @@ impl GetPayloadResponse {
             GetPayloadResponse::Bellatrix(payload) => payload.block_hash(),
             GetPayloadResponse::Deneb(payload) => payload.execution_payload.block_hash(),
         }
-    }
-}
-
-impl<'de> serde::Deserialize<'de> for GetPayloadResponse {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let value = serde_json::Value::deserialize(deserializer)?;
-        if let Ok(inner) = <_ as serde::Deserialize>::deserialize(&value) {
-            return Ok(Self::Capella(inner));
-        }
-        if let Ok(inner) = <_ as serde::Deserialize>::deserialize(&value) {
-            return Ok(Self::Deneb(inner));
-        }
-        if let Ok(inner) = <_ as serde::Deserialize>::deserialize(&value) {
-            return Ok(Self::Bellatrix(inner));
-        }
-        Err(serde::de::Error::custom(
-            "no variant could be deserialized from input for GetPayloadResponse",
-        ))
     }
 }
 
