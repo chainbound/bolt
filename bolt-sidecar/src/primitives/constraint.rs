@@ -1,5 +1,5 @@
 use alloy_primitives::{keccak256, Address};
-use reth_primitives::TransactionSigned;
+use reth_primitives::PooledTransactionsElement;
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 
@@ -57,7 +57,7 @@ impl ConstraintsMessage {
         request: InclusionRequest,
         sender: Address,
     ) -> Self {
-        let constraints = vec![Constraint::from_inclusion_request(request, None, sender)];
+        let constraints = vec![Constraint::from_transaction(request.tx, None, sender)];
         Self {
             validator_index,
             slot,
@@ -85,13 +85,10 @@ impl SignableBLS for ConstraintsMessage {
 /// A general constraint on block building.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Constraint {
-    /// The raw transaction that needs to be included in the block
-    pub tx: String,
     /// The optional index at which the transaction needs to be included in the block
     pub index: Option<u64>,
-    /// The decoded transaction for internal use
-    #[serde(skip)]
-    pub(crate) tx_decoded: TransactionSigned,
+    /// The transaction to be included in the block
+    pub(crate) transaction: PooledTransactionsElement,
     /// The ec-recovered address of the transaction sender for internal use
     #[serde(skip)]
     pub(crate) sender: Address,
@@ -99,18 +96,14 @@ pub struct Constraint {
 
 impl Constraint {
     /// Builds a constraint from an inclusion request and an optional index
-    pub fn from_inclusion_request(
-        req: InclusionRequest,
+    pub fn from_transaction(
+        transaction: PooledTransactionsElement,
         index: Option<u64>,
         sender: Address,
     ) -> Self {
-        let mut encoded_tx = Vec::new();
-        req.tx.encode_enveloped(&mut encoded_tx);
-
         Self {
-            tx: format!("0x{}", hex::encode(encoded_tx)),
+            transaction,
             index,
-            tx_decoded: req.tx.into_transaction(),
             sender,
         }
     }
@@ -119,7 +112,7 @@ impl Constraint {
     /// TODO: remove if we go with SSZ
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut data = Vec::new();
-        data.extend_from_slice(self.tx.as_bytes());
+        self.transaction.encode_enveloped(&mut data);
         data.extend_from_slice(&self.index.unwrap_or(0).to_le_bytes());
         data
     }

@@ -15,7 +15,7 @@ mod tests {
     #[tokio::test]
     async fn test_trace_call() -> eyre::Result<()> {
         dotenvy::dotenv().ok();
-        tracing_subscriber::fmt::init();
+        let _ = tracing_subscriber::fmt::try_init();
 
         tracing::info!("Starting test_trace_call");
 

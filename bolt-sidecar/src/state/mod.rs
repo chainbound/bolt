@@ -80,7 +80,7 @@ mod tests {
     use execution::{ExecutionState, ValidationError};
     use fetcher::StateClient;
     use reqwest::Url;
-    use reth_primitives::TransactionSigned;
+    use reth_primitives::PooledTransactionsElement;
     use tracing_subscriber::fmt;
 
     use crate::{
@@ -131,7 +131,7 @@ mod tests {
         // Trick to parse into the TransactionSigned type
         let tx_signed_bytes = signed.encoded_2718();
         let tx_signed =
-            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+            PooledTransactionsElement::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
@@ -139,7 +139,7 @@ mod tests {
             signature: sig,
         });
 
-        assert!(state.check_commitment_validity(&request).await.is_ok());
+        assert!(state.validate_commitment_request(&request).await.is_ok());
     }
 
     #[tokio::test]
@@ -167,7 +167,7 @@ mod tests {
         // Trick to parse into the TransactionSigned type
         let tx_signed_bytes = signed.encoded_2718();
         let tx_signed =
-            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+            PooledTransactionsElement::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
@@ -176,7 +176,7 @@ mod tests {
         });
 
         assert!(matches!(
-            state.check_commitment_validity(&request).await,
+            state.validate_commitment_request(&request).await,
             Err(ValidationError::NonceTooHigh)
         ));
     }
@@ -207,7 +207,7 @@ mod tests {
         // Trick to parse into the TransactionSigned type
         let tx_signed_bytes = signed.encoded_2718();
         let tx_signed =
-            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+            PooledTransactionsElement::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
@@ -216,7 +216,7 @@ mod tests {
         });
 
         assert!(matches!(
-            state.check_commitment_validity(&request).await,
+            state.validate_commitment_request(&request).await,
             Err(ValidationError::InsufficientBalance)
         ));
     }
@@ -248,7 +248,7 @@ mod tests {
         // Trick to parse into the TransactionSigned type
         let tx_signed_bytes = signed.encoded_2718();
         let tx_signed =
-            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+            PooledTransactionsElement::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
@@ -257,7 +257,7 @@ mod tests {
         });
 
         assert!(matches!(
-            state.check_commitment_validity(&request).await,
+            state.validate_commitment_request(&request).await,
             Err(ValidationError::BaseFeeTooLow(_))
         ));
     }
@@ -287,7 +287,7 @@ mod tests {
         // Trick to parse into the TransactionSigned type
         let tx_signed_bytes = signed.encoded_2718();
         let tx_signed =
-            TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+            PooledTransactionsElement::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
 
         let request = CommitmentRequest::Inclusion(InclusionRequest {
             slot: 10,
@@ -295,7 +295,7 @@ mod tests {
             signature: sig,
         });
 
-        assert!(state.check_commitment_validity(&request).await.is_ok());
+        assert!(state.validate_commitment_request(&request).await.is_ok());
         assert!(state.block_templates().get(&10).unwrap().transactions_len() == 1);
 
         let provider = ProviderBuilder::new().on_http(anvil.endpoint_url());
