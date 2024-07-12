@@ -348,8 +348,8 @@ func TestConstraintsAndProofs(t *testing.T) {
 			Slot:           slot,
 			Constraints:    []*Constraint{{Transaction(rawTx), nil}},
 		},
-		Signature: _HexToBytes(
-			"0x81510b571e22f89d1697545aac01c9ad0c1e7a3e778b3078bef524efae14990e58a6e960a152abd49de2e18d7fd3081c15d5c25867ccfad3d47beef6b39ac24b6b9fbf2cfa91c88f67aff750438a6841ec9e4a06a94ae41410c4f97b75ab284c"),
+		Signature: phase0.BLSSignature(_HexToBytes(
+			"0x81510b571e22f89d1697545aac01c9ad0c1e7a3e778b3078bef524efae14990e58a6e960a152abd49de2e18d7fd3081c15d5c25867ccfad3d47beef6b39ac24b6b9fbf2cfa91c88f67aff750438a6841ec9e4a06a94ae41410c4f97b75ab284c")),
 	}}
 
 	// Build getHeader request
