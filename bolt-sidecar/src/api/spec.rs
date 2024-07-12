@@ -66,6 +66,8 @@ pub enum BuilderApiError {
     InvalidFork(String),
     #[error("Invalid local payload block hash. expected: {expected}, got: {have}")]
     InvalidLocalPayloadBlockHash { expected: String, have: String },
+    #[error("Generic error: {0}")]
+    Generic(String),
 }
 
 impl IntoResponse for BuilderApiError {
@@ -109,6 +111,9 @@ impl IntoResponse for BuilderApiError {
             }
             BuilderApiError::InvalidLocalPayloadBlockHash { .. } => {
                 (StatusCode::BAD_REQUEST, self.to_string()).into_response()
+            }
+            BuilderApiError::Generic(err) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
             }
         }
     }

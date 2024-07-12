@@ -106,9 +106,8 @@ async fn main() -> eyre::Result<()> {
 
                 execution_state.add_constraint(request.slot, signed_constraints.clone());
 
-
                 let res = serde_json::to_value(signed_constraints).map_err(Into::into);
-                let _ = response_tx.send(res).ok();
+                let _ = response_tx.send(res);
             },
             Ok(HeadEvent { slot, .. }) = head_tracker.next_head() => {
                 tracing::info!(slot, "Received new head event");
