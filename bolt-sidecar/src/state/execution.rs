@@ -264,6 +264,9 @@ impl<C: StateFetcher> ExecutionState<C> {
 
         self.apply_state_update(update);
 
+        // Remove any block templates that are no longer valid
+        self.block_templates.remove(&slot);
+
         Ok(())
     }
 
