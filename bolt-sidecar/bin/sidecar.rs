@@ -67,6 +67,7 @@ async fn main() -> eyre::Result<()> {
     loop {
         tokio::select! {
             Some(ApiEvent { request, response_tx }) = api_events_rx.recv() => {
+                let start = std::time::Instant::now();
                 tracing::info!("Received commitment request: {:?}", request);
 
                 let validator_index = match consensus_state.validate_request(&request) {
@@ -79,7 +80,7 @@ async fn main() -> eyre::Result<()> {
                 };
 
                 let sender = match execution_state
-                    .check_commitment_validity(&request)
+                    .validate_commitment_request(&request)
                 .await
                 {
                     Ok(sender) => { sender },
@@ -93,8 +94,9 @@ async fn main() -> eyre::Result<()> {
                 // TODO: match when we have more request types
                 let CommitmentRequest::Inclusion(request) = request;
                 tracing::info!(
+                    elapsed = ?start.elapsed(),
                     tx_hash = %request.tx.hash(),
-                    "Validation against execution state passed"
+                    "Commitment request validated"
                 );
 
                 // TODO: review all this `clone` usage
@@ -107,7 +109,14 @@ async fn main() -> eyre::Result<()> {
                 execution_state.add_constraint(request.slot, signed_constraints.clone());
 
                 let res = serde_json::to_value(signed_constraints).map_err(Into::into);
+
                 let _ = response_tx.send(res);
+
+                tracing::info!(
+                    elapsed = ?start.elapsed(),
+                    tx_hash = %request.tx.hash(),
+                    "Processed commitment request"
+                );
             },
             Ok(HeadEvent { slot, .. }) = head_tracker.next_head() => {
                 tracing::info!(slot, "Received new head event");
@@ -146,7 +155,7 @@ async fn main() -> eyre::Result<()> {
                 }
 
 
-                if let Err(e) = local_builder.build_new_local_payload(template.transactions()).await {
+                if let Err(e) = local_builder.build_new_local_payload(template.as_signed_transactions()).await {
                     tracing::error!(err = ?e, "CRITICAL: Error while building local payload at slot deadline for {slot}");
                 };
             },
