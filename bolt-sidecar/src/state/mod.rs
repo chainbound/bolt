@@ -342,4 +342,66 @@ mod tests {
             .transactions_len();
         assert!(transactions_len == 0);
     }
+
+    #[tokio::test]
+    async fn test_invalidate_stale_template() {
+        let _ = fmt::try_init();
+
+        let target_slot = 10;
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
+
+        let mut state = ExecutionState::new(client, NonZero::new(1024).expect("valid non-zero"))
+            .await
+            .unwrap();
+
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
+
+        let sender = anvil.addresses()[0];
+
+        let tx = default_test_transaction(sender, None);
+
+        let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
+
+        let signer: EthereumWallet = wallet.into();
+        let signed = tx.build(&signer).await.unwrap();
+
+        let bls_signer = Signer::random();
+
+        // Trick to parse into the TransactionSigned type
+        let tx_signed_bytes = signed.encoded_2718();
+        let tx_signed =
+            PooledTransactionsElement::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
+
+        let inclusion_request = InclusionRequest {
+            slot: target_slot,
+            tx: tx_signed,
+            signature: sig,
+        };
+
+        let request = CommitmentRequest::Inclusion(inclusion_request.clone());
+
+        assert!(state.validate_commitment_request(&request).await.is_ok());
+
+        let message = ConstraintsMessage::build(0, target_slot, inclusion_request, sender);
+        let signature = bls_signer.sign(&message.digest()).unwrap().to_string();
+        let signed_constraints = SignedConstraints { message, signature };
+
+        state.add_constraint(target_slot, signed_constraints.clone());
+
+        assert!(
+            state
+                .block_templates()
+                .get(&target_slot)
+                .unwrap()
+                .transactions_len()
+                == 1
+        );
+
+        // Update the head, which should invalidate the transaction due to a nonce conflict
+        state.update_head(None, target_slot).await.unwrap();
+
+        assert!(state.block_templates().get(&target_slot).is_none());
+    }
 }
