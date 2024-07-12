@@ -99,6 +99,12 @@ impl ConstraintsApi for MockMevBoost {
     }
 }
 
-// fn decode_payload() {
-//     let stringified = r#""#;
-// }
+#[test]
+fn test_decode_get_payload_response() {
+    let stringified =
+        std::fs::read_to_string("./src/client/test_util/deneb_get_payload_response.json")
+            .expect("failed to read get payload response file");
+
+    let parsed_response: GetPayloadResponse =
+        serde_json::from_str(&stringified).expect("failed to parse get payload response");
+}

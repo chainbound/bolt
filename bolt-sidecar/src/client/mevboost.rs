@@ -127,14 +127,7 @@ impl BuilderApi for MevBoostClient {
             return Err(BuilderApiError::FailedGettingPayload(error));
         }
 
-        // TODO: rm after debugging
-        let px = response.text().await?;
-        tracing::info!("get_payload json response received: {}", px);
-        let mut file = std::fs::File::create("get_payload_response.json").unwrap();
-        std::io::Write::write_all(&mut file, px.as_bytes()).unwrap();
-        let payload = serde_json::from_str(&px)?;
-
-        // let payload = response.json().await?;
+        let payload = response.json().await?;
 
         Ok(payload)
     }
