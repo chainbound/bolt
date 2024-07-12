@@ -8,7 +8,7 @@ use thiserror::Error;
 use crate::{
     builder::BlockTemplate,
     common::{calculate_max_basefee, validate_transaction},
-    primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot},
+    primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot, TransactionExt},
 };
 
 use super::fetcher::StateFetcher;
@@ -126,10 +126,10 @@ impl<C: StateFetcher> ExecutionState<C> {
     /// timing or proposer slot targets.
     ///
     /// If the commitment is invalid because of nonce, basefee or balance errors, it will return an error.
-    /// If the commitment is valid, it will be added to the block template and its account state
+    /// If the commitment is valid, its account state
     /// will be cached. If this is succesful, any callers can be sure that the commitment is valid
     /// and SHOULD sign it and respond to the requester.
-    pub async fn check_commitment_validity(
+    pub async fn validate_commitment_request(
         &mut self,
         request: &CommitmentRequest,
     ) -> Result<Address, ValidationError> {
@@ -166,6 +166,8 @@ impl<C: StateFetcher> ExecutionState<C> {
         if !req.validate_basefee(max_basefee) {
             return Err(ValidationError::BaseFeeTooLow(max_basefee as u128));
         }
+
+        // let transaction = req.tx.into_transaction();
 
         // If we have the account state, use it here
         if let Some(account_state) = self.account_state(&sender) {

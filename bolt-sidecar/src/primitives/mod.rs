@@ -17,6 +17,7 @@ use ethereum_consensus::{
     types::mainnet::ExecutionPayload,
     Fork,
 };
+use reth_primitives::{PooledTransactionsElement, TxType};
 use tokio::sync::{mpsc, oneshot};
 
 /// Commitment types, received by users wishing to receive preconfirmations.
@@ -217,5 +218,42 @@ impl ChainHead {
     /// Get the block number (execution layer).
     pub fn block(&self) -> u64 {
         self.block.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// Trait that exposes additional information on transaction types that don't already do it
+/// by themselves (e.g. [`PooledTransactionsElement`]).
+pub trait TransactionExt {
+    fn gas_limit(&self) -> u64;
+    fn value(&self) -> U256;
+    fn tx_type(&self) -> TxType;
+}
+
+impl TransactionExt for PooledTransactionsElement {
+    fn gas_limit(&self) -> u64 {
+        match self {
+            PooledTransactionsElement::Legacy { transaction, .. } => transaction.gas_limit,
+            PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.gas_limit,
+            PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.gas_limit,
+            PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.gas_limit,
+        }
+    }
+
+    fn value(&self) -> U256 {
+        match self {
+            PooledTransactionsElement::Legacy { transaction, .. } => transaction.value,
+            PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.value,
+            PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.value,
+            PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.value,
+        }
+    }
+
+    fn tx_type(&self) -> TxType {
+        match self {
+            PooledTransactionsElement::Legacy { .. } => TxType::Legacy,
+            PooledTransactionsElement::Eip2930 { .. } => TxType::Eip2930,
+            PooledTransactionsElement::Eip1559 { .. } => TxType::Eip1559,
+            PooledTransactionsElement::BlobTransaction(_) => TxType::Eip4844,
+        }
     }
 }
