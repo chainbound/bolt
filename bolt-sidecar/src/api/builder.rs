@@ -127,7 +127,7 @@ where
             Ok(res) => match res {
                 Err(builder_err) => builder_err,
                 Ok(header) => {
-                    tracing::debug!(elapsed = ?start.elapsed(), "Returning signed builder bid: {:?}", header);
+                    tracing::debug!(elapsed = ?start.elapsed(), "Returning signed builder bid");
                     return Ok(Json(header));
                 }
             },
@@ -215,7 +215,7 @@ where
                 });
             };
 
-            tracing::info!("Local block found, returning: {payload:?}");
+            tracing::debug!("Local block found, returning: {payload:?}");
             return Ok(Json(payload));
         }
 
