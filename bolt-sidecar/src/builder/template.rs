@@ -7,7 +7,7 @@
 use std::collections::HashMap;
 
 use alloy_primitives::{Address, U256};
-use reth_primitives::{TransactionSigned, TxType};
+use reth_primitives::{PooledTransactionsElement, TransactionSigned};
 
 use crate::{
     common::max_transaction_cost,
@@ -46,11 +46,11 @@ impl BlockTemplate {
                 .and_modify(|state| {
                     state.balance = state
                         .balance
-                        .saturating_add(max_transaction_cost(&c.tx_decoded));
+                        .saturating_add(max_transaction_cost(&c.transaction));
                     state.transaction_count += 1;
                 })
                 .or_insert(AccountState {
-                    balance: max_transaction_cost(&c.tx_decoded),
+                    balance: max_transaction_cost(&c.transaction),
                     transaction_count: 1,
                 });
         });
@@ -72,10 +72,25 @@ impl BlockTemplate {
 
     /// Returns all a clone of all transactions from the signed constraints list
     #[inline]
-    pub fn transactions(&self) -> Vec<TransactionSigned> {
+    pub fn transactions(&self) -> Vec<PooledTransactionsElement> {
         self.signed_constraints_list
             .iter()
-            .flat_map(|sc| sc.message.constraints.iter().map(|c| c.tx_decoded.clone()))
+            .flat_map(|sc| sc.message.constraints.iter().map(|c| c.transaction.clone()))
+            .collect()
+    }
+
+    /// Converts the list of signed constraints into a list of signed transactions. Use this when building
+    /// a local execution payload.
+    #[inline]
+    pub fn as_signed_transactions(&self) -> Vec<TransactionSigned> {
+        self.signed_constraints_list
+            .iter()
+            .flat_map(|sc| {
+                sc.message
+                    .constraints
+                    .iter()
+                    .map(|c| c.transaction.clone().into_transaction())
+            })
             .collect()
     }
 
@@ -90,25 +105,28 @@ impl BlockTemplate {
     /// Returns the blob count of the block template.
     #[inline]
     pub fn blob_count(&self) -> usize {
-        self.signed_constraints_list.iter().fold(0, |acc, sc| {
-            acc + sc
-                .message
-                .constraints
-                .iter()
-                .filter(|c| c.tx_decoded.tx_type() == TxType::Eip4844)
-                .count()
+        self.signed_constraints_list.iter().fold(0, |mut acc, sc| {
+            acc += sc.message.constraints.iter().fold(0, |acc, c| {
+                acc + c
+                    .transaction
+                    .as_eip4844()
+                    .map(|tx| tx.blob_versioned_hashes.len())
+                    .unwrap_or(0)
+            });
+
+            acc
         })
     }
 
     /// Remove all signed constraints at the specified index and updates the state diff
     fn remove_constraints_at_index(&mut self, index: usize) {
         let sc = self.signed_constraints_list.remove(index);
-        let mut address_to_txs: HashMap<Address, Vec<&TransactionSigned>> = HashMap::new();
+        let mut address_to_txs: HashMap<Address, Vec<&PooledTransactionsElement>> = HashMap::new();
         sc.message.constraints.iter().for_each(|c| {
             address_to_txs
                 .entry(c.sender)
-                .and_modify(|txs| txs.push(&c.tx_decoded))
-                .or_insert(vec![&c.tx_decoded]);
+                .and_modify(|txs| txs.push(&c.transaction))
+                .or_insert(vec![&c.transaction]);
         });
 
         // Collect the diff for each address and every transaction
@@ -157,11 +175,11 @@ impl BlockTemplate {
             .iter()
             .flat_map(|c| c.1.clone())
             .fold((U256::ZERO, u64::MAX), |mut acc, c| {
-                let nonce = c.tx_decoded.nonce();
+                let nonce = c.transaction.nonce();
                 if nonce < acc.1 {
                     acc.1 = nonce;
                 }
-                acc.0 += max_transaction_cost(&c.tx_decoded);
+                acc.0 += max_transaction_cost(&c.transaction);
                 acc
             });
 
