@@ -33,6 +33,8 @@ pub trait StateFetcher {
 
     async fn get_basefee(&self, block_number: Option<u64>) -> Result<u128, TransportError>;
 
+    async fn get_blob_basefee(&self, block_number: Option<u64>) -> Result<u128, TransportError>;
+
     async fn get_account_state(
         &self,
         address: &Address,
@@ -105,12 +107,14 @@ impl StateFetcher for StateClient {
         batch.send().await?;
 
         let basefee = self.client.get_basefee(None);
+        let blob_basefee = self.client.get_blob_basefee(None);
 
         // Collect the results
-        let (nonce_vec, balance_vec, basefee) = tokio::join!(
+        let (nonce_vec, balance_vec, basefee, blob_basefee) = tokio::join!(
             nonce_futs.collect::<Vec<_>>(),
             balance_futs.collect::<Vec<_>>(),
             basefee,
+            blob_basefee,
         );
 
         // Insert the results
@@ -145,6 +149,7 @@ impl StateFetcher for StateClient {
         Ok(StateUpdate {
             account_states,
             min_basefee: basefee?,
+            min_blob_basefee: blob_basefee?,
             block_number,
         })
     }
@@ -155,6 +160,10 @@ impl StateFetcher for StateClient {
 
     async fn get_basefee(&self, block_number: Option<u64>) -> Result<u128, TransportError> {
         self.client.get_basefee(block_number).await
+    }
+
+    async fn get_blob_basefee(&self, block_number: Option<u64>) -> Result<u128, TransportError> {
+        self.client.get_blob_basefee(block_number).await
     }
 
     async fn get_account_state(
