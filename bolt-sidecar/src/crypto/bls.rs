@@ -62,6 +62,13 @@ impl Signer {
         Self { key }
     }
 
+    /// Create a signer with a random BLS key.
+    pub fn random() -> Self {
+        Self {
+            key: random_bls_secret(),
+        }
+    }
+
     /// Verify the signature of the object with the given public key.
     #[allow(dead_code)]
     pub fn verify<T: SignableBLS>(

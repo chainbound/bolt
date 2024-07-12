@@ -84,7 +84,8 @@ mod tests {
     use tracing_subscriber::fmt;
 
     use crate::{
-        primitives::{CommitmentRequest, InclusionRequest},
+        crypto::{bls::Signer, SignableBLS, SignerBLS},
+        primitives::{CommitmentRequest, ConstraintsMessage, InclusionRequest, SignedConstraints},
         test_util::{default_test_transaction, launch_anvil},
     };
 
@@ -266,6 +267,8 @@ mod tests {
     async fn test_invalidate_inclusion_request() {
         let _ = fmt::try_init();
 
+        let target_slot = 10;
+
         let anvil = launch_anvil();
         let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
 
@@ -284,19 +287,37 @@ mod tests {
         let signer: EthereumWallet = wallet.into();
         let signed = tx.build(&signer).await.unwrap();
 
+        let bls_signer = Signer::random();
+
         // Trick to parse into the TransactionSigned type
         let tx_signed_bytes = signed.encoded_2718();
         let tx_signed =
             PooledTransactionsElement::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
 
-        let request = CommitmentRequest::Inclusion(InclusionRequest {
-            slot: 10,
+        let inclusion_request = InclusionRequest {
+            slot: target_slot,
             tx: tx_signed,
             signature: sig,
-        });
+        };
+
+        let request = CommitmentRequest::Inclusion(inclusion_request.clone());
 
         assert!(state.validate_commitment_request(&request).await.is_ok());
-        assert!(state.block_templates().get(&10).unwrap().transactions_len() == 1);
+
+        let message = ConstraintsMessage::build(0, target_slot, inclusion_request, sender);
+        let signature = bls_signer.sign(&message.digest()).unwrap().to_string();
+        let signed_constraints = SignedConstraints { message, signature };
+
+        state.add_constraint(target_slot, signed_constraints.clone());
+
+        assert!(
+            state
+                .block_templates()
+                .get(&target_slot)
+                .unwrap()
+                .transactions_len()
+                == 1
+        );
 
         let provider = ProviderBuilder::new().on_http(anvil.endpoint_url());
 
@@ -314,7 +335,11 @@ mod tests {
             .await
             .unwrap();
 
-        let transactions_len = state.block_templates().get(&10).unwrap().transactions_len();
+        let transactions_len = state
+            .block_templates()
+            .get(&target_slot)
+            .unwrap()
+            .transactions_len();
         assert!(transactions_len == 0);
     }
 }

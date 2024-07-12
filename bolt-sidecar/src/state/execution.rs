@@ -1,14 +1,16 @@
 use alloy_eips::eip4844::MAX_BLOBS_PER_BLOCK;
 use alloy_primitives::{Address, SignatureError};
 use alloy_transport::TransportError;
-use reth_primitives::transaction::TxType;
+use reth_primitives::{
+    revm_primitives::EnvKzgSettings, BlobTransactionValidationError, PooledTransactionsElement,
+};
 use std::{collections::HashMap, num::NonZero};
 use thiserror::Error;
 
 use crate::{
     builder::BlockTemplate,
     common::{calculate_max_basefee, validate_transaction},
-    primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot, TransactionExt},
+    primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot},
 };
 
 use super::fetcher::StateFetcher;
@@ -17,8 +19,14 @@ use super::fetcher::StateFetcher;
 #[derive(Debug, Error)]
 pub enum ValidationError {
     /// The transaction fee is too low to cover the maximum base fee.
-    #[error("Transaction fee is too low, need {0} gwei to cover the maximum base fee")]
+    #[error("Transaction fee is too low, need {0} gwei to cover the maximum basefee")]
     BaseFeeTooLow(u128),
+    /// The transaction blob fee is too low to cover the maximum blob base fee.
+    #[error("Transaction blob fee is too low, need {0} gwei to cover the maximum blob basefee")]
+    BlobBaseFeeTooLow(u128),
+    /// The transaction blob is invalid.
+    #[error(transparent)]
+    BlobValidation(#[from] BlobTransactionValidationError),
     /// The transaction nonce is too low.
     #[error("Transaction nonce too low")]
     NonceTooLow,
@@ -69,12 +77,12 @@ impl ValidationError {
 pub struct ExecutionState<C> {
     /// The latest block number.
     block_number: u64,
-
     /// The latest slot number.
     slot: u64,
-
-    /// The base fee at the head block.
+    /// The basefee at the head block.
     basefee: u128,
+    /// The blob basefee at the head block.
+    blob_basefee: u128,
     /// The cached account states. This should never be read directly.
     /// These only contain the canonical account states at the head block,
     /// not the intermediate states.
@@ -88,6 +96,8 @@ pub struct ExecutionState<C> {
     chain_id: u64,
     /// The maximum number of commitments per slot.
     max_commitments_per_slot: NonZero<usize>,
+    /// The KZG settings for validating blobs.
+    kzg_settings: EnvKzgSettings,
     /// The state fetcher client.
     client: C,
 }
@@ -99,13 +109,19 @@ impl<C: StateFetcher> ExecutionState<C> {
         client: C,
         max_commitments_per_slot: NonZero<usize>,
     ) -> Result<Self, TransportError> {
+        let (basefee, blob_basefee) =
+            tokio::try_join!(client.get_basefee(None), client.get_blob_basefee(None))?;
+
         Ok(Self {
-            basefee: client.get_basefee(None).await?,
+            basefee,
+            blob_basefee,
             block_number: client.get_head().await?,
             slot: 0,
             account_states: HashMap::new(),
             block_templates: HashMap::new(),
             chain_id: client.get_chain_id().await?,
+            // Load the default KZG settings
+            kzg_settings: EnvKzgSettings::default(),
             max_commitments_per_slot,
             client,
         })
@@ -129,6 +145,8 @@ impl<C: StateFetcher> ExecutionState<C> {
     /// If the commitment is valid, its account state
     /// will be cached. If this is succesful, any callers can be sure that the commitment is valid
     /// and SHOULD sign it and respond to the requester.
+    ///
+    /// TODO: should also validate everything in https://github.com/paradigmxyz/reth/blob/9aa44e1a90b262c472b14cd4df53264c649befc2/crates/transaction-pool/src/validate/eth.rs#L153
     pub async fn validate_commitment_request(
         &mut self,
         request: &CommitmentRequest,
@@ -167,8 +185,6 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::BaseFeeTooLow(max_basefee as u128));
         }
 
-        // let transaction = req.tx.into_transaction();
-
         // If we have the account state, use it here
         if let Some(account_state) = self.account_state(&sender) {
             // Validate the transaction against the account state
@@ -193,14 +209,27 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
 
         // Check EIP-4844-specific limits
-        if req.tx.tx_type() == TxType::Eip4844 {
+        if let Some(transaction) = req.tx.as_eip4844() {
             if let Some(template) = self.block_templates.get(&req.slot) {
                 if template.blob_count() >= MAX_BLOBS_PER_BLOCK {
                     return Err(ValidationError::Eip4844Limit);
                 }
             }
 
-            // TODO: check max_fee_per_blob_gas against the blob_base_fee
+            let PooledTransactionsElement::BlobTransaction(ref blob_transaction) = req.tx else {
+                unreachable!("EIP-4844 transaction should be a blob transaction")
+            };
+
+            // Calculate max possible increase in blob basefee
+            let max_blob_basefee = calculate_max_basefee(self.blob_basefee, slot_diff)
+                .ok_or(reject_internal("Overflow calculating max blob basefee"))?;
+
+            if blob_transaction.transaction.max_fee_per_blob_gas < max_blob_basefee {
+                return Err(ValidationError::BlobBaseFeeTooLow(max_blob_basefee));
+            }
+
+            // Validate blob against KZG settings
+            transaction.validate_blob(&blob_transaction.sidecar, self.kzg_settings.get())?;
         }
 
         Ok(sender)
@@ -302,6 +331,7 @@ impl<C: StateFetcher> ExecutionState<C> {
 pub struct StateUpdate {
     pub account_states: HashMap<Address, AccountState>,
     pub min_basefee: u128,
+    pub min_blob_basefee: u128,
     pub block_number: u64,
 }
 
