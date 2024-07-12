@@ -259,6 +259,10 @@ func TestOnPayloadAttributesConstraint(t *testing.T) {
 	builder, err := NewBuilder(builderArgs)
 	require.NoError(t, err)
 
+	builder.Start()
+	defer builder.Stop()
+
+	// Create a sample blob transaction
 	tx := createSampleBlobTransaction()
 
 	// Add the transaction to the cache directly
@@ -268,31 +272,28 @@ func TestOnPayloadAttributesConstraint(t *testing.T) {
 		},
 	})
 
-	builder.Start()
-	defer builder.Stop()
-
 	err = builder.OnPayloadAttribute(testPayloadAttributes)
 	require.NoError(t, err)
 	time.Sleep(time.Second * 3)
 
-	require.NotNil(t, testRelay.submittedMsgWithPreconf)
+	require.NotNil(t, testRelay.submittedMsg)
 
-	// expectedProposerPubkey, err := utils.HexToPubkey(testBeacon.validator.Pk.String())
-	// require.NoError(t, err)
+	expectedProposerPubkey, err := utils.HexToPubkey(testBeacon.validator.Pk.String())
+	require.NoError(t, err)
 
-	// expectedMessage := builderApiV1.BidTrace{
-	// 	Slot:                 uint64(25),
-	// 	ParentHash:           phase0.Hash32{0x02, 0x03},
-	// 	BuilderPubkey:        builder.builderPublicKey,
-	// 	ProposerPubkey:       expectedProposerPubkey,
-	// 	ProposerFeeRecipient: feeRecipient,
-	// 	GasLimit:             expectedGasLimit,
-	// 	GasUsed:              uint64(100),
-	// 	Value:                &uint256.Int{0x0a},
-	// }
-	// copy(expectedMessage.BlockHash[:], hexutil.MustDecode("0x68e516c8827b589fcb749a9e672aa16b9643437459508c467f66a9ed1de66a6c")[:])
-	// require.NotNil(t, testRelay.submittedMsgWithPreconf)
-	// require.Equal(t, expectedMessage, *testRelay.submittedMsgWithPreconf.Bellatrix.Message)
+	expectedMessage := builderApiV1.BidTrace{
+		Slot:                 uint64(25),
+		ParentHash:           phase0.Hash32{0x02, 0x03},
+		BuilderPubkey:        builder.builderPublicKey,
+		ProposerPubkey:       expectedProposerPubkey,
+		ProposerFeeRecipient: feeRecipient,
+		GasLimit:             expectedGasLimit,
+		GasUsed:              uint64(100),
+		Value:                &uint256.Int{0x0a},
+	}
+	copy(expectedMessage.BlockHash[:], hexutil.MustDecode("0x68e516c8827b589fcb749a9e672aa16b9643437459508c467f66a9ed1de66a6c")[:])
+	require.NotNil(t, testRelay.submittedMsg.Bellatrix)
+	require.Equal(t, expectedMessage, *testRelay.submittedMsg.Bellatrix.Message)
 
 	// expectedExecutionPayload := bellatrix.ExecutionPayload{
 	// 	ParentHash:    [32]byte(testExecutableData.ParentHash),
@@ -553,6 +554,7 @@ func validateConstraintSubscriptionAuth(auth string, headSlot uint64) (phase0.BL
 	return authData.PublicKey, nil
 }
 
+// createSampleBlobTransaction creates a sample blob transaction with sidecar
 func createSampleBlobTransaction() *types.Transaction {
 	// Sample values
 	chainID := uint256.NewInt(1)
@@ -593,6 +595,7 @@ func createSampleBlobTransaction() *types.Transaction {
 	}
 
 	// Create the transaction
+	// Tx hash - 0x7ebe3533335a96c69c5f822d9e0dda9d62d229a1b17f13347b6816b5c41a836b
 	tx := types.NewTx(blobTx)
 
 	return tx
