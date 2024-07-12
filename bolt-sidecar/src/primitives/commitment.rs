@@ -1,8 +1,8 @@
+use serde::{de, Deserialize, Deserializer, Serialize};
 use std::str::FromStr;
 
 use alloy_primitives::{keccak256, Signature, B256};
-use reth_primitives::TransactionSigned;
-use serde::{de, Deserialize, Deserializer, Serialize};
+use reth_primitives::PooledTransactionsElement;
 
 /// Commitment requests sent by users or RPC proxies to the sidecar.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -18,11 +18,8 @@ pub struct InclusionRequest {
     /// The consensus slot number at which the transaction should be included.
     pub slot: u64,
     /// The transaction to be included.
-    #[serde(
-        deserialize_with = "deserialize_tx_signed",
-        serialize_with = "serialize_tx_signed"
-    )]
-    pub tx: TransactionSigned,
+    #[serde(deserialize_with = "deserialize_tx", serialize_with = "serialize_tx")]
+    pub tx: PooledTransactionsElement,
     /// The signature over the "slot" and "tx" fields by the user.
     /// A valid signature is the only proof that the user actually requested
     /// this specific commitment to be included at the given slot.
@@ -44,16 +41,16 @@ impl InclusionRequest {
     }
 }
 
-fn deserialize_tx_signed<'de, D>(deserializer: D) -> Result<TransactionSigned, D::Error>
+fn deserialize_tx<'de, D>(deserializer: D) -> Result<PooledTransactionsElement, D::Error>
 where
     D: Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
     let data = hex::decode(s.trim_start_matches("0x")).map_err(de::Error::custom)?;
-    TransactionSigned::decode_enveloped(&mut data.as_slice()).map_err(de::Error::custom)
+    PooledTransactionsElement::decode_enveloped(&mut data.as_slice()).map_err(de::Error::custom)
 }
 
-fn serialize_tx_signed<S>(tx: &TransactionSigned, serializer: S) -> Result<S::Ok, S::Error>
+fn serialize_tx<S>(tx: &PooledTransactionsElement, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
@@ -88,7 +85,7 @@ impl InclusionRequest {
     pub fn digest(&self) -> B256 {
         let mut data = Vec::new();
         data.extend_from_slice(&self.slot.to_le_bytes());
-        data.extend_from_slice(self.tx.hash.as_slice());
+        data.extend_from_slice(self.tx.hash().as_slice());
 
         keccak256(&data)
     }
