@@ -83,7 +83,7 @@ async fn main() -> eyre::Result<()> {
                     .validate_commitment_request(&request)
                 .await
                 {
-                    Ok(sender) => { sender },
+                    Ok(sender) => sender,
                     Err(e) => {
                         tracing::error!("Failed to commit request: {:?}", e);
                         let _ = response_tx.send(Err(ApiError::Custom(e.to_string())));
@@ -96,7 +96,7 @@ async fn main() -> eyre::Result<()> {
                 tracing::info!(
                     elapsed = ?start.elapsed(),
                     tx_hash = %request.tx.hash(),
-                    "Commitment request validated"
+                    "Validation against execution state passed"
                 );
 
                 // TODO: review all this `clone` usage
@@ -108,15 +108,9 @@ async fn main() -> eyre::Result<()> {
 
                 execution_state.add_constraint(request.slot, signed_constraints.clone());
 
+
                 let res = serde_json::to_value(signed_constraints).map_err(Into::into);
-
-                let _ = response_tx.send(res);
-
-                tracing::info!(
-                    elapsed = ?start.elapsed(),
-                    tx_hash = %request.tx.hash(),
-                    "Processed commitment request"
-                );
+                let _ = response_tx.send(res).ok();
             },
             Ok(HeadEvent { slot, .. }) = head_tracker.next_head() => {
                 tracing::info!(slot, "Received new head event");
@@ -142,7 +136,7 @@ async fn main() -> eyre::Result<()> {
                 let max_retries = 5;
                 let mut i = 0;
                 'inner: while let Err(e) = mevboost_client
-                    .submit_constraints(&template.signed_constraints_list)
+                    .submit_constraints(&template.constraints)
                 .await
                 {
                     tracing::error!(err = ?e, "Error submitting constraints, retrying...");

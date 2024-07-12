@@ -17,9 +17,13 @@ mod tests {
         dotenvy::dotenv().ok();
         let _ = tracing_subscriber::fmt::try_init();
 
+        let Some(rpc_url) = std::env::var("RPC_URL").ok() else {
+            tracing::warn!("RPC_URL not found in environment variables, skipping test");
+            return Ok(());
+        };
+
         tracing::info!("Starting test_trace_call");
 
-        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL must be set");
         let rpc_url = Url::parse(&rpc_url).unwrap();
         let client = RpcClient::new(rpc_url.clone());
 
