@@ -34,10 +34,7 @@ impl InclusionRequest {
     /// Validates the transaction fee against a minimum basefee.
     /// Returns true if the fee is greater than or equal to the min, false otherwise.
     pub fn validate_basefee(&self, min: u128) -> bool {
-        if self.tx.max_fee_per_gas() < min {
-            return false;
-        }
-        true
+        self.tx.max_fee_per_gas() >= min
     }
 }
 

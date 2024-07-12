@@ -45,6 +45,18 @@ impl RpcClient {
         Ok(fee_history.latest_block_base_fee().unwrap())
     }
 
+    /// Get the blob basefee of the latest block.
+    pub async fn get_blob_basefee(&self, block_number: Option<u64>) -> TransportResult<u128> {
+        let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
+
+        let fee_history: FeeHistory = self
+            .0
+            .request("eth_feeHistory", (U64::from(1), tag, &[] as &[f64]))
+            .await?;
+
+        Ok(fee_history.latest_block_blob_base_fee().unwrap_or(0))
+    }
+
     /// Get the latest block number
     pub async fn get_head(&self) -> TransportResult<u64> {
         let result: U64 = self.0.request("eth_blockNumber", ()).await?;

@@ -28,7 +28,7 @@ pub struct BlockTemplate {
     /// The state diffs per address given the list of commitments.
     state_diff: StateDiff,
     /// The signed constraints associated to the block
-    pub signed_constraints_list: Vec<SignedConstraints>,
+    pub constraints: Vec<SignedConstraints>,
 }
 
 impl BlockTemplate {
@@ -37,43 +37,10 @@ impl BlockTemplate {
         &self.state_diff
     }
 
-    /// Adds a transaction to the block template and updates the state diff.
-    pub fn add_constraints(&mut self, signed_constraints: SignedConstraints) {
-        let mut address_to_state_diffs: HashMap<Address, AccountState> = HashMap::new();
-        signed_constraints.message.constraints.iter().for_each(|c| {
-            address_to_state_diffs
-                .entry(c.sender)
-                .and_modify(|state| {
-                    state.balance = state
-                        .balance
-                        .saturating_add(max_transaction_cost(&c.transaction));
-                    state.transaction_count += 1;
-                })
-                .or_insert(AccountState {
-                    balance: max_transaction_cost(&c.transaction),
-                    transaction_count: 1,
-                });
-        });
-
-        // Now update intermediate state
-        address_to_state_diffs.iter().for_each(|(address, diff)| {
-            self.state_diff
-                .diffs
-                .entry(*address)
-                .and_modify(|(nonce, balance)| {
-                    *nonce += diff.transaction_count;
-                    *balance += diff.balance;
-                })
-                .or_insert((diff.transaction_count, diff.balance));
-        });
-
-        self.signed_constraints_list.push(signed_constraints);
-    }
-
-    /// Returns all a clone of all transactions from the signed constraints list
+    /// Returns the cloned list of transactions from the constraints.
     #[inline]
     pub fn transactions(&self) -> Vec<PooledTransactionsElement> {
-        self.signed_constraints_list
+        self.constraints
             .iter()
             .flat_map(|sc| sc.message.constraints.iter().map(|c| c.transaction.clone()))
             .collect()
@@ -83,7 +50,7 @@ impl BlockTemplate {
     /// a local execution payload.
     #[inline]
     pub fn as_signed_transactions(&self) -> Vec<TransactionSigned> {
-        self.signed_constraints_list
+        self.constraints
             .iter()
             .flat_map(|sc| {
                 sc.message
@@ -97,7 +64,7 @@ impl BlockTemplate {
     /// Returns the length of the transactions in the block template.
     #[inline]
     pub fn transactions_len(&self) -> usize {
-        self.signed_constraints_list
+        self.constraints
             .iter()
             .fold(0, |acc, sc| acc + sc.message.constraints.len())
     }
@@ -105,7 +72,7 @@ impl BlockTemplate {
     /// Returns the blob count of the block template.
     #[inline]
     pub fn blob_count(&self) -> usize {
-        self.signed_constraints_list.iter().fold(0, |mut acc, sc| {
+        self.constraints.iter().fold(0, |mut acc, sc| {
             acc += sc.message.constraints.iter().fold(0, |acc, c| {
                 acc + c
                     .transaction
@@ -118,38 +85,34 @@ impl BlockTemplate {
         })
     }
 
-    /// Remove all signed constraints at the specified index and updates the state diff
-    fn remove_constraints_at_index(&mut self, index: usize) {
-        let sc = self.signed_constraints_list.remove(index);
-        let mut address_to_txs: HashMap<Address, Vec<&PooledTransactionsElement>> = HashMap::new();
-        sc.message.constraints.iter().for_each(|c| {
-            address_to_txs
-                .entry(c.sender)
-                .and_modify(|txs| txs.push(&c.transaction))
-                .or_insert(vec![&c.transaction]);
-        });
-
-        // Collect the diff for each address and every transaction
-        let address_to_diff: HashMap<Address, AccountState> = address_to_txs
-            .iter()
-            .map(|(address, txs)| {
-                let mut state = AccountState::default();
-                for tx in txs {
-                    state.balance = state.balance.saturating_add(max_transaction_cost(tx));
-                    state.transaction_count = state.transaction_count.saturating_sub(1);
-                }
-                (*address, state)
-            })
-            .collect();
-
-        // Update intermediate state
-        for (address, diff) in address_to_diff.iter() {
+    /// Adds a list of constraints to the block template and updates the state diff.
+    pub fn add_constraints(&mut self, constraints: SignedConstraints) {
+        for constraint in constraints.message.constraints.iter() {
+            let max_cost = max_transaction_cost(&constraint.transaction);
             self.state_diff
                 .diffs
-                .entry(*address)
+                .entry(constraint.sender)
                 .and_modify(|(nonce, balance)| {
-                    *nonce = nonce.saturating_sub(diff.transaction_count);
-                    *balance += diff.balance;
+                    *nonce += 1;
+                    *balance += max_cost;
+                })
+                .or_insert((1, max_cost));
+        }
+
+        self.constraints.push(constraints);
+    }
+
+    /// Remove all signed constraints at the specified index and updates the state diff
+    fn remove_constraints_at_index(&mut self, index: usize) {
+        let constraints = self.constraints.remove(index);
+
+        for constraint in constraints.message.constraints.iter() {
+            self.state_diff
+                .diffs
+                .entry(constraint.sender)
+                .and_modify(|(nonce, balance)| {
+                    *nonce = nonce.saturating_sub(1);
+                    *balance -= max_transaction_cost(&constraint.transaction);
                 });
         }
     }
@@ -161,7 +124,7 @@ impl BlockTemplate {
         // The pre-confirmations made by such address, and the indexes of the signed constraints
         // in which they appear
         let constraints_with_address: Vec<(usize, Vec<&Constraint>)> = self
-            .signed_constraints_list
+            .constraints
             .iter()
             .enumerate()
             .map(|(idx, c)| (idx, &c.message.constraints))
@@ -184,13 +147,12 @@ impl BlockTemplate {
             });
 
         if state.balance < max_total_cost || state.transaction_count > min_nonce {
-            // NOTE: We drop all the signed constraints containing such pre-confirmations
-            // since at least one of them has been invalidated.
+            // Remove invalidated constraints due to balance / nonce of chain state
             tracing::warn!(
                 %address,
-                "Removing all signed constraints which contain such address pre-confirmations due to conflict with account state",
+                "Removing invalidated constraints for address"
             );
-            indexes = constraints_with_address.iter().map(|c| c.0).collect();
+            indexes = constraints_with_address.iter().map(|(i, _)| *i).collect();
         }
 
         for index in indexes.into_iter().rev() {
