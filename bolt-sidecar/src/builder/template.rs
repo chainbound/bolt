@@ -137,13 +137,11 @@ impl BlockTemplate {
         let (max_total_cost, min_nonce) = constraints_with_address
             .iter()
             .flat_map(|c| c.1.clone())
-            .fold((U256::ZERO, u64::MAX), |mut acc, c| {
-                let nonce = c.transaction.nonce();
-                if nonce < acc.1 {
-                    acc.1 = nonce;
-                }
-                acc.0 += max_transaction_cost(&c.transaction);
-                acc
+            .fold((U256::ZERO, u64::MAX), |(total_cost, min_nonce), c| {
+                (
+                    total_cost + max_transaction_cost(&c.transaction),
+                    min_nonce.min(c.transaction.nonce()),
+                )
             });
 
         if state.balance < max_total_cost || state.transaction_count > min_nonce {
