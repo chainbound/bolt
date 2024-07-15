@@ -136,7 +136,7 @@ async fn main() -> eyre::Result<()> {
                 let max_retries = 5;
                 let mut i = 0;
                 'inner: while let Err(e) = mevboost_client
-                    .submit_constraints(&template.constraints)
+                    .submit_constraints(&template.signed_constraints_list)
                 .await
                 {
                     tracing::error!(err = ?e, "Error submitting constraints, retrying...");

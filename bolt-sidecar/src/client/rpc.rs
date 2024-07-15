@@ -46,12 +46,15 @@ impl RpcClient {
     }
 
     /// Get the blob basefee of the latest block.
+    ///
+    /// Reference: https://github.com/ethereum/execution-apis/blob/main/src/eth/fee_market.yaml
     pub async fn get_blob_basefee(&self, block_number: Option<u64>) -> TransportResult<u128> {
+        let block_count = U64::from(1);
         let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
-
+        let reward_percentiles: Vec<f64> = vec![];
         let fee_history: FeeHistory = self
             .0
-            .request("eth_feeHistory", (U64::from(1), tag, &[] as &[f64]))
+            .request("eth_feeHistory", (block_count, tag, &reward_percentiles))
             .await?;
 
         Ok(fee_history.latest_block_blob_base_fee().unwrap_or(0))
