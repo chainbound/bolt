@@ -1,11 +1,11 @@
 use alloy_primitives::{keccak256, Address};
 use reth_primitives::PooledTransactionsElement;
 use secp256k1::Message;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 
 use crate::crypto::{ecdsa::SignableECDSA, SignableBLS};
 
-use super::InclusionRequest;
+use super::{commitment::serialize_tx, InclusionRequest};
 
 /// What the proposer sidecar will need to sign to confirm the inclusion request.
 impl SignableECDSA for ConstraintsMessage {
@@ -30,7 +30,9 @@ impl SignableECDSA for ConstraintsMessage {
 pub type BatchedSignedConstraints = Vec<SignedConstraints>;
 
 /// A container for a list of constraints and the signature of the proposer sidecar.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+///
+/// Reference: https://chainbound.github.io/bolt-docs/api/builder-api#ethv1builderconstraints
+#[derive(Serialize, Debug, Clone, PartialEq, Default)]
 pub struct SignedConstraints {
     /// The constraints that need to be signed.
     pub message: ConstraintsMessage,
@@ -39,7 +41,9 @@ pub struct SignedConstraints {
 }
 
 /// A message that contains the constraints that need to be signed by the proposer sidecar.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+///
+/// Reference: https://chainbound.github.io/bolt-docs/api/builder-api#ethv1builderconstraints
+#[derive(Serialize, Debug, Clone, PartialEq, Default)]
 pub struct ConstraintsMessage {
     /// The validator index of the proposer sidecar.
     pub validator_index: u64,
@@ -51,16 +55,11 @@ pub struct ConstraintsMessage {
 
 impl ConstraintsMessage {
     /// Builds a constraints message from an inclusion request and metadata
-    pub fn build(
-        validator_index: u64,
-        slot: u64,
-        request: InclusionRequest,
-        sender: Address,
-    ) -> Self {
+    pub fn build(validator_index: u64, request: InclusionRequest, sender: Address) -> Self {
         let constraints = vec![Constraint::from_transaction(request.tx, None, sender)];
         Self {
             validator_index,
-            slot,
+            slot: request.slot,
             constraints,
         }
     }
@@ -83,11 +82,14 @@ impl SignableBLS for ConstraintsMessage {
 }
 
 /// A general constraint on block building.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+///
+/// Reference: https://chainbound.github.io/bolt-docs/api/builder-api#ethv1builderconstraints
+#[derive(Serialize, Debug, Clone, PartialEq)]
 pub struct Constraint {
     /// The optional index at which the transaction needs to be included in the block
     pub index: Option<u64>,
-    /// The transaction to be included in the block
+    /// The transaction to be included in the block, in hex format
+    #[serde(rename(serialize = "tx"), serialize_with = "serialize_tx")]
     pub(crate) transaction: PooledTransactionsElement,
     /// The ec-recovered address of the transaction sender for internal use
     #[serde(skip)]

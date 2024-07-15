@@ -304,7 +304,7 @@ mod tests {
 
         assert!(state.validate_commitment_request(&request).await.is_ok());
 
-        let message = ConstraintsMessage::build(0, target_slot, inclusion_request, sender);
+        let message = ConstraintsMessage::build(0, inclusion_request, sender);
         let signature = bls_signer.sign(&message.digest()).unwrap().to_string();
         let signed_constraints = SignedConstraints { message, signature };
 
@@ -384,7 +384,7 @@ mod tests {
 
         assert!(state.validate_commitment_request(&request).await.is_ok());
 
-        let message = ConstraintsMessage::build(0, target_slot, inclusion_request, sender);
+        let message = ConstraintsMessage::build(0, inclusion_request, sender);
         let signature = bls_signer.sign(&message.digest()).unwrap().to_string();
         let signed_constraints = SignedConstraints { message, signature };
 
