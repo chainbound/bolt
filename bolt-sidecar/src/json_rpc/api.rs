@@ -7,7 +7,10 @@ use thiserror::Error;
 use tokio::sync::{mpsc, oneshot};
 use tracing::info;
 
-use crate::primitives::{CommitmentRequest, Slot};
+use crate::{
+    primitives::{CommitmentRequest, Slot},
+    state::{consensus::ConsensusError, ValidationError},
+};
 
 /// Default size of the api request cache (implemented as a LRU).
 const DEFAULT_API_REQUEST_CACHE_SIZE: usize = 1000;
@@ -31,6 +34,10 @@ pub enum ApiError {
     Rlp(#[from] alloy::transports::HttpError),
     #[error("failed during HTTP call: {0}")]
     Http(#[from] reqwest::Error),
+    #[error("consensus error: {0}")]
+    Consensus(#[from] ConsensusError),
+    #[error("execution state validation error: {0}")]
+    Validation(#[from] ValidationError),
     #[error("downstream error: {0}")]
     Eyre(#[from] eyre::Report),
     #[error("failed while processing API request: {0}")]

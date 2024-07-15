@@ -45,6 +45,11 @@ impl CommitmentDeadline {
         self.sleep = None;
         slot
     }
+
+    /// Poll the deadline in an unpin context.
+    pub fn poll_wait(&mut self, cx: &mut Context<'_>) -> Poll<Option<u64>> {
+        self.poll_unpin(cx)
+    }
 }
 
 /// Poll the deadline until it is reached.

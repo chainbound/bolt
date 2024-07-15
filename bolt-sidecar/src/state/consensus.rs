@@ -1,4 +1,7 @@
-use std::time::{Duration, Instant};
+use std::{
+    fmt::Debug,
+    time::{Duration, Instant},
+};
 
 use beacon_api_client::{mainnet::Client, BlockId, ProposerDuty};
 use ethereum_consensus::{deneb::BeaconBlockHeader, phase0::mainnet::SLOTS_PER_EPOCH};
@@ -35,7 +38,6 @@ pub struct Epoch {
 }
 
 /// Represents the consensus state container for the sidecar.
-#[allow(missing_debug_implementations)]
 pub struct ConsensusState {
     beacon_api_client: Client,
     header: BeaconBlockHeader,
@@ -152,6 +154,18 @@ impl ConsensusState {
             })
             .map(|duty| duty.validator_index as u64)
             .ok_or(ConsensusError::ValidatorNotFound)
+    }
+}
+
+impl Debug for ConsensusState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConsensusState")
+            .field("header", &self.header)
+            .field("epoch", &self.epoch)
+            .field("latest_slot", &self.latest_slot)
+            .field("latest_slot_timestamp", &self.latest_slot_timestamp)
+            .field("commitment_deadline", &self.commitment_deadline)
+            .finish()
     }
 }
 

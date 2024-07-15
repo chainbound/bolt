@@ -60,7 +60,7 @@ pub enum BuilderError {
 
 /// Local builder instance that can ingest a sealed header and
 /// create the corresponding builder bid ready for the Builder API.
-#[allow(missing_debug_implementations)]
+#[derive(Debug)]
 pub struct LocalBuilder {
     /// BLS credentials for the local builder. We use this to sign the
     /// payload bid submissions built by the sidecar.

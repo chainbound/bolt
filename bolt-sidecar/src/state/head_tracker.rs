@@ -1,9 +1,12 @@
-use std::time::Duration;
+use std::{
+    task::{Context, Poll},
+    time::Duration,
+};
 
 use alloy::rpc::types::beacon::events::HeadEvent;
 use beacon_api_client::Topic;
 use futures::StreamExt;
-use tokio::{sync::broadcast, task::AbortHandle};
+use tokio::{sync::mpsc, task::AbortHandle};
 
 use crate::BeaconClient;
 
@@ -15,7 +18,7 @@ use crate::BeaconClient;
 #[derive(Debug)]
 pub struct HeadTracker {
     /// Channel to receive updates of the "Head" beacon topic
-    new_heads_rx: broadcast::Receiver<HeadEvent>,
+    new_heads_rx: mpsc::Receiver<HeadEvent>,
     /// Handle to the background task that listens for new head events.
     /// Kept to allow for graceful shutdown.
     quit: AbortHandle,
@@ -35,7 +38,7 @@ impl HeadTracker {
     /// Create a new `HeadTracker` with the given beacon client HTTP URL and
     /// start listening for new head events in the background
     pub fn start(beacon_client: BeaconClient) -> Self {
-        let (new_heads_tx, new_heads_rx) = broadcast::channel(32);
+        let (new_heads_tx, new_heads_rx) = mpsc::channel(32);
 
         let task = tokio::spawn(async move {
             loop {
@@ -62,7 +65,7 @@ impl HeadTracker {
                     }
                 };
 
-                if let Err(err) = new_heads_tx.send(event) {
+                if let Err(err) = new_heads_tx.send(event).await {
                     tracing::warn!(?err, "failed to broadcast new head event to subscribers");
                 }
             }
@@ -80,16 +83,13 @@ impl HeadTracker {
     }
 
     /// Get the next head event from the tracker
-    pub async fn next_head(&mut self) -> Result<HeadEvent, broadcast::error::RecvError> {
+    pub async fn next_head(&mut self) -> Option<HeadEvent> {
         self.new_heads_rx.recv().await
     }
 
-    /// Subscribe to new head events from the tracker
-    ///
-    /// The returned channel will NOT contain any previously emitted events cached in
-    /// the tracker, but only new ones received after the call to this method
-    pub fn subscribe_new_heads(&self) -> broadcast::Receiver<HeadEvent> {
-        self.new_heads_rx.resubscribe()
+    /// Poll for the next head event in a non-blocking way
+    pub fn poll_next_head(&mut self, cx: &mut Context<'_>) -> Poll<Option<HeadEvent>> {
+        self.new_heads_rx.poll_recv(cx)
     }
 }
 
@@ -113,7 +113,7 @@ mod tests {
         let beacon_client = BeaconClient::new(Url::parse(url).unwrap());
         let mut tracker = HeadTracker::start(beacon_client);
 
-        let head = tracker.next_head().await?;
+        let head = tracker.next_head().await.unwrap();
 
         assert!(head.slot > 0);
         assert!(!head.block.is_empty());

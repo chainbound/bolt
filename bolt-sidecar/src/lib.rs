@@ -27,6 +27,10 @@ pub use builder::LocalBuilder;
 mod config;
 pub use config::{ChainConfig, Config, Opts};
 
+/// Driver for the sidecar, which manages the main event loop
+pub mod driver;
+pub use driver::SidecarDriver;
+
 /// Crypto utilities, including BLS and ECDSA
 pub mod crypto;
 

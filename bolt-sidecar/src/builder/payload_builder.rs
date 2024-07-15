@@ -39,7 +39,6 @@ const DEFAULT_EXTRA_DATA: [u8; 20] = [
 ///
 /// Find more information about this process & its reasoning here:
 /// <https://github.com/chainbound/bolt/discussions/59>
-#[allow(missing_debug_implementations)]
 pub struct FallbackPayloadBuilder {
     extra_data: Bytes,
     fee_recipient: Address,
@@ -390,6 +389,18 @@ pub(crate) fn build_header_with_hints_and_context(
         parent_beacon_block_root: Some(context.parent_beacon_block_root),
         requests_root: None,
         extra_data: context.extra_data.clone(),
+    }
+}
+
+impl fmt::Debug for FallbackPayloadBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FallbackPayloadBuilder")
+            .field("extra_data", &self.extra_data)
+            .field("fee_recipient", &self.fee_recipient)
+            .field("execution_rpc_client", &self.execution_rpc_client)
+            .field("engine_hinter", &self.engine_hinter)
+            .field("slot_time_in_seconds", &self.slot_time_in_seconds)
+            .finish()
     }
 }
 

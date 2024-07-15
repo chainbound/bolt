@@ -104,7 +104,7 @@ async fn main() -> eyre::Result<()> {
                 let res = serde_json::to_value(signed_constraints).map_err(Into::into);
                 let _ = response_tx.send(res).ok();
             },
-            Ok(HeadEvent { slot, .. }) = head_tracker.next_head() => {
+            Some(HeadEvent { slot, .. }) = head_tracker.next_head() => {
                 tracing::info!(slot, "Received new head event");
 
                 // We use None to signal that we want to fetch the latest EL head
