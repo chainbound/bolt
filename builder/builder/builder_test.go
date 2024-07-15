@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -179,7 +180,7 @@ func TestOnPayloadAttributes(t *testing.T) {
 	require.NotNil(t, testRelay.submittedMsg)
 }
 
-func TestOnPayloadAttributesConstraint(t *testing.T) {
+func TestBlockWithPreconfs(t *testing.T) {
 	const (
 		validatorDesiredGasLimit = 30_000_000
 		payloadAttributeGasLimit = 30_000_000 // Was zero in the other test
@@ -213,6 +214,20 @@ func TestOnPayloadAttributesConstraint(t *testing.T) {
 
 	bDomain := ssz.ComputeDomain(ssz.DomainTypeAppBuilder, [4]byte{0x02, 0x0, 0x0, 0x0}, phase0.Root{})
 
+	// https://etherscan.io/tx/0x9d48b4a021898a605b7ae49bf93ad88fa6bd7050e9448f12dde064c10f22fe9c
+	// 0x02f87601836384348477359400850517683ba883019a28943678fce4028b6745eb04fa010d9c8e4b36d6288c872b0f1366ad800080c080a0b6b7aba1954160d081b2c8612e039518b9c46cd7df838b405a03f927ad196158a071d2fb6813e5b5184def6bd90fb5f29e0c52671dea433a7decb289560a58416e
+	preconfTxByte, _ := hex.DecodeString("02f87601836384348477359400850517683ba883019a28943678fce4028b6745eb04fa010d9c8e4b36d6288c872b0f1366ad800080c080a0b6b7aba1954160d081b2c8612e039518b9c46cd7df838b405a03f927ad196158a071d2fb6813e5b5184def6bd90fb5f29e0c52671dea433a7decb289560a58416e")
+	preconfTx := new(types.Transaction)
+	err = preconfTx.UnmarshalBinary(preconfTxByte)
+	require.NoError(t, err)
+
+	// https://etherscan.io/tx/0x15bd881daa1408b33f67fa4bdeb8acfb0a2289d9b4c6f81eef9bb2bb2e52e780 - Blob Tx
+	// 0x03f9029c01830299f184b2d05e008507aef40a00832dc6c09468d30f47f19c07bccef4ac7fae2dc12fca3e0dc980b90204ef16e845000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001e0000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000633b68f5d8d3a86593ebb815b4663bcbe0302e31382e302d64657600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004109de8da2a97e37f2e6dc9f7d50a408f9344d7aa1a925ae53daf7fbef43491a571960d76c0cb926190a9da10df7209fb1ba93cd98b1565a3a2368749d505f90c81c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c0843b9aca00e1a00141e3a338e30c49ed0501e315bcc45e4edefebed43ab1368a1505461d9cf64901a01e8511e06b17683d89eb57b9869b96b8b611f969f7f56cbc0adc2df7c88a2a07a00910deacf91bba0d74e368d285d311dc5884e7cfe219d85aea5741b2b6e3a2fe
+	preconfTxWithBlobByte, _ := hex.DecodeString("03f9029c01830299f184b2d05e008507aef40a00832dc6c09468d30f47f19c07bccef4ac7fae2dc12fca3e0dc980b90204ef16e845000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001e0000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000633b68f5d8d3a86593ebb815b4663bcbe0302e31382e302d64657600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004109de8da2a97e37f2e6dc9f7d50a408f9344d7aa1a925ae53daf7fbef43491a571960d76c0cb926190a9da10df7209fb1ba93cd98b1565a3a2368749d505f90c81c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c0843b9aca00e1a00141e3a338e30c49ed0501e315bcc45e4edefebed43ab1368a1505461d9cf64901a01e8511e06b17683d89eb57b9869b96b8b611f969f7f56cbc0adc2df7c88a2a07a00910deacf91bba0d74e368d285d311dc5884e7cfe219d85aea5741b2b6e3a2fe")
+	preconfTxWithBlob := new(types.Transaction)
+	err = preconfTxWithBlob.UnmarshalBinary(preconfTxWithBlobByte)
+	require.NoError(t, err)
+
 	testExecutableData := &engine.ExecutableData{
 		ParentHash:   common.Hash{0x02, 0x03},
 		FeeRecipient: common.Address(feeRecipient),
@@ -227,11 +242,11 @@ func TestOnPayloadAttributesConstraint(t *testing.T) {
 
 		BaseFeePerGas: big.NewInt(16),
 
-		BlockHash:    common.HexToHash("0x68e516c8827b589fcb749a9e672aa16b9643437459508c467f66a9ed1de66a6c"),
-		Transactions: [][]byte{},
+		BlockHash:    common.HexToHash("3cce5d0f5c9a7e188e79c35168256e91bec2d98a1140f6701da6ed3c98ea9d04"),
+		Transactions: [][]byte{preconfTxByte, preconfTxWithBlobByte},
 	}
 
-	testBlock, err := engine.ExecutableDataToBlock(*testExecutableData, nil, nil)
+	testBlock, err := engine.ExecutableDataToBlock(*testExecutableData, preconfTxWithBlob.BlobHashes(), nil)
 	require.NoError(t, err)
 
 	testPayloadAttributes := &types.BuilderPayloadAttributes{
@@ -262,13 +277,13 @@ func TestOnPayloadAttributesConstraint(t *testing.T) {
 	builder.Start()
 	defer builder.Stop()
 
-	// Create a sample blob transaction
-	tx := createSampleBlobTransaction()
-
 	// Add the transaction to the cache directly
 	builder.constraintsCache.Put(25, map[common.Hash]*types.ConstraintDecoded{
-		tx.Hash(): {
-			Tx: tx,
+		preconfTx.Hash(): {
+			Tx: preconfTx,
+		},
+		preconfTxWithBlob.Hash(): {
+			Tx: preconfTxWithBlob,
 		},
 	})
 
@@ -276,7 +291,7 @@ func TestOnPayloadAttributesConstraint(t *testing.T) {
 	require.NoError(t, err)
 	time.Sleep(time.Second * 3)
 
-	require.NotNil(t, testRelay.submittedMsg)
+	require.NotNil(t, testRelay.submittedMsgWithPreconf)
 
 	expectedProposerPubkey, err := utils.HexToPubkey(testBeacon.validator.Pk.String())
 	require.NoError(t, err)
@@ -291,53 +306,53 @@ func TestOnPayloadAttributesConstraint(t *testing.T) {
 		GasUsed:              uint64(100),
 		Value:                &uint256.Int{0x0a},
 	}
-	copy(expectedMessage.BlockHash[:], hexutil.MustDecode("0x68e516c8827b589fcb749a9e672aa16b9643437459508c467f66a9ed1de66a6c")[:])
-	require.NotNil(t, testRelay.submittedMsg.Bellatrix)
-	require.Equal(t, expectedMessage, *testRelay.submittedMsg.Bellatrix.Message)
+	copy(expectedMessage.BlockHash[:], hexutil.MustDecode("0x3cce5d0f5c9a7e188e79c35168256e91bec2d98a1140f6701da6ed3c98ea9d04")[:])
+	require.NotNil(t, testRelay.submittedMsgWithPreconf.Inner.Bellatrix)
+	require.Equal(t, expectedMessage, *testRelay.submittedMsgWithPreconf.Inner.Bellatrix.Message)
 
-	// expectedExecutionPayload := bellatrix.ExecutionPayload{
-	// 	ParentHash:    [32]byte(testExecutableData.ParentHash),
-	// 	FeeRecipient:  feeRecipient,
-	// 	StateRoot:     [32]byte(testExecutableData.StateRoot),
-	// 	ReceiptsRoot:  [32]byte(testExecutableData.ReceiptsRoot),
-	// 	LogsBloom:     [256]byte{},
-	// 	PrevRandao:    [32]byte(testExecutableData.Random),
-	// 	BlockNumber:   testExecutableData.Number,
-	// 	GasLimit:      testExecutableData.GasLimit,
-	// 	GasUsed:       testExecutableData.GasUsed,
-	// 	Timestamp:     testExecutableData.Timestamp,
-	// 	ExtraData:     hexutil.MustDecode("0x0042fafc"),
-	// 	BaseFeePerGas: [32]byte{0x10},
-	// 	BlockHash:     expectedMessage.BlockHash,
-	// 	Transactions:  []bellatrix.Transaction{},
-	// }
+	expectedExecutionPayload := bellatrix.ExecutionPayload{
+		ParentHash:    [32]byte(testExecutableData.ParentHash),
+		FeeRecipient:  feeRecipient,
+		StateRoot:     [32]byte(testExecutableData.StateRoot),
+		ReceiptsRoot:  [32]byte(testExecutableData.ReceiptsRoot),
+		LogsBloom:     [256]byte{},
+		PrevRandao:    [32]byte(testExecutableData.Random),
+		BlockNumber:   testExecutableData.Number,
+		GasLimit:      testExecutableData.GasLimit,
+		GasUsed:       testExecutableData.GasUsed,
+		Timestamp:     testExecutableData.Timestamp,
+		ExtraData:     hexutil.MustDecode("0x0042fafc"),
+		BaseFeePerGas: [32]byte{0x10},
+		BlockHash:     expectedMessage.BlockHash,
+		Transactions:  []bellatrix.Transaction{preconfTxByte, preconfTxWithBlobByte},
+	}
 
-	// require.Equal(t, expectedExecutionPayload, *testRelay.submittedMsg.Bellatrix.ExecutionPayload)
+	require.Equal(t, expectedExecutionPayload, *testRelay.submittedMsgWithPreconf.Inner.Bellatrix.ExecutionPayload)
 
-	// expectedSignature, err := utils.HexToSignature("0x8d1dc346d469b0678ee72baa559315433af0966d2d05dad0de9ce60ff5e4954d4e28a85643496df279494d105bc4a771034fefcdd83d71df5f1b81c9369942b20d6d574b544a93588f6182ba8b09585eb1cf3e1b6551ccbd9e76a4db8eb579fe")
+	expectedSignature, err := utils.HexToSignature("0x97db0496dcfd04ed444b87b6fc1c9e3339a0d35f7c01825ac353812601a72e7e35ef94899a9b03f4d23102214701255805efd0f6552073791ea1c3e10003ae435952f8305f6b89e58d4442ced149d3c33a486f5a390b4b8047e6ea4176059755")
 
-	// require.NoError(t, err)
-	// require.Equal(t, expectedSignature, testRelay.submittedMsg.Bellatrix.Signature)
+	require.NoError(t, err)
+	require.Equal(t, expectedSignature, testRelay.submittedMsgWithPreconf.Inner.Bellatrix.Signature)
 
-	// require.Equal(t, uint64(25), testRelay.requestedSlot)
+	require.Equal(t, uint64(25), testRelay.requestedSlot)
 
-	// // Clear the submitted message and check that the job will be ran again and but a new message will not be submitted since the hash is the same
-	// testEthService.testBlockValue = big.NewInt(10)
+	// Clear the submitted message and check that the job will be ran again and but a new message will not be submitted since the hash is the same
+	testEthService.testBlockValue = big.NewInt(10)
 
-	// testRelay.submittedMsg = nil
-	// time.Sleep(2200 * time.Millisecond)
-	// require.Nil(t, testRelay.submittedMsg)
+	testRelay.submittedMsgWithPreconf = nil
+	time.Sleep(2200 * time.Millisecond)
+	require.Nil(t, testRelay.submittedMsgWithPreconf)
 
-	// // Change the hash, expect to get the block
-	// testExecutableData.ExtraData = hexutil.MustDecode("0x0042fafd")
-	// testExecutableData.BlockHash = common.HexToHash("0x6a259b9a148da3cc0bf139eaa89292fa9f7b136cfeddad17f7cb0ae33e0c3df9")
-	// testBlock, err = engine.ExecutableDataToBlock(*testExecutableData, nil, nil)
-	// testEthService.testBlockValue = big.NewInt(10)
-	// require.NoError(t, err)
-	// testEthService.testBlock = testBlock
+	// Change the hash, expect to get the block
+	testExecutableData.ExtraData = hexutil.MustDecode("0x0042fafd")
+	testExecutableData.BlockHash = common.HexToHash("0x38456f6f1f5e76cf83c89ebb8606ff2b700bf02a86a165316c6d7a0c4e6a8614")
+	testBlock, err = engine.ExecutableDataToBlock(*testExecutableData, preconfTxWithBlob.BlobHashes(), nil)
+	testEthService.testBlockValue = big.NewInt(10)
+	require.NoError(t, err)
+	testEthService.testBlock = testBlock
 
-	// time.Sleep(2200 * time.Millisecond)
-	// require.NotNil(t, testRelay.submittedMsg)
+	time.Sleep(2200 * time.Millisecond)
+	require.NotNil(t, testRelay.submittedMsgWithPreconf)
 }
 
 func TestSubscribeProposerConstraints(t *testing.T) {
