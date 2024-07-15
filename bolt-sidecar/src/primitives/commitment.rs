@@ -4,6 +4,8 @@ use std::str::FromStr;
 use alloy_primitives::{keccak256, Signature, B256};
 use reth_primitives::PooledTransactionsElement;
 
+use super::TransactionExt;
+
 /// Commitment requests sent by users or RPC proxies to the sidecar.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
@@ -40,10 +42,7 @@ impl InclusionRequest {
     /// Validates the transaction chain id against the provided chain id.
     /// Returns true if the chain id matches, false otherwise.
     pub fn validate_chain_id(&self, chain_id: u64) -> bool {
-        match self.tx.chain_id() {
-            Some(tx_chain_id) if tx_chain_id == chain_id => true,
-            _ => false,
-        }
+        matches!(self.tx.chain_id(), Some(tx_chain_id) if tx_chain_id == chain_id)
     }
 }
 

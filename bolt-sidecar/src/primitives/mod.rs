@@ -227,6 +227,7 @@ pub trait TransactionExt {
     fn gas_limit(&self) -> u64;
     fn value(&self) -> U256;
     fn tx_type(&self) -> TxType;
+    fn chain_id(&self) -> Option<u64>;
 }
 
 impl TransactionExt for PooledTransactionsElement {
@@ -254,6 +255,17 @@ impl TransactionExt for PooledTransactionsElement {
             PooledTransactionsElement::Eip2930 { .. } => TxType::Eip2930,
             PooledTransactionsElement::Eip1559 { .. } => TxType::Eip1559,
             PooledTransactionsElement::BlobTransaction(_) => TxType::Eip4844,
+        }
+    }
+
+    fn chain_id(&self) -> Option<u64> {
+        match self {
+            PooledTransactionsElement::Legacy { transaction, .. } => transaction.chain_id,
+            PooledTransactionsElement::Eip2930 { transaction, .. } => Some(transaction.chain_id),
+            PooledTransactionsElement::Eip1559 { transaction, .. } => Some(transaction.chain_id),
+            PooledTransactionsElement::BlobTransaction(blob_tx) => {
+                Some(blob_tx.transaction.chain_id)
+            }
         }
     }
 }
