@@ -14,7 +14,7 @@ use alloy_primitives::{Address, B256, U256, U64};
 use alloy_rpc_client::{self as alloy, Waiter};
 use alloy_rpc_types::{Block, EIP1186AccountProofResponse, FeeHistory, TransactionRequest};
 use alloy_rpc_types_trace::parity::{TraceResults, TraceType};
-use alloy_transport::TransportResult;
+use alloy_transport::{TransportErrorKind, TransportResult};
 use alloy_transport_http::Http;
 use reqwest::{Client, Url};
 
@@ -35,7 +35,17 @@ impl RpcClient {
 
     /// Get the chain ID.
     pub async fn get_chain_id(&self) -> TransportResult<u64> {
-        self.0.request("eth_chainId", ()).await
+        let chain_id: String = self.0.request("eth_chainId", ()).await?;
+        let chain_id = chain_id
+            .get(2..)
+            .ok_or(TransportErrorKind::Custom("not hex prefixed result".into()))?;
+
+        let decoded = u64::from_str_radix(chain_id, 16).map_err(|e| {
+            TransportErrorKind::Custom(
+                format!("could not decode {} into u64: {}", chain_id, e).into(),
+            )
+        })?;
+        Ok(decoded)
     }
 
     /// Get the basefee of the latest block.
