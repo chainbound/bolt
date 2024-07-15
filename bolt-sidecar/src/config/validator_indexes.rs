@@ -13,6 +13,7 @@ impl FromStr for ValidatorIndexes {
     type Err = eyre::Report;
 
     /// Parse an array of validator indexes. Accepted values:
+    /// - a single index (e.g. "1")
     /// - a comma-separated list of indexes (e.g. "1,2,3,4")
     /// - a contiguous range of indexes (e.g. "1..4")
     /// - a mix of the above (e.g. "1,2..4,6..8")
@@ -56,6 +57,9 @@ mod tests {
     fn test_parse_validator_indexes() {
         use super::ValidatorIndexes;
         use std::str::FromStr;
+
+        let indexes = ValidatorIndexes::from_str("1").unwrap();
+        assert_eq!(indexes.0, vec![1]);
 
         let indexes = ValidatorIndexes::from_str("1,2,3,4").unwrap();
         assert_eq!(indexes.0, vec![1, 2, 3, 4]);
