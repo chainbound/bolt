@@ -149,7 +149,7 @@ async fn main() -> eyre::Result<()> {
                 }
 
 
-                if let Err(e) = local_builder.build_new_local_payload(template.as_signed_transactions()).await {
+                if let Err(e) = local_builder.build_new_local_payload(&template).await {
                     tracing::error!(err = ?e, "CRITICAL: Error while building local payload at slot deadline for {slot}");
                 };
             },
