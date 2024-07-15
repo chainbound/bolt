@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/flashbotsextra"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/flashbots/go-boost-utils/bls"
@@ -567,51 +566,4 @@ func validateConstraintSubscriptionAuth(auth string, headSlot uint64) (phase0.BL
 		return zeroKey, errors.New("invalid signature")
 	}
 	return authData.PublicKey, nil
-}
-
-// createSampleBlobTransaction creates a sample blob transaction with sidecar
-func createSampleBlobTransaction() *types.Transaction {
-	// Sample values
-	chainID := uint256.NewInt(1)
-	nonce := uint64(0)
-	gasTipCap := uint256.NewInt(1000000000)  // 1 Gwei
-	gasFeeCap := uint256.NewInt(10000000000) // 10 Gwei
-	gas := uint64(21000)
-	to := common.HexToAddress("0xRecipientAddress")
-	value := uint256.NewInt(1000000000000000000) // 1 Ether
-	data := []byte{}
-	blobFeeCap := uint256.NewInt(1000000000) // 1 Gwei
-
-	// Create blobs, commitments, and proofs
-	blobs := []kzg4844.Blob{{}}
-	commitments := []kzg4844.Commitment{{}}
-	proofs := []kzg4844.Proof{{}}
-
-	// Create the BlobTxSidecar
-	sidecar := &types.BlobTxSidecar{
-		Blobs:       blobs,
-		Commitments: commitments,
-		Proofs:      proofs,
-	}
-
-	// Create the BlobTx
-	blobTx := &types.BlobTx{
-		ChainID:    chainID,
-		Nonce:      nonce,
-		GasTipCap:  gasTipCap,
-		GasFeeCap:  gasFeeCap,
-		Gas:        gas,
-		To:         to,
-		Value:      value,
-		Data:       data,
-		BlobFeeCap: blobFeeCap,
-		BlobHashes: sidecar.BlobHashes(),
-		Sidecar:    sidecar,
-	}
-
-	// Create the transaction
-	// Tx hash - 0x7ebe3533335a96c69c5f822d9e0dda9d62d229a1b17f13347b6816b5c41a836b
-	tx := types.NewTx(blobTx)
-
-	return tx
 }
