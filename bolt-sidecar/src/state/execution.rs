@@ -40,8 +40,8 @@ pub enum ValidationError {
     #[error("Too many EIP-4844 transactions in target block")]
     Eip4844Limit,
     /// The maximum commitments have been reached for the slot.
-    #[error("Max commitments reached for slot {0}")]
-    MaxCommitmentsReachedForSlot(usize),
+    #[error("Max commitments reached for slot {0}: {1}")]
+    MaxCommitmentsReachedForSlot(u64, usize),
     /// The signature is invalid.
     #[error("Signature error: {0:?}")]
     Signature(#[from] SignatureError),
@@ -162,6 +162,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         if let Some(template) = self.get_block_template(req.slot) {
             if template.transactions_len() >= self.max_commitments_per_slot.get() {
                 return Err(ValidationError::MaxCommitmentsReachedForSlot(
+                    self.slot,
                     self.max_commitments_per_slot.get(),
                 ));
             }
