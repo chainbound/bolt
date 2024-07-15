@@ -4,6 +4,8 @@ use std::str::FromStr;
 use alloy_primitives::{keccak256, Signature, B256};
 use reth_primitives::PooledTransactionsElement;
 
+use super::TransactionExt;
+
 /// Commitment requests sent by users or RPC proxies to the sidecar.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
