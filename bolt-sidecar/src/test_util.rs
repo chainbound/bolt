@@ -1,12 +1,20 @@
-use alloy_network::TransactionBuilder;
+use alloy_eips::eip2718::Encodable2718;
+use alloy_network::{EthereumWallet, TransactionBuilder};
 use alloy_node_bindings::{Anvil, AnvilInstance};
-use alloy_primitives::{Address, U256};
+use alloy_primitives::{keccak256, Address, B256, U256};
 use alloy_rpc_types::TransactionRequest;
+use alloy_signer::{
+    k256::{ecdsa::SigningKey as K256SigningKey, SecretKey as K256SecretKey},
+    Signer,
+};
+use alloy_signer_local::PrivateKeySigner;
 use blst::min_pk::SecretKey;
+use reth_primitives::TransactionSigned;
 use secp256k1::Message;
 
 use crate::{
     crypto::{ecdsa::SignableECDSA, SignableBLS},
+    primitives::{CommitmentRequest, InclusionRequest},
     Config,
 };
 
@@ -129,4 +137,37 @@ impl SignableECDSA for TestSignableData {
 
         Message::from_digest_slice(as_32.as_slice()).expect("valid message")
     }
+}
+
+/// Create a valid signed commitment request for testing purposes
+/// from the given transaction, private key of the sender, and slot.
+pub(crate) async fn create_signed_commitment_request(
+    tx: TransactionRequest,
+    sk: &K256SecretKey,
+    slot: u64,
+) -> eyre::Result<CommitmentRequest> {
+    let sk = K256SigningKey::from_slice(sk.to_bytes().as_slice())?;
+    let signer = PrivateKeySigner::from_signing_key(sk.clone());
+    let wallet = EthereumWallet::from(signer.clone());
+
+    let tx_signed = tx.build(&wallet).await?;
+    let raw_encoded = tx_signed.encoded_2718();
+    let tx_signed_reth = TransactionSigned::decode_enveloped(&mut raw_encoded.as_slice())?;
+
+    let tx_hash = tx_signed_reth.hash();
+
+    let message_digest = {
+        let mut data = Vec::new();
+        data.extend_from_slice(&slot.to_le_bytes());
+        data.extend_from_slice(tx_hash.as_slice());
+        B256::from(keccak256(data))
+    };
+
+    let signature = signer.sign_hash(&message_digest).await?;
+
+    Ok(CommitmentRequest::Inclusion(InclusionRequest {
+        tx: tx_signed_reth,
+        slot,
+        signature,
+    }))
 }

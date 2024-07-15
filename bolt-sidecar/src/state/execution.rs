@@ -27,6 +27,9 @@ pub enum ValidationError {
     /// The transaction blob is invalid.
     #[error(transparent)]
     BlobValidation(#[from] BlobTransactionValidationError),
+    /// The max basefee calculation incurred an overflow error.
+    #[error("Invalid max basefee calculation: overflow")]
+    MaxBaseFeeCalcOverflow,
     /// The transaction nonce is too low.
     #[error("Transaction nonce too low")]
     NonceTooLow,
@@ -87,7 +90,6 @@ pub struct ExecutionState<C> {
     /// These only contain the canonical account states at the head block,
     /// not the intermediate states.
     account_states: HashMap<Address, AccountState>,
-
     /// The block templates by target SLOT NUMBER.
     /// We have multiple block templates because in rare cases we might have multiple
     /// proposal duties for a single lookahead.
@@ -138,6 +140,7 @@ impl<C: StateFetcher> ExecutionState<C> {
     }
 
     /// Validates the commitment request against state (historical + intermediate).
+    ///
     /// NOTE: This function only simulates against execution state, it does not consider
     /// timing or proposer slot targets.
     ///
@@ -168,22 +171,23 @@ impl<C: StateFetcher> ExecutionState<C> {
             }
         }
 
-        let sender = req.tx.recover_signer().ok_or(ValidationError::Internal(
-            "Failed to recover signer from transaction".to_string(),
-        ))?;
+        let sender = req
+            .tx
+            .recover_signer()
+            .ok_or(ValidationError::RecoverSigner)?;
 
         tracing::debug!(%sender, target_slot = req.slot, "Trying to commit inclusion request to block template");
 
         // Check if the max_fee_per_gas would cover the maximum possible basefee.
-        let slot_diff = req.slot - self.slot;
+        let slot_diff = req.slot.saturating_sub(self.slot);
 
         // Calculate the max possible basefee given the slot diff
         let max_basefee = calculate_max_basefee(self.basefee, slot_diff)
-            .ok_or(reject_internal("Overflow calculating max basefee"))?;
+            .ok_or(ValidationError::MaxBaseFeeCalcOverflow)?;
 
         // Validate the base fee
         if !req.validate_basefee(max_basefee) {
-            return Err(ValidationError::BaseFeeTooLow(max_basefee as u128));
+            return Err(ValidationError::BaseFeeTooLow(max_basefee));
         }
 
         // If we have the account state, use it here
@@ -194,11 +198,13 @@ impl<C: StateFetcher> ExecutionState<C> {
         } else {
             tracing::debug!(address = %sender, "Unknown account state");
             // If we don't have the account state, we need to fetch it
-            let account_state = self
-                .client
-                .get_account_state(&sender, None)
-                .await
-                .map_err(|e| reject_internal(&e.to_string()))?;
+            let account_state =
+                self.client
+                    .get_account_state(&sender, None)
+                    .await
+                    .map_err(|e| {
+                        ValidationError::Internal(format!("Failed to fetch account state: {:?}", e))
+                    })?;
 
             tracing::debug!(address = %sender, "Fetched account state: {account_state:?}");
 
@@ -223,7 +229,7 @@ impl<C: StateFetcher> ExecutionState<C> {
 
             // Calculate max possible increase in blob basefee
             let max_blob_basefee = calculate_max_basefee(self.blob_basefee, slot_diff)
-                .ok_or(reject_internal("Overflow calculating max blob basefee"))?;
+                .ok_or(ValidationError::MaxBaseFeeCalcOverflow)?;
 
             if blob_transaction.transaction.max_fee_per_blob_gas < max_blob_basefee {
                 return Err(ValidationError::BlobBaseFeeTooLow(max_blob_basefee));
@@ -259,7 +265,6 @@ impl<C: StateFetcher> ExecutionState<C> {
     ) -> Result<(), TransportError> {
         self.slot = slot;
 
-        // TODO: invalidate any state that we don't need anymore (will be based on block template)
         let accounts = self.account_states.keys().collect::<Vec<_>>();
         let update = self.client.get_state_update(accounts, block_number).await?;
 
@@ -339,6 +344,47 @@ pub struct StateUpdate {
     pub block_number: u64,
 }
 
-fn reject_internal(reason: &str) -> ValidationError {
-    ValidationError::Internal(reason.to_string())
+#[cfg(test)]
+mod tests {
+    use std::num::NonZero;
+
+    use reqwest::Url;
+
+    use crate::{
+        state::{fetcher::StateFetcher, ExecutionState, StateClient, ValidationError},
+        test_util::{create_signed_commitment_request, default_test_transaction, launch_anvil},
+    };
+
+    #[tokio::test]
+    async fn test_check_commitment_validity() -> eyre::Result<()> {
+        let anvil = launch_anvil();
+        let client = StateClient::new(Url::parse(&anvil.endpoint())?);
+
+        let max_comms = NonZero::new(10).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let mut tx = default_test_transaction(*sender, None);
+
+        // Base fee too low
+        tx.gas_price = Some(0);
+        let req = create_signed_commitment_request(tx.clone(), sender_pk, slot + 1).await?;
+        let res = state.validate_commitment_request(&req).await;
+        assert!(matches!(res, Err(ValidationError::BaseFeeTooLow(_))));
+
+        // Nonce too high
+        tx.gas_price = Some(1_000_000_000);
+        tx.nonce = Some(100);
+        let req = create_signed_commitment_request(tx, sender_pk, slot + 1).await?;
+        let res = state.validate_commitment_request(&req).await;
+        assert!(matches!(res, Err(ValidationError::NonceTooHigh)));
+
+        Ok(())
+    }
 }
