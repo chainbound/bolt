@@ -36,6 +36,9 @@ pub enum ValidationError {
     /// The transaction nonce is too high.
     #[error("Transaction nonce too high")]
     NonceTooHigh,
+    /// The sender account is a smart contract and has code.
+    #[error("Account has code")]
+    AccountHasCode,
     /// The sender does not have enough balance to pay for the transaction.
     #[error("Not enough balance to pay for value + maximum fee")]
     InsufficientBalance,
@@ -198,11 +201,11 @@ impl<C: StateFetcher> ExecutionState<C> {
             }
         }
 
-        // Check if the input data size exceeds the maximum.
-        if req.tx.input_data_size() > self.constants.max_tx_input_bytes {
+        // Check if the transaction size exceeds the maximum
+        if req.tx.size() > self.constants.max_tx_input_bytes {
             return Err(ValidationError::Internal(format!(
                 "Transaction input size exceeds maximum: {} > {}",
-                req.tx.input_data_size(),
+                req.tx.size(),
                 self.constants.max_tx_input_bytes
             )));
         }

@@ -37,7 +37,10 @@ pub type Slot = u64;
 pub struct AccountState {
     /// The nonce of the account. This is the number of transactions sent from this account
     pub transaction_count: u64,
+    /// The balance of the account in wei
     pub balance: U256,
+    /// Flag to indicate if the account is a smart contract or an EOA
+    pub has_code: bool,
 }
 
 #[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
@@ -229,7 +232,7 @@ pub trait TransactionExt {
     fn tx_type(&self) -> TxType;
     fn chain_id(&self) -> Option<u64>;
     fn blob_sidecar(&self) -> Option<&BlobTransactionSidecar>;
-    fn input_data_size(&self) -> usize;
+    fn size(&self) -> usize;
 }
 
 impl TransactionExt for PooledTransactionsElement {
@@ -278,12 +281,12 @@ impl TransactionExt for PooledTransactionsElement {
         }
     }
 
-    fn input_data_size(&self) -> usize {
+    fn size(&self) -> usize {
         match self {
-            PooledTransactionsElement::Legacy { transaction, .. } => transaction.input.len(),
-            PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.input.len(),
-            PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.input.len(),
-            PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.input.len(),
+            PooledTransactionsElement::Legacy { transaction, .. } => transaction.size(),
+            PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.size(),
+            PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.size(),
+            PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.size(),
         }
     }
 }
