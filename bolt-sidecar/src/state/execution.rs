@@ -39,6 +39,15 @@ pub enum ValidationError {
     /// The sender account is a smart contract and has code.
     #[error("Account has code")]
     AccountHasCode,
+    /// The gas limit is too high.
+    #[error("Gas limit too high")]
+    GasLimitTooHigh,
+    /// The transaction input size is too high.
+    #[error("Transaction input size too high")]
+    TransactionSizeTooHigh,
+    /// Max priority fee per gas is greater than max fee per gas.
+    #[error("Max priority fee per gas is greater than max fee per gas")]
+    MaxPriorityFeePerGasTooHigh,
     /// The sender does not have enough balance to pay for the transaction.
     #[error("Not enough balance to pay for value + maximum fee")]
     InsufficientBalance,
@@ -203,20 +212,19 @@ impl<C: StateFetcher> ExecutionState<C> {
 
         // Check if the transaction size exceeds the maximum
         if req.tx.size() > self.constants.max_tx_input_bytes {
-            return Err(ValidationError::Internal(format!(
-                "Transaction input size exceeds maximum: {} > {}",
-                req.tx.size(),
-                self.constants.max_tx_input_bytes
-            )));
+            return Err(ValidationError::TransactionSizeTooHigh);
+        }
+
+        // Check if the transaction is a contract creation and the init code size exceeds the maximum
+        if req.tx.tx_kind().is_create()
+            && req.tx.input().len() > self.constants.max_init_code_byte_size
+        {
+            return Err(ValidationError::TransactionSizeTooHigh);
         }
 
         // Check if the gas limit is higher than the maximum block gas limit
         if req.tx.gas_limit() > self.constants.block_gas_limit {
-            return Err(ValidationError::Internal(format!(
-                "Transaction gas limit exceeds block gas limit: {} > {}",
-                req.tx.gas_limit(),
-                self.constants.block_gas_limit
-            )));
+            return Err(ValidationError::GasLimitTooHigh);
         }
 
         // Ensure max_priority_fee_per_gas is less than max_fee_per_gas, if any
@@ -225,9 +233,7 @@ impl<C: StateFetcher> ExecutionState<C> {
             .max_priority_fee_per_gas()
             .is_some_and(|max_priority_fee| max_priority_fee > req.tx.max_fee_per_gas())
         {
-            return Err(ValidationError::Internal(
-                "max_priority_fee_per_gas is greater than max_fee_per_gas".to_string(),
-            ));
+            return Err(ValidationError::MaxPriorityFeePerGasTooHigh);
         }
 
         let sender = req

@@ -17,7 +17,9 @@ use ethereum_consensus::{
     types::mainnet::ExecutionPayload,
     Fork,
 };
-use reth_primitives::{BlobTransactionSidecar, PooledTransactionsElement, TxType};
+use reth_primitives::{
+    BlobTransactionSidecar, Bytes, PooledTransactionsElement, TransactionKind, TxType,
+};
 use tokio::sync::{mpsc, oneshot};
 
 /// Commitment types, received by users wishing to receive preconfirmations.
@@ -230,6 +232,8 @@ pub trait TransactionExt {
     fn gas_limit(&self) -> u64;
     fn value(&self) -> U256;
     fn tx_type(&self) -> TxType;
+    fn tx_kind(&self) -> TransactionKind;
+    fn input(&self) -> &Bytes;
     fn chain_id(&self) -> Option<u64>;
     fn blob_sidecar(&self) -> Option<&BlobTransactionSidecar>;
     fn size(&self) -> usize;
@@ -260,6 +264,24 @@ impl TransactionExt for PooledTransactionsElement {
             PooledTransactionsElement::Eip2930 { .. } => TxType::Eip2930,
             PooledTransactionsElement::Eip1559 { .. } => TxType::Eip1559,
             PooledTransactionsElement::BlobTransaction(_) => TxType::Eip4844,
+        }
+    }
+
+    fn tx_kind(&self) -> TransactionKind {
+        match self {
+            PooledTransactionsElement::Legacy { transaction, .. } => transaction.to,
+            PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.to,
+            PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.to,
+            PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.to,
+        }
+    }
+
+    fn input(&self) -> &Bytes {
+        match self {
+            PooledTransactionsElement::Legacy { transaction, .. } => &transaction.input,
+            PooledTransactionsElement::Eip2930 { transaction, .. } => &transaction.input,
+            PooledTransactionsElement::Eip1559 { transaction, .. } => &transaction.input,
+            PooledTransactionsElement::BlobTransaction(blob_tx) => &blob_tx.transaction.input,
         }
     }
 
