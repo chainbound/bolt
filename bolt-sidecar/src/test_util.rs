@@ -9,7 +9,7 @@ use alloy_signer::{
 };
 use alloy_signer_local::PrivateKeySigner;
 use blst::min_pk::SecretKey;
-use reth_primitives::TransactionSigned;
+use reth_primitives::PooledTransactionsElement;
 use secp256k1::Message;
 
 use crate::{
@@ -152,9 +152,9 @@ pub(crate) async fn create_signed_commitment_request(
 
     let tx_signed = tx.build(&wallet).await?;
     let raw_encoded = tx_signed.encoded_2718();
-    let tx_signed_reth = TransactionSigned::decode_enveloped(&mut raw_encoded.as_slice())?;
+    let tx_pooled = PooledTransactionsElement::decode_enveloped(&mut raw_encoded.as_slice())?;
 
-    let tx_hash = tx_signed_reth.hash();
+    let tx_hash = tx_pooled.hash();
 
     let message_digest = {
         let mut data = Vec::new();
@@ -166,7 +166,7 @@ pub(crate) async fn create_signed_commitment_request(
     let signature = signer.sign_hash(&message_digest).await?;
 
     Ok(CommitmentRequest::Inclusion(InclusionRequest {
-        tx: tx_signed_reth,
+        tx: tx_pooled,
         slot,
         signature,
     }))
