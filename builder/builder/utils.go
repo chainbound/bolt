@@ -161,7 +161,7 @@ func CalculateMerkleMultiProofs(
 	// BOLT: generate merkle tree from payload transactions (we need raw RLP bytes for this)
 	rawTxs := make([]bellatrix.Transaction, len(payloadTransactions))
 	for i, tx := range payloadTransactions {
-		raw, err := tx.MarshalBinary()
+		raw, err := tx.WithoutBlobTxSidecar().MarshalBinary()
 		if err != nil {
 			log.Warn("[BOLT]: could not marshal transaction", "txHash", tx.Hash(), "err", err)
 			continue
@@ -174,8 +174,7 @@ func CalculateMerkleMultiProofs(
 
 	rootNode, err = bellatrixPayloadTxs.GetTree()
 	if err != nil {
-		log.Error("[BOLT]: could not get tree from transactions", "err", err)
-		return
+		return nil, nil, fmt.Errorf("could not get tree from transactions: %w", err)
 	}
 
 	// BOLT: Set the value of nodes. This is MANDATORY for the proof calculation
@@ -209,8 +208,7 @@ func CalculateMerkleMultiProofs(
 	timeStart := time.Now()
 	multiProof, err := rootNode.ProveMulti(generalizedIndexes)
 	if err != nil {
-		log.Error(fmt.Sprintf("[BOLT]: could not calculate merkle multiproof for %d preconf %s", len(constraints), err))
-		return
+		return nil, nil, fmt.Errorf("could not calculate merkle multiproof for %d preconf: %w", len(constraints), err)
 	}
 
 	timeForProofs := time.Since(timeStart)
