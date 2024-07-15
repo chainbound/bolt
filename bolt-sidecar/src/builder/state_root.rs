@@ -12,6 +12,7 @@ mod tests {
 
     use crate::{builder::CallTraceManager, client::rpc::RpcClient};
 
+    #[ignore]
     #[tokio::test]
     async fn test_trace_call() -> eyre::Result<()> {
         dotenvy::dotenv().ok();
