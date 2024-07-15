@@ -73,19 +73,16 @@ async fn main() -> eyre::Result<()> {
                 let validator_index = match consensus_state.validate_request(&request) {
                     Ok(index) => index,
                     Err(e) => {
-                        tracing::error!("Failed to validate request: {:?}", e);
+                        tracing::error!(err = ?e, "Failed to validate request");
                         let _ = response_tx.send(Err(ApiError::Custom(e.to_string())));
                         continue;
                     }
                 };
 
-                let sender = match execution_state
-                    .validate_commitment_request(&request)
-                .await
-                {
+                let sender = match execution_state.validate_commitment_request(&request).await {
                     Ok(sender) => sender,
                     Err(e) => {
-                        tracing::error!("Failed to commit request: {:?}", e);
+                        tracing::error!(err = ?e, "Failed to commit request");
                         let _ = response_tx.send(Err(ApiError::Custom(e.to_string())));
                         continue;
                     }
