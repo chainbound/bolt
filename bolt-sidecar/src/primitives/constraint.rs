@@ -95,7 +95,7 @@ pub struct Constraint {
 }
 
 impl Constraint {
-    /// Builds a constraint from an inclusion request and an optional index
+    /// Builds a constraint from a transaction, with an optional index
     pub fn from_transaction(
         transaction: PooledTransactionsElement,
         index: Option<u64>,

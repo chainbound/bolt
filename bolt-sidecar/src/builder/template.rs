@@ -28,7 +28,7 @@ pub struct BlockTemplate {
     /// The state diffs per address given the list of commitments.
     state_diff: StateDiff,
     /// The signed constraints associated to the block
-    pub constraints: Vec<SignedConstraints>,
+    pub signed_constraints_list: Vec<SignedConstraints>,
 }
 
 impl BlockTemplate {
@@ -40,7 +40,7 @@ impl BlockTemplate {
     /// Returns the cloned list of transactions from the constraints.
     #[inline]
     pub fn transactions(&self) -> Vec<PooledTransactionsElement> {
-        self.constraints
+        self.signed_constraints_list
             .iter()
             .flat_map(|sc| sc.message.constraints.iter().map(|c| c.transaction.clone()))
             .collect()
@@ -50,7 +50,7 @@ impl BlockTemplate {
     /// a local execution payload.
     #[inline]
     pub fn as_signed_transactions(&self) -> Vec<TransactionSigned> {
-        self.constraints
+        self.signed_constraints_list
             .iter()
             .flat_map(|sc| {
                 sc.message
@@ -64,7 +64,7 @@ impl BlockTemplate {
     /// Returns the length of the transactions in the block template.
     #[inline]
     pub fn transactions_len(&self) -> usize {
-        self.constraints
+        self.signed_constraints_list
             .iter()
             .fold(0, |acc, sc| acc + sc.message.constraints.len())
     }
@@ -72,7 +72,7 @@ impl BlockTemplate {
     /// Returns the blob count of the block template.
     #[inline]
     pub fn blob_count(&self) -> usize {
-        self.constraints.iter().fold(0, |mut acc, sc| {
+        self.signed_constraints_list.iter().fold(0, |mut acc, sc| {
             acc += sc.message.constraints.iter().fold(0, |acc, c| {
                 acc + c
                     .transaction
@@ -99,12 +99,12 @@ impl BlockTemplate {
                 .or_insert((1, max_cost));
         }
 
-        self.constraints.push(constraints);
+        self.signed_constraints_list.push(constraints);
     }
 
     /// Remove all signed constraints at the specified index and updates the state diff
     fn remove_constraints_at_index(&mut self, index: usize) {
-        let constraints = self.constraints.remove(index);
+        let constraints = self.signed_constraints_list.remove(index);
 
         for constraint in constraints.message.constraints.iter() {
             self.state_diff
@@ -124,7 +124,7 @@ impl BlockTemplate {
         // The pre-confirmations made by such address, and the indexes of the signed constraints
         // in which they appear
         let constraints_with_address: Vec<(usize, Vec<&Constraint>)> = self
-            .constraints
+            .signed_constraints_list
             .iter()
             .enumerate()
             .map(|(idx, c)| (idx, &c.message.constraints))
