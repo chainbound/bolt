@@ -213,17 +213,18 @@ func TestBlockWithPreconfs(t *testing.T) {
 
 	bDomain := ssz.ComputeDomain(ssz.DomainTypeAppBuilder, [4]byte{0x02, 0x0, 0x0, 0x0}, phase0.Root{})
 
-	// This is a valid non-preconf tx
-	// https://etherscan.io/tx/0x25b8aaba23575f544582e9326c30ed3808d52cb6edc123431bbcacf74c40e96c
-	testTxBytes, err := hex.DecodeString("02f8710183089bc58085031b0c4ab082565f94388c818ca8b9251b393131c08a736a67ccb19297873999b89a7354a180c080a08f75074cc97b5b3e16f227bcf7150f2c45e8144057d3f8ed569e4d2b19604fc1a011691495eadf62c47312bf8f8ef2283078f22716ff07f14d382b8b557c1faf80")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	preconfTxBytes, err := hex.DecodeString("02f8710183089be4808502e2898e638252089487b3f3c934a13c779e100a5d6e6d7ef577e86671876c64fb0212934e80c080a0756aae55edab901f50a206447f0ccf8418835d0245707deb5f7b3a24accb864ba076da473e398a4a2149881462edaf4bd824587d14633ed262b45a54ca8be49e7d")
-	require.NoError(t, err)
+	// https://etherscan.io/tx/0x9d48b4a021898a605b7ae49bf93ad88fa6bd7050e9448f12dde064c10f22fe9c
+	// 0x02f87601836384348477359400850517683ba883019a28943678fce4028b6745eb04fa010d9c8e4b36d6288c872b0f1366ad800080c080a0b6b7aba1954160d081b2c8612e039518b9c46cd7df838b405a03f927ad196158a071d2fb6813e5b5184def6bd90fb5f29e0c52671dea433a7decb289560a58416e
+	preconfTxByte, _ := hex.DecodeString("02f87601836384348477359400850517683ba883019a28943678fce4028b6745eb04fa010d9c8e4b36d6288c872b0f1366ad800080c080a0b6b7aba1954160d081b2c8612e039518b9c46cd7df838b405a03f927ad196158a071d2fb6813e5b5184def6bd90fb5f29e0c52671dea433a7decb289560a58416e")
 	preconfTx := new(types.Transaction)
-	err = preconfTx.UnmarshalBinary(preconfTxBytes)
+	err = preconfTx.UnmarshalBinary(preconfTxByte)
+	require.NoError(t, err)
+
+	// https://etherscan.io/tx/0x15bd881daa1408b33f67fa4bdeb8acfb0a2289d9b4c6f81eef9bb2bb2e52e780 - Blob Tx
+	// 0x03f9029c01830299f184b2d05e008507aef40a00832dc6c09468d30f47f19c07bccef4ac7fae2dc12fca3e0dc980b90204ef16e845000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001e0000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000633b68f5d8d3a86593ebb815b4663bcbe0302e31382e302d64657600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004109de8da2a97e37f2e6dc9f7d50a408f9344d7aa1a925ae53daf7fbef43491a571960d76c0cb926190a9da10df7209fb1ba93cd98b1565a3a2368749d505f90c81c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c0843b9aca00e1a00141e3a338e30c49ed0501e315bcc45e4edefebed43ab1368a1505461d9cf64901a01e8511e06b17683d89eb57b9869b96b8b611f969f7f56cbc0adc2df7c88a2a07a00910deacf91bba0d74e368d285d311dc5884e7cfe219d85aea5741b2b6e3a2fe
+	preconfTxWithBlobByte, _ := hex.DecodeString("03f9029c01830299f184b2d05e008507aef40a00832dc6c09468d30f47f19c07bccef4ac7fae2dc12fca3e0dc980b90204ef16e845000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000001e0000000000000000000000000000000000000000000000000000000000000018000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000633b68f5d8d3a86593ebb815b4663bcbe0302e31382e302d64657600000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c000000000000000000000000000000000000000000000000000000000000000e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004109de8da2a97e37f2e6dc9f7d50a408f9344d7aa1a925ae53daf7fbef43491a571960d76c0cb926190a9da10df7209fb1ba93cd98b1565a3a2368749d505f90c81c000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000c0843b9aca00e1a00141e3a338e30c49ed0501e315bcc45e4edefebed43ab1368a1505461d9cf64901a01e8511e06b17683d89eb57b9869b96b8b611f969f7f56cbc0adc2df7c88a2a07a00910deacf91bba0d74e368d285d311dc5884e7cfe219d85aea5741b2b6e3a2fe")
+	preconfTxWithBlob := new(types.Transaction)
+	err = preconfTxWithBlob.UnmarshalBinary(preconfTxWithBlobByte)
 	require.NoError(t, err)
 
 	testExecutableData := &engine.ExecutableData{
@@ -240,13 +241,11 @@ func TestBlockWithPreconfs(t *testing.T) {
 
 		BaseFeePerGas: big.NewInt(16),
 
-		BlockHash: common.HexToHash("e7ec4675c311a8bf7e96d3ace8bdf909bec2b6605ab5dc444fc6d0ebe75a5859"),
-		// We need to add the preconf here already because test block building doesn't follow
-		// the usual flow unfortunately
-		Transactions: [][]byte{preconfTxBytes, testTxBytes},
+		BlockHash:    common.HexToHash("3cce5d0f5c9a7e188e79c35168256e91bec2d98a1140f6701da6ed3c98ea9d04"),
+		Transactions: [][]byte{preconfTxByte, preconfTxWithBlobByte},
 	}
 
-	testBlock, err := engine.ExecutableDataToBlock(*testExecutableData, nil, nil)
+	testBlock, err := engine.ExecutableDataToBlock(*testExecutableData, preconfTxWithBlob.BlobHashes(), nil)
 	require.NoError(t, err)
 
 	testPayloadAttributes := &types.BuilderPayloadAttributes{
@@ -257,32 +256,35 @@ func TestBlockWithPreconfs(t *testing.T) {
 		Slot:                  uint64(25),
 	}
 
-	testEthService := &testEthereumService{
-		synced:             true,
-		testExecutableData: testExecutableData,
-		testBlock:          testBlock,
-		testBlockValue:     big.NewInt(10),
-		testPreconfs:       []*types.Transaction{preconfTx},
-	}
-
+	testEthService := &testEthereumService{synced: true, testExecutableData: testExecutableData, testBlock: testBlock, testBlockValue: big.NewInt(10)}
 	builderArgs := BuilderArgs{
-		sk:                           sk,
-		ds:                           flashbotsextra.NilDbService{},
-		relay:                        &testRelay,
-		builderSigningDomain:         bDomain,
-		eth:                          testEthService,
-		dryRun:                       false,
-		ignoreLatePayloadAttributes:  false,
-		validator:                    nil,
-		beaconClient:                 &testBeacon,
-		limiter:                      nil,
-		blockConsumer:                flashbotsextra.NilDbService{},
-		builderBlockResubmitInterval: 500 * time.Millisecond,
+		sk:                          sk,
+		ds:                          flashbotsextra.NilDbService{},
+		relay:                       &testRelay,
+		builderSigningDomain:        bDomain,
+		eth:                         testEthService,
+		dryRun:                      false,
+		ignoreLatePayloadAttributes: false,
+		validator:                   nil,
+		beaconClient:                &testBeacon,
+		limiter:                     nil,
+		blockConsumer:               flashbotsextra.NilDbService{},
 	}
 	builder, err := NewBuilder(builderArgs)
 	require.NoError(t, err)
+
 	builder.Start()
 	defer builder.Stop()
+
+	// Add the transaction to the cache directly
+	builder.constraintsCache.Put(25, map[common.Hash]*types.ConstraintDecoded{
+		preconfTx.Hash(): {
+			Tx: preconfTx,
+		},
+		preconfTxWithBlob.Hash(): {
+			Tx: preconfTxWithBlob,
+		},
+	})
 
 	err = builder.OnPayloadAttribute(testPayloadAttributes)
 	require.NoError(t, err)
@@ -303,17 +305,10 @@ func TestBlockWithPreconfs(t *testing.T) {
 		GasUsed:              uint64(100),
 		Value:                &uint256.Int{0x0a},
 	}
-	copy(expectedMessage.BlockHash[:], hexutil.MustDecode("0xe7ec4675c311a8bf7e96d3ace8bdf909bec2b6605ab5dc444fc6d0ebe75a5859")[:])
-	require.NotNil(t, testRelay.submittedMsgWithPreconf)
+	copy(expectedMessage.BlockHash[:], hexutil.MustDecode("0x3cce5d0f5c9a7e188e79c35168256e91bec2d98a1140f6701da6ed3c98ea9d04")[:])
+	require.NotNil(t, testRelay.submittedMsgWithPreconf.Inner.Bellatrix)
 	require.Equal(t, expectedMessage, *testRelay.submittedMsgWithPreconf.Inner.Bellatrix.Message)
 
-	t.Log("Message received from relay", testRelay.submittedMsgWithPreconf)
-
-	expectedTxs := make([]bellatrix.Transaction, 0, 2)
-	expectedTxs = append(expectedTxs, preconfTxBytes, testTxBytes)
-
-	// In this payload we expect the preconf as first (Top of Block) and then
-	// other transactions
 	expectedExecutionPayload := bellatrix.ExecutionPayload{
 		ParentHash:    [32]byte(testExecutableData.ParentHash),
 		FeeRecipient:  feeRecipient,
@@ -328,12 +323,12 @@ func TestBlockWithPreconfs(t *testing.T) {
 		ExtraData:     hexutil.MustDecode("0x0042fafc"),
 		BaseFeePerGas: [32]byte{0x10},
 		BlockHash:     expectedMessage.BlockHash,
-		Transactions:  expectedTxs,
+		Transactions:  []bellatrix.Transaction{preconfTxByte, preconfTxWithBlobByte},
 	}
 
 	require.Equal(t, expectedExecutionPayload, *testRelay.submittedMsgWithPreconf.Inner.Bellatrix.ExecutionPayload)
 
-	expectedSignature, err := utils.HexToSignature("0x920e7e48983bf94b172c2ae847beb00a402440b4c70ba106065a0be2de7fca62aa52e3b04feeb7c571241bb427fe23100ecb2e10dd0bf1442d9e98b3e025b0317eb95da3c6d8447f2a6b3a8f425a01c444d1e2b49ddde56e1b1123454499b5d2")
+	expectedSignature, err := utils.HexToSignature("0x97db0496dcfd04ed444b87b6fc1c9e3339a0d35f7c01825ac353812601a72e7e35ef94899a9b03f4d23102214701255805efd0f6552073791ea1c3e10003ae435952f8305f6b89e58d4442ced149d3c33a486f5a390b4b8047e6ea4176059755")
 
 	require.NoError(t, err)
 	require.Equal(t, expectedSignature, testRelay.submittedMsgWithPreconf.Inner.Bellatrix.Signature)
@@ -349,8 +344,8 @@ func TestBlockWithPreconfs(t *testing.T) {
 
 	// Change the hash, expect to get the block
 	testExecutableData.ExtraData = hexutil.MustDecode("0x0042fafd")
-	testExecutableData.BlockHash = common.HexToHash("0x92faeefd45e6192dc9265b1f7fb426cd5340e4670b93853801820cd444efb660")
-	testBlock, err = engine.ExecutableDataToBlock(*testExecutableData, nil, nil)
+	testExecutableData.BlockHash = common.HexToHash("0x38456f6f1f5e76cf83c89ebb8606ff2b700bf02a86a165316c6d7a0c4e6a8614")
+	testBlock, err = engine.ExecutableDataToBlock(*testExecutableData, preconfTxWithBlob.BlobHashes(), nil)
 	testEthService.testBlockValue = big.NewInt(10)
 	require.NoError(t, err)
 	testEthService.testBlock = testBlock
@@ -511,12 +506,14 @@ func sseConstraintsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// generateMockConstraintsForSlot generates a list of constraints for a given slot
 func generateMockConstraintsForSlot(slot uint64) common.SignedConstraintsList {
 	rawTx := new(common.HexBytes)
 	err := rawTx.UnmarshalJSON([]byte("\"0x02f876018305da308401312d0085041f1196d2825208940c598786c88883ff5e4f461750fad64d3fae54268804b7ec32d7a2000080c080a0086f02eacec72820be3b117e1edd5bd7ed8956964b28b2d903d2cba53dd13560a06d61ec9ccce6acb31bf21878b9a844e7fdac860c5b7d684f7eb5f38a5945357c\""))
 	if err != nil {
 		fmt.Println("Failed to unmarshal rawTx: ", err)
 	}
+
 	return common.SignedConstraintsList{
 		&common.SignedConstraints{
 			Message: common.ConstraintMessage{

@@ -466,7 +466,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 		timeForProofs := time.Since(timeStart)
 
 		if err != nil {
-			log.Error("could not calculate merkle multiproofs", "err", err)
+			log.Error("[BOLT]: could not calculate merkle multiproofs", "err", err)
 			return err
 		}
 
