@@ -73,20 +73,16 @@ mod tests {
     use alloy_consensus::constants::ETH_TO_WEI;
     use alloy_eips::eip2718::Encodable2718;
     use alloy_network::EthereumWallet;
-    use alloy_primitives::{hex, uint, Uint};
+    use alloy_primitives::{uint, Uint};
     use alloy_provider::{network::TransactionBuilder, Provider, ProviderBuilder};
-    use alloy_signer::SignerSync;
     use alloy_signer_local::PrivateKeySigner;
     use execution::{ExecutionState, ValidationError};
-    use fetcher::StateClient;
-    use reqwest::Url;
-    use reth_primitives::PooledTransactionsElement;
-    use tracing_subscriber::fmt;
+    use fetcher::{StateClient, StateFetcher};
 
     use crate::{
         crypto::{bls::Signer, SignableBLS, SignerBLS},
-        primitives::{CommitmentRequest, ConstraintsMessage, InclusionRequest, SignedConstraints},
-        test_util::{default_test_transaction, launch_anvil},
+        primitives::{ConstraintsMessage, SignedConstraints},
+        test_util::{create_signed_commitment_request, default_test_transaction, launch_anvil},
     };
 
     use super::*;
@@ -107,208 +103,161 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_valid_inclusion_request() {
-        let _ = fmt::try_init();
+    async fn test_valid_inclusion_request() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
 
-        // let mut state = State::new(get_client()).await.unwrap();
         let anvil = launch_anvil();
-        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
+        let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client, NonZero::new(1024).expect("valid non-zero"))
-            .await
-            .unwrap();
+        let max_comms = NonZero::new(10).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
 
-        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
 
-        let sender = anvil.addresses()[0];
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
 
-        let tx = default_test_transaction(sender, None);
+        let tx = default_test_transaction(*sender, None);
 
-        let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
-
-        let signer: EthereumWallet = wallet.into();
-        let signed = tx.build(&signer).await.unwrap();
-
-        // Trick to parse into the TransactionSigned type
-        let tx_signed_bytes = signed.encoded_2718();
-        let tx_signed =
-            PooledTransactionsElement::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
-
-        let request = CommitmentRequest::Inclusion(InclusionRequest {
-            slot: 10,
-            tx: tx_signed,
-            signature: sig,
-        });
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
         assert!(state.validate_commitment_request(&request).await.is_ok());
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_invalid_inclusion_request_nonce() {
-        let _ = fmt::try_init();
+    async fn test_invalid_inclusion_request_nonce() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
 
         let anvil = launch_anvil();
-        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
+        let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client, NonZero::new(1024).expect("valid non-zero"))
-            .await
-            .unwrap();
+        let max_comms = NonZero::new(10).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
 
-        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
 
-        let sender = anvil.addresses()[0];
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
 
-        let tx = default_test_transaction(sender, Some(1));
+        // Create a transaction with a nonce that is too high
+        let tx = default_test_transaction(*sender, Some(1));
 
-        let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
-
-        let signer: EthereumWallet = wallet.into();
-        let signed = tx.build(&signer).await.unwrap();
-
-        // Trick to parse into the TransactionSigned type
-        let tx_signed_bytes = signed.encoded_2718();
-        let tx_signed =
-            PooledTransactionsElement::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
-
-        let request = CommitmentRequest::Inclusion(InclusionRequest {
-            slot: 10,
-            tx: tx_signed,
-            signature: sig,
-        });
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
         assert!(matches!(
             state.validate_commitment_request(&request).await,
             Err(ValidationError::NonceTooHigh)
         ));
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_invalid_inclusion_request_balance() {
-        let _ = fmt::try_init();
+    async fn test_invalid_inclusion_request_balance() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
 
         let anvil = launch_anvil();
-        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
+        let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client, NonZero::new(1024).expect("valid non-zero"))
-            .await
-            .unwrap();
+        let max_comms = NonZero::new(10).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
 
-        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
 
-        let sender = anvil.addresses()[0];
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
 
-        let tx = default_test_transaction(sender, None)
+        // Create a transaction with a value that is too high
+        let tx = default_test_transaction(*sender, None)
             .with_value(uint!(11_000_U256 * Uint::from(ETH_TO_WEI)));
 
-        let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
-
-        let signer: EthereumWallet = wallet.into();
-        let signed = tx.build(&signer).await.unwrap();
-
-        // Trick to parse into the TransactionSigned type
-        let tx_signed_bytes = signed.encoded_2718();
-        let tx_signed =
-            PooledTransactionsElement::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
-
-        let request = CommitmentRequest::Inclusion(InclusionRequest {
-            slot: 10,
-            tx: tx_signed,
-            signature: sig,
-        });
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
         assert!(matches!(
             state.validate_commitment_request(&request).await,
             Err(ValidationError::InsufficientBalance)
         ));
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_invalid_inclusion_request_basefee() {
-        let _ = fmt::try_init();
+    async fn test_invalid_inclusion_request_basefee() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
 
         let anvil = launch_anvil();
-        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
+        let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client, NonZero::new(1024).expect("valid non-zero"))
-            .await
-            .unwrap();
+        let max_comms = NonZero::new(10).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
 
         let basefee = state.basefee();
 
-        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
 
-        let sender = anvil.addresses()[0];
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
 
-        let tx = default_test_transaction(sender, None).with_max_fee_per_gas(basefee - 1);
+        // Create a transaction with a basefee that is too low
+        let tx = default_test_transaction(*sender, None).with_max_fee_per_gas(basefee - 1);
 
-        let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
-
-        let signer: EthereumWallet = wallet.into();
-        let signed = tx.build(&signer).await.unwrap();
-
-        // Trick to parse into the TransactionSigned type
-        let tx_signed_bytes = signed.encoded_2718();
-        let tx_signed =
-            PooledTransactionsElement::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
-
-        let request = CommitmentRequest::Inclusion(InclusionRequest {
-            slot: 10,
-            tx: tx_signed,
-            signature: sig,
-        });
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
         assert!(matches!(
             state.validate_commitment_request(&request).await,
             Err(ValidationError::BaseFeeTooLow(_))
         ));
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_invalidate_inclusion_request() {
-        let _ = fmt::try_init();
-
-        let target_slot = 10;
+    async fn test_invalidate_inclusion_request() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
 
         let anvil = launch_anvil();
-        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
+        let client = StateClient::new(anvil.endpoint_url());
+        let provider = ProviderBuilder::new().on_http(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client, NonZero::new(1024).expect("valid non-zero"))
-            .await
-            .unwrap();
+        let max_comms = NonZero::new(10).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
 
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let tx = default_test_transaction(*sender, None);
+
+        // build the signed transaction for submission later
         let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
-
-        let sender = anvil.addresses()[0];
-
-        let tx = default_test_transaction(sender, None);
-
-        let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
-
         let signer: EthereumWallet = wallet.into();
-        let signed = tx.build(&signer).await.unwrap();
+        let signed = tx.clone().build(&signer).await?;
 
-        let bls_signer = Signer::random();
-
-        // Trick to parse into the TransactionSigned type
-        let tx_signed_bytes = signed.encoded_2718();
-        let tx_signed =
-            PooledTransactionsElement::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
-
-        let inclusion_request = InclusionRequest {
-            slot: target_slot,
-            tx: tx_signed,
-            signature: sig,
-        };
-
-        let request = CommitmentRequest::Inclusion(inclusion_request.clone());
+        let target_slot = 10;
+        let request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
+        let inclusion_request = request.as_inclusion_request().unwrap().clone();
 
         assert!(state.validate_commitment_request(&request).await.is_ok());
 
-        let message = ConstraintsMessage::build(0, inclusion_request, sender);
+        let bls_signer = Signer::random();
+        let message = ConstraintsMessage::build(0, inclusion_request, *sender);
         let signature = bls_signer.sign(&message.digest()).unwrap().to_string();
         let signed_constraints = SignedConstraints { message, signature };
 
-        state.add_constraint(target_slot, signed_constraints.clone());
+        state.add_constraint(target_slot, signed_constraints);
 
         assert!(
             state
@@ -319,76 +268,60 @@ mod tests {
                 == 1
         );
 
-        let provider = ProviderBuilder::new().on_http(anvil.endpoint_url());
-
         let notif = provider
             .send_raw_transaction(&signed.encoded_2718())
-            .await
-            .unwrap();
+            .await?;
 
         // Wait for confirmation
-        let receipt = notif.get_receipt().await.unwrap();
+        let receipt = notif.get_receipt().await?;
 
         // Update the head, which should invalidate the transaction due to a nonce conflict
         state
             .update_head(receipt.block_number, receipt.block_number.unwrap())
-            .await
-            .unwrap();
+            .await?;
 
         let transactions_len = state
             .block_templates()
             .get(&target_slot)
             .unwrap()
             .transactions_len();
+
         assert!(transactions_len == 0);
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_invalidate_stale_template() {
-        let _ = fmt::try_init();
-
-        let target_slot = 10;
+    async fn test_invalidate_stale_template() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
 
         let anvil = launch_anvil();
-        let client = StateClient::new(Url::parse(&anvil.endpoint()).unwrap());
+        let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client, NonZero::new(1024).expect("valid non-zero"))
-            .await
-            .unwrap();
+        let max_comms = NonZero::new(10).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
 
-        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
 
-        let sender = anvil.addresses()[0];
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
 
-        let tx = default_test_transaction(sender, None);
+        let tx = default_test_transaction(*sender, None);
 
-        let sig = wallet.sign_message_sync(&hex!("abcd")).unwrap();
-
-        let signer: EthereumWallet = wallet.into();
-        let signed = tx.build(&signer).await.unwrap();
-
-        let bls_signer = Signer::random();
-
-        // Trick to parse into the TransactionSigned type
-        let tx_signed_bytes = signed.encoded_2718();
-        let tx_signed =
-            PooledTransactionsElement::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
-
-        let inclusion_request = InclusionRequest {
-            slot: target_slot,
-            tx: tx_signed,
-            signature: sig,
-        };
-
-        let request = CommitmentRequest::Inclusion(inclusion_request.clone());
+        let target_slot = 10;
+        let request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
+        let inclusion_request = request.as_inclusion_request().unwrap().clone();
 
         assert!(state.validate_commitment_request(&request).await.is_ok());
 
-        let message = ConstraintsMessage::build(0, inclusion_request, sender);
+        let bls_signer = Signer::random();
+        let message = ConstraintsMessage::build(0, inclusion_request, *sender);
         let signature = bls_signer.sign(&message.digest()).unwrap().to_string();
         let signed_constraints = SignedConstraints { message, signature };
 
-        state.add_constraint(target_slot, signed_constraints.clone());
+        state.add_constraint(target_slot, signed_constraints);
 
         assert!(
             state
@@ -399,9 +332,12 @@ mod tests {
                 == 1
         );
 
-        // Update the head, which should invalidate the transaction due to a nonce conflict
-        state.update_head(None, target_slot).await.unwrap();
+        // fast-forward the head to the target slot, which should invalidate the entire template
+        // because it's now stale
+        state.update_head(None, target_slot).await?;
 
         assert!(state.block_templates().get(&target_slot).is_none());
+
+        Ok(())
     }
 }
