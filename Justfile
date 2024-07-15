@@ -109,19 +109,19 @@ build-images:
 
 # build the docker image for the bolt builder
 _build-builder:
-	cd builder && docker buildx build -t ghcr.io/chainbound/bolt-builder:0.1.0 .
+	cd builder && docker buildx build -t ghcr.io/chainbound/bolt-builder:0.1.0 . --load
 
 # build the docker image for the bolt relay
 _build-relay:
-	cd mev-boost-relay && docker buildx build -t ghcr.io/chainbound/bolt-relay:0.1.0 .
+	cd mev-boost-relay && docker buildx build -t ghcr.io/chainbound/bolt-relay:0.1.0 . --load
 
 # build the docker image for the bolt sidecar
 _build-sidecar:
-	cd bolt-sidecar && docker buildx build -t ghcr.io/chainbound/bolt-sidecar:0.1.0 .
+	cd bolt-sidecar && docker buildx build -t ghcr.io/chainbound/bolt-sidecar:0.1.0 . --load
 
 # build the docker image for the bolt mev-boost sidecar
 _build-mevboost:
-	cd mev-boost && docker buildx build -t ghcr.io/chainbound/bolt-mev-boost:0.1.0 .
+	cd mev-boost && docker buildx build -t ghcr.io/chainbound/bolt-mev-boost:0.1.0 . --load
 
 # push all the docker images to the private github container registry
 _push-images:
