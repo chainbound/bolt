@@ -102,12 +102,11 @@ async fn main() -> eyre::Result<()> {
                 // TODO: review all this `clone` usage
 
                 // parse the request into constraints and sign them with the sidecar signer
-                let message = ConstraintsMessage::build(validator_index, request.slot, request.clone(), sender);
+                let message = ConstraintsMessage::build(validator_index, request.clone(), sender);
                 let signature = signer.sign(&message.digest())?.to_string();
                 let signed_constraints = SignedConstraints { message, signature };
 
                 execution_state.add_constraint(request.slot, signed_constraints.clone());
-
 
                 let res = serde_json::to_value(signed_constraints).map_err(Into::into);
                 let _ = response_tx.send(res).ok();

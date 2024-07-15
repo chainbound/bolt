@@ -55,7 +55,10 @@ where
     PooledTransactionsElement::decode_enveloped(&mut data.as_slice()).map_err(de::Error::custom)
 }
 
-fn serialize_tx<S>(tx: &PooledTransactionsElement, serializer: S) -> Result<S::Ok, S::Error>
+pub(crate) fn serialize_tx<S>(
+    tx: &PooledTransactionsElement,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
