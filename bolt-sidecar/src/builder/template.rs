@@ -121,7 +121,7 @@ impl BlockTemplate {
     pub fn retain(&mut self, address: Address, state: AccountState) {
         let mut indexes: Vec<usize> = Vec::new();
 
-        // The pre-confirmations made by such address, and the indexes of the signed constraints
+        // The preconfirmations made by such address, and the indexes of the signed constraints
         // in which they appear
         let constraints_with_address: Vec<(usize, Vec<&Constraint>)> = self
             .signed_constraints_list
@@ -132,7 +132,7 @@ impl BlockTemplate {
             .map(|(idx, c)| (idx, c.iter().filter(|c| c.sender == address).collect()))
             .collect();
 
-        // For every pre-confirmation, gather the max total balance cost,
+        // For every preconfirmation, gather the max total balance cost,
         // and find the one with the lowest nonce
         let (max_total_cost, min_nonce) = constraints_with_address
             .iter()
