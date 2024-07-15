@@ -7,11 +7,15 @@
 use std::collections::HashMap;
 
 use alloy_primitives::{Address, U256};
+use ethereum_consensus::{
+    crypto::{KzgCommitment, KzgProof},
+    deneb::mainnet::{Blob, BlobsBundle},
+};
 use reth_primitives::{PooledTransactionsElement, TransactionSigned};
 
 use crate::{
     common::max_transaction_cost,
-    primitives::{constraint::Constraint, AccountState, SignedConstraints},
+    primitives::{constraint::Constraint, AccountState, SignedConstraints, TransactionExt},
 };
 
 /// A block template that serves as a fallback block, but is also used
@@ -59,6 +63,44 @@ impl BlockTemplate {
                     .map(|c| c.transaction.clone().into_transaction())
             })
             .collect()
+    }
+
+    /// Converts the list of signed constraints into a list of all blobs in all transactions
+    /// in the constraints. Use this when building a local execution payload.
+    #[inline]
+    pub fn as_blobs_bundle(&self) -> BlobsBundle {
+        let (commitments, proofs, blobs) = self
+            .signed_constraints_list
+            .iter()
+            .flat_map(|sc| sc.message.constraints.iter())
+            .filter_map(|c| c.transaction.blob_sidecar())
+            .fold(
+                (Vec::new(), Vec::new(), Vec::new()),
+                |(mut commitments, mut proofs, mut blobs), bs| {
+                    commitments.extend(
+                        bs.commitments
+                            .iter()
+                            .map(|c| KzgCommitment::try_from(c.as_slice()).unwrap()),
+                    );
+                    proofs.extend(
+                        bs.proofs
+                            .iter()
+                            .map(|p| KzgProof::try_from(p.as_slice()).unwrap()),
+                    );
+                    blobs.extend(
+                        bs.blobs
+                            .iter()
+                            .map(|b| Blob::try_from(b.as_slice()).unwrap()),
+                    );
+                    (commitments, proofs, blobs)
+                },
+            );
+
+        BlobsBundle {
+            commitments,
+            proofs,
+            blobs,
+        }
     }
 
     /// Returns the length of the transactions in the block template.
