@@ -59,6 +59,11 @@ pub fn validate_transaction(
         return Err(ValidationError::InsufficientBalance);
     }
 
+    // Check if the account has code (i.e. is a smart contract)
+    if account_state.has_code {
+        return Err(ValidationError::AccountHasCode);
+    }
+
     Ok(())
 }
 
