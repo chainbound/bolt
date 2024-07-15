@@ -229,6 +229,7 @@ pub trait TransactionExt {
     fn tx_type(&self) -> TxType;
     fn chain_id(&self) -> Option<u64>;
     fn blob_sidecar(&self) -> Option<&BlobTransactionSidecar>;
+    fn input_data_size(&self) -> usize;
 }
 
 impl TransactionExt for PooledTransactionsElement {
@@ -274,6 +275,15 @@ impl TransactionExt for PooledTransactionsElement {
         match self {
             PooledTransactionsElement::BlobTransaction(blob_tx) => Some(&blob_tx.sidecar),
             _ => None,
+        }
+    }
+
+    fn input_data_size(&self) -> usize {
+        match self {
+            PooledTransactionsElement::Legacy { transaction, .. } => transaction.input.len(),
+            PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.input.len(),
+            PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.input.len(),
+            PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.input.len(),
         }
     }
 }

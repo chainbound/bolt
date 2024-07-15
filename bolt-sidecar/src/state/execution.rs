@@ -10,7 +10,7 @@ use thiserror::Error;
 use crate::{
     builder::BlockTemplate,
     common::{calculate_max_basefee, validate_transaction},
-    primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot},
+    primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot, TransactionExt},
 };
 
 use super::fetcher::StateFetcher;
@@ -102,6 +102,27 @@ pub struct ExecutionState<C> {
     kzg_settings: EnvKzgSettings,
     /// The state fetcher client.
     client: C,
+    /// Constant values used for validation
+    constants: Constants,
+}
+
+/// Constants used for validation.
+#[derive(Debug)]
+pub struct Constants {
+    block_gas_limit: u64,
+    max_tx_input_bytes: usize,
+    #[allow(unused)]
+    max_init_code_byte_size: usize,
+}
+
+impl Default for Constants {
+    fn default() -> Self {
+        Self {
+            block_gas_limit: 30_000_000,
+            max_tx_input_bytes: 4 * 32 * 1024, // 128kb
+            max_init_code_byte_size: 2 * 24576,
+        }
+    }
 }
 
 impl<C: StateFetcher> ExecutionState<C> {
@@ -111,21 +132,27 @@ impl<C: StateFetcher> ExecutionState<C> {
         client: C,
         max_commitments_per_slot: NonZero<usize>,
     ) -> Result<Self, TransportError> {
-        let (basefee, blob_basefee) =
-            tokio::try_join!(client.get_basefee(None), client.get_blob_basefee(None))?;
+        let (basefee, blob_basefee, block_number, chain_id) = tokio::try_join!(
+            client.get_basefee(None),
+            client.get_blob_basefee(None),
+            client.get_head(),
+            client.get_chain_id()
+        )?;
 
         Ok(Self {
             basefee,
             blob_basefee,
-            block_number: client.get_head().await?,
+            block_number,
+            chain_id,
+            max_commitments_per_slot,
+            client,
             slot: 0,
             account_states: HashMap::new(),
             block_templates: HashMap::new(),
-            chain_id: client.get_chain_id().await?,
             // Load the default KZG settings
             kzg_settings: EnvKzgSettings::default(),
-            max_commitments_per_slot,
-            client,
+            // Load the default constants
+            constants: Constants::default(),
         })
     }
 
@@ -169,6 +196,35 @@ impl<C: StateFetcher> ExecutionState<C> {
                     self.max_commitments_per_slot.get(),
                 ));
             }
+        }
+
+        // Check if the input data size exceeds the maximum.
+        if req.tx.input_data_size() > self.constants.max_tx_input_bytes {
+            return Err(ValidationError::Internal(format!(
+                "Transaction input size exceeds maximum: {} > {}",
+                req.tx.input_data_size(),
+                self.constants.max_tx_input_bytes
+            )));
+        }
+
+        // Check if the gas limit is higher than the maximum block gas limit
+        if req.tx.gas_limit() > self.constants.block_gas_limit {
+            return Err(ValidationError::Internal(format!(
+                "Transaction gas limit exceeds block gas limit: {} > {}",
+                req.tx.gas_limit(),
+                self.constants.block_gas_limit
+            )));
+        }
+
+        // Ensure max_priority_fee_per_gas is less than max_fee_per_gas, if any
+        if req
+            .tx
+            .max_priority_fee_per_gas()
+            .is_some_and(|max_priority_fee| max_priority_fee > req.tx.max_fee_per_gas())
+        {
+            return Err(ValidationError::Internal(
+                "max_priority_fee_per_gas is greater than max_fee_per_gas".to_string(),
+            ));
         }
 
         let sender = req
