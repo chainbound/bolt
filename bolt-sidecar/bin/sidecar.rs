@@ -131,6 +131,8 @@ async fn main() -> eyre::Result<()> {
                     continue;
                 };
 
+                tracing::trace!(?template.signed_constraints_list, "Submitting constraints to MEV-Boost");
+
                 // TODO: fix retry logic, and move this to separate task
                 let max_retries = 5;
                 let mut i = 0;
