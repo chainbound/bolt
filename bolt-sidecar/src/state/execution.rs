@@ -114,19 +114,19 @@ pub struct ExecutionState<C> {
     kzg_settings: EnvKzgSettings,
     /// The state fetcher client.
     client: C,
-    /// Constant values used for validation
-    constants: Constants,
+    /// Other values used for validation
+    validation_params: ValidationParams,
 }
 
-/// Constants used for validation.
+/// Other values used for validation.
 #[derive(Debug)]
-pub struct Constants {
+pub struct ValidationParams {
     block_gas_limit: u64,
     max_tx_input_bytes: usize,
     max_init_code_byte_size: usize,
 }
 
-impl Default for Constants {
+impl Default for ValidationParams {
     fn default() -> Self {
         Self {
             block_gas_limit: 30_000_000,
@@ -162,8 +162,8 @@ impl<C: StateFetcher> ExecutionState<C> {
             block_templates: HashMap::new(),
             // Load the default KZG settings
             kzg_settings: EnvKzgSettings::default(),
-            // Load the default constants
-            constants: Constants::default(),
+            // TODO: add a way to configure these values from CLI
+            validation_params: ValidationParams::default(),
         })
     }
 
@@ -210,19 +210,19 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
 
         // Check if the transaction size exceeds the maximum
-        if req.tx.size() > self.constants.max_tx_input_bytes {
+        if req.tx.size() > self.validation_params.max_tx_input_bytes {
             return Err(ValidationError::TransactionSizeTooHigh);
         }
 
         // Check if the transaction is a contract creation and the init code size exceeds the maximum
         if req.tx.tx_kind().is_create()
-            && req.tx.input().len() > self.constants.max_init_code_byte_size
+            && req.tx.input().len() > self.validation_params.max_init_code_byte_size
         {
             return Err(ValidationError::TransactionSizeTooHigh);
         }
 
         // Check if the gas limit is higher than the maximum block gas limit
-        if req.tx.gas_limit() > self.constants.block_gas_limit {
+        if req.tx.gas_limit() > self.validation_params.block_gas_limit {
             return Err(ValidationError::GasLimitTooHigh);
         }
 
