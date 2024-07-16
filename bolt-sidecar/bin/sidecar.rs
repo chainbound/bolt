@@ -68,7 +68,6 @@ async fn main() -> eyre::Result<()> {
         tokio::select! {
             Some(ApiEvent { request, response_tx }) = api_events_rx.recv() => {
                 let start = std::time::Instant::now();
-                tracing::info!("Received commitment request: {:?}", request);
 
                 let validator_index = match consensus_state.validate_request(&request) {
                     Ok(index) => index,
