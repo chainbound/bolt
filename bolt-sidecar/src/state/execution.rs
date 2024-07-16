@@ -401,9 +401,13 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
     }
 
+    pub fn get_block_template(&mut self, slot: u64) -> Option<&BlockTemplate> {
+        self.block_templates.get(&slot)
+    }
+
     /// Gets the block template for the given slot number and removes it from the cache.
     /// This should be called when we need to propose a block for the given slot.
-    pub fn get_block_template(&mut self, slot: u64) -> Option<BlockTemplate> {
+    pub fn remove_block_template(&mut self, slot: u64) -> Option<BlockTemplate> {
         self.block_templates.remove(&slot)
     }
 }
