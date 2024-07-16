@@ -1,5 +1,5 @@
 use alloy_eips::eip4844::MAX_BLOBS_PER_BLOCK;
-use alloy_primitives::{Address, SignatureError};
+use alloy_primitives::{Address, SignatureError, U256};
 use alloy_transport::TransportError;
 use reth_primitives::{
     revm_primitives::EnvKzgSettings, BlobTransactionValidationError, PooledTransactionsElement,
@@ -200,7 +200,8 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
 
         // Check if there is room for more commitments
-        if let Some(template) = self.get_block_template(req.slot) {
+        let template = self.get_block_template(req.slot);
+        if let Some(template) = template {
             if template.transactions_len() >= self.max_commitments_per_slot.get() {
                 return Err(ValidationError::MaxCommitmentsReachedForSlot(
                     self.slot,
@@ -235,10 +236,7 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::MaxPriorityFeePerGasTooHigh);
         }
 
-        let sender = req
-            .tx
-            .recover_signer()
-            .ok_or(ValidationError::RecoverSigner)?;
+        let sender = req.sender;
 
         tracing::debug!(%sender, target_slot = req.slot, "Trying to commit inclusion request to block template");
 
@@ -254,30 +252,40 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::BaseFeeTooLow(max_basefee));
         }
 
-        // If we have the account state, use it here
-        if let Some(account_state) = self.account_state(&sender) {
-            // Validate the transaction against the account state
-            tracing::debug!(address = %sender, "Known account state: {account_state:?}");
-            validate_transaction(&account_state, &req.tx)?;
-        } else {
-            tracing::debug!(address = %sender, "Unknown account state");
-            // If we don't have the account state, we need to fetch it
-            let account_state =
-                self.client
+        // Retrieve the nonce and balance diffs from previous preconfirmations for this slot.
+        // If the template does not exist, or this is the first request for this sender,
+        // its diffs will be zero.
+        let (nonce_diff, balance_diff) = self
+            .block_templates
+            .get(&req.slot)
+            .and_then(|template| template.state_diff().get_diff(&sender))
+            // TODO: should balance diff be signed?
+            .unwrap_or((0, U256::ZERO));
+
+        let account_state = match self.account_state(&sender) {
+            Some(account) => account,
+            None => {
+                let account = self
+                    .client
                     .get_account_state(&sender, None)
                     .await
                     .map_err(|e| {
                         ValidationError::Internal(format!("Failed to fetch account state: {:?}", e))
                     })?;
 
-            tracing::debug!(address = %sender, "Fetched account state: {account_state:?}");
+                self.account_states.insert(sender, account);
+                account
+            }
+        };
 
-            // Record the account state for later
-            self.account_states.insert(sender, account_state);
+        let account_state_with_diffs = AccountState {
+            transaction_count: account_state.transaction_count + nonce_diff,
+            balance: account_state.balance - balance_diff,
+            has_code: account_state.has_code,
+        };
 
-            // Validate the transaction against the account state
-            validate_transaction(&account_state, &req.tx)?;
-        }
+        // Validate the transaction against the account state with existing diffs
+        validate_transaction(&account_state_with_diffs, &req.tx)?;
 
         // Check EIP-4844-specific limits
         if let Some(transaction) = req.tx.as_eip4844() {
