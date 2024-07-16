@@ -123,7 +123,6 @@ pub struct ExecutionState<C> {
 pub struct Constants {
     block_gas_limit: u64,
     max_tx_input_bytes: usize,
-    #[allow(unused)]
     max_init_code_byte_size: usize,
 }
 
@@ -131,7 +130,7 @@ impl Default for Constants {
     fn default() -> Self {
         Self {
             block_gas_limit: 30_000_000,
-            max_tx_input_bytes: 4 * 32 * 1024, // 128kb
+            max_tx_input_bytes: 4 * 32 * 1024,
             max_init_code_byte_size: 2 * 24576,
         }
     }
