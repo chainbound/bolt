@@ -10,7 +10,7 @@ use thiserror::Error;
 use crate::{
     builder::BlockTemplate,
     common::{calculate_max_basefee, validate_transaction},
-    primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot},
+    primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot, TransactionExt},
 };
 
 use super::fetcher::StateFetcher;
@@ -27,12 +27,27 @@ pub enum ValidationError {
     /// The transaction blob is invalid.
     #[error(transparent)]
     BlobValidation(#[from] BlobTransactionValidationError),
+    /// The max basefee calculation incurred an overflow error.
+    #[error("Invalid max basefee calculation: overflow")]
+    MaxBaseFeeCalcOverflow,
     /// The transaction nonce is too low.
     #[error("Transaction nonce too low")]
     NonceTooLow,
     /// The transaction nonce is too high.
     #[error("Transaction nonce too high")]
     NonceTooHigh,
+    /// The sender account is a smart contract and has code.
+    #[error("Account has code")]
+    AccountHasCode,
+    /// The gas limit is too high.
+    #[error("Gas limit too high")]
+    GasLimitTooHigh,
+    /// The transaction input size is too high.
+    #[error("Transaction input size too high")]
+    TransactionSizeTooHigh,
+    /// Max priority fee per gas is greater than max fee per gas.
+    #[error("Max priority fee per gas is greater than max fee per gas")]
+    MaxPriorityFeePerGasTooHigh,
     /// The sender does not have enough balance to pay for the transaction.
     #[error("Not enough balance to pay for value + maximum fee")]
     InsufficientBalance,
@@ -87,7 +102,6 @@ pub struct ExecutionState<C> {
     /// These only contain the canonical account states at the head block,
     /// not the intermediate states.
     account_states: HashMap<Address, AccountState>,
-
     /// The block templates by target SLOT NUMBER.
     /// We have multiple block templates because in rare cases we might have multiple
     /// proposal duties for a single lookahead.
@@ -100,6 +114,26 @@ pub struct ExecutionState<C> {
     kzg_settings: EnvKzgSettings,
     /// The state fetcher client.
     client: C,
+    /// Other values used for validation
+    validation_params: ValidationParams,
+}
+
+/// Other values used for validation.
+#[derive(Debug)]
+pub struct ValidationParams {
+    block_gas_limit: u64,
+    max_tx_input_bytes: usize,
+    max_init_code_byte_size: usize,
+}
+
+impl Default for ValidationParams {
+    fn default() -> Self {
+        Self {
+            block_gas_limit: 30_000_000,
+            max_tx_input_bytes: 4 * 32 * 1024,
+            max_init_code_byte_size: 2 * 24576,
+        }
+    }
 }
 
 impl<C: StateFetcher> ExecutionState<C> {
@@ -109,21 +143,27 @@ impl<C: StateFetcher> ExecutionState<C> {
         client: C,
         max_commitments_per_slot: NonZero<usize>,
     ) -> Result<Self, TransportError> {
-        let (basefee, blob_basefee) =
-            tokio::try_join!(client.get_basefee(None), client.get_blob_basefee(None))?;
+        let (basefee, blob_basefee, block_number, chain_id) = tokio::try_join!(
+            client.get_basefee(None),
+            client.get_blob_basefee(None),
+            client.get_head(),
+            client.get_chain_id()
+        )?;
 
         Ok(Self {
             basefee,
             blob_basefee,
-            block_number: client.get_head().await?,
+            block_number,
+            chain_id,
+            max_commitments_per_slot,
+            client,
             slot: 0,
             account_states: HashMap::new(),
             block_templates: HashMap::new(),
-            chain_id: client.get_chain_id().await?,
             // Load the default KZG settings
             kzg_settings: EnvKzgSettings::default(),
-            max_commitments_per_slot,
-            client,
+            // TODO: add a way to configure these values from CLI
+            validation_params: ValidationParams::default(),
         })
     }
 
@@ -138,6 +178,7 @@ impl<C: StateFetcher> ExecutionState<C> {
     }
 
     /// Validates the commitment request against state (historical + intermediate).
+    ///
     /// NOTE: This function only simulates against execution state, it does not consider
     /// timing or proposer slot targets.
     ///
@@ -168,22 +209,49 @@ impl<C: StateFetcher> ExecutionState<C> {
             }
         }
 
-        let sender = req.tx.recover_signer().ok_or(ValidationError::Internal(
-            "Failed to recover signer from transaction".to_string(),
-        ))?;
+        // Check if the transaction size exceeds the maximum
+        if req.tx.size() > self.validation_params.max_tx_input_bytes {
+            return Err(ValidationError::TransactionSizeTooHigh);
+        }
+
+        // Check if the transaction is a contract creation and the init code size exceeds the maximum
+        if req.tx.tx_kind().is_create()
+            && req.tx.input().len() > self.validation_params.max_init_code_byte_size
+        {
+            return Err(ValidationError::TransactionSizeTooHigh);
+        }
+
+        // Check if the gas limit is higher than the maximum block gas limit
+        if req.tx.gas_limit() > self.validation_params.block_gas_limit {
+            return Err(ValidationError::GasLimitTooHigh);
+        }
+
+        // Ensure max_priority_fee_per_gas is less than max_fee_per_gas, if any
+        if req
+            .tx
+            .max_priority_fee_per_gas()
+            .is_some_and(|max_priority_fee| max_priority_fee > req.tx.max_fee_per_gas())
+        {
+            return Err(ValidationError::MaxPriorityFeePerGasTooHigh);
+        }
+
+        let sender = req
+            .tx
+            .recover_signer()
+            .ok_or(ValidationError::RecoverSigner)?;
 
         tracing::debug!(%sender, target_slot = req.slot, "Trying to commit inclusion request to block template");
 
         // Check if the max_fee_per_gas would cover the maximum possible basefee.
-        let slot_diff = req.slot - self.slot;
+        let slot_diff = req.slot.saturating_sub(self.slot);
 
         // Calculate the max possible basefee given the slot diff
         let max_basefee = calculate_max_basefee(self.basefee, slot_diff)
-            .ok_or(reject_internal("Overflow calculating max basefee"))?;
+            .ok_or(ValidationError::MaxBaseFeeCalcOverflow)?;
 
         // Validate the base fee
         if !req.validate_basefee(max_basefee) {
-            return Err(ValidationError::BaseFeeTooLow(max_basefee as u128));
+            return Err(ValidationError::BaseFeeTooLow(max_basefee));
         }
 
         // If we have the account state, use it here
@@ -194,11 +262,13 @@ impl<C: StateFetcher> ExecutionState<C> {
         } else {
             tracing::debug!(address = %sender, "Unknown account state");
             // If we don't have the account state, we need to fetch it
-            let account_state = self
-                .client
-                .get_account_state(&sender, None)
-                .await
-                .map_err(|e| reject_internal(&e.to_string()))?;
+            let account_state =
+                self.client
+                    .get_account_state(&sender, None)
+                    .await
+                    .map_err(|e| {
+                        ValidationError::Internal(format!("Failed to fetch account state: {:?}", e))
+                    })?;
 
             tracing::debug!(address = %sender, "Fetched account state: {account_state:?}");
 
@@ -223,7 +293,7 @@ impl<C: StateFetcher> ExecutionState<C> {
 
             // Calculate max possible increase in blob basefee
             let max_blob_basefee = calculate_max_basefee(self.blob_basefee, slot_diff)
-                .ok_or(reject_internal("Overflow calculating max blob basefee"))?;
+                .ok_or(ValidationError::MaxBaseFeeCalcOverflow)?;
 
             if blob_transaction.transaction.max_fee_per_blob_gas < max_blob_basefee {
                 return Err(ValidationError::BlobBaseFeeTooLow(max_blob_basefee));
@@ -259,7 +329,6 @@ impl<C: StateFetcher> ExecutionState<C> {
     ) -> Result<(), TransportError> {
         self.slot = slot;
 
-        // TODO: invalidate any state that we don't need anymore (will be based on block template)
         let accounts = self.account_states.keys().collect::<Vec<_>>();
         let update = self.client.get_state_update(accounts, block_number).await?;
 
@@ -337,8 +406,4 @@ pub struct StateUpdate {
     pub min_basefee: u128,
     pub min_blob_basefee: u128,
     pub block_number: u64,
-}
-
-fn reject_internal(reason: &str) -> ValidationError {
-    ValidationError::Internal(reason.to_string())
 }

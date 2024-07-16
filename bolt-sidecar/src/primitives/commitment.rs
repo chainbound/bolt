@@ -14,6 +14,18 @@ pub enum CommitmentRequest {
     Inclusion(InclusionRequest),
 }
 
+impl CommitmentRequest {
+    /// Returns a reference to the inner request if this is an inclusion request, otherwise `None`.
+    pub fn as_inclusion_request(&self) -> Option<&InclusionRequest> {
+        match self {
+            CommitmentRequest::Inclusion(req) => Some(req),
+            // TODO: remove this when we have more request types
+            #[allow(unreachable_patterns)]
+            _ => None,
+        }
+    }
+}
+
 /// Request to include a transaction at a specific slot.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InclusionRequest {

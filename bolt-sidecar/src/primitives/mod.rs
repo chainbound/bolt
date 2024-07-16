@@ -17,7 +17,9 @@ use ethereum_consensus::{
     types::mainnet::ExecutionPayload,
     Fork,
 };
-use reth_primitives::{BlobTransactionSidecar, PooledTransactionsElement, TxType};
+use reth_primitives::{
+    BlobTransactionSidecar, Bytes, PooledTransactionsElement, TransactionKind, TxType,
+};
 use tokio::sync::{mpsc, oneshot};
 
 /// Commitment types, received by users wishing to receive preconfirmations.
@@ -37,7 +39,10 @@ pub type Slot = u64;
 pub struct AccountState {
     /// The nonce of the account. This is the number of transactions sent from this account
     pub transaction_count: u64,
+    /// The balance of the account in wei
     pub balance: U256,
+    /// Flag to indicate if the account is a smart contract or an EOA
+    pub has_code: bool,
 }
 
 #[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
@@ -227,8 +232,11 @@ pub trait TransactionExt {
     fn gas_limit(&self) -> u64;
     fn value(&self) -> U256;
     fn tx_type(&self) -> TxType;
+    fn tx_kind(&self) -> TransactionKind;
+    fn input(&self) -> &Bytes;
     fn chain_id(&self) -> Option<u64>;
     fn blob_sidecar(&self) -> Option<&BlobTransactionSidecar>;
+    fn size(&self) -> usize;
 }
 
 impl TransactionExt for PooledTransactionsElement {
@@ -259,6 +267,24 @@ impl TransactionExt for PooledTransactionsElement {
         }
     }
 
+    fn tx_kind(&self) -> TransactionKind {
+        match self {
+            PooledTransactionsElement::Legacy { transaction, .. } => transaction.to,
+            PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.to,
+            PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.to,
+            PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.to,
+        }
+    }
+
+    fn input(&self) -> &Bytes {
+        match self {
+            PooledTransactionsElement::Legacy { transaction, .. } => &transaction.input,
+            PooledTransactionsElement::Eip2930 { transaction, .. } => &transaction.input,
+            PooledTransactionsElement::Eip1559 { transaction, .. } => &transaction.input,
+            PooledTransactionsElement::BlobTransaction(blob_tx) => &blob_tx.transaction.input,
+        }
+    }
+
     fn chain_id(&self) -> Option<u64> {
         match self {
             PooledTransactionsElement::Legacy { transaction, .. } => transaction.chain_id,
@@ -274,6 +300,15 @@ impl TransactionExt for PooledTransactionsElement {
         match self {
             PooledTransactionsElement::BlobTransaction(blob_tx) => Some(&blob_tx.sidecar),
             _ => None,
+        }
+    }
+
+    fn size(&self) -> usize {
+        match self {
+            PooledTransactionsElement::Legacy { transaction, .. } => transaction.size(),
+            PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.size(),
+            PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.size(),
+            PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.size(),
         }
     }
 }
