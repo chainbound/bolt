@@ -343,7 +343,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         self.apply_state_update(update);
 
         // Remove any block templates that are no longer valid
-        self.block_templates.remove(&slot);
+        self.remove_block_template(slot);
 
         Ok(())
     }
@@ -406,7 +406,8 @@ impl<C: StateFetcher> ExecutionState<C> {
     }
 
     /// Gets the block template for the given slot number and removes it from the cache.
-    /// This should be called when we need to propose a block for the given slot.
+    /// This should be called when we need to propose a block for the given slot,
+    /// or when a new head comes in which makes an older block template useless.
     pub fn remove_block_template(&mut self, slot: u64) -> Option<BlockTemplate> {
         self.block_templates.remove(&slot)
     }
