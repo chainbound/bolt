@@ -1,11 +1,10 @@
 use std::{
     pin::Pin,
     task::{Context, Poll},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use alloy_rpc_types_beacon::events::HeadEvent;
-use eyre::eyre;
 use futures::Future;
 use tokio::sync::mpsc;
 
@@ -13,7 +12,7 @@ use crate::{
     crypto::{SignableBLS, SignerBLS},
     json_rpc::api::{ApiError, ApiEvent},
     primitives::{CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, SignedConstraints},
-    state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker},
+    state::{ConsensusState, ExecutionState, HeadTracker, StateFetcher},
     ConstraintsApi, LocalBuilder, MevBoostClient,
 };
 
@@ -36,57 +35,82 @@ pub struct SidecarDriver<C, S> {
 #[macro_export]
 macro_rules! poll_bail {
     ($($tt:tt)*) => {
-        return Poll::Ready(Err(eyre!($($tt)*)))
+        return Poll::Ready(Err(eyre::eyre!($($tt)*)))
     };
 }
 
 impl<C: StateFetcher + Unpin, S: SignerBLS + Unpin> Future for SidecarDriver<C, S> {
     type Output = eyre::Result<()>;
 
+    /// Main event loop for the sidecar driver, polling all the internal
+    /// components and handling the various events.
+    ///
+    /// This poll implementation does not prioritize any channel, and tries to
+    /// make progress on all of them in each iteration.
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
 
-        match this.api_events_rx.poll_recv(cx) {
-            Poll::Ready(Some(api_event)) => this.handle_incoming_api_event(api_event),
-            Poll::Ready(None) => poll_bail!("API events channel closed"),
-            Poll::Pending => { /* pass-through */ }
-        }
+        loop {
+            let mut progress = false;
 
-        match this.head_tracker.poll_next_head(cx) {
-            Poll::Ready(Some(head_event)) => this.handle_new_head_event(head_event),
-            Poll::Ready(None) => poll_bail!("Head tracker channel closed"),
-            Poll::Pending => { /* pass-through */ }
-        }
-
-        match this.consensus_state.commitment_deadline.poll_wait(cx) {
-            Poll::Ready(Some(slot)) => this.handle_commitment_deadline(slot),
-            Poll::Ready(None) => { /* pass-through as there is no pending deadline */ }
-            Poll::Pending => { /* pass-through */ }
-        }
-
-        match this.payload_requests_rx.poll_recv(cx) {
-            Poll::Ready(Some(req)) => this.handle_fetch_payload_request(req),
-            Poll::Ready(None) => poll_bail!("Payload request channel closed"),
-            Poll::Pending => { /* pass-through */ }
-        }
-
-        match this.shutdown_rx.poll_recv(cx) {
-            Poll::Ready(Some(())) => {
-                tracing::warn!("Received shutdown signal, shutting down...");
-                return Poll::Ready(Ok(()));
+            match this.api_events_rx.poll_recv(cx) {
+                Poll::Ready(Some(api_event)) => {
+                    this.handle_incoming_api_event(api_event);
+                    progress = true;
+                }
+                Poll::Ready(None) => poll_bail!("API events channel closed"),
+                Poll::Pending => { /* pass-through */ }
             }
-            Poll::Ready(None) => poll_bail!("Shutdown channel closed"),
-            Poll::Pending => { /* pass-through */ }
-        }
 
-        Poll::Pending
+            match this.head_tracker.poll_next_head(cx) {
+                Poll::Ready(Some(head_event)) => {
+                    this.handle_new_head_event(head_event);
+                    progress = true;
+                }
+                Poll::Ready(None) => poll_bail!("Head tracker channel closed"),
+                Poll::Pending => { /* pass-through */ }
+            }
+
+            match this.consensus_state.commitment_deadline.poll_wait(cx) {
+                Poll::Ready(Some(slot)) => {
+                    this.handle_commitment_deadline(slot);
+                    progress = true;
+                }
+                Poll::Ready(None) => { /* pass-through as there is no pending deadline */ }
+                Poll::Pending => { /* pass-through */ }
+            }
+
+            match this.payload_requests_rx.poll_recv(cx) {
+                Poll::Ready(Some(req)) => {
+                    this.handle_fetch_payload_request(req);
+                    progress = true;
+                }
+                Poll::Ready(None) => poll_bail!("Payload request channel closed"),
+                Poll::Pending => { /* pass-through */ }
+            }
+
+            match this.shutdown_rx.poll_recv(cx) {
+                Poll::Ready(Some(())) => {
+                    tracing::warn!("Received shutdown signal, shutting down...");
+                    return Poll::Ready(Ok(()));
+                }
+                Poll::Ready(None) => poll_bail!("Shutdown channel closed"),
+                Poll::Pending => { /* pass-through */ }
+            }
+
+            // If we made any progress during the loop, continue processing, otherwise
+            // return pending to wait for the next event.
+            if !progress {
+                return Poll::Pending;
+            }
+        }
     }
 }
 
 impl<C: StateFetcher + Unpin, S: SignerBLS + Unpin> SidecarDriver<C, S> {
     fn handle_incoming_api_event(&mut self, api_event: ApiEvent) {
-        let start = std::time::Instant::now();
         tracing::info!("Received commitment request: {:?}", api_event.request);
+        let start = Instant::now();
 
         let validator_index = match self.consensus_state.validate_request(&api_event.request) {
             Ok(index) => index,
@@ -155,7 +179,7 @@ impl<C: StateFetcher + Unpin, S: SignerBLS + Unpin> SidecarDriver<C, S> {
     }
 
     fn handle_commitment_deadline(&mut self, slot: u64) {
-        tracing::info!(
+        tracing::debug!(
             slot,
             "Commitment deadline reached, starting to build local block"
         );
@@ -170,16 +194,16 @@ impl<C: StateFetcher + Unpin, S: SignerBLS + Unpin> SidecarDriver<C, S> {
         tokio::spawn(async move {
             let max_retries = 5;
             let mut i = 0;
-            'inner: while let Err(e) = mevboost
+            while let Err(e) = mevboost
                 .submit_constraints(&template.signed_constraints_list)
                 .await
             {
-                tracing::error!(err = ?e, "Error submitting constraints, retrying...");
+                tracing::error!(err = ?e, "Error submitting constraints to mev-boost, retrying...");
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 i += 1;
                 if i >= max_retries {
                     tracing::error!("Max retries reached while submitting to MEV-Boost");
-                    break 'inner;
+                    break;
                 }
             }
         });

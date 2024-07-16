@@ -15,7 +15,7 @@ pub use execution::{ExecutionState, ValidationError};
 
 /// Module to fetch state from the Execution layer.
 pub mod fetcher;
-pub use fetcher::StateClient;
+pub use fetcher::{StateClient, StateFetcher};
 
 /// Module to track the consensus state.
 pub mod consensus;
