@@ -2694,6 +2694,8 @@ func (api *RelayAPI) handleSubmitNewBlockWithProofs(w http.ResponseWriter, req *
 		}
 	}
 
+	log.Infof("Received block bid with proofs from builder: %s", payload)
+
 	// BOLT: Send an event to the web demo
 	slot, _ := payload.Inner.Slot()
 	message := fmt.Sprintf("received block bid with %d preconfirmations for slot %d", len(payload.Proofs.TransactionHashes), slot)

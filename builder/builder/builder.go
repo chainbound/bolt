@@ -177,6 +177,9 @@ func NewBuilder(args BuilderArgs) (*Builder, error) {
 	}
 
 	slotCtx, slotCtxCancel := context.WithCancel(context.Background())
+
+	constraintsCache := shardmap.NewFIFOMap[uint64, types.HashToConstraintDecoded](64, 16, shardmap.HashUint64)
+
 	return &Builder{
 		ds:                            args.ds,
 		blockConsumer:                 args.blockConsumer,
@@ -193,7 +196,7 @@ func NewBuilder(args BuilderArgs) (*Builder, error) {
 		discardRevertibleTxOnErr:      args.discardRevertibleTxOnErr,
 		submissionOffsetFromEndOfSlot: args.submissionOffsetFromEndOfSlot,
 
-		constraintsCache: shardmap.NewFIFOMap[uint64, types.HashToConstraintDecoded](64, 16, shardmap.HashUint64),
+		constraintsCache: constraintsCache,
 
 		limiter:       args.limiter,
 		slotCtx:       slotCtx,
@@ -418,7 +421,7 @@ func (b *Builder) Stop() error {
 }
 
 // BOLT: modify to calculate merkle inclusion proofs for preconfirmed transactions
-func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToConstraintDecoded) error {
+func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 	executableData := engine.BlockToExecutableData(opts.Block, opts.BlockValue, opts.BlobSidecars)
 	var dataVersion spec.DataVersion
 	if b.eth.Config().IsCancun(opts.Block.Number(), opts.Block.Time()) {
@@ -455,6 +458,10 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 	}
 
 	var versionedBlockRequestWithPreconfsProofs *common.VersionedSubmitBlockRequestWithProofs
+
+	// BOLT: fetch constraints from the cache, which is automatically updated by the SSE subscription
+	constraints, _ := b.constraintsCache.Get(opts.PayloadAttributes.Slot)
+	log.Info(fmt.Sprintf("[BOLT]: Found %d constraints for slot %d", len(constraints), opts.PayloadAttributes.Slot))
 
 	if len(constraints) > 0 {
 		message := fmt.Sprintf("sealing block %d with %d constraints", opts.Block.Number(), len(constraints))
@@ -495,6 +502,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts, constraints types.HashToCo
 		// NOTE: we can ignore preconfs for `processBuiltBlock`
 		go b.processBuiltBlock(opts.Block, opts.BlockValue, opts.OrdersClosedAt, opts.SealedAt, opts.CommitedBundles, opts.AllBundles, opts.UsedSbundles, &blockBidMsg)
 		if versionedBlockRequestWithPreconfsProofs != nil {
+			log.Info(fmt.Sprintf("[BOLT]: Sending sealed block to relay %s", versionedBlockRequestWithPreconfsProofs))
 			err = b.relay.SubmitBlockWithProofs(versionedBlockRequestWithPreconfsProofs, opts.ValidatorData)
 		} else if len(constraints) == 0 {
 			// If versionedBlockRequestWithPreconfsProofs is nil and no constraints, then we don't have proofs to send
@@ -662,10 +670,6 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 
 	log.Debug("runBuildingJob", "slot", attrs.Slot, "parent", attrs.HeadHash, "payloadTimestamp", uint64(attrs.Timestamp))
 
-	// fetch constraints here
-	constraints, _ := b.constraintsCache.Get(attrs.Slot)
-	log.Info(fmt.Sprintf("[BOLT]: Got %d constraints for slot %d", len(constraints), attrs.Slot))
-
 	submitBestBlock := func() {
 		queueMu.Lock()
 		if queueBestEntry.block.Hash() != queueLastSubmittedHash {
@@ -682,7 +686,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 				ValidatorData:     vd,
 				PayloadAttributes: attrs,
 			}
-			err := b.onSealedBlock(submitBlockOpts, constraints)
+			err := b.onSealedBlock(submitBlockOpts)
 
 			if err != nil {
 				log.Error("could not run sealed block hook", "err", err)
@@ -738,7 +742,7 @@ func (b *Builder) runBuildingJob(slotCtx context.Context, proposerPubkey phase0.
 			"slot", attrs.Slot,
 			"parent", attrs.HeadHash,
 			"resubmit-interval", b.builderResubmitInterval.String())
-		err := b.eth.BuildBlock(attrs, blockHook, constraints)
+		err := b.eth.BuildBlock(attrs, blockHook, b.constraintsCache)
 		if err != nil {
 			log.Warn("Failed to build block", "err", err)
 		}

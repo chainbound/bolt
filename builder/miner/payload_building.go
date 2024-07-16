@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/chainbound/shardmap"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -35,16 +36,17 @@ import (
 // Check engine-api specification for more details.
 // https://github.com/ethereum/execution-apis/blob/main/src/engine/cancun.md#payloadattributesv3
 type BuildPayloadArgs struct {
-	Parent       common.Hash           // The parent block to build payload on top
-	Timestamp    uint64                // The provided timestamp of generated payload
-	FeeRecipient common.Address        // The provided recipient address for collecting transaction fee
-	Random       common.Hash           // The provided randomness value
-	Withdrawals  types.Withdrawals     // The provided withdrawals
-	BeaconRoot   *common.Hash          // The provided beaconRoot (Cancun)
-	Version      engine.PayloadVersion // Versioning byte for payload id calculation.
-	GasLimit     uint64
-	BlockHook    BlockHookFn
-	Constraints  types.HashToConstraintDecoded
+	Parent           common.Hash           // The parent block to build payload on top
+	Timestamp        uint64                // The provided timestamp of generated payload
+	FeeRecipient     common.Address        // The provided recipient address for collecting transaction fee
+	Random           common.Hash           // The provided randomness value
+	Withdrawals      types.Withdrawals     // The provided withdrawals
+	BeaconRoot       *common.Hash          // The provided beaconRoot (Cancun)
+	Version          engine.PayloadVersion // Versioning byte for payload id calculation.
+	GasLimit         uint64
+	BlockHook        BlockHookFn
+	Slot             uint64
+	ConstraintsCache *shardmap.FIFOMap[uint64, types.HashToConstraintDecoded]
 }
 
 // Id computes an 8-byte identifier by hashing the components of the payload arguments.
@@ -249,15 +251,17 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 	// enough to run. The empty payload can at least make sure there is something
 	// to deliver for not missing slot.
 	emptyParams := &generateParams{
-		timestamp:   args.Timestamp,
-		forceTime:   true,
-		parentHash:  args.Parent,
-		coinbase:    args.FeeRecipient,
-		random:      args.Random,
-		withdrawals: args.Withdrawals,
-		beaconRoot:  args.BeaconRoot,
-		noTxs:       true,
-		onBlock:     args.BlockHook,
+		timestamp:        args.Timestamp,
+		forceTime:        true,
+		parentHash:       args.Parent,
+		coinbase:         args.FeeRecipient,
+		random:           args.Random,
+		withdrawals:      args.Withdrawals,
+		beaconRoot:       args.BeaconRoot,
+		noTxs:            true,
+		onBlock:          args.BlockHook,
+		slot:             args.Slot,
+		constraintsCache: args.ConstraintsCache,
 	}
 	empty := w.getSealingBlock(emptyParams)
 	if empty.err != nil {
@@ -281,15 +285,17 @@ func (w *worker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 		endTimer := time.NewTimer(time.Second * 12)
 
 		fullParams := &generateParams{
-			timestamp:   args.Timestamp,
-			forceTime:   true,
-			parentHash:  args.Parent,
-			coinbase:    args.FeeRecipient,
-			random:      args.Random,
-			withdrawals: args.Withdrawals,
-			beaconRoot:  args.BeaconRoot,
-			noTxs:       false,
-			onBlock:     args.BlockHook,
+			timestamp:        args.Timestamp,
+			forceTime:        true,
+			parentHash:       args.Parent,
+			coinbase:         args.FeeRecipient,
+			random:           args.Random,
+			withdrawals:      args.Withdrawals,
+			beaconRoot:       args.BeaconRoot,
+			noTxs:            false,
+			onBlock:          args.BlockHook,
+			slot:             args.Slot,
+			constraintsCache: args.ConstraintsCache,
 		}
 
 		for {
