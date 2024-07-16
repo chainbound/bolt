@@ -253,25 +253,35 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
 
         // Retrieve the nonce and balance diffs from previous preconfirmations for this slot.
-        // If the template does not exist, or this is the first request for this sender,
+        // If the templates do not exist, or this is the first request for this sender,
         // its diffs will be zero.
-        let (nonce_diff, balance_diff) = self
-            .block_templates
-            .get(&req.slot)
-            .and_then(|template| template.state_diff().get_diff(&sender))
-            // TODO: should balance diff be signed?
-            .unwrap_or((0, U256::ZERO));
+        let (nonce_diff, balance_diff) = self.block_templates().values().fold(
+            (0, U256::ZERO),
+            |(nonce_diff_acc, balance_diff_acc), block_template| {
+                let (nonce_diff, balance_diff) = block_template
+                    .state_diff()
+                    .get_diff(&sender)
+                    // TODO: should balance diff be signed?
+                    .unwrap_or((0, U256::ZERO));
+
+                (nonce_diff_acc + nonce_diff, balance_diff_acc + balance_diff)
+            },
+        );
+
+        tracing::debug!(%sender, nonce_diff, %balance_diff, "Applying diffs to account state");
 
         let account_state = match self.account_state(&sender) {
             Some(account) => account,
             None => {
-                let account = self
-                    .client
-                    .get_account_state(&sender, None)
-                    .await
-                    .map_err(|e| {
-                        ValidationError::Internal(format!("Failed to fetch account state: {:?}", e))
-                    })?;
+                let account = match self.client.get_account_state(&sender, None).await {
+                    Ok(account) => account,
+                    Err(err) => {
+                        return Err(ValidationError::Internal(format!(
+                            "Error fetching account state: {:?}",
+                            err
+                        )))
+                    }
+                };
 
                 self.account_states.insert(sender, account);
                 account
