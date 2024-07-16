@@ -17,7 +17,7 @@ use ethereum_consensus::{
     types::mainnet::ExecutionPayload,
     Fork,
 };
-use reth_primitives::{PooledTransactionsElement, TxType};
+use reth_primitives::{BlobTransactionSidecar, PooledTransactionsElement, TxType};
 use tokio::sync::{mpsc, oneshot};
 
 /// Commitment types, received by users wishing to receive preconfirmations.
@@ -228,6 +228,7 @@ pub trait TransactionExt {
     fn value(&self) -> U256;
     fn tx_type(&self) -> TxType;
     fn chain_id(&self) -> Option<u64>;
+    fn blob_sidecar(&self) -> Option<&BlobTransactionSidecar>;
 }
 
 impl TransactionExt for PooledTransactionsElement {
@@ -266,6 +267,13 @@ impl TransactionExt for PooledTransactionsElement {
             PooledTransactionsElement::BlobTransaction(blob_tx) => {
                 Some(blob_tx.transaction.chain_id)
             }
+        }
+    }
+
+    fn blob_sidecar(&self) -> Option<&BlobTransactionSidecar> {
+        match self {
+            PooledTransactionsElement::BlobTransaction(blob_tx) => Some(&blob_tx.sidecar),
+            _ => None,
         }
     }
 }
