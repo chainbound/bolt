@@ -55,8 +55,12 @@ pub struct ConstraintsMessage {
 
 impl ConstraintsMessage {
     /// Builds a constraints message from an inclusion request and metadata
-    pub fn build(validator_index: u64, request: InclusionRequest, sender: Address) -> Self {
-        let constraints = vec![Constraint::from_transaction(request.tx, None, sender)];
+    pub fn build(validator_index: u64, request: InclusionRequest) -> Self {
+        let constraints = vec![Constraint::from_transaction(
+            request.tx,
+            None,
+            request.sender,
+        )];
         Self {
             validator_index,
             slot: request.slot,

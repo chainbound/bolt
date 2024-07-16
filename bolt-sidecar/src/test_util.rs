@@ -169,5 +169,6 @@ pub(crate) async fn create_signed_commitment_request(
         tx: tx_pooled,
         slot,
         signature,
+        sender: signer.address(),
     }))
 }
