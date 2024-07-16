@@ -37,9 +37,7 @@ const GET_HEADER_WITH_PROOFS_TIMEOUT: Duration = Duration::from_millis(500);
 /// Forwards all requests to the target after interception.
 pub struct BuilderProxyServer<T, P> {
     proxy_target: T,
-    // TODO: fill with local payload when we fetch a payload
-    // in failed get_header
-    // This will only be some in case of a failed get_header
+    /// INVARIANT: This will be `Some` IFF we have signed a local header for the latest slot.
     local_payload: Mutex<Option<GetPayloadResponse>>,
     /// The payload fetcher to get locally built payloads.
     payload_fetcher: P,
@@ -127,6 +125,11 @@ where
             Ok(res) => match res {
                 Err(builder_err) => builder_err,
                 Ok(header) => {
+                    // Clear the local payload cache if we have a successful response
+                    // By definition of `server.local_payload`, this will be `Some` IFF we have signed a local header
+                    let mut local_payload = server.local_payload.lock();
+                    *local_payload = None;
+
                     tracing::debug!(elapsed = ?start.elapsed(), "Returning signed builder bid");
                     return Ok(Json(header));
                 }
@@ -137,33 +140,31 @@ where
         // On ANY error, we fall back to locally built block
         tracing::warn!(slot, elapsed = ?start.elapsed(), err = ?err, "Proxy error, fetching local payload instead");
 
-        let payload = match server.payload_fetcher.fetch_payload(slot).await {
-            Some(payload) => {
-                tracing::info!(elapsed = ?start.elapsed(), "Fetched local payload for slot {slot}");
-                payload
-            }
+        let payload_and_bid = match server.payload_fetcher.fetch_payload(slot).await {
+            Some(payload_and_bid) => payload_and_bid,
             None => {
                 // TODO: handle failure? In this case, we don't have a fallback block
-                // which means we haven't made any commitments. This means the beacon client should
+                // which means we haven't made any commitments. This means the EL should
                 // fallback to local block building.
                 tracing::error!("No local payload produced for slot {slot}");
                 return Err(BuilderApiError::FailedToFetchLocalPayload(slot));
             }
         };
 
-        let hash = payload.bid.message.header.block_hash.clone();
-        let number = payload.bid.message.header.block_number;
+        let hash = payload_and_bid.bid.message.header.block_hash.clone();
+        let number = payload_and_bid.bid.message.header.block_number;
+        tracing::info!(elapsed = ?start.elapsed(), %hash, "Fetched local payload for slot {slot}");
 
         {
-            // Set the payload for the following get_payload request
+            // Since we've signed a local header, set the payload for
+            // the following `get_payload` request.
             let mut local_payload = server.local_payload.lock();
-            *local_payload = Some(payload.payload);
+            *local_payload = Some(payload_and_bid.payload);
         }
 
         let versioned_bid = VersionedValue::<SignedBuilderBid> {
             version: Fork::Deneb,
-            data: payload.bid,
-            // TODO: a more elegant way to do this? Can we avoid this meta field?
+            data: payload_and_bid.bid,
             meta: Default::default(),
         };
 
@@ -192,7 +193,8 @@ where
                 e
             })?;
 
-        // If we have a locally built payload, return it and clear the cache.
+        // If we have a locally built payload, it means we signed a local header.
+        // Return it and clear the cache.
         if let Some(payload) = server.local_payload.lock().take() {
             let requested_block = &signed_blinded_block
                 .message
@@ -204,8 +206,8 @@ where
             // beacon node has signed, we are at risk of equivocation and slashing.
             if payload.block_hash() != requested_block {
                 tracing::error!(
-                    expected = requested_block.to_string(),
-                    have = payload.block_hash().to_string(),
+                    expected = %requested_block.to_string(),
+                    have = %payload.block_hash().to_string(),
                     "Local block hash does not match requested block hash"
                 );
 
