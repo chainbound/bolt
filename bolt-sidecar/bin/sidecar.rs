@@ -120,7 +120,7 @@ async fn main() -> eyre::Result<()> {
             Some(slot) = consensus_state.commitment_deadline.wait() => {
                 tracing::info!(slot, "Commitment deadline reached, starting to build local block");
 
-                let Some(template) = execution_state.get_block_template(slot) else {
+                let Some(template) = execution_state.remove_block_template(slot) else {
                     tracing::warn!("No block template found for slot {slot} when requested");
                     continue;
                 };
