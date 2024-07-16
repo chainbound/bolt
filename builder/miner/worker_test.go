@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/chainbound/shardmap"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
@@ -77,8 +78,8 @@ var (
 	pendingTxs []*types.Transaction
 	newTxs     []*types.Transaction
 
-	// Test testConstraints
-	testConstraints = make(types.HashToConstraintDecoded)
+	// Test testConstraintsCache
+	testConstraintsCache = new(shardmap.FIFOMap[uint64, types.HashToConstraintDecoded])
 
 	testConfig = &Config{
 		Recommit: time.Second,
@@ -121,7 +122,10 @@ func init() {
 			} else {
 				idx = nil
 			}
-			testConstraints[tx1.Hash()] = &types.ConstraintDecoded{Index: idx, Tx: tx1}
+			constraints := make(map[common.Hash]*types.ConstraintDecoded)
+			constraints[tx1.Hash()] = &types.ConstraintDecoded{Index: idx, Tx: tx1}
+			// FIXME: slot 0 is probably not correct for these tests
+			testConstraintsCache.Put(0, constraints)
 		}
 
 		pendingTxs = append(pendingTxs, tx1)
@@ -425,10 +429,10 @@ func TestGetSealingWorkWithConstraints(t *testing.T) {
 	local := new(params.ChainConfig)
 	*local = *ethashChainConfig
 	local.TerminalTotalDifficulty = big.NewInt(0)
-	testGetSealingWork(t, local, ethash.NewFaker(), testConstraints)
+	testGetSealingWork(t, local, ethash.NewFaker(), testConstraintsCache)
 }
 
-func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, constraints types.HashToConstraintDecoded) {
+func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine consensus.Engine, constraintsCache *shardmap.FIFOMap[uint64, types.HashToConstraintDecoded]) {
 	defer engine.Close()
 	w, b := newTestWorker(t, chainConfig, engine, rawdb.NewMemoryDatabase(), nil, 0)
 	defer w.close()
@@ -520,16 +524,16 @@ func testGetSealingWork(t *testing.T, chainConfig *params.ChainConfig, engine co
 	// This API should work even when the automatic sealing is not enabled
 	for _, c := range cases {
 		r := w.getSealingBlock(&generateParams{
-			parentHash:  c.parent,
-			timestamp:   timestamp,
-			coinbase:    c.coinbase,
-			random:      c.random,
-			withdrawals: nil,
-			beaconRoot:  nil,
-			noTxs:       false,
-			forceTime:   true,
-			onBlock:     nil,
-			constraints: constraints,
+			parentHash:       c.parent,
+			timestamp:        timestamp,
+			coinbase:         c.coinbase,
+			random:           c.random,
+			withdrawals:      nil,
+			beaconRoot:       nil,
+			noTxs:            false,
+			forceTime:        true,
+			onBlock:          nil,
+			constraintsCache: constraintsCache,
 		})
 		if c.expectErr {
 			if r.err == nil {
