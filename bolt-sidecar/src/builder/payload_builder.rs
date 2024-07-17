@@ -189,6 +189,7 @@ impl FallbackPayloadBuilder {
             ommers: Vec::new(),
             transactions: transactions.to_vec(),
             withdrawals: Some(Withdrawals::new(withdrawals)),
+            requests: None,
         };
 
         let mut hints = Hints::default();
@@ -382,6 +383,7 @@ pub(crate) fn build_header_with_hints_and_context(
         blob_gas_used: Some(blob_gas_used),
         excess_blob_gas: Some(context.excess_blob_gas),
         parent_beacon_block_root: Some(context.parent_beacon_block_root),
+        requests_root: None,
         extra_data: context.extra_data.clone(),
     }
 }
