@@ -1,6 +1,6 @@
 // use alloy::alloy_eips::eip2718::Encodable2718;
 use alloy::{
-    consensus::{BlobTransactionSidecar, SidecarBuilder, SimpleCoder, TxEnvelope},
+    consensus::{BlobTransactionSidecar, SidecarBuilder, SimpleCoder},
     hex,
     network::{eip2718::Encodable2718, EthereumWallet, TransactionBuilder},
     primitives::{Address, U256},
@@ -54,14 +54,12 @@ pub async fn sign_transaction(
     signer: &EthereumWallet,
     tx: TransactionRequest,
 ) -> Result<(String, String)> {
-    let signed: TxEnvelope = tx.build(signer).await.unwrap();
+    let Ok(signed) = tx.build(signer).await else {
+        return Err(eyre::eyre!("Failed to sign transaction"));
+    };
     let tx_signed_bytes = signed.encoded_2718();
     let tx_signed = TransactionSigned::decode_enveloped(&mut tx_signed_bytes.as_slice()).unwrap();
-    // let Ok(signature) = signer.sign_transaction(&tx).await else {
-    //     eyre::bail!("Failed to sign transaction")
-    // };
 
-    // let rlp_signed_tx = tx.rlp_signed(&signature);
     let tx_hash = tx_signed.hash().to_string();
     let hex_rlp_signed_tx = format!("0x{}", hex::encode(tx_signed_bytes));
 
