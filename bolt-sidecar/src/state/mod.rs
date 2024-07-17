@@ -152,7 +152,7 @@ mod tests {
 
         assert!(matches!(
             state.validate_commitment_request(&request).await,
-            Err(ValidationError::NonceTooHigh)
+            Err(ValidationError::NonceTooHigh(_, _))
         ));
 
         Ok(())

@@ -31,11 +31,11 @@ pub enum ValidationError {
     #[error("Invalid max basefee calculation: overflow")]
     MaxBaseFeeCalcOverflow,
     /// The transaction nonce is too low.
-    #[error("Transaction nonce too low")]
-    NonceTooLow,
+    #[error("Transaction nonce too low. Expected {0}, got {1}")]
+    NonceTooLow(u64, u64),
     /// The transaction nonce is too high.
     #[error("Transaction nonce too high")]
-    NonceTooHigh,
+    NonceTooHigh(u64, u64),
     /// The sender account is a smart contract and has code.
     #[error("Account has code")]
     AccountHasCode,
