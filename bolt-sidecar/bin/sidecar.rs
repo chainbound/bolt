@@ -92,6 +92,8 @@ async fn main() -> eyre::Result<()> {
                     "Validation against execution state passed"
                 );
 
+                // TODO: review all this `clone` usage
+
                 // parse the request into constraints and sign them with the sidecar signer
                 let slot = request.slot;
                 let message = ConstraintsMessage::build(validator_index, request);
