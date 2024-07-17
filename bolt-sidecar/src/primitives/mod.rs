@@ -17,9 +17,7 @@ use ethereum_consensus::{
     types::mainnet::ExecutionPayload,
     Fork,
 };
-use reth_primitives::{
-    BlobTransactionSidecar, Bytes, PooledTransactionsElement, TransactionKind, TxType,
-};
+use reth_primitives::{BlobTransactionSidecar, Bytes, PooledTransactionsElement, TxKind, TxType};
 use tokio::sync::{mpsc, oneshot};
 
 /// Commitment types, received by users wishing to receive preconfirmations.
@@ -232,7 +230,7 @@ pub trait TransactionExt {
     fn gas_limit(&self) -> u64;
     fn value(&self) -> U256;
     fn tx_type(&self) -> TxType;
-    fn tx_kind(&self) -> TransactionKind;
+    fn tx_kind(&self) -> TxKind;
     fn input(&self) -> &Bytes;
     fn chain_id(&self) -> Option<u64>;
     fn blob_sidecar(&self) -> Option<&BlobTransactionSidecar>;
@@ -246,6 +244,7 @@ impl TransactionExt for PooledTransactionsElement {
             PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.gas_limit,
             PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.gas_limit,
             PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.gas_limit,
+            _ => unimplemented!(),
         }
     }
 
@@ -255,6 +254,7 @@ impl TransactionExt for PooledTransactionsElement {
             PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.value,
             PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.value,
             PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.value,
+            _ => unimplemented!(),
         }
     }
 
@@ -264,15 +264,19 @@ impl TransactionExt for PooledTransactionsElement {
             PooledTransactionsElement::Eip2930 { .. } => TxType::Eip2930,
             PooledTransactionsElement::Eip1559 { .. } => TxType::Eip1559,
             PooledTransactionsElement::BlobTransaction(_) => TxType::Eip4844,
+            _ => unimplemented!(),
         }
     }
 
-    fn tx_kind(&self) -> TransactionKind {
+    fn tx_kind(&self) -> TxKind {
         match self {
             PooledTransactionsElement::Legacy { transaction, .. } => transaction.to,
             PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.to,
             PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.to,
-            PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.to,
+            PooledTransactionsElement::BlobTransaction(blob_tx) => {
+                TxKind::Call(blob_tx.transaction.to)
+            }
+            _ => unimplemented!(),
         }
     }
 
@@ -282,6 +286,7 @@ impl TransactionExt for PooledTransactionsElement {
             PooledTransactionsElement::Eip2930 { transaction, .. } => &transaction.input,
             PooledTransactionsElement::Eip1559 { transaction, .. } => &transaction.input,
             PooledTransactionsElement::BlobTransaction(blob_tx) => &blob_tx.transaction.input,
+            _ => unimplemented!(),
         }
     }
 
@@ -293,6 +298,7 @@ impl TransactionExt for PooledTransactionsElement {
             PooledTransactionsElement::BlobTransaction(blob_tx) => {
                 Some(blob_tx.transaction.chain_id)
             }
+            _ => unimplemented!(),
         }
     }
 
@@ -309,6 +315,7 @@ impl TransactionExt for PooledTransactionsElement {
             PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.size(),
             PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.size(),
             PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.size(),
+            _ => unimplemented!(),
         }
     }
 }

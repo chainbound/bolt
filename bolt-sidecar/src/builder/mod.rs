@@ -32,13 +32,6 @@ mod compat;
 /// `engine_newPayloadV3` response error to produce a valid payload.
 pub mod payload_builder;
 
-/// Deprecated. TODO: remove
-pub mod state_root;
-
-/// Deprecated simulation manager. TODO: remove
-pub mod call_trace_manager;
-pub use call_trace_manager::{CallTraceHandle, CallTraceManager};
-
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 #[allow(missing_docs)]
