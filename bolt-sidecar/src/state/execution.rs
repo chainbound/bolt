@@ -806,7 +806,7 @@ mod tests {
         );
 
         // fast-forward the head to the target slot, which should invalidate the entire template
-        // because it's now stale
+        // because it's now stale.
         state.update_head(None, target_slot).await?;
 
         assert!(state.get_block_template(target_slot).is_none());
