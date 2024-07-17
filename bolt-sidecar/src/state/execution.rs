@@ -441,3 +441,278 @@ pub struct StateUpdate {
     pub min_blob_basefee: u128,
     pub block_number: u64,
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::state::CommitmentDeadline;
+    use crate::state::Duration;
+    use std::num::NonZero;
+
+    use alloy_consensus::constants::ETH_TO_WEI;
+    use alloy_eips::eip2718::Encodable2718;
+    use alloy_network::EthereumWallet;
+    use alloy_primitives::{uint, Uint};
+    use alloy_provider::{network::TransactionBuilder, Provider, ProviderBuilder};
+    use alloy_signer_local::PrivateKeySigner;
+    use fetcher::{StateClient, StateFetcher};
+
+    use crate::{
+        crypto::{bls::Signer, SignableBLS, SignerBLS},
+        primitives::{ConstraintsMessage, SignedConstraints},
+        state::fetcher,
+        test_util::{create_signed_commitment_request, default_test_transaction, launch_anvil},
+    };
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_commitment_deadline() {
+        let time = std::time::Instant::now();
+        let mut deadline = CommitmentDeadline::new(0, Duration::from_secs(1));
+
+        let slot = deadline.wait().await;
+        println!("Deadline reached. Passed {:?}", time.elapsed());
+        assert_eq!(slot, Some(0));
+
+        let time = std::time::Instant::now();
+        let slot = deadline.wait().await;
+        println!("Deadline reached. Passed {:?}", time.elapsed());
+        assert_eq!(slot, None);
+    }
+
+    #[tokio::test]
+    async fn test_valid_inclusion_request() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let max_comms = NonZero::new(10).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let tx = default_test_transaction(*sender, None);
+
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+
+        assert!(state.validate_commitment_request(&request).await.is_ok());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_invalid_inclusion_request_nonce() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let max_comms = NonZero::new(10).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        // Create a transaction with a nonce that is too high
+        let tx = default_test_transaction(*sender, Some(1));
+
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+
+        assert!(matches!(
+            state.validate_commitment_request(&request).await,
+            Err(ValidationError::NonceTooHigh(0, 1))
+        ));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_invalid_inclusion_request_balance() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let max_comms = NonZero::new(10).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        // Create a transaction with a value that is too high
+        let tx = default_test_transaction(*sender, None)
+            .with_value(uint!(11_000_U256 * Uint::from(ETH_TO_WEI)));
+
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+
+        assert!(matches!(
+            state.validate_commitment_request(&request).await,
+            Err(ValidationError::InsufficientBalance)
+        ));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_invalid_inclusion_request_basefee() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let max_comms = NonZero::new(10).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+
+        let basefee = state.basefee();
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        // Create a transaction with a basefee that is too low
+        let tx = default_test_transaction(*sender, None).with_max_fee_per_gas(basefee - 1);
+
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+
+        assert!(matches!(
+            state.validate_commitment_request(&request).await,
+            Err(ValidationError::BaseFeeTooLow(_))
+        ));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_invalidate_inclusion_request() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+        let provider = ProviderBuilder::new().on_http(anvil.endpoint_url());
+
+        let max_comms = NonZero::new(10).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let tx = default_test_transaction(*sender, None);
+
+        // build the signed transaction for submission later
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let signer: EthereumWallet = wallet.into();
+        let signed = tx.clone().build(&signer).await?;
+
+        let target_slot = 10;
+        let request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
+        let inclusion_request = request.as_inclusion_request().unwrap().clone();
+
+        assert!(state.validate_commitment_request(&request).await.is_ok());
+
+        let bls_signer = Signer::random();
+        let message = ConstraintsMessage::build(0, inclusion_request);
+        let signature = bls_signer.sign(&message.digest()).unwrap().to_string();
+        let signed_constraints = SignedConstraints { message, signature };
+
+        state.add_constraint(target_slot, signed_constraints);
+
+        assert!(
+            state
+                .get_block_template(target_slot)
+                .unwrap()
+                .transactions_len()
+                == 1
+        );
+
+        let notif = provider
+            .send_raw_transaction(&signed.encoded_2718())
+            .await?;
+
+        // Wait for confirmation
+        let receipt = notif.get_receipt().await?;
+
+        // Update the head, which should invalidate the transaction due to a nonce conflict
+        state
+            .update_head(receipt.block_number, receipt.block_number.unwrap())
+            .await?;
+
+        let transactions_len = state
+            .get_block_template(target_slot)
+            .unwrap()
+            .transactions_len();
+
+        assert!(transactions_len == 0);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_invalidate_stale_template() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let max_comms = NonZero::new(10).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let tx = default_test_transaction(*sender, None);
+
+        let target_slot = 10;
+        let request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
+        let inclusion_request = request.as_inclusion_request().unwrap().clone();
+
+        assert!(state.validate_commitment_request(&request).await.is_ok());
+
+        let bls_signer = Signer::random();
+        let message = ConstraintsMessage::build(0, inclusion_request);
+        let signature = bls_signer.sign(&message.digest()).unwrap().to_string();
+        let signed_constraints = SignedConstraints { message, signature };
+
+        state.add_constraint(target_slot, signed_constraints);
+
+        assert!(
+            state
+                .get_block_template(target_slot)
+                .unwrap()
+                .transactions_len()
+                == 1
+        );
+
+        // fast-forward the head to the target slot, which should invalidate the entire template
+        // because it's now stale
+        state.update_head(None, target_slot).await?;
+
+        assert!(state.get_block_template(target_slot).is_none());
+
+        Ok(())
+    }
+}
