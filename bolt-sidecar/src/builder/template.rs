@@ -37,8 +37,8 @@ pub struct BlockTemplate {
 
 impl BlockTemplate {
     /// Return the state diff of the block template.
-    pub fn state_diff(&self) -> &StateDiff {
-        &self.state_diff
+    pub fn get_diff(&self, address: &Address) -> Option<(u64, U256)> {
+        self.state_diff.get_diff(address)
     }
 
     /// Returns the cloned list of transactions from the constraints.

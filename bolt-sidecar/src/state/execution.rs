@@ -55,9 +55,7 @@ pub enum ValidationError {
     #[error("Too many EIP-4844 transactions in target block")]
     Eip4844Limit,
     /// The maximum commitments have been reached for the slot.
-    #[error(
-        "Already requested a preconfirmation for slot {0}. Slot must be greater than or equal {0}"
-    )]
+    #[error("Already requested a preconfirmation for slot {0}. Slot must be >= {0}")]
     SlotTooLow(u64),
     /// The maximum commitments have been reached for the slot.
     #[error("Max commitments reached for slot {0}: {1}")]
@@ -177,11 +175,6 @@ impl<C: StateFetcher> ExecutionState<C> {
         self.basefee
     }
 
-    /// Returns the current block templates mapped by slot number
-    pub fn block_templates(&self) -> &HashMap<u64, BlockTemplate> {
-        &self.block_templates
-    }
-
     /// Validates the commitment request against state (historical + intermediate).
     ///
     /// NOTE: This function only simulates against execution state, it does not consider
@@ -199,14 +192,16 @@ impl<C: StateFetcher> ExecutionState<C> {
     ) -> Result<Address, ValidationError> {
         let CommitmentRequest::Inclusion(req) = request;
 
+        let sender = req.sender;
+        let target_slot = req.slot;
+
         // Validate the chain ID
         if !req.validate_chain_id(self.chain_id) {
             return Err(ValidationError::ChainIdMismatch);
         }
 
         // Check if there is room for more commitments
-        let template = self.get_block_template(req.slot);
-        if let Some(template) = template {
+        if let Some(template) = self.get_block_template(target_slot) {
             if template.transactions_len() >= self.max_commitments_per_slot.get() {
                 return Err(ValidationError::MaxCommitmentsReachedForSlot(
                     self.slot,
@@ -241,12 +236,10 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::MaxPriorityFeePerGasTooHigh);
         }
 
-        let sender = req.sender;
-
-        tracing::debug!(%sender, target_slot = req.slot, "Trying to commit inclusion request to block template");
+        tracing::debug!(%sender, target_slot, "Trying to commit inclusion request to block template");
 
         // Check if the max_fee_per_gas would cover the maximum possible basefee.
-        let slot_diff = req.slot.saturating_sub(self.slot);
+        let slot_diff = target_slot.saturating_sub(self.slot);
 
         // Calculate the max possible basefee given the slot diff
         let max_basefee = calculate_max_basefee(self.basefee, slot_diff)
@@ -261,16 +254,15 @@ impl<C: StateFetcher> ExecutionState<C> {
         // - the nonce difference from the account state.
         // - the balance difference from the account state.
         // - the highest slot number for which the user has requested a preconfirmation.
+        //
         // If the templates do not exist, or this is the first request for this sender,
         // its diffs will be zero.
-        let (nonce_diff, balance_diff, highest_slot) = self.block_templates().iter().fold(
+        let (nonce_diff, balance_diff, highest_slot) = self.block_templates.iter().fold(
             (0, U256::ZERO, 0),
             |(nonce_diff_acc, balance_diff_acc, highest_slot), (slot, block_template)| {
                 let (nonce_diff, balance_diff, slot) = block_template
-                    .state_diff()
                     .get_diff(&sender)
-                    .map(|d| (d.0, d.1, *slot))
-                    // TODO: should balance diff be signed?
+                    .map(|(nonce, balance)| (nonce, balance, *slot))
                     .unwrap_or((0, U256::ZERO, 0));
 
                 (
@@ -281,15 +273,16 @@ impl<C: StateFetcher> ExecutionState<C> {
             },
         );
 
-        if req.slot < highest_slot {
+        if target_slot < highest_slot {
             return Err(ValidationError::SlotTooLow(highest_slot));
         }
 
-        tracing::debug!(%sender, nonce_diff, %balance_diff, "Applying diffs to account state");
+        tracing::trace!(%sender, nonce_diff, %balance_diff, "Applying diffs to account state");
 
         let account_state = match self.account_state(&sender) {
             Some(account) => account,
             None => {
+                // Fetch the account state from the client if it does not exist
                 let account = match self.client.get_account_state(&sender, None).await {
                     Ok(account) => account,
                     Err(err) => {
@@ -316,7 +309,7 @@ impl<C: StateFetcher> ExecutionState<C> {
 
         // Check EIP-4844-specific limits
         if let Some(transaction) = req.tx.as_eip4844() {
-            if let Some(template) = self.block_templates.get(&req.slot) {
+            if let Some(template) = self.block_templates.get(&target_slot) {
                 if template.blob_count() >= MAX_BLOBS_PER_BLOCK {
                     return Err(ValidationError::Eip4844Limit);
                 }
@@ -397,7 +390,7 @@ impl<C: StateFetcher> ExecutionState<C> {
                 template.retain(*address, *account_state);
 
                 // Update the account state with the remaining state diff for the next iteration.
-                if let Some((nonce_diff, balance_diff)) = template.state_diff().get_diff(address) {
+                if let Some((nonce_diff, balance_diff)) = template.get_diff(address) {
                     // Nonce will always be increased
                     account_state.transaction_count += nonce_diff;
                     // Balance will always be decreased
@@ -414,7 +407,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         if let Some(mut account_state) = account_state {
             // Iterate over all block templates and apply the state diff
             for (_, template) in self.block_templates.iter() {
-                if let Some((nonce_diff, balance_diff)) = template.state_diff().get_diff(address) {
+                if let Some((nonce_diff, balance_diff)) = template.get_diff(address) {
                     // Nonce will always be increased
                     account_state.transaction_count += nonce_diff;
                     // Balance will always be decreased
@@ -428,6 +421,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
     }
 
+    /// Gets the block template for the given slot number.
     pub fn get_block_template(&mut self, slot: u64) -> Option<&BlockTemplate> {
         self.block_templates.get(&slot)
     }
