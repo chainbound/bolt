@@ -444,6 +444,7 @@ pub struct StateUpdate {
 
 #[cfg(test)]
 mod tests {
+    use crate::builder::template::StateDiff;
     use crate::state::CommitmentDeadline;
     use crate::state::Duration;
     use std::num::NonZero;
@@ -502,6 +503,47 @@ mod tests {
         let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
         assert!(state.validate_commitment_request(&request).await.is_ok());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_invalid_inclusion_slot() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let max_comms = NonZero::new(10).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        // Create a transaction with a nonce that is too high
+        let tx = default_test_transaction(*sender, Some(1));
+
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+
+        // Insert a constraint diff for slot 11
+        let mut diffs = HashMap::new();
+        diffs.insert(*sender, (1, U256::ZERO));
+        state.block_templates.insert(
+            11,
+            BlockTemplate {
+                state_diff: StateDiff { diffs },
+                signed_constraints_list: vec![],
+            },
+        );
+
+        assert!(matches!(
+            state.validate_commitment_request(&request).await,
+            Err(ValidationError::SlotTooLow(11))
+        ));
 
         Ok(())
     }
