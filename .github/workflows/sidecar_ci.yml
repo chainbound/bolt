@@ -1,6 +1,6 @@
-name: ci
+name: Bolt-sidecar CI
 
-on: [push]
+on: [push, pull_request]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -10,22 +10,33 @@ jobs:
   cargo-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
     steps:
       - name: Checkout sources
         uses: actions/checkout@v3
+
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           profile: minimal
           override: true
-      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+
       - name: Install cargo-nextest
         uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-nextest
-          locked: true
+          args: --locked
+
       - name: Run all tests
         run: cd bolt-sidecar && cargo nextest run --workspace --retries 3
+        env:
+          RPC_URL: ${{ secrets.RPC_URL }}
