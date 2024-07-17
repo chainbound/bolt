@@ -218,6 +218,13 @@ impl StateFetcher for StateClient {
 }
 
 #[cfg(test)]
+impl StateClient {
+    pub fn inner(&self) -> &RpcClient {
+        &self.client
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_util::launch_anvil;
