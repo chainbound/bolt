@@ -274,7 +274,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_smart_contract_code() -> eyre::Result<()> {
-        let rpc_url = Url::parse("https://cloudflare-eth.com")?;
+        let rpc_url = Url::parse(std::env::var("RPC_URL").unwrap().as_str())?;
         let rpc_client = RpcClient::new(rpc_url);
 
         // random deployed smart contract address
