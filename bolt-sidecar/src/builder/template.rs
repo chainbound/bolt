@@ -30,15 +30,15 @@ use crate::{
 #[derive(Debug, Default)]
 pub struct BlockTemplate {
     /// The state diffs per address given the list of commitments.
-    state_diff: StateDiff,
+    pub(crate) state_diff: StateDiff,
     /// The signed constraints associated to the block
     pub signed_constraints_list: Vec<SignedConstraints>,
 }
 
 impl BlockTemplate {
     /// Return the state diff of the block template.
-    pub fn state_diff(&self) -> &StateDiff {
-        &self.state_diff
+    pub fn get_diff(&self, address: &Address) -> Option<(u64, U256)> {
+        self.state_diff.get_diff(address)
     }
 
     /// Returns the cloned list of transactions from the constraints.
@@ -206,7 +206,7 @@ impl BlockTemplate {
 pub struct StateDiff {
     /// Map of diffs per address. Each diff is a tuple of the nonce and balance diff
     /// that should be applied to the current state.
-    diffs: HashMap<Address, (u64, U256)>,
+    pub(crate) diffs: HashMap<Address, (u64, U256)>,
 }
 
 impl StateDiff {

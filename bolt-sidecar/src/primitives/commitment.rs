@@ -1,7 +1,7 @@
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::str::FromStr;
 
-use alloy_primitives::{keccak256, Signature, B256};
+use alloy_primitives::{keccak256, Address, Signature, B256};
 use reth_primitives::PooledTransactionsElement;
 
 use super::TransactionExt;
@@ -37,11 +37,12 @@ pub struct InclusionRequest {
     /// The signature over the "slot" and "tx" fields by the user.
     /// A valid signature is the only proof that the user actually requested
     /// this specific commitment to be included at the given slot.
-    #[serde(
-        deserialize_with = "deserialize_from_str",
-        serialize_with = "signature_as_str"
-    )]
+    #[serde(deserialize_with = "deserialize_sig", serialize_with = "serialize_sig")]
     pub signature: Signature,
+    /// The ec-recovered address of the signature, for internal use.
+    /// If not explicitly set, this defaults to `Address::ZERO`.
+    #[serde(skip)]
+    pub sender: Address,
 }
 
 impl InclusionRequest {
@@ -79,7 +80,7 @@ where
     serializer.serialize_str(&format!("0x{}", hex::encode(&data)))
 }
 
-fn deserialize_from_str<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+fn deserialize_sig<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: Deserializer<'de>,
     T: FromStr,
@@ -89,10 +90,7 @@ where
     T::from_str(s.trim_start_matches("0x")).map_err(de::Error::custom)
 }
 
-fn signature_as_str<S: serde::Serializer>(
-    sig: &Signature,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
+fn serialize_sig<S: serde::Serializer>(sig: &Signature, serializer: S) -> Result<S::Ok, S::Error> {
     let parity = sig.v();
     // As bytes encodes the parity as 27/28, need to change that.
     let mut bytes = sig.as_bytes();

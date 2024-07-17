@@ -68,7 +68,6 @@ async fn main() -> eyre::Result<()> {
         tokio::select! {
             Some(ApiEvent { request, response_tx }) = api_events_rx.recv() => {
                 let start = std::time::Instant::now();
-                tracing::info!("Received commitment request: {:?}", request);
 
                 let validator_index = match consensus_state.validate_request(&request) {
                     Ok(index) => index,
@@ -79,13 +78,10 @@ async fn main() -> eyre::Result<()> {
                     }
                 };
 
-                let sender = match execution_state.validate_commitment_request(&request).await {
-                    Ok(sender) => sender,
-                    Err(e) => {
-                        tracing::error!(err = ?e, "Failed to commit request");
-                        let _ = response_tx.send(Err(ApiError::Custom(e.to_string())));
-                        continue;
-                    }
+                if let Err(e) = execution_state.validate_commitment_request(&request).await {
+                    tracing::error!(err = ?e, "Failed to commit request");
+                    let _ = response_tx.send(Err(ApiError::Custom(e.to_string())));
+                    continue;
                 };
 
                 // TODO: match when we have more request types
@@ -99,7 +95,7 @@ async fn main() -> eyre::Result<()> {
                 // TODO: review all this `clone` usage
 
                 // parse the request into constraints and sign them with the sidecar signer
-                let message = ConstraintsMessage::build(validator_index, request.clone(), sender);
+                let message = ConstraintsMessage::build(validator_index, request.clone());
                 let signature = signer.sign(&message.digest())?.to_string();
                 let signed_constraints = SignedConstraints { message, signature };
 
@@ -123,7 +119,7 @@ async fn main() -> eyre::Result<()> {
             Some(slot) = consensus_state.commitment_deadline.wait() => {
                 tracing::info!(slot, "Commitment deadline reached, starting to build local block");
 
-                let Some(template) = execution_state.get_block_template(slot) else {
+                let Some(template) = execution_state.remove_block_template(slot) else {
                     tracing::warn!("No block template found for slot {slot} when requested");
                     continue;
                 };
