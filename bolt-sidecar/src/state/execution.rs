@@ -279,7 +279,7 @@ impl<C: StateFetcher> ExecutionState<C> {
 
         tracing::trace!(%sender, nonce_diff, %balance_diff, "Applying diffs to account state");
 
-        let account_state = match self.account_state(&sender) {
+        let account_state = match self.account_state(&sender).copied() {
             Some(account) => account,
             None => {
                 // Fetch the account state from the client if it does not exist
@@ -400,25 +400,9 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
     }
 
-    /// Returns the account state for the given address INCLUDING any intermediate block templates state.
-    fn account_state(&self, address: &Address) -> Option<AccountState> {
-        let account_state = self.account_states.get(address).copied();
-
-        if let Some(mut account_state) = account_state {
-            // Iterate over all block templates and apply the state diff
-            for (_, template) in self.block_templates.iter() {
-                if let Some((nonce_diff, balance_diff)) = template.get_diff(address) {
-                    // Nonce will always be increased
-                    account_state.transaction_count += nonce_diff;
-                    // Balance will always be decreased
-                    account_state.balance -= balance_diff;
-                }
-            }
-
-            Some(account_state)
-        } else {
-            None
-        }
+    /// Returns the cached account state for the given address
+    fn account_state(&self, address: &Address) -> Option<&AccountState> {
+        self.account_states.get(address)
     }
 
     /// Gets the block template for the given slot number.
@@ -643,7 +627,7 @@ mod tests {
         state.add_constraint(10, signed_constraints);
 
         // create a new transaction and request a preconfirmation for it
-        let tx = default_test_transaction(*sender, Some(3));
+        let tx = default_test_transaction(*sender, Some(2));
         let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
         // this should fail because the balance is insufficient as we spent
