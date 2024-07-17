@@ -1,4 +1,5 @@
-// use alloy::alloy_eips::eip2718::Encodable2718;
+use std::str::FromStr;
+
 use alloy::{
     consensus::{BlobTransactionSidecar, SidecarBuilder, SimpleCoder},
     hex,
@@ -7,12 +8,6 @@ use alloy::{
     rpc::types::TransactionRequest,
 };
 use beacon_api_client::{mainnet::Client as BeaconApiClient, BlockId};
-use std::str::FromStr;
-// use ethers::{
-//     signers::Signer,
-//     types::{transaction::eip2718::TypedTransaction, Eip1559TransactionRequest},
-//     utils::hex,
-// };
 use eyre::Result;
 use rand::{thread_rng, Rng};
 use reth_primitives::TransactionSigned;
@@ -22,13 +17,11 @@ use crate::constants::{DEAD_ADDRESS, HELDER_TESTNET_CHAIN_ID, NOICE_GAS_PRICE};
 
 /// Generates random ETH transfer to `DEAD_ADDRESS` with a random payload.
 pub fn generate_random_tx() -> TransactionRequest {
-    let tx: TransactionRequest = TransactionRequest::default()
+    TransactionRequest::default()
         .with_to(Address::from_str(DEAD_ADDRESS).unwrap())
         .with_chain_id(HELDER_TESTNET_CHAIN_ID)
         .with_value(U256::from(thread_rng().gen_range(1..100)))
-        .with_gas_price(NOICE_GAS_PRICE);
-
-    tx
+        .with_gas_price(NOICE_GAS_PRICE)
 }
 
 /// Generate random transaction with blob (eip4844)

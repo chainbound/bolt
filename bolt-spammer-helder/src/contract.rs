@@ -8,10 +8,9 @@ use alloy::{
     sol_types::{Error as SolError, SolInterface},
     transports::{http::Http, TransportError},
 };
+use beacon_api_client::ProposerDuty;
 use reqwest::Client;
 use url::Url;
-
-use beacon_api_client::ProposerDuty;
 use BoltRegistryContract::{BoltRegistryContractErrors, BoltRegistryContractInstance, Registrant};
 
 #[derive(Debug, Clone)]
