@@ -55,6 +55,11 @@ pub enum ValidationError {
     #[error("Too many EIP-4844 transactions in target block")]
     Eip4844Limit,
     /// The maximum commitments have been reached for the slot.
+    #[error(
+        "Already requested a preconfirmation for slot {0}. Slot must be greater than or equal {0}"
+    )]
+    SlotTooLow(u64),
+    /// The maximum commitments have been reached for the slot.
     #[error("Max commitments reached for slot {0}: {1}")]
     MaxCommitmentsReachedForSlot(u64, usize),
     /// The signature is invalid.
@@ -252,21 +257,33 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::BaseFeeTooLow(max_basefee));
         }
 
-        // Retrieve the nonce and balance diffs from previous preconfirmations for this slot.
+        // From previous preconfirmations requests retrieve
+        // - the nonce difference from the account state.
+        // - the balance difference from the account state.
+        // - the highest slot number for which the user has requested a preconfirmation.
         // If the templates do not exist, or this is the first request for this sender,
         // its diffs will be zero.
-        let (nonce_diff, balance_diff) = self.block_templates().values().fold(
-            (0, U256::ZERO),
-            |(nonce_diff_acc, balance_diff_acc), block_template| {
-                let (nonce_diff, balance_diff) = block_template
+        let (nonce_diff, balance_diff, highest_slot) = self.block_templates().iter().fold(
+            (0, U256::ZERO, 0),
+            |(nonce_diff_acc, balance_diff_acc, highest_slot), (slot, block_template)| {
+                let (nonce_diff, balance_diff, slot) = block_template
                     .state_diff()
                     .get_diff(&sender)
+                    .map(|d| (d.0, d.1, *slot))
                     // TODO: should balance diff be signed?
-                    .unwrap_or((0, U256::ZERO));
+                    .unwrap_or((0, U256::ZERO, 0));
 
-                (nonce_diff_acc + nonce_diff, balance_diff_acc + balance_diff)
+                (
+                    nonce_diff_acc + nonce_diff,
+                    balance_diff_acc + balance_diff,
+                    u64::max(highest_slot, slot),
+                )
             },
         );
+
+        if req.slot < highest_slot {
+            return Err(ValidationError::SlotTooLow(highest_slot));
+        }
 
         tracing::debug!(%sender, nonce_diff, %balance_diff, "Applying diffs to account state");
 
