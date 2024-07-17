@@ -533,14 +533,37 @@ mod tests {
         let slot = client.get_head().await?;
         state.update_head(None, slot).await?;
 
-        // Create a transaction with a nonce that is too high
-        let tx = default_test_transaction(*sender, Some(1));
+        // Insert a constraint diff for slot 9 to simulate nonce increment
+        let mut diffs = HashMap::new();
+        diffs.insert(*sender, (1, U256::ZERO));
+        state.block_templates.insert(
+            9,
+            BlockTemplate {
+                state_diff: StateDiff { diffs },
+                signed_constraints_list: vec![],
+            },
+        );
+
+        // Create a transaction with a nonce that is too low
+        let tx = default_test_transaction(*sender, Some(0));
 
         let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
         assert!(matches!(
             state.validate_commitment_request(&request).await,
-            Err(ValidationError::NonceTooHigh(0, 1))
+            Err(ValidationError::NonceTooLow(1, 0))
+        ));
+
+        assert!(state.account_states.get(sender).unwrap().transaction_count == 0);
+
+        // Create a transaction with a nonce that is too high
+        let tx = default_test_transaction(*sender, Some(2));
+
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+
+        assert!(matches!(
+            state.validate_commitment_request(&request).await,
+            Err(ValidationError::NonceTooHigh(1, 2))
         ));
 
         Ok(())
