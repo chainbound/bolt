@@ -261,8 +261,7 @@ mod tests {
 
         assert!(
             state
-                .block_templates()
-                .get(&target_slot)
+                .get_block_template(target_slot)
                 .unwrap()
                 .transactions_len()
                 == 1
@@ -281,8 +280,7 @@ mod tests {
             .await?;
 
         let transactions_len = state
-            .block_templates()
-            .get(&target_slot)
+            .get_block_template(target_slot)
             .unwrap()
             .transactions_len();
 
@@ -325,8 +323,7 @@ mod tests {
 
         assert!(
             state
-                .block_templates()
-                .get(&target_slot)
+                .get_block_template(target_slot)
                 .unwrap()
                 .transactions_len()
                 == 1
@@ -336,7 +333,7 @@ mod tests {
         // because it's now stale
         state.update_head(None, target_slot).await?;
 
-        assert!(state.block_templates().get(&target_slot).is_none());
+        assert!(state.get_block_template(target_slot).is_none());
 
         Ok(())
     }
