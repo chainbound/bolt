@@ -683,7 +683,9 @@ mod tests {
         state.update_head(None, slot).await?;
 
         // Create a transaction with a basefee that is too low
-        let tx = default_test_transaction(*sender, None).with_max_fee_per_gas(basefee - 1);
+        let tx = default_test_transaction(*sender, None)
+            .with_max_fee_per_gas(basefee - 1)
+            .with_max_priority_fee_per_gas(basefee / 2);
 
         let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
