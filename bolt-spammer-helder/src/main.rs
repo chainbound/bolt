@@ -10,7 +10,7 @@ use alloy::{
 use beacon_api_client::mainnet::Client as BeaconApiClient;
 use bolt_spammer_helder::{
     constants::SLOTS_PER_EPOCH,
-    onchain_registry::BoltRegistry,
+    contract::BoltRegistry,
     utils::{
         current_slot, generate_random_blob_tx, generate_random_tx, prepare_rpc_request,
         sign_transaction,
@@ -98,7 +98,7 @@ async fn main() -> Result<()> {
         B256::from(keccak256(data))
     };
 
-    let signature = wallet.sign_message(&message_digest).unwrap();
+    let signature = wallet.sign_message(&message_digest).await?;
 
     let request = prepare_rpc_request(
         "bolt_inclusionPreconfirmation",
