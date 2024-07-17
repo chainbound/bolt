@@ -136,6 +136,7 @@ impl<C: StateFetcher + Unpin, S: SignerBLS + Unpin> SidecarDriver<C, S> {
 
         // TODO: match when we have more request types
         let CommitmentRequest::Inclusion(request) = api_event.request;
+        let target_slot = request.slot;
 
         tracing::info!(
             elapsed = ?start.elapsed(),
@@ -146,7 +147,7 @@ impl<C: StateFetcher + Unpin, S: SignerBLS + Unpin> SidecarDriver<C, S> {
         // TODO: review all this `clone` usage
 
         // parse the request into constraints and sign them with the sidecar signer
-        let message = ConstraintsMessage::build(validator_index, request.clone(), sender);
+        let message = ConstraintsMessage::build(validator_index, request, sender);
         let signature = match self.signer.sign(&message.digest()) {
             Ok(sig) => sig.to_string(),
             Err(e) => {
@@ -158,10 +159,10 @@ impl<C: StateFetcher + Unpin, S: SignerBLS + Unpin> SidecarDriver<C, S> {
         let signed_constraints = SignedConstraints { message, signature };
 
         self.execution_state
-            .add_constraint(request.slot, signed_constraints.clone());
+            .add_constraint(target_slot, signed_constraints.clone());
 
         let res = serde_json::to_value(signed_constraints).map_err(Into::into);
-        let _ = api_event.response_tx.send(res).ok();
+        let _ = api_event.response_tx.send(res);
     }
 
     fn handle_new_head_event(&mut self, head_event: HeadEvent) {
