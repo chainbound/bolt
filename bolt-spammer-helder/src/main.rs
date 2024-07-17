@@ -11,7 +11,10 @@ use beacon_api_client::mainnet::Client as BeaconApiClient;
 use bolt_spammer_helder::{
     constants::SLOTS_PER_EPOCH,
     onchain_registry::BoltRegistry,
-    utils::{current_slot, generate_random_tx, prepare_rpc_request, sign_transaction},
+    utils::{
+        current_slot, generate_random_blob_tx, generate_random_tx, prepare_rpc_request,
+        sign_transaction,
+    },
 };
 use clap::Parser;
 use eyre::Result;
@@ -31,6 +34,9 @@ struct Opts {
     private_key: String,
     #[clap(short = 'a', long, env, default_value = "./registry_abi.json")]
     registry_abi_path: PathBuf,
+    // Flag for blob mode
+    #[clap(short, long, default_value = "false")]
+    blob: bool,
 }
 
 #[tokio::main]
@@ -81,7 +87,7 @@ async fn main() -> Result<()> {
             }
         };
 
-    let mut tx = generate_random_tx();
+    let mut tx = if opts.blob { generate_random_blob_tx() } else { generate_random_tx() };
 
     let (tx_hash, tx_rlp) = sign_transaction(&transaction_signer, tx).await?;
 
