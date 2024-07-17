@@ -267,7 +267,7 @@ impl<C: StateFetcher> ExecutionState<C> {
 
                 (
                     nonce_diff_acc + nonce_diff,
-                    balance_diff_acc + balance_diff,
+                    balance_diff_acc.saturating_add(balance_diff),
                     u64::max(highest_slot, slot),
                 )
             },
@@ -299,8 +299,8 @@ impl<C: StateFetcher> ExecutionState<C> {
         };
 
         let account_state_with_diffs = AccountState {
-            transaction_count: account_state.transaction_count + nonce_diff,
-            balance: account_state.balance - balance_diff,
+            transaction_count: account_state.transaction_count.saturating_add(nonce_diff),
+            balance: account_state.balance.saturating_sub(balance_diff),
             has_code: account_state.has_code,
         };
 
@@ -445,9 +445,8 @@ pub struct StateUpdate {
 #[cfg(test)]
 mod tests {
     use crate::builder::template::StateDiff;
-    use crate::state::CommitmentDeadline;
-    use crate::state::Duration;
-    use std::num::NonZero;
+    use std::str::FromStr;
+    use std::{num::NonZero, time::Duration};
 
     use alloy_consensus::constants::ETH_TO_WEI;
     use alloy_eips::eip2718::Encodable2718;
@@ -465,21 +464,6 @@ mod tests {
     };
 
     use super::*;
-
-    #[tokio::test]
-    async fn test_commitment_deadline() {
-        let time = std::time::Instant::now();
-        let mut deadline = CommitmentDeadline::new(0, Duration::from_secs(1));
-
-        let slot = deadline.wait().await;
-        println!("Deadline reached. Passed {:?}", time.elapsed());
-        assert_eq!(slot, Some(0));
-
-        let time = std::time::Instant::now();
-        let slot = deadline.wait().await;
-        println!("Deadline reached. Passed {:?}", time.elapsed());
-        assert_eq!(slot, None);
-    }
 
     #[tokio::test]
     async fn test_valid_inclusion_request() -> eyre::Result<()> {
@@ -601,6 +585,69 @@ mod tests {
 
         let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
+        assert!(matches!(
+            state.validate_commitment_request(&request).await,
+            Err(ValidationError::InsufficientBalance)
+        ));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_invalid_inclusion_request_balance_multiple() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let max_comms = NonZero::new(10).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+        let signer = Signer::random();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        // Set the sender balance to just enough to pay for 1 transaction
+        let balance = U256::from_str("500000000000000").unwrap(); // leave just 0.0005 ETH
+        let sender_account = client.get_account_state(sender, None).await.unwrap();
+        let balance_to_burn = sender_account.balance - balance;
+
+        // burn the balance
+        let tx = default_test_transaction(*sender, Some(0)).with_value(uint!(balance_to_burn));
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let tx_bytes = request
+            .as_inclusion_request()
+            .unwrap()
+            .tx
+            .envelope_encoded();
+        let _ = client.inner().send_raw_transaction(tx_bytes).await?;
+
+        // wait for the transaction to be included to update the sender balance
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        // create a new transaction and request a preconfirmation for it
+        let tx = default_test_transaction(*sender, Some(1));
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+
+        assert!(state.validate_commitment_request(&request).await.is_ok());
+
+        let message = ConstraintsMessage::build(0, request.as_inclusion_request().unwrap().clone());
+        let signature = signer.sign(&message.digest())?.to_string();
+        let signed_constraints = SignedConstraints { message, signature };
+        state.add_constraint(10, signed_constraints);
+
+        // create a new transaction and request a preconfirmation for it
+        let tx = default_test_transaction(*sender, Some(3));
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+
+        // this should fail because the balance is insufficient as we spent
+        // all of it on the previous preconfirmation
         assert!(matches!(
             state.validate_commitment_request(&request).await,
             Err(ValidationError::InsufficientBalance)

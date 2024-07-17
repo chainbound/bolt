@@ -193,6 +193,11 @@ impl RpcClient {
 
         self.0.request("debug_traceCall", params).await
     }
+
+    /// Send a raw transaction to the network.
+    pub async fn send_raw_transaction(&self, raw: Bytes) -> TransportResult<B256> {
+        self.0.request("eth_sendRawTransaction", [raw]).await
+    }
 }
 
 impl Deref for RpcClient {

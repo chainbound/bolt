@@ -65,3 +65,24 @@ impl Future for CommitmentDeadline {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_commitment_deadline() {
+        let time = std::time::Instant::now();
+        let mut deadline = CommitmentDeadline::new(0, Duration::from_secs(1));
+
+        let slot = deadline.wait().await;
+        println!("Deadline reached. Passed {:?}", time.elapsed());
+        assert_eq!(slot, Some(0));
+
+        let time = std::time::Instant::now();
+        let slot = deadline.wait().await;
+        println!("Deadline reached. Passed {:?}", time.elapsed());
+        assert_eq!(slot, None);
+    }
+}
