@@ -46,10 +46,7 @@ impl InclusionRequest {
     /// Validates the transaction chain id against the provided chain id.
     /// Returns true if the chain id matches, false otherwise.
     pub fn validate_chain_id(&self, chain_id: u64) -> bool {
-        match self.tx.chain_id() {
-            Some(tx_chain_id) if tx_chain_id == chain_id => true,
-            _ => false,
-        }
+        matches!(self.tx.chain_id(), Some(tx_chain_id) if tx_chain_id == chain_id)
     }
 }
 

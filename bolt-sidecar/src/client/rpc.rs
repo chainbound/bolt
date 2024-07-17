@@ -212,7 +212,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_proof() -> eyre::Result<()> {
-        let rpc_url = Url::parse("https://cloudflare-eth.com")?;
+        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL must be set");
+        let rpc_url = Url::parse(&rpc_url)?;
         let rpc_client = RpcClient::new(rpc_url);
 
         let proof: EIP1186AccountProofResponse = rpc_client
