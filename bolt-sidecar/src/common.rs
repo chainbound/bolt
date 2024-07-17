@@ -47,11 +47,17 @@ pub fn validate_transaction(
 ) -> Result<(), ValidationError> {
     // Check if the nonce is correct (should be the same as the transaction count)
     if transaction.nonce() < account_state.transaction_count {
-        return Err(ValidationError::NonceTooLow);
+        return Err(ValidationError::NonceTooLow(
+            account_state.transaction_count,
+            transaction.nonce(),
+        ));
     }
 
     if transaction.nonce() > account_state.transaction_count {
-        return Err(ValidationError::NonceTooHigh);
+        return Err(ValidationError::NonceTooHigh(
+            account_state.transaction_count,
+            transaction.nonce(),
+        ));
     }
 
     // Check if the balance is enough
