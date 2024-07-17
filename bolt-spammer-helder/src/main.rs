@@ -34,7 +34,7 @@ struct Opts {
     private_key: String,
     #[clap(short = 'a', long, env, default_value = "./registry_abi.json")]
     registry_abi_path: PathBuf,
-    // Flag for blob mode
+    // Flag for generating a blob tx instead of a regular tx
     #[clap(short, long, default_value = "false")]
     blob: bool,
 }
@@ -54,6 +54,8 @@ async fn main() -> Result<()> {
 
     let beacon_api_client = BeaconApiClient::new(opts.beacon_client_url);
 
+    let registry = BoltRegistry::new(Url::from_str(&opts.el_provider_url)?, opts.registry_address);
+
     let current_slot = current_slot(&beacon_api_client).await?;
 
     tracing::info!(
@@ -71,14 +73,11 @@ async fn main() -> Result<()> {
         .filter(|duty| duty.slot > current_slot)
         .collect::<Vec<_>>();
 
-    let registry_url = Url::from_str(&opts.el_provider_url)?;
-    let registry = BoltRegistry::new(registry_url, opts.registry_address);
-
     let (proposer_rpc, next_preconfer_slot) =
         match registry.next_preconfer_from_registry(proposer_duties).await {
             Ok(Some(res)) => res,
             Ok(None) => {
-                // Handle the case where there is no next preconfer slot
+                tracing::info!("no next preconfer slot found");
                 return Ok(());
             }
             Err(e) => {
@@ -98,7 +97,7 @@ async fn main() -> Result<()> {
         B256::from(keccak256(data))
     };
 
-    let signature = wallet.sign_message(&message_digest).await?;
+    let signature = wallet.sign_message().await?;
 
     let request = prepare_rpc_request(
         "bolt_inclusionPreconfirmation",
