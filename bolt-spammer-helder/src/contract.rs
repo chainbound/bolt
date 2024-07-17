@@ -207,4 +207,36 @@ mod tests {
 
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_next_preconfer_from_registry() -> eyre::Result<()> {
+        let registry = BoltRegistry::new(
+            Url::parse("http://remotebeast:4485")?,
+            Address::from_str("0xdF11D829eeC4C192774F3Ec171D822f6Cb4C14d9")?,
+        );
+
+        // Mock proposer duties
+        let proposer_duties = vec![
+            ProposerDuty { public_key: Default::default(), validator_index: 2145, slot: 12345 },
+            ProposerDuty { public_key: Default::default(), validator_index: 2150, slot: 12346 },
+        ];
+
+        // Calling the next_preconfer_from_registry function
+        let result = registry.next_preconfer_from_registry(proposer_duties).await?;
+
+        // Expected result
+        let expected_rpc = "http://135.181.191.125:8000".to_string();
+        let expected_slot = 12345;
+
+        // Asserting the result
+        match result {
+            Some((rpc, slot)) => {
+                assert_eq!(rpc, expected_rpc);
+                assert_eq!(slot, expected_slot);
+            }
+            None => panic!("Expected some value but got None"),
+        }
+
+        Ok(())
+    }
 }

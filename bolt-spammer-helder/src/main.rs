@@ -1,10 +1,8 @@
-use std::{path::PathBuf, str::FromStr, sync::Arc};
+use std::{path::PathBuf, str::FromStr};
 
 use alloy::{
     hex,
     network::EthereumWallet,
-    primitives::{utils::keccak256, B256},
-    providers::{Provider, ProviderBuilder},
     signers::{local::PrivateKeySigner, Signer},
 };
 use beacon_api_client::mainnet::Client as BeaconApiClient;
@@ -49,8 +47,7 @@ async fn main() -> Result<()> {
     let opts = Opts::parse();
 
     let wallet: PrivateKeySigner = opts.private_key.parse().expect("should parse private key");
-    let eth_provider = ProviderBuilder::new().on_http(opts.el_provider_url.parse()?);
-    let transaction_signer: EthereumWallet = wallet.into();
+    let transaction_signer: EthereumWallet = wallet.clone().into();
 
     let beacon_api_client = BeaconApiClient::new(opts.beacon_client_url);
 
@@ -86,7 +83,7 @@ async fn main() -> Result<()> {
             }
         };
 
-    let mut tx = if opts.blob { generate_random_blob_tx() } else { generate_random_tx() };
+    let tx = if opts.blob { generate_random_blob_tx() } else { generate_random_tx() };
 
     let (tx_hash, tx_rlp) = sign_transaction(&transaction_signer, tx).await?;
 
@@ -94,10 +91,10 @@ async fn main() -> Result<()> {
         let mut data = Vec::new();
         data.extend_from_slice(&next_preconfer_slot.to_le_bytes());
         data.extend_from_slice(hex::decode(tx_hash.trim_start_matches("0x"))?.as_slice());
-        B256::from(keccak256(data))
+        data
     };
 
-    let signature = wallet.sign_message().await?;
+    let signature = wallet.sign_message(message_digest.as_ref()).await?;
 
     let request = prepare_rpc_request(
         "bolt_inclusionPreconfirmation",
