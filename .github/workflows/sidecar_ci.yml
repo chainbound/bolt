@@ -28,4 +28,4 @@ jobs:
           crate: cargo-nextest
           locked: true
       - name: Run all tests
-        run: cargo nextest run --workspace --retries 3
+        run: cd bolt-sidecar && cargo nextest run --workspace --retries 3
