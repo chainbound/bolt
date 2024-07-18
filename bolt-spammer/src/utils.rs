@@ -30,7 +30,7 @@ pub fn generate_random_blob_tx() -> TransactionRequest {
 
     let dead_address = Address::from_str(DEAD_ADDRESS).unwrap();
 
-    let tx: TransactionRequest = TransactionRequest::default()
+    TransactionRequest::default()
         .with_to(dead_address)
         .with_chain_id(KURTOSIS_CHAIN_ID)
         .with_value(U256::from(100))
@@ -38,9 +38,7 @@ pub fn generate_random_blob_tx() -> TransactionRequest {
         .max_fee_per_gas(100u128)
         .max_priority_fee_per_gas(50u128)
         .with_gas_limit(1_000_000u128)
-        .with_blob_sidecar(sidecar);
-
-    tx
+        .with_blob_sidecar(sidecar)
 }
 
 pub fn prepare_rpc_request(method: &str, params: Vec<Value>) -> Value {

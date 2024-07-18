@@ -38,7 +38,7 @@ struct Opts {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
-    tracing::info!("starting bolt-spammer-helder");
+    tracing::info!("starting bolt-spammer");
 
     let opts = Opts::parse();
 
