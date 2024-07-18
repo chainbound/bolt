@@ -1,6 +1,6 @@
 use std::{fs::read_to_string, path::Path, str::FromStr};
 
-use alloy_primitives::Address;
+use alloy::primitives::Address;
 use blst::min_pk::SecretKey;
 use clap::Parser;
 use reqwest::Url;

@@ -6,7 +6,7 @@
 
 use std::collections::HashMap;
 
-use alloy_primitives::{Address, U256};
+use alloy::primitives::{Address, U256};
 use ethereum_consensus::{
     crypto::{KzgCommitment, KzgProof},
     deneb::mainnet::{Blob, BlobsBundle},

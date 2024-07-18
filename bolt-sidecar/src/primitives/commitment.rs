@@ -1,7 +1,7 @@
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::str::FromStr;
 
-use alloy_primitives::{keccak256, Address, Signature, B256};
+use alloy::primitives::{keccak256, Address, Signature, B256};
 use reth_primitives::PooledTransactionsElement;
 
 use super::TransactionExt;

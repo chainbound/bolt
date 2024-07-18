@@ -1,4 +1,4 @@
-use alloy_primitives::FixedBytes;
+use alloy::primitives::FixedBytes;
 use blst::{min_pk::Signature, BLST_ERROR};
 use rand::RngCore;
 

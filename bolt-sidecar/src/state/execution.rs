@@ -1,6 +1,8 @@
-use alloy_eips::eip4844::MAX_BLOBS_PER_BLOCK;
-use alloy_primitives::{Address, SignatureError, U256};
-use alloy_transport::TransportError;
+use alloy::{
+    eips::eip4844::MAX_BLOBS_PER_BLOCK,
+    primitives::{Address, SignatureError, U256},
+    transports::TransportError,
+};
 use reth_primitives::{
     revm_primitives::EnvKzgSettings, BlobTransactionValidationError, PooledTransactionsElement,
 };
@@ -451,12 +453,14 @@ mod tests {
     use std::str::FromStr;
     use std::{num::NonZero, time::Duration};
 
-    use alloy_consensus::constants::ETH_TO_WEI;
-    use alloy_eips::eip2718::Encodable2718;
-    use alloy_network::EthereumWallet;
-    use alloy_primitives::{uint, Uint};
-    use alloy_provider::{network::TransactionBuilder, Provider, ProviderBuilder};
-    use alloy_signer_local::PrivateKeySigner;
+    use alloy::{
+        consensus::constants::ETH_TO_WEI,
+        eips::eip2718::Encodable2718,
+        network::EthereumWallet,
+        primitives::{uint, Uint},
+        providers::{network::TransactionBuilder, Provider, ProviderBuilder},
+        signers::local::PrivateKeySigner,
+    };
     use fetcher::{StateClient, StateFetcher};
 
     use crate::{

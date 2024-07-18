@@ -1,8 +1,10 @@
-use alloy_eips::eip4895::Withdrawal;
-use alloy_primitives::{Address, Bloom, B256, U256};
-use alloy_rpc_types_engine::{
-    ExecutionPayload as AlloyExecutionPayload, ExecutionPayloadV1, ExecutionPayloadV2,
-    ExecutionPayloadV3,
+use alloy::{
+    eips::eip4895::Withdrawal,
+    primitives::{Address, Bloom, B256, U256},
+    rpc::types::engine::{
+        ExecutionPayload as AlloyExecutionPayload, ExecutionPayloadV1, ExecutionPayloadV2,
+        ExecutionPayloadV3,
+    },
 };
 use ethereum_consensus::{
     bellatrix::mainnet::Transaction,

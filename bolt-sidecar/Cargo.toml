@@ -19,25 +19,7 @@ tree_hash_derive = "0.5"
 secp256k1 = { version = "0.29.0", features = ["rand"] }
 
 # alloy
-alloy-rpc-client = { version = "0.2.0", features = ["reqwest", "ws", "pubsub"] }
-alloy-consensus = { version = "0.2.0", features = ["k256"] }
-alloy-provider = { version = "0.2.0", features = ["ws"] }
-alloy-signer = { version = "0.2.0" }
-alloy-signer-local = { version = "0.2.0" }
-alloy-transport = { version = "0.2.0" }
-alloy-eips = { version = "0.2.0" }
-alloy-transport-http = { version = "0.2.0" }
-alloy-transport-ws = { version = "0.2.0" }
-alloy-pubsub = { version = "0.2.0" }
-alloy-rpc-types = { version = "0.2.0" }
-alloy-rpc-types-engine = { version = "0.2.0" }
-alloy-rpc-types-beacon = { version = "0.2.0" }
-alloy-rpc-types-trace = { version = "0.2.0" }
-alloy-json-rpc = { version = "0.2.0" }
-alloy-network = { version = "0.2.0" }
-alloy-primitives = { version = "0.7.7" }
-alloy-rlp = { version = "0.3.7" }
-
+alloy = { version = "0.2.0", features = ["full", "provider-trace-api", "rpc-types-beacon", "rpc-types-engine"] }
 
 # alloy-rpc-types = { git = "https://github.com/chainbound/alloy", branch = "fix/account-override-serialize" }
 
