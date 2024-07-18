@@ -245,7 +245,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         let max_basefee = calculate_max_basefee(self.basefee, slot_diff)
             .ok_or(ValidationError::MaxBaseFeeCalcOverflow)?;
 
-        tracing::debug!(%slot_diff, %max_basefee, "Validating basefee");
+        tracing::debug!(%slot_diff, basefee = self.basefee, %max_basefee, "Validating basefee");
 
         // Validate the base fee
         if !req.validate_basefee(max_basefee) {
