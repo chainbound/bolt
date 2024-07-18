@@ -362,6 +362,7 @@ impl<C: StateFetcher> ExecutionState<C> {
 
         let accounts = self.account_states.keys().collect::<Vec<_>>();
         let update = self.client.get_state_update(accounts, block_number).await?;
+        tracing::trace!(%slot, ?update, "Applying execution state update");
 
         self.apply_state_update(update);
 
