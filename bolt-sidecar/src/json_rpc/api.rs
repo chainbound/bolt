@@ -24,11 +24,11 @@ pub enum ApiError {
     #[error("duplicate: the same request already exists")]
     DuplicateRequest,
     #[error("signature error: {0}")]
-    Signature(#[from] alloy_primitives::SignatureError),
+    Signature(#[from] alloy::primitives::SignatureError),
     #[error("signature pubkey mismatch. expected: {expected}, got: {got}")]
     SignaturePubkeyMismatch { expected: String, got: String },
     #[error("failed to decode RLP: {0}")]
-    Rlp(#[from] alloy_rlp::Error),
+    Rlp(#[from] alloy::transports::HttpError),
     #[error("failed during HTTP call: {0}")]
     Http(#[from] reqwest::Error),
     #[error("downstream error: {0}")]

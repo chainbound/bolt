@@ -1,4 +1,4 @@
-use alloy_primitives::{keccak256, Address};
+use alloy::primitives::{keccak256, Address};
 use reth_primitives::PooledTransactionsElement;
 use secp256k1::Message;
 use serde::Serialize;

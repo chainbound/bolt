@@ -3,7 +3,7 @@
 
 use std::sync::{atomic::AtomicU64, Arc};
 
-use alloy_primitives::U256;
+use alloy::primitives::U256;
 use ethereum_consensus::{
     crypto::{KzgCommitment, PublicKey as BlsPublicKey, Signature as BlsSignature},
     deneb::{

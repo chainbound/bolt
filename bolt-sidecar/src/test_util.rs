@@ -1,13 +1,15 @@
-use alloy_eips::eip2718::Encodable2718;
-use alloy_network::{EthereumWallet, TransactionBuilder};
-use alloy_node_bindings::{Anvil, AnvilInstance};
-use alloy_primitives::{keccak256, Address, B256, U256};
-use alloy_rpc_types::TransactionRequest;
-use alloy_signer::{
-    k256::{ecdsa::SigningKey as K256SigningKey, SecretKey as K256SecretKey},
-    Signer,
+use alloy::{
+    eips::eip2718::Encodable2718,
+    network::{EthereumWallet, TransactionBuilder},
+    primitives::{keccak256, Address, B256, U256},
+    rpc::types::TransactionRequest,
+    signers::{
+        k256::{ecdsa::SigningKey as K256SigningKey, SecretKey as K256SecretKey},
+        local::PrivateKeySigner,
+        Signer,
+    },
 };
-use alloy_signer_local::PrivateKeySigner;
+use alloy_node_bindings::{Anvil, AnvilInstance};
 use blst::min_pk::SecretKey;
 use reth_primitives::PooledTransactionsElement;
 use secp256k1::Message;
