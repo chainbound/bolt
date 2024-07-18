@@ -1,3 +1,5 @@
+use std::{collections::HashMap, num::NonZero};
+
 use alloy::{
     eips::eip4844::MAX_BLOBS_PER_BLOCK,
     primitives::{Address, SignatureError, U256},
@@ -6,16 +8,14 @@ use alloy::{
 use reth_primitives::{
     revm_primitives::EnvKzgSettings, BlobTransactionValidationError, PooledTransactionsElement,
 };
-use std::{collections::HashMap, num::NonZero};
 use thiserror::Error;
 
+use super::fetcher::StateFetcher;
 use crate::{
     builder::BlockTemplate,
     common::{calculate_max_basefee, validate_transaction},
     primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot, TransactionExt},
 };
-
-use super::fetcher::StateFetcher;
 
 /// Possible commitment validation errors.
 #[derive(Debug, Error)]
