@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::str::FromStr;
 
 use alloy::{
     eips::eip2718::Encodable2718,
@@ -37,9 +37,6 @@ struct Opts {
     /// Private key to sign transactions with
     #[clap(short = 'k', long, env)]
     private_key: String,
-    /// Path to the ABI file of the Bolt Registry smart contract
-    #[clap(short = 'a', long, env, default_value = "./registry_abi.json")]
-    registry_abi_path: PathBuf,
     // Flag for generating a blob tx instead of a regular tx
     #[clap(short, long, default_value = "false")]
     blob: bool,
