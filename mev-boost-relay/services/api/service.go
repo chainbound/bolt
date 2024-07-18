@@ -2148,11 +2148,13 @@ func (api *RelayAPI) updateRedisBidWithProofs(
 		return nil, nil, false
 	}
 
-	slotConstraints, _ := api.constraints.Get(api.headSlot.Load())
+	newSlot := api.headSlot.Load() + 1
+
+	slotConstraints, _ := api.constraints.Get(newSlot)
 	if slotConstraints != nil {
 		transactionsRoot, err := getHeaderResponse.TransactionsRoot()
 		if err != nil {
-			api.log.WithError(err).Errorf("Failed to calculate transactions root for slot %d", api.headSlot.Load())
+			api.log.WithError(err).Errorf("Failed to calculate transactions root for slot %d", newSlot)
 			api.RespondError(opts.w, http.StatusBadRequest, err.Error())
 			return nil, nil, false
 		}
@@ -2172,7 +2174,7 @@ func (api *RelayAPI) updateRedisBidWithProofs(
 		}
 
 		if len(constraints) > len(proof.TransactionHashes) {
-			api.log.Warnf("Constraints and proofs length mismatch for slot %d: %d > %d", api.headSlot.Load(), len(constraints), len(proof.TransactionHashes))
+			api.log.Warnf("Constraints and proofs length mismatch for slot %d: %d > %d", newSlot, len(constraints), len(proof.TransactionHashes))
 			api.RespondError(opts.w, http.StatusBadRequest, "constraints and proofs length mismatch")
 			return nil, nil, false
 		}
@@ -2183,7 +2185,7 @@ func (api *RelayAPI) updateRedisBidWithProofs(
 			api.RespondError(opts.w, http.StatusBadRequest, err.Error())
 			return nil, nil, false
 		} else {
-			api.log.Infof("constraints proofs verified for slot %d", api.headSlot.Load())
+			api.log.Infof("[BOLT]: constraints proofs verified for slot %d", newSlot)
 		}
 	}
 
