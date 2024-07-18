@@ -42,7 +42,7 @@ impl HeadTracker {
                 let mut event_stream = match beacon_client.get_events::<NewHeadsTopic>().await {
                     Ok(events) => events,
                     Err(err) => {
-                        tracing::warn!("failed to subscribe to new heads topic: {:?}", err);
+                        tracing::warn!(?err, "failed to subscribe to new heads topic, retrying...");
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         continue;
                     }
@@ -51,7 +51,7 @@ impl HeadTracker {
                 let event = match event_stream.next().await {
                     Some(Ok(event)) => event,
                     Some(Err(err)) => {
-                        tracing::warn!("error reading new head event stream: {:?}", err);
+                        tracing::warn!(?err, "error reading new head event stream, retrying...");
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         continue;
                     }
@@ -62,8 +62,8 @@ impl HeadTracker {
                     }
                 };
 
-                if let Err(e) = new_heads_tx.send(event) {
-                    tracing::warn!("failed to broadcast new head event to subscribers: {:?}", e);
+                if let Err(err) = new_heads_tx.send(event) {
+                    tracing::warn!(?err, "failed to broadcast new head event to subscribers");
                 }
             }
         });

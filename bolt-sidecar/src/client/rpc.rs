@@ -10,11 +10,11 @@ use std::{
 
 use alloy::ClientBuilder;
 use alloy_eips::BlockNumberOrTag;
-use alloy_primitives::{Address, B256, U256, U64};
+use alloy_primitives::{Address, Bytes, B256, U256, U64};
 use alloy_rpc_client::{self as alloy, Waiter};
 use alloy_rpc_types::{Block, EIP1186AccountProofResponse, FeeHistory, TransactionRequest};
 use alloy_rpc_types_trace::parity::{TraceResults, TraceType};
-use alloy_transport::TransportResult;
+use alloy_transport::{TransportErrorKind, TransportResult};
 use alloy_transport_http::Http;
 use reqwest::{Client, Url};
 
@@ -35,7 +35,17 @@ impl RpcClient {
 
     /// Get the chain ID.
     pub async fn get_chain_id(&self) -> TransportResult<u64> {
-        self.0.request("eth_chainId", ()).await
+        let chain_id: String = self.0.request("eth_chainId", ()).await?;
+        let chain_id = chain_id
+            .get(2..)
+            .ok_or(TransportErrorKind::Custom("not hex prefixed result".into()))?;
+
+        let decoded = u64::from_str_radix(chain_id, 16).map_err(|e| {
+            TransportErrorKind::Custom(
+                format!("could not decode {} into u64: {}", chain_id, e).into(),
+            )
+        })?;
+        Ok(decoded)
     }
 
     /// Get the basefee of the latest block.
@@ -48,6 +58,21 @@ impl RpcClient {
             .await?;
 
         Ok(fee_history.latest_block_base_fee().unwrap())
+    }
+
+    /// Get the blob basefee of the latest block.
+    ///
+    /// Reference: https://github.com/ethereum/execution-apis/blob/main/src/eth/fee_market.yaml
+    pub async fn get_blob_basefee(&self, block_number: Option<u64>) -> TransportResult<u128> {
+        let block_count = U64::from(1);
+        let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
+        let reward_percentiles: Vec<f64> = vec![];
+        let fee_history: FeeHistory = self
+            .0
+            .request("eth_feeHistory", (block_count, tag, &reward_percentiles))
+            .await?;
+
+        Ok(fee_history.latest_block_blob_base_fee().unwrap_or(0))
     }
 
     /// Get the latest block number
@@ -75,16 +100,22 @@ impl RpcClient {
             .add_call("eth_getTransactionCount", &(address, tag))
             .expect("Correct parameters");
 
+        let code = batch
+            .add_call("eth_getCode", &(address, tag))
+            .expect("Correct parameters");
+
         // After the batch is complete, we can get the results.
         // Note that requests may error separately!
         batch.send().await?;
 
         let tx_count: U64 = tx_count.await?;
         let balance: U256 = balance.await?;
+        let code: Bytes = code.await?;
 
         Ok(AccountState {
             balance,
             transaction_count: tx_count.to(),
+            has_code: !code.is_empty(),
         })
     }
 
@@ -162,6 +193,11 @@ impl RpcClient {
 
         self.0.request("debug_traceCall", params).await
     }
+
+    /// Send a raw transaction to the network.
+    pub async fn send_raw_transaction(&self, raw: Bytes) -> TransportResult<B256> {
+        self.0.request("eth_sendRawTransaction", [raw]).await
+    }
 }
 
 impl Deref for RpcClient {
@@ -233,6 +269,20 @@ mod tests {
         let block = rpc_client.get_block(None, false).await?;
 
         println!("root {:?}", block.header.state_root);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_smart_contract_code() -> eyre::Result<()> {
+        let rpc_url = Url::parse(std::env::var("RPC_URL").unwrap().as_str())?;
+        let rpc_client = RpcClient::new(rpc_url);
+
+        // random deployed smart contract address
+        let addr = Address::from_str("0xBA12222222228d8Ba445958a75a0704d566BF2C8")?;
+        let account = rpc_client.get_account_state(&addr, None).await?;
+
+        assert!(account.has_code);
 
         Ok(())
     }

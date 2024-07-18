@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/chainbound/shardmap"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -15,7 +16,7 @@ import (
 )
 
 type IEthereumService interface {
-	BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraints types.HashToConstraintDecoded) error
+	BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraintsCache *shardmap.FIFOMap[uint64, types.HashToConstraintDecoded]) error
 	GetBlockByHash(hash common.Hash) *types.Block
 	Config() *params.ChainConfig
 	Synced() bool
@@ -33,7 +34,7 @@ type testEthereumService struct {
 	testPreconfs       []*types.Transaction
 }
 
-func (t *testEthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraints types.HashToConstraintDecoded) error {
+func (t *testEthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraintsCache *shardmap.FIFOMap[uint64, types.HashToConstraintDecoded]) error {
 	sealedBlockCallback(t.testBlock, t.testBlockValue, t.testBlobSidecar, time.Now(), t.testBundlesMerged, t.testAllBundles, t.testUsedSbundles)
 	return nil
 }
@@ -53,19 +54,20 @@ func NewEthereumService(eth *eth.Ethereum) *EthereumService {
 }
 
 // TODO: we should move to a setup similar to catalyst local blocks & payload ids
-func (s *EthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraints types.HashToConstraintDecoded) error {
+func (s *EthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraintsCache *shardmap.FIFOMap[uint64, types.HashToConstraintDecoded]) error {
 	// Send a request to generate a full block in the background.
 	// The result can be obtained via the returned channel.
 	args := &miner.BuildPayloadArgs{
-		Parent:       attrs.HeadHash,
-		Timestamp:    uint64(attrs.Timestamp),
-		FeeRecipient: attrs.SuggestedFeeRecipient,
-		GasLimit:     attrs.GasLimit,
-		Random:       attrs.Random,
-		Withdrawals:  attrs.Withdrawals,
-		BeaconRoot:   attrs.ParentBeaconBlockRoot,
-		BlockHook:    sealedBlockCallback,
-		Constraints:  constraints,
+		Parent:           attrs.HeadHash,
+		Timestamp:        uint64(attrs.Timestamp),
+		FeeRecipient:     attrs.SuggestedFeeRecipient,
+		GasLimit:         attrs.GasLimit,
+		Random:           attrs.Random,
+		Withdrawals:      attrs.Withdrawals,
+		BeaconRoot:       attrs.ParentBeaconBlockRoot,
+		Slot:             attrs.Slot,
+		BlockHook:        sealedBlockCallback,
+		ConstraintsCache: constraintsCache,
 	}
 
 	payload, err := s.eth.Miner().BuildPayload(args)

@@ -1,24 +1,36 @@
-use std::{str::FromStr, sync::Arc};
-
+use alloy::{
+    eips::eip2718::Encodable2718,
+    hex,
+    network::{EthereumWallet, TransactionBuilder},
+    primitives::keccak256,
+    providers::{Provider, ProviderBuilder},
+    signers::{local::PrivateKeySigner, Signer},
+};
+use beacon_api_client::mainnet::Client as BeaconApiClient;
 use clap::Parser;
-use ethers::{prelude::*, types::transaction::eip2718::TypedTransaction, utils::hex};
-use eyre::{Context, OptionExt, Result};
-use rand::{thread_rng, Rng};
-use serde_json::Value;
+use eyre::Result;
+use reqwest::Url;
 use tracing::info;
+
+pub mod constants;
+pub mod utils;
+
+use utils::{current_slot, generate_random_blob_tx, generate_random_tx, prepare_rpc_request};
 
 #[derive(Parser)]
 struct Opts {
     #[clap(short = 'p', long, default_value = "http://localhost:8545")]
-    provider_url: String,
+    provider_url: Url,
     #[clap(short = 'c', long, default_value = "http://localhost:4000")]
-    beacon_client_url: String,
+    beacon_client_url: Url,
     #[clap(short = 'b', long)]
     bolt_sidecar_url: String,
     #[clap(short = 'k', long)]
     private_key: String,
     #[clap(short = 'n', long)]
     nonce: Option<u16>,
+    #[clap(short = 'B', long, default_value_t = false)]
+    blob: bool,
     #[clap(short = 's', long, default_value = "head")]
     slot: String,
 }
@@ -26,48 +38,43 @@ struct Opts {
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt::init();
+    tracing::info!("starting bolt-spammer");
 
     let opts = Opts::parse();
 
-    let wallet = LocalWallet::from_str(&opts.private_key)?;
-    let eth_provider = Arc::new(Provider::<Http>::try_from(opts.provider_url)?);
-    let transaction_signer = SignerMiddleware::new(eth_provider.clone(), wallet);
+    let wallet: PrivateKeySigner = opts.private_key.parse().expect("should parse private key");
 
-    let mut tx = generate_random_tx(opts.nonce);
-    tx.set_gas_price(69_420_000_000_000u128); // 69_420 gwei
-    transaction_signer.fill_transaction(&mut tx, None).await?;
+    let sender = wallet.address();
+    let transaction_signer: EthereumWallet = wallet.clone().into();
+    let provider = ProviderBuilder::new().on_http(opts.provider_url);
 
-    let current_slot = get_slot(&opts.beacon_client_url, &opts.slot).await?;
+    let beacon_api_client = BeaconApiClient::new(opts.beacon_client_url);
 
-    let slot_number = match opts.slot.parse::<u64>() {
-        Ok(num) => num,
-        Err(_) => {
-            // Attempt to fetch slot number from the beacon API.
-            // This works with notable slots: "head", "genesis", "finalized"
-            current_slot + 2
-        }
-    };
+    let current_slot = current_slot(&beacon_api_client).await?;
+    let target_slot = if opts.slot == "head" { current_slot + 2 } else { opts.slot.parse()? };
 
-    tracing::info!(?current_slot, ?slot_number);
+    let mut tx = if opts.blob { generate_random_blob_tx() } else { generate_random_tx() };
+    tx.set_from(sender);
+    tx.set_nonce(provider.get_transaction_count(sender).await?);
 
-    let (tx_hash, tx_rlp) = sign_transaction(transaction_signer.signer(), tx).await?;
+    let tx_signed = tx.build(&transaction_signer).await?;
+    let tx_hash = tx_signed.tx_hash().to_string();
+    let tx_rlp = hex::encode(tx_signed.encoded_2718());
 
     let message_digest = {
         let mut data = Vec::new();
-        data.extend_from_slice(&slot_number.to_le_bytes());
+        data.extend_from_slice(&target_slot.to_le_bytes());
         data.extend_from_slice(hex::decode(tx_hash.trim_start_matches("0x"))?.as_slice());
-        H256::from(ethers::utils::keccak256(data))
+        keccak256(data)
     };
 
-    let signature = transaction_signer
-        .signer()
-        .sign_hash(message_digest)?
-        .to_string();
+    let signature = wallet.sign_hash(&message_digest).await?;
+    let signature = hex::encode(signature.as_bytes());
 
     let request = prepare_rpc_request(
         "bolt_inclusionPreconfirmation",
         vec![serde_json::json!({
-            "slot": slot_number,
+            "slot": target_slot,
             "tx": tx_rlp,
             "signature": signature,
         })],
@@ -87,61 +94,4 @@ async fn main() -> Result<()> {
     info!("Response: {:?}", response.text().await?);
 
     Ok(())
-}
-
-fn generate_random_tx(nonce: Option<u16>) -> TypedTransaction {
-    let mut tx = Eip1559TransactionRequest::new()
-        .to("0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD")
-        .value("0x69420")
-        .chain_id(3151908)
-        .data(vec![thread_rng().gen::<u8>(); 32]);
-
-    tx = if let Some(nonce) = nonce {
-        tx.nonce(nonce)
-    } else {
-        // `fill_transaction` can automatically set the nonce if it's not provided
-        tx
-    };
-
-    tx.into()
-}
-
-/// Signs a [TypedTransaction] with the given [Signer], returning a tuple
-/// with the transaction hash and the RLP-encoded signed transaction.
-async fn sign_transaction<S: Signer>(signer: &S, tx: TypedTransaction) -> Result<(String, String)> {
-    let Ok(signature) = signer.sign_transaction(&tx).await else {
-        eyre::bail!("Failed to sign transaction")
-    };
-
-    let rlp_signed_tx = tx.rlp_signed(&signature);
-    let tx_hash = format!("0x{:x}", tx.hash(&signature));
-    let hex_rlp_signed_tx = format!("0x{}", hex::encode(rlp_signed_tx));
-
-    Ok((tx_hash, hex_rlp_signed_tx))
-}
-
-fn prepare_rpc_request(method: &str, params: Vec<Value>) -> Value {
-    serde_json::json!({
-        "id": "1",
-        "jsonrpc": "2.0",
-        "method": method,
-        "params": params,
-    })
-}
-
-async fn get_slot(beacon_url: &str, slot: &str) -> Result<u64> {
-    let url = format!("{}/eth/v1/beacon/headers/{}", beacon_url, slot);
-
-    let res = reqwest::get(url).await?;
-    let json: Value = serde_json::from_str(&res.text().await?)?;
-
-    let slot_num = json
-        .pointer("/data/header/message/slot")
-        .ok_or_eyre("slot not found")?
-        .as_str()
-        .ok_or_eyre("slot is not a string")?
-        .parse::<u64>()
-        .wrap_err("failed to parse slot")?;
-
-    Ok(slot_num)
 }

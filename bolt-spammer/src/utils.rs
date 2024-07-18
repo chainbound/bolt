@@ -11,15 +11,15 @@ use eyre::Result;
 use rand::{thread_rng, Rng};
 use serde_json::Value;
 
-use crate::constants::{DEAD_ADDRESS, HELDER_TESTNET_CHAIN_ID, NOICE_GAS_PRICE};
+use crate::constants::{DEAD_ADDRESS, KURTOSIS_CHAIN_ID, NOICE_GAS_PRICE};
 
 /// Generates random ETH transfer to `DEAD_ADDRESS` with a random payload.
 pub fn generate_random_tx() -> TransactionRequest {
     TransactionRequest::default()
         .with_to(Address::from_str(DEAD_ADDRESS).unwrap())
-        .with_chain_id(HELDER_TESTNET_CHAIN_ID)
+        .with_chain_id(KURTOSIS_CHAIN_ID)
         .with_value(U256::from(thread_rng().gen_range(1..100)))
-        .with_gas_limit(1000000u128)
+        .with_gas_limit(1_000_000u128)
         .with_gas_price(NOICE_GAS_PRICE)
 }
 
@@ -32,7 +32,7 @@ pub fn generate_random_blob_tx() -> TransactionRequest {
 
     TransactionRequest::default()
         .with_to(dead_address)
-        .with_chain_id(HELDER_TESTNET_CHAIN_ID)
+        .with_chain_id(KURTOSIS_CHAIN_ID)
         .with_value(U256::from(100))
         .with_max_fee_per_blob_gas(100u128)
         .max_fee_per_gas(100u128)

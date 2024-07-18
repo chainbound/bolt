@@ -6,7 +6,6 @@ use ethereum_consensus::{
     ssz::prelude::{List, MerkleizationError},
 };
 use payload_builder::FallbackPayloadBuilder;
-use reth_primitives::TransactionSigned;
 use signature::sign_builder_message;
 
 use crate::{
@@ -99,8 +98,11 @@ impl LocalBuilder {
     ///
     pub async fn build_new_local_payload(
         &mut self,
-        transactions: Vec<TransactionSigned>,
+        template: &BlockTemplate,
     ) -> Result<(), BuilderError> {
+        let transactions = template.as_signed_transactions();
+        let blobs_bundle = template.as_blobs_bundle();
+
         // 1. build a fallback payload with the given transactions, on top of
         // the current head of the chain
         let sealed_block = self
@@ -119,8 +121,7 @@ impl LocalBuilder {
         let eth_payload = compat::to_consensus_execution_payload(&sealed_block);
         let payload_and_blobs = PayloadAndBlobs {
             execution_payload: eth_payload,
-            // TODO: add included blobs here
-            blobs_bundle: Default::default(),
+            blobs_bundle,
         };
 
         // 2. create a signed builder bid with the sealed block header we just created

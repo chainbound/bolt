@@ -10,17 +10,24 @@ mod tests {
     use partial_mpt::StateTrie;
     use reqwest::Url;
 
-    use crate::{builder::CallTraceManager, client::rpc::RpcClient};
+    use crate::{
+        builder::CallTraceManager, client::rpc::RpcClient, test_util::try_get_execution_api_url,
+    };
 
+    #[ignore]
     #[tokio::test]
     async fn test_trace_call() -> eyre::Result<()> {
         dotenvy::dotenv().ok();
-        tracing_subscriber::fmt::init();
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let Some(rpc_url) = try_get_execution_api_url().await else {
+            tracing::warn!("EL_RPC not reachable, skipping test");
+            return Ok(());
+        };
 
         tracing::info!("Starting test_trace_call");
 
-        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL must be set");
-        let rpc_url = Url::parse(&rpc_url).unwrap();
+        let rpc_url = Url::parse(rpc_url).unwrap();
         let client = RpcClient::new(rpc_url.clone());
 
         let (call_trace_manager, call_trace_handler) = CallTraceManager::new(rpc_url);

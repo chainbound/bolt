@@ -9,7 +9,7 @@ use tree_hash_derive::TreeHash;
 
 use crate::ChainConfig;
 
-/// Sign a SSZ object a BLS secret key, using the Application Builder domain
+/// Sign a SSZ object with a BLS secret key, using the Application Builder domain
 /// for signing arbitrary builder-api messages in the out-of-protocol specifications.
 ///
 /// Fun Note: we use a `blst` secret key to sign a message, and produce an `alloy` signature,

@@ -7,9 +7,16 @@
 use std::collections::HashMap;
 
 use alloy_primitives::{Address, U256};
-use reth_primitives::{TransactionSigned, TxType};
+use ethereum_consensus::{
+    crypto::{KzgCommitment, KzgProof},
+    deneb::mainnet::{Blob, BlobsBundle},
+};
+use reth_primitives::{PooledTransactionsElement, TransactionSigned};
 
-use crate::{common::max_transaction_cost, primitives::AccountState};
+use crate::{
+    common::max_transaction_cost,
+    primitives::{constraint::Constraint, AccountState, SignedConstraints, TransactionExt},
+};
 
 /// A block template that serves as a fallback block, but is also used
 /// to keep intermediary state for new commitment requests.
@@ -23,94 +30,173 @@ use crate::{common::max_transaction_cost, primitives::AccountState};
 #[derive(Debug, Default)]
 pub struct BlockTemplate {
     /// The state diffs per address given the list of commitments.
-    state_diff: StateDiff,
-    /// The list of transactions in the block template.
-    pub transactions: Vec<TransactionSigned>,
+    pub(crate) state_diff: StateDiff,
+    /// The signed constraints associated to the block
+    pub signed_constraints_list: Vec<SignedConstraints>,
 }
 
 impl BlockTemplate {
     /// Return the state diff of the block template.
-    pub fn state_diff(&self) -> &StateDiff {
-        &self.state_diff
+    pub fn get_diff(&self, address: &Address) -> Option<(u64, U256)> {
+        self.state_diff.get_diff(address)
     }
 
-    /// Adds a transaction to the block template and updates the state diff.
-    pub fn add_transaction(&mut self, transaction: TransactionSigned) {
-        let max_cost = max_transaction_cost(&transaction);
+    /// Returns the cloned list of transactions from the constraints.
+    #[inline]
+    pub fn transactions(&self) -> Vec<PooledTransactionsElement> {
+        self.signed_constraints_list
+            .iter()
+            .flat_map(|sc| sc.message.constraints.iter().map(|c| c.transaction.clone()))
+            .collect()
+    }
 
-        // Update intermediate state
-        self.state_diff
-            .diffs
-            .entry(transaction.recover_signer().expect("Passed validation"))
-            .and_modify(|(nonce, balance)| {
-                *nonce += 1;
-                *balance += max_cost;
+    /// Converts the list of signed constraints into a list of signed transactions. Use this when building
+    /// a local execution payload.
+    #[inline]
+    pub fn as_signed_transactions(&self) -> Vec<TransactionSigned> {
+        self.signed_constraints_list
+            .iter()
+            .flat_map(|sc| {
+                sc.message
+                    .constraints
+                    .iter()
+                    .map(|c| c.transaction.clone().into_transaction())
             })
-            .or_insert((1, max_cost));
+            .collect()
+    }
 
-        self.transactions.push(transaction);
+    /// Converts the list of signed constraints into a list of all blobs in all transactions
+    /// in the constraints. Use this when building a local execution payload.
+    #[inline]
+    pub fn as_blobs_bundle(&self) -> BlobsBundle {
+        let (commitments, proofs, blobs) = self
+            .signed_constraints_list
+            .iter()
+            .flat_map(|sc| sc.message.constraints.iter())
+            .filter_map(|c| c.transaction.blob_sidecar())
+            .fold(
+                (Vec::new(), Vec::new(), Vec::new()),
+                |(mut commitments, mut proofs, mut blobs), bs| {
+                    commitments.extend(
+                        bs.commitments
+                            .iter()
+                            .map(|c| KzgCommitment::try_from(c.as_slice()).unwrap()),
+                    );
+                    proofs.extend(
+                        bs.proofs
+                            .iter()
+                            .map(|p| KzgProof::try_from(p.as_slice()).unwrap()),
+                    );
+                    blobs.extend(
+                        bs.blobs
+                            .iter()
+                            .map(|b| Blob::try_from(b.as_slice()).unwrap()),
+                    );
+                    (commitments, proofs, blobs)
+                },
+            );
+
+        BlobsBundle {
+            commitments,
+            proofs,
+            blobs,
+        }
     }
 
     /// Returns the length of the transactions in the block template.
+    #[inline]
     pub fn transactions_len(&self) -> usize {
-        self.transactions.len()
+        self.signed_constraints_list
+            .iter()
+            .fold(0, |acc, sc| acc + sc.message.constraints.len())
     }
 
     /// Returns the blob count of the block template.
+    #[inline]
     pub fn blob_count(&self) -> usize {
-        self.transactions.iter().fold(0, |mut acc, tx| {
-            if tx.tx_type() == TxType::Eip4844 {
-                acc += tx.blob_versioned_hashes().unwrap_or_default().len();
-            }
+        self.signed_constraints_list.iter().fold(0, |mut acc, sc| {
+            acc += sc.message.constraints.iter().fold(0, |acc, c| {
+                acc + c
+                    .transaction
+                    .as_eip4844()
+                    .map(|tx| tx.blob_versioned_hashes.len())
+                    .unwrap_or(0)
+            });
 
             acc
         })
     }
 
-    /// Removes the transaction at the specified index and updates the state diff.
-    fn remove_transaction_at_index(&mut self, index: usize) {
-        let tx = self.transactions.remove(index);
-        let max_cost = max_transaction_cost(&tx);
+    /// Adds a list of constraints to the block template and updates the state diff.
+    pub fn add_constraints(&mut self, constraints: SignedConstraints) {
+        for constraint in constraints.message.constraints.iter() {
+            let max_cost = max_transaction_cost(&constraint.transaction);
+            self.state_diff
+                .diffs
+                .entry(constraint.sender)
+                .and_modify(|(nonce, balance)| {
+                    *nonce += 1;
+                    *balance += max_cost;
+                })
+                .or_insert((1, max_cost));
+        }
 
-        // Update intermediate state
-        self.state_diff
-            .diffs
-            .entry(tx.recover_signer().expect("Passed validation"))
-            .and_modify(|(nonce, balance)| {
-                *nonce = nonce.saturating_sub(1);
-                *balance += max_cost;
-            });
+        self.signed_constraints_list.push(constraints);
+    }
+
+    /// Remove all signed constraints at the specified index and updates the state diff
+    fn remove_constraints_at_index(&mut self, index: usize) {
+        let constraints = self.signed_constraints_list.remove(index);
+
+        for constraint in constraints.message.constraints.iter() {
+            self.state_diff
+                .diffs
+                .entry(constraint.sender)
+                .and_modify(|(nonce, balance)| {
+                    *nonce = nonce.saturating_sub(1);
+                    *balance -= max_transaction_cost(&constraint.transaction);
+                });
+        }
     }
 
     /// Retain removes any transactions that conflict with the given account state.
-    pub fn retain(&mut self, address: Address, mut state: AccountState) {
-        let mut indexes = Vec::new();
+    pub fn retain(&mut self, address: Address, state: AccountState) {
+        let mut indexes: Vec<usize> = Vec::new();
 
-        for (index, tx) in self.transactions.iter().enumerate() {
-            let max_cost = max_transaction_cost(tx);
-            if tx.recover_signer().expect("passed validation") == address
-                && (state.balance < max_cost || state.transaction_count > tx.nonce())
-            {
-                tracing::trace!(
-                    %address,
-                    "Removing transaction at index {} due to conflict with account state",
-                    index
-                );
+        // The preconfirmations made by such address, and the indexes of the signed constraints
+        // in which they appear
+        let constraints_with_address: Vec<(usize, Vec<&Constraint>)> = self
+            .signed_constraints_list
+            .iter()
+            .enumerate()
+            .map(|(idx, c)| (idx, &c.message.constraints))
+            .filter(|(_idx, c)| c.iter().any(|c| c.sender == address))
+            .map(|(idx, c)| (idx, c.iter().filter(|c| c.sender == address).collect()))
+            .collect();
 
-                indexes.push(index);
-                // Continue to the next iteration, not updating the state
-                continue;
-            }
+        // For every preconfirmation, gather the max total balance cost,
+        // and find the one with the lowest nonce
+        let (max_total_cost, min_nonce) = constraints_with_address
+            .iter()
+            .flat_map(|c| c.1.clone())
+            .fold((U256::ZERO, u64::MAX), |(total_cost, min_nonce), c| {
+                (
+                    total_cost + max_transaction_cost(&c.transaction),
+                    min_nonce.min(c.transaction.nonce()),
+                )
+            });
 
-            // Update intermediary state for next transaction (if the tx was not removed)
-            state.balance -= max_cost;
-            state.transaction_count += 1;
+        if state.balance < max_total_cost || state.transaction_count > min_nonce {
+            // Remove invalidated constraints due to balance / nonce of chain state
+            tracing::warn!(
+                %address,
+                "Removing invalidated constraints for address"
+            );
+            indexes = constraints_with_address.iter().map(|(i, _)| *i).collect();
         }
 
-        // Remove transactions that conflict with the account state. We start in reverse
-        // order to avoid invalidating the indexes.
         for index in indexes.into_iter().rev() {
-            self.remove_transaction_at_index(index);
+            self.remove_constraints_at_index(index);
         }
     }
 }
@@ -120,7 +206,7 @@ impl BlockTemplate {
 pub struct StateDiff {
     /// Map of diffs per address. Each diff is a tuple of the nonce and balance diff
     /// that should be applied to the current state.
-    diffs: HashMap<Address, (u64, U256)>,
+    pub(crate) diffs: HashMap<Address, (u64, U256)>,
 }
 
 impl StateDiff {

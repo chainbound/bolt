@@ -104,7 +104,7 @@ impl CommitmentsRpc for JsonRpcApi {
 
         let request = serde_json::from_value::<CommitmentRequest>(params)?;
         #[allow(irrefutable_let_patterns)] // TODO: remove this when we have more request types
-        let CommitmentRequest::Inclusion(request) = request
+        let CommitmentRequest::Inclusion(mut request) = request
         else {
             return Err(ApiError::Custom(
                 "request must be an inclusion request".to_string(),
@@ -113,7 +113,9 @@ impl CommitmentsRpc for JsonRpcApi {
 
         info!(?request, "received inclusion commitment request");
 
-        let tx_sender = request.tx.recover_signer().ok_or(ApiError::Custom(
+        // NOTE: request.sender is skipped from deserialization and initialized as Address::ZERO
+        // by the default Deserialization. It must be set here.
+        request.sender = request.tx.recover_signer().ok_or(ApiError::Custom(
             "failed to recover signer from transaction".to_string(),
         ))?;
 
@@ -124,9 +126,9 @@ impl CommitmentsRpc for JsonRpcApi {
 
         // TODO: relax this check to allow for external signers to request commitments
         // about transactions that they did not sign themselves
-        if signer_address != tx_sender {
+        if signer_address != request.sender {
             return Err(ApiError::SignaturePubkeyMismatch {
-                expected: tx_sender.to_string(),
+                expected: request.sender.to_string(),
                 got: signer_address.to_string(),
             });
         }

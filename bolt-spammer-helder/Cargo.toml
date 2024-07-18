@@ -19,4 +19,3 @@ beacon-api-client = { git = "https://github.com/ralexstokes/ethereum-consensus",
 dotenvy = "0.15.7"
 alloy = { version = "0.2.0", features = ["full"] }
 url = "2.5.2"
-reth-primitives = { git = "https://github.com/paradigmxyz/reth", rev = "71c404d" }

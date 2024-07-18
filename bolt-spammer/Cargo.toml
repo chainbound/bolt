@@ -8,10 +8,14 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1.37.0", features = ["full"] }
 eyre = "0.6.12"
-ethers = "2.0.14"
-clap = { version = "4.5.4", features = ["derive"] }
+rand = "0.8.5"
+clap = { version = "4.5.4", features = ["derive", "env"] }
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.115"
 reqwest = "0.12.3"
+beacon-api-client = { git = "https://github.com/ralexstokes/ethereum-consensus", rev = "cf3c404" }
+dotenvy = "0.15.7"
+alloy = { version = "0.2.0", features = ["full"] }
+url = "2.5.2"

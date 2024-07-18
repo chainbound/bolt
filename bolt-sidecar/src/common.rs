@@ -1,7 +1,10 @@
 use alloy_primitives::U256;
-use reth_primitives::TransactionSigned;
+use reth_primitives::PooledTransactionsElement;
 
-use crate::{primitives::AccountState, state::ValidationError};
+use crate::{
+    primitives::{AccountState, TransactionExt},
+    state::ValidationError,
+};
 
 /// Calculates the max_basefee `slot_diff` blocks in the future given a current basefee (in gwei).
 /// Returns None if an overflow would occur.
@@ -26,7 +29,7 @@ pub fn calculate_max_basefee(current: u128, block_diff: u64) -> Option<u128> {
 }
 
 /// Calculates the max transaction cost (gas + value) in wei.
-pub fn max_transaction_cost(transaction: &TransactionSigned) -> U256 {
+pub fn max_transaction_cost(transaction: &PooledTransactionsElement) -> U256 {
     let gas_limit = transaction.gas_limit() as u128;
 
     let fee_cap = transaction.max_fee_per_gas();
@@ -40,20 +43,31 @@ pub fn max_transaction_cost(transaction: &TransactionSigned) -> U256 {
 /// 2. The balance of the account must be higher than the transaction's max cost.
 pub fn validate_transaction(
     account_state: &AccountState,
-    transaction: &TransactionSigned,
+    transaction: &PooledTransactionsElement,
 ) -> Result<(), ValidationError> {
     // Check if the nonce is correct (should be the same as the transaction count)
     if transaction.nonce() < account_state.transaction_count {
-        return Err(ValidationError::NonceTooLow);
+        return Err(ValidationError::NonceTooLow(
+            account_state.transaction_count,
+            transaction.nonce(),
+        ));
     }
 
     if transaction.nonce() > account_state.transaction_count {
-        return Err(ValidationError::NonceTooHigh);
+        return Err(ValidationError::NonceTooHigh(
+            account_state.transaction_count,
+            transaction.nonce(),
+        ));
     }
 
     // Check if the balance is enough
     if max_transaction_cost(transaction) > account_state.balance {
         return Err(ValidationError::InsufficientBalance);
+    }
+
+    // Check if the account has code (i.e. is a smart contract)
+    if account_state.has_code {
+        return Err(ValidationError::AccountHasCode);
     }
 
     Ok(())

@@ -1,8 +1,10 @@
+use serde::{de, Deserialize, Deserializer, Serialize};
 use std::str::FromStr;
 
-use alloy_primitives::{keccak256, Signature, B256};
-use reth_primitives::TransactionSigned;
-use serde::{de, Deserialize, Deserializer, Serialize};
+use alloy_primitives::{keccak256, Address, Signature, B256};
+use reth_primitives::PooledTransactionsElement;
+
+use super::TransactionExt;
 
 /// Commitment requests sent by users or RPC proxies to the sidecar.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -12,35 +14,42 @@ pub enum CommitmentRequest {
     Inclusion(InclusionRequest),
 }
 
+impl CommitmentRequest {
+    /// Returns a reference to the inner request if this is an inclusion request, otherwise `None`.
+    pub fn as_inclusion_request(&self) -> Option<&InclusionRequest> {
+        match self {
+            CommitmentRequest::Inclusion(req) => Some(req),
+            // TODO: remove this when we have more request types
+            #[allow(unreachable_patterns)]
+            _ => None,
+        }
+    }
+}
+
 /// Request to include a transaction at a specific slot.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InclusionRequest {
     /// The consensus slot number at which the transaction should be included.
     pub slot: u64,
     /// The transaction to be included.
-    #[serde(
-        deserialize_with = "deserialize_tx_signed",
-        serialize_with = "serialize_tx_signed"
-    )]
-    pub tx: TransactionSigned,
+    #[serde(deserialize_with = "deserialize_tx", serialize_with = "serialize_tx")]
+    pub tx: PooledTransactionsElement,
     /// The signature over the "slot" and "tx" fields by the user.
     /// A valid signature is the only proof that the user actually requested
     /// this specific commitment to be included at the given slot.
-    #[serde(
-        deserialize_with = "deserialize_from_str",
-        serialize_with = "signature_as_str"
-    )]
+    #[serde(deserialize_with = "deserialize_sig", serialize_with = "serialize_sig")]
     pub signature: Signature,
+    /// The ec-recovered address of the signature, for internal use.
+    /// If not explicitly set, this defaults to `Address::ZERO`.
+    #[serde(skip)]
+    pub sender: Address,
 }
 
 impl InclusionRequest {
     /// Validates the transaction fee against a minimum basefee.
     /// Returns true if the fee is greater than or equal to the min, false otherwise.
     pub fn validate_basefee(&self, min: u128) -> bool {
-        if self.tx.max_fee_per_gas() < min {
-            return false;
-        }
-        true
+        self.tx.max_fee_per_gas() >= min
     }
 
     /// Validates the transaction chain id against the provided chain id.
@@ -50,16 +59,19 @@ impl InclusionRequest {
     }
 }
 
-fn deserialize_tx_signed<'de, D>(deserializer: D) -> Result<TransactionSigned, D::Error>
+fn deserialize_tx<'de, D>(deserializer: D) -> Result<PooledTransactionsElement, D::Error>
 where
     D: Deserializer<'de>,
 {
     let s = String::deserialize(deserializer)?;
     let data = hex::decode(s.trim_start_matches("0x")).map_err(de::Error::custom)?;
-    TransactionSigned::decode_enveloped(&mut data.as_slice()).map_err(de::Error::custom)
+    PooledTransactionsElement::decode_enveloped(&mut data.as_slice()).map_err(de::Error::custom)
 }
 
-fn serialize_tx_signed<S>(tx: &TransactionSigned, serializer: S) -> Result<S::Ok, S::Error>
+pub(crate) fn serialize_tx<S>(
+    tx: &PooledTransactionsElement,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
 where
     S: serde::Serializer,
 {
@@ -68,7 +80,7 @@ where
     serializer.serialize_str(&format!("0x{}", hex::encode(&data)))
 }
 
-fn deserialize_from_str<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+fn deserialize_sig<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: Deserializer<'de>,
     T: FromStr,
@@ -78,10 +90,7 @@ where
     T::from_str(s.trim_start_matches("0x")).map_err(de::Error::custom)
 }
 
-fn signature_as_str<S: serde::Serializer>(
-    sig: &Signature,
-    serializer: S,
-) -> Result<S::Ok, S::Error> {
+fn serialize_sig<S: serde::Serializer>(sig: &Signature, serializer: S) -> Result<S::Ok, S::Error> {
     let parity = sig.v();
     // As bytes encodes the parity as 27/28, need to change that.
     let mut bytes = sig.as_bytes();
@@ -94,7 +103,7 @@ impl InclusionRequest {
     pub fn digest(&self) -> B256 {
         let mut data = Vec::new();
         data.extend_from_slice(&self.slot.to_le_bytes());
-        data.extend_from_slice(self.tx.hash.as_slice());
+        data.extend_from_slice(self.tx.hash().as_slice());
 
         keccak256(&data)
     }

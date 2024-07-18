@@ -17,6 +17,9 @@ use ethereum_consensus::{
     types::mainnet::ExecutionPayload,
     Fork,
 };
+use reth_primitives::{
+    BlobTransactionSidecar, Bytes, PooledTransactionsElement, TransactionKind, TxType,
+};
 use tokio::sync::{mpsc, oneshot};
 
 /// Commitment types, received by users wishing to receive preconfirmations.
@@ -32,11 +35,14 @@ pub use constraint::{BatchedSignedConstraints, ConstraintsMessage, SignedConstra
 pub type Slot = u64;
 
 /// Minimal account state needed for commitment validation.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct AccountState {
     /// The nonce of the account. This is the number of transactions sent from this account
     pub transaction_count: u64,
+    /// The balance of the account in wei
     pub balance: U256,
+    /// Flag to indicate if the account is a smart contract or an EOA
+    pub has_code: bool,
 }
 
 #[derive(Debug, Default, Clone, SimpleSerialize, serde::Serialize, serde::Deserialize)]
@@ -157,7 +163,7 @@ impl Default for PayloadAndBlobs {
     }
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "version", content = "data")]
 pub enum GetPayloadResponse {
     #[serde(rename = "bellatrix")]
@@ -191,27 +197,6 @@ impl GetPayloadResponse {
     }
 }
 
-impl<'de> serde::Deserialize<'de> for GetPayloadResponse {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let value = serde_json::Value::deserialize(deserializer)?;
-        if let Ok(inner) = <_ as serde::Deserialize>::deserialize(&value) {
-            return Ok(Self::Capella(inner));
-        }
-        if let Ok(inner) = <_ as serde::Deserialize>::deserialize(&value) {
-            return Ok(Self::Deneb(inner));
-        }
-        if let Ok(inner) = <_ as serde::Deserialize>::deserialize(&value) {
-            return Ok(Self::Bellatrix(inner));
-        }
-        Err(serde::de::Error::custom(
-            "no variant could be deserialized from input for GetPayloadResponse",
-        ))
-    }
-}
-
 /// A struct representing the current chain head.
 #[derive(Debug, Clone)]
 pub struct ChainHead {
@@ -238,5 +223,92 @@ impl ChainHead {
     /// Get the block number (execution layer).
     pub fn block(&self) -> u64 {
         self.block.load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
+/// Trait that exposes additional information on transaction types that don't already do it
+/// by themselves (e.g. [`PooledTransactionsElement`]).
+pub trait TransactionExt {
+    fn gas_limit(&self) -> u64;
+    fn value(&self) -> U256;
+    fn tx_type(&self) -> TxType;
+    fn tx_kind(&self) -> TransactionKind;
+    fn input(&self) -> &Bytes;
+    fn chain_id(&self) -> Option<u64>;
+    fn blob_sidecar(&self) -> Option<&BlobTransactionSidecar>;
+    fn size(&self) -> usize;
+}
+
+impl TransactionExt for PooledTransactionsElement {
+    fn gas_limit(&self) -> u64 {
+        match self {
+            PooledTransactionsElement::Legacy { transaction, .. } => transaction.gas_limit,
+            PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.gas_limit,
+            PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.gas_limit,
+            PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.gas_limit,
+        }
+    }
+
+    fn value(&self) -> U256 {
+        match self {
+            PooledTransactionsElement::Legacy { transaction, .. } => transaction.value,
+            PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.value,
+            PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.value,
+            PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.value,
+        }
+    }
+
+    fn tx_type(&self) -> TxType {
+        match self {
+            PooledTransactionsElement::Legacy { .. } => TxType::Legacy,
+            PooledTransactionsElement::Eip2930 { .. } => TxType::Eip2930,
+            PooledTransactionsElement::Eip1559 { .. } => TxType::Eip1559,
+            PooledTransactionsElement::BlobTransaction(_) => TxType::Eip4844,
+        }
+    }
+
+    fn tx_kind(&self) -> TransactionKind {
+        match self {
+            PooledTransactionsElement::Legacy { transaction, .. } => transaction.to,
+            PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.to,
+            PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.to,
+            PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.to,
+        }
+    }
+
+    fn input(&self) -> &Bytes {
+        match self {
+            PooledTransactionsElement::Legacy { transaction, .. } => &transaction.input,
+            PooledTransactionsElement::Eip2930 { transaction, .. } => &transaction.input,
+            PooledTransactionsElement::Eip1559 { transaction, .. } => &transaction.input,
+            PooledTransactionsElement::BlobTransaction(blob_tx) => &blob_tx.transaction.input,
+        }
+    }
+
+    fn chain_id(&self) -> Option<u64> {
+        match self {
+            PooledTransactionsElement::Legacy { transaction, .. } => transaction.chain_id,
+            PooledTransactionsElement::Eip2930 { transaction, .. } => Some(transaction.chain_id),
+            PooledTransactionsElement::Eip1559 { transaction, .. } => Some(transaction.chain_id),
+            PooledTransactionsElement::BlobTransaction(blob_tx) => {
+                Some(blob_tx.transaction.chain_id)
+            }
+        }
+    }
+
+    fn blob_sidecar(&self) -> Option<&BlobTransactionSidecar> {
+        match self {
+            PooledTransactionsElement::BlobTransaction(blob_tx) => Some(&blob_tx.sidecar),
+            _ => None,
+        }
+    }
+
+    fn size(&self) -> usize {
+        match self {
+            PooledTransactionsElement::Legacy { transaction, .. } => transaction.size(),
+            PooledTransactionsElement::Eip2930 { transaction, .. } => transaction.size(),
+            PooledTransactionsElement::Eip1559 { transaction, .. } => transaction.size(),
+            PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.size(),
+        }
     }
 }

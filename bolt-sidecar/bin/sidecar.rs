@@ -28,7 +28,8 @@ async fn main() -> eyre::Result<()> {
     let signer = Signer::new(config.private_key.clone().unwrap());
 
     let state_client = StateClient::new(config.execution_api_url.clone());
-    let mut execution_state = ExecutionState::new(state_client).await?;
+    let mut execution_state =
+        ExecutionState::new(state_client, config.limits.max_commitments_per_slot).await?;
 
     let mevboost_client = MevBoostClient::new(config.mevboost_url.clone());
     let beacon_client = BeaconClient::new(config.beacon_api_url.clone());
@@ -66,54 +67,40 @@ async fn main() -> eyre::Result<()> {
     loop {
         tokio::select! {
             Some(ApiEvent { request, response_tx }) = api_events_rx.recv() => {
-                tracing::info!("Received commitment request: {:?}", request);
+                let start = std::time::Instant::now();
 
                 let validator_index = match consensus_state.validate_request(&request) {
                     Ok(index) => index,
                     Err(e) => {
-                        tracing::error!("Failed to validate request: {:?}", e);
+                        tracing::error!(err = ?e, "Failed to validate request");
                         let _ = response_tx.send(Err(ApiError::Custom(e.to_string())));
                         continue;
                     }
                 };
 
-                if let Err(e) = execution_state
-                    .try_commit(&request)
-                    .await
-                {
-                    tracing::error!("Failed to commit request: {:?}", e);
+                if let Err(e) = execution_state.validate_commitment_request(&request).await {
+                    tracing::error!(err = ?e, "Failed to commit request");
                     let _ = response_tx.send(Err(ApiError::Custom(e.to_string())));
                     continue;
-                }
+                };
 
                 // TODO: match when we have more request types
                 let CommitmentRequest::Inclusion(request) = request;
-
                 tracing::info!(
+                    elapsed = ?start.elapsed(),
                     tx_hash = %request.tx.hash(),
                     "Validation against execution state passed"
                 );
 
+                // TODO: review all this `clone` usage
+
                 // parse the request into constraints and sign them with the sidecar signer
-                let message = ConstraintsMessage::build(validator_index, request.slot, request);
-
+                let slot = request.slot;
+                let message = ConstraintsMessage::build(validator_index, request);
                 let signature = signer.sign(&message.digest())?.to_string();
-                let signed_constraints = vec![SignedConstraints { message, signature }];
+                let signed_constraints = SignedConstraints { message, signature };
 
-                // TODO: fix retry logic
-                let max_retries = 5;
-                let mut i = 0;
-                'inner: while let Err(e) = mevboost_client
-                    .submit_constraints(&signed_constraints)
-                    .await
-                {
-                    tracing::error!(err = ?e, "Error submitting constraints, retrying...");
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                    i+=1;
-                    if i >= max_retries {
-                        break 'inner
-                    }
-                }
+                execution_state.add_constraint(slot, signed_constraints.clone());
 
                 let res = serde_json::to_value(signed_constraints).map_err(Into::into);
                 let _ = response_tx.send(res).ok();
@@ -133,12 +120,30 @@ async fn main() -> eyre::Result<()> {
             Some(slot) = consensus_state.commitment_deadline.wait() => {
                 tracing::info!(slot, "Commitment deadline reached, starting to build local block");
 
-                let Some(template) = execution_state.get_block_template(slot) else {
+                let Some(template) = execution_state.remove_block_template(slot) else {
                     tracing::warn!("No block template found for slot {slot} when requested");
                     continue;
                 };
 
-                if let Err(e) = local_builder.build_new_local_payload(template.transactions).await {
+                tracing::trace!(?template.signed_constraints_list, "Submitting constraints to MEV-Boost");
+
+                // TODO: fix retry logic, and move this to separate task
+                let max_retries = 5;
+                let mut i = 0;
+                'inner: while let Err(e) = mevboost_client
+                    .submit_constraints(&template.signed_constraints_list)
+                .await
+                {
+                    tracing::error!(err = ?e, "Error submitting constraints, retrying...");
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    i+=1;
+                    if i >= max_retries {
+                        tracing::error!("Max retries reached while submitting to MEV-Boost");
+                        break 'inner
+                    }
+                }
+
+                if let Err(e) = local_builder.build_new_local_payload(&template).await {
                     tracing::error!(err = ?e, "CRITICAL: Error while building local payload at slot deadline for {slot}");
                 };
             },
