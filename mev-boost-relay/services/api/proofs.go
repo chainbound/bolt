@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/core/types"
 	fastSsz "github.com/ferranbt/fastssz"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/sirupsen/logrus"
@@ -39,7 +40,23 @@ func verifyInclusionProof(log *logrus.Entry, transactionsRoot phase0.Root, proof
 
 		// Compute the hash tree root for the raw preconfirmed transaction
 		// and use it as "Leaf" in the proof to be verified against
-		tx := Transaction(constraint.Tx)
+
+		// TODO: this is pretty inefficient, we should work with the transaction already
+		// parsed without the blob here to avoid unmarshalling and marshalling again
+		transaction := new(types.Transaction)
+		err := transaction.UnmarshalBinary(constraint.Tx)
+		if err != nil {
+			log.WithError(err).Error("error unmarshalling transaction while verifying proofs")
+			return err
+		}
+
+		withoutBlob, err := transaction.WithoutBlobTxSidecar().MarshalBinary()
+		if err != nil {
+			log.WithError(err).Error("error marshalling transaction without blob tx sidecar")
+			return err
+		}
+
+		tx := Transaction(withoutBlob)
 		txHashTreeRoot, err := tx.HashTreeRoot()
 		if err != nil {
 			return ErrInvalidRoot

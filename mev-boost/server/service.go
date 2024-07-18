@@ -22,6 +22,7 @@ import (
 	eth2ApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	eth2ApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	fastSsz "github.com/ferranbt/fastssz"
 	"github.com/flashbots/go-boost-utils/ssz"
 	"github.com/flashbots/go-boost-utils/types"
@@ -373,7 +374,23 @@ func (m *BoostService) verifyInclusionProof(responsePayload *BidWithInclusionPro
 
 		// Compute the hash tree root for the raw preconfirmed transaction
 		// and use it as "Leaf" in the proof to be verified against
-		tx := Transaction(constraint.Tx)
+
+		// TODO: this is pretty inefficient, we should work with the transaction already
+		// parsed without the blob here to avoid unmarshalling and marshalling again
+		transaction := new(gethTypes.Transaction)
+		err := transaction.UnmarshalBinary(constraint.Tx)
+		if err != nil {
+			log.WithError(err).Error("error unmarshalling transaction while verifying proofs")
+			return err
+		}
+
+		withoutBlob, err := transaction.WithoutBlobTxSidecar().MarshalBinary()
+		if err != nil {
+			log.WithError(err).Error("error marshalling transaction without blob tx sidecar")
+			return err
+		}
+
+		tx := Transaction(withoutBlob)
 		txHashTreeRoot, err := tx.HashTreeRoot()
 		if err != nil {
 			return errInvalidRoot
