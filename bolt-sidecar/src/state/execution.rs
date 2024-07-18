@@ -245,6 +245,8 @@ impl<C: StateFetcher> ExecutionState<C> {
         let max_basefee = calculate_max_basefee(self.basefee, slot_diff)
             .ok_or(ValidationError::MaxBaseFeeCalcOverflow)?;
 
+        tracing::debug!(%slot_diff, %max_basefee, "Validating basefee");
+
         // Validate the base fee
         if !req.validate_basefee(max_basefee) {
             return Err(ValidationError::BaseFeeTooLow(max_basefee));
@@ -323,6 +325,7 @@ impl<C: StateFetcher> ExecutionState<C> {
             let max_blob_basefee = calculate_max_basefee(self.blob_basefee, slot_diff)
                 .ok_or(ValidationError::MaxBaseFeeCalcOverflow)?;
 
+            tracing::debug!(%max_blob_basefee, blob_basefee = blob_transaction.transaction.max_fee_per_blob_gas, "Validating blob basefee");
             if blob_transaction.transaction.max_fee_per_blob_gas < max_blob_basefee {
                 return Err(ValidationError::BlobBaseFeeTooLow(max_blob_basefee));
             }
