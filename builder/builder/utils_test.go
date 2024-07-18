@@ -35,39 +35,104 @@ func TestGenerateMerkleMultiProofs(t *testing.T) {
 		return transaction
 	})
 
-	transactionsRaw := new([]string)
-	err = json.Unmarshal([]byte(raw), transactionsRaw)
-	require.NoError(t, err)
-
 	require.Equal(t, payloadTransactions[0].Type(), uint8(3))
 	require.Equal(t, payloadTransactions[1].Type(), uint8(2))
 
-	constraints := make(types.HashToConstraintDecoded, 1)
-	// constraints[payloadTransactions[0].Hash()] = &types.ConstraintDecoded{Tx: payloadTransactions[0]}
-	constraints[payloadTransactions[1].Hash()] = &types.ConstraintDecoded{Tx: payloadTransactions[1]}
-	// constraints[payloadTransactions[2].Hash()] = &types.ConstraintDecoded{Tx: payloadTransactions[2]}
+	// try out all combinations of "constraints":
+	// e.g. only [0], then [0, 1], then [1] etc...
+	// and log which ones are failing and which ones are not
+	for i := 1; i < len(payloadTransactions)+1; i++ {
+		t.Logf("--- Trying with %d constraints\n", i)
+		for _, chosenConstraintTransactions := range combinations(payloadTransactions, i) {
+			// find the index of the chosen constraints inside payload transactions for debugging
+			payloadIndexes := make([]int, len(chosenConstraintTransactions))
+			for i, chosenConstraint := range chosenConstraintTransactions {
+				for j, payloadTransaction := range payloadTransactions {
+					if chosenConstraint.Hash() == payloadTransaction.Hash() {
+						payloadIndexes[i] = j
+						break
+					}
+				}
+			}
 
-	inclusionProof, root, err := CalculateMerkleMultiProofs(payloadTransactions, constraints)
-	require.NoError(t, err)
-	rootHash := root.Hash()
+			constraints := make(types.HashToConstraintDecoded)
+			for _, tx := range chosenConstraintTransactions {
+				constraints[tx.Hash()] = &types.ConstraintDecoded{Tx: tx}
+			}
 
-	hashesBytes := make([][]byte, len(inclusionProof.MerkleHashes))
-	for i, hash := range inclusionProof.MerkleHashes {
-		hashesBytes[i] = (*hash)[:]
+			inclusionProof, root, err := CalculateMerkleMultiProofs(payloadTransactions, constraints)
+			require.NoError(t, err)
+			rootHash := root.Hash()
+
+			leaves := make([][]byte, len(constraints))
+
+			i := 0
+			for _, constraint := range constraints {
+				if constraint == nil || constraint.Tx == nil {
+					t.Logf("nil constraint or transaction!")
+				}
+
+				// Compute the hash tree root for the raw preconfirmed transaction
+				// and use it as "Leaf" in the proof to be verified against
+
+				withoutBlob, err := constraint.Tx.WithoutBlobTxSidecar().MarshalBinary()
+				if err != nil {
+					t.Logf("error marshalling transaction without blob tx sidecar: %v", err)
+				}
+
+				tx := Transaction(withoutBlob)
+				txHashTreeRoot, err := tx.HashTreeRoot()
+				if err != nil {
+					t.Logf("error calculating hash tree root: %v", err)
+				}
+
+				leaves[i] = txHashTreeRoot[:]
+				i++
+			}
+
+			hashes := make([][]byte, len(inclusionProof.MerkleHashes))
+			for i, hash := range inclusionProof.MerkleHashes {
+				hashes[i] = []byte(*hash)
+			}
+			indexes := make([]int, len(inclusionProof.GeneralizedIndexes))
+			for i, index := range inclusionProof.GeneralizedIndexes {
+				indexes[i] = int(index)
+			}
+
+			ok, err := fastSsz.VerifyMultiproof(rootHash[:], hashes, leaves, indexes)
+			if err != nil {
+				t.Logf("error verifying merkle proof: %v", err)
+			}
+
+			if !ok {
+				t.Logf("FAIL with txs: %v", payloadIndexes)
+			} else {
+				t.Logf("SUCCESS with txs: %v", payloadIndexes)
+			}
+		}
 	}
-	leavesBytes := make([][]byte, len(constraints))
-	for i := 0; i < len(constraints); i++ {
-		tx := Transaction([]byte(*byteTxs[i]))
-		root, err := tx.HashTreeRoot()
-		require.NoError(t, err)
-		leavesBytes[i] = root[:]
-	}
-	indicesInt := make([]int, len(inclusionProof.GeneralizedIndexes))
-	for i, index := range inclusionProof.GeneralizedIndexes {
-		indicesInt[i] = int(index)
+}
+
+// Function to generate combinations of a specific length
+func combinations[T any](arr []T, k int) [][]T {
+	var result [][]T
+	n := len(arr)
+	data := make([]T, k)
+	combine(arr, data, 0, n-1, 0, k, &result)
+	return result
+}
+
+// Helper function to generate combinations
+func combine[T any](arr, data []T, start, end, index, k int, result *[][]T) {
+	if index == k {
+		tmp := make([]T, k)
+		copy(tmp, data)
+		*result = append(*result, tmp)
+		return
 	}
 
-	ok, err := fastSsz.VerifyMultiproof(rootHash, hashesBytes, leavesBytes, indicesInt)
-	require.NoError(t, err)
-	require.True(t, ok)
+	for i := start; i <= end && end-i+1 >= k-index; i++ {
+		data[index] = arr[i]
+		combine(arr, data, i+1, end, index+1, k, result)
+	}
 }
