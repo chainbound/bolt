@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use alloy_primitives::b256;
+use alloy::primitives::b256;
 use clap::{Args, ValueEnum};
 
 /// Default commitment deadline duration.

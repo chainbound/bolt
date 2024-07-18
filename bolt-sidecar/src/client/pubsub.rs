@@ -3,16 +3,18 @@ use std::{
     str::FromStr,
 };
 
-use alloy::{ClientBuilder, WsConnect};
-use alloy_json_rpc::RpcError;
-use alloy_pubsub::PubSubFrontend;
-use alloy_rpc_client as alloy;
-use alloy_transport::TransportError;
+use alloy::{
+    pubsub::PubSubFrontend,
+    rpc::client::{self as alloyClient, ClientBuilder, WsConnect},
+    transports::RpcError,
+    transports::TransportError,
+};
+
 use reqwest::Url;
 
 /// Wrapper around an [`alloy::RpcClient`] that uses WS as the transport. Supports batching
 /// JSON-RPC requests.
-pub struct PubsubClient(alloy::RpcClient<PubSubFrontend>);
+pub struct PubsubClient(alloyClient::RpcClient<PubSubFrontend>);
 
 #[allow(unused)]
 impl PubsubClient {
@@ -27,7 +29,7 @@ impl PubsubClient {
 }
 
 impl Deref for PubsubClient {
-    type Target = alloy::RpcClient<PubSubFrontend>;
+    type Target = alloyClient::RpcClient<PubSubFrontend>;
 
     fn deref(&self) -> &Self::Target {
         &self.0

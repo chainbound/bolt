@@ -1,21 +1,28 @@
 //! This module contains the `RpcClient` struct, which is a wrapper around the `alloy_rpc_client`.
 //! It provides a simple interface to interact with the Execution layer JSON-RPC API.
 
-use alloy_rpc_types_trace::geth::{GethDebugTracingCallOptions, GethTrace};
 use futures::future::join_all;
 use std::{
     collections::HashSet,
     ops::{Deref, DerefMut},
 };
 
-use alloy::ClientBuilder;
-use alloy_eips::BlockNumberOrTag;
-use alloy_primitives::{Address, Bytes, B256, U256, U64};
-use alloy_rpc_client::{self as alloy, Waiter};
-use alloy_rpc_types::{Block, EIP1186AccountProofResponse, FeeHistory, TransactionRequest};
-use alloy_rpc_types_trace::parity::{TraceResults, TraceType};
-use alloy_transport::{TransportErrorKind, TransportResult};
-use alloy_transport_http::Http;
+use alloy::{
+    eips::BlockNumberOrTag,
+    primitives::{Address, Bytes, B256, U256, U64},
+    rpc::{
+        client::{self as alloyClient, ClientBuilder, Waiter},
+        types::{
+            trace::{
+                geth::{GethDebugTracingCallOptions, GethTrace},
+                parity::{TraceResults, TraceType},
+            },
+            {Block, EIP1186AccountProofResponse, FeeHistory, TransactionRequest},
+        },
+    },
+    transports::{http::Http, TransportErrorKind, TransportResult},
+};
+
 use reqwest::{Client, Url};
 
 use crate::primitives::AccountState;
@@ -23,7 +30,7 @@ use crate::primitives::AccountState;
 /// An HTTP-based JSON-RPC client that supports batching.
 /// Implements all methods that are relevant to Bolt state.
 #[derive(Clone, Debug)]
-pub struct RpcClient(alloy::RpcClient<Http<Client>>);
+pub struct RpcClient(alloyClient::RpcClient<Http<Client>>);
 
 impl RpcClient {
     /// Create a new `RpcClient` with the given URL.
@@ -201,7 +208,7 @@ impl RpcClient {
 }
 
 impl Deref for RpcClient {
-    type Target = alloy::RpcClient<Http<Client>>;
+    type Target = alloyClient::RpcClient<Http<Client>>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -218,9 +225,11 @@ impl DerefMut for RpcClient {
 mod tests {
     use std::str::FromStr;
 
-    use alloy_consensus::constants::ETH_TO_WEI;
-    use alloy_primitives::{uint, Uint};
-    use alloy_rpc_types::EIP1186AccountProofResponse;
+    use alloy::{
+        consensus::constants::ETH_TO_WEI,
+        primitives::{uint, Uint},
+        rpc::types::EIP1186AccountProofResponse,
+    };
     use reth_primitives::B256;
 
     use crate::test_util::launch_anvil;
