@@ -918,10 +918,6 @@ mod tests {
 
         let tx = default_test_transaction(*sender, None).with_gas_limit(4_999_999);
 
-        // build the signed transaction for submission later
-        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
-        let signer: EthereumWallet = wallet.into();
-
         let target_slot = 10;
         let request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
         let inclusion_request = request.as_inclusion_request().unwrap().clone();
