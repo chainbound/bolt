@@ -47,6 +47,9 @@ pub struct Opts {
     /// Max number of commitments to accept per block
     #[clap(short = 'm', long)]
     pub(super) max_commitments: Option<NonZero<usize>>,
+    /// Max committed gas per slot
+    #[clap(short = 'g', long)]
+    pub(super) max_committed_gas: Option<NonZero<u64>>,
     /// Validator indexes of connected validators that the sidecar
     /// should accept commitments on behalf of. Accepted values:
     /// - a comma-separated list of indexes (e.g. "1,2,3,4")
@@ -133,16 +136,18 @@ impl Default for Config {
 }
 
 /// Limits for the sidecar.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Limits {
     /// Maximum number of commitments to accept per block
     pub max_commitments_per_slot: NonZero<usize>,
+    pub max_committed_gas_per_slot: NonZero<u64>,
 }
 
 impl Default for Limits {
     fn default() -> Self {
         Self {
             max_commitments_per_slot: NonZero::new(6).expect("Valid non-zero"),
+            max_committed_gas_per_slot: NonZero::new(10_000_000).expect("Valid non-zero"),
         }
     }
 }
@@ -167,6 +172,10 @@ impl TryFrom<Opts> for Config {
 
         if let Some(max_commitments) = opts.max_commitments {
             config.limits.max_commitments_per_slot = max_commitments;
+        }
+
+        if let Some(max_committed_gas) = opts.max_committed_gas {
+            config.limits.max_committed_gas_per_slot = max_committed_gas;
         }
 
         config.commit_boost_url = opts

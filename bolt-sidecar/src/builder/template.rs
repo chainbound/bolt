@@ -107,6 +107,18 @@ impl BlockTemplate {
             .fold(0, |acc, sc| acc + sc.message.constraints.len())
     }
 
+    /// Returns the committed gas in the block template.
+    #[inline]
+    pub fn committed_gas(&self) -> u64 {
+        self.signed_constraints_list.iter().fold(0, |acc, sc| {
+            acc + sc
+                .message
+                .constraints
+                .iter()
+                .fold(0, |acc, c| acc + &c.transaction.gas_limit())
+        })
+    }
+
     /// Returns the blob count of the block template.
     #[inline]
     pub fn blob_count(&self) -> usize {

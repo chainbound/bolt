@@ -4,12 +4,13 @@ use alloy_transport::TransportError;
 use reth_primitives::{
     revm_primitives::EnvKzgSettings, BlobTransactionValidationError, PooledTransactionsElement,
 };
-use std::{collections::HashMap, num::NonZero};
+use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::{
     builder::BlockTemplate,
     common::{calculate_max_basefee, validate_transaction},
+    config::Limits,
     primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot, TransactionExt},
 };
 
@@ -60,6 +61,9 @@ pub enum ValidationError {
     /// The maximum commitments have been reached for the slot.
     #[error("Max commitments reached for slot {0}: {1}")]
     MaxCommitmentsReachedForSlot(u64, usize),
+    /// The maximum committed gas has been reached for the slot.
+    #[error("Max committed gas reached for slot {0}: {1}")]
+    MaxCommittedGasReachedForSlot(u64, u64),
     /// The signature is invalid.
     #[error("Signature error: {0:?}")]
     Signature(#[from] SignatureError),
@@ -111,8 +115,8 @@ pub struct ExecutionState<C> {
     block_templates: HashMap<Slot, BlockTemplate>,
     /// The chain ID of the chain (constant).
     chain_id: u64,
-    /// The maximum number of commitments per slot.
-    max_commitments_per_slot: NonZero<usize>,
+    /// The limits set for the sidecar.
+    limits: Limits,
     /// The KZG settings for validating blobs.
     kzg_settings: EnvKzgSettings,
     /// The state fetcher client.
@@ -142,10 +146,7 @@ impl Default for ValidationParams {
 impl<C: StateFetcher> ExecutionState<C> {
     /// Creates a new state with the given client, initializing the
     /// basefee and head block number.
-    pub async fn new(
-        client: C,
-        max_commitments_per_slot: NonZero<usize>,
-    ) -> Result<Self, TransportError> {
+    pub async fn new(client: C, limits: Limits) -> Result<Self, TransportError> {
         let (basefee, blob_basefee, block_number, chain_id) = tokio::try_join!(
             client.get_basefee(None),
             client.get_blob_basefee(None),
@@ -158,7 +159,7 @@ impl<C: StateFetcher> ExecutionState<C> {
             blob_basefee,
             block_number,
             chain_id,
-            max_commitments_per_slot,
+            limits,
             client,
             slot: 0,
             account_states: HashMap::new(),
@@ -202,12 +203,26 @@ impl<C: StateFetcher> ExecutionState<C> {
 
         // Check if there is room for more commitments
         if let Some(template) = self.get_block_template(target_slot) {
-            if template.transactions_len() >= self.max_commitments_per_slot.get() {
+            if template.transactions_len() >= self.limits.max_commitments_per_slot.get() {
                 return Err(ValidationError::MaxCommitmentsReachedForSlot(
                     self.slot,
-                    self.max_commitments_per_slot.get(),
+                    self.limits.max_commitments_per_slot.get(),
                 ));
             }
+        }
+
+        // Check if the committed gas exceeds the maximum
+        let template_committed_gas = self
+            .get_block_template(target_slot)
+            .map(|t| t.committed_gas())
+            .unwrap_or(0);
+        if template_committed_gas + req.tx.gas_limit()
+            >= self.limits.max_committed_gas_per_slot.get()
+        {
+            return Err(ValidationError::MaxCommittedGasReachedForSlot(
+                self.slot,
+                self.limits.max_committed_gas_per_slot.get(),
+            ));
         }
 
         // Check if the transaction size exceeds the maximum
@@ -460,8 +475,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -486,8 +500,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -527,8 +540,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -580,8 +592,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -611,8 +622,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -674,8 +684,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
 
         let basefee = state.basefee();
 
@@ -702,6 +711,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_invalid_inclusion_request_with_excess_gas() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let limits: Limits = Limits {
+            max_commitments_per_slot: NonZero::new(10).unwrap(),
+            max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
+        };
+        let mut state = ExecutionState::new(client.clone(), limits).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let tx = default_test_transaction(*sender, None).with_gas_limit(6_000_000);
+
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+
+        assert!(matches!(
+            state.validate_commitment_request(&request).await,
+            Err(ValidationError::MaxCommittedGasReachedForSlot(_, 5_000_000))
+        ));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_invalidate_inclusion_request() -> eyre::Result<()> {
         let _ = tracing_subscriber::fmt::try_init();
 
@@ -709,8 +750,7 @@ mod tests {
         let client = StateClient::new(anvil.endpoint_url());
         let provider = ProviderBuilder::new().on_http(anvil.endpoint_url());
 
-        let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -776,8 +816,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -814,6 +853,62 @@ mod tests {
         state.update_head(None, target_slot).await?;
 
         assert!(state.get_block_template(target_slot).is_none());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_invalidate_inclusion_request_with_excess_gas() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let limits: Limits = Limits {
+            max_commitments_per_slot: NonZero::new(10).unwrap(),
+            max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
+        };
+        let mut state = ExecutionState::new(client.clone(), limits).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let tx = default_test_transaction(*sender, None).with_gas_limit(4_999_999);
+
+        let target_slot = 10;
+        let request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
+        let inclusion_request = request.as_inclusion_request().unwrap().clone();
+
+        assert!(state.validate_commitment_request(&request).await.is_ok());
+
+        let bls_signer = Signer::random();
+        let message = ConstraintsMessage::build(0, inclusion_request);
+        let signature = bls_signer.sign(&message.digest()).unwrap().to_string();
+        let signed_constraints = SignedConstraints { message, signature };
+
+        state.add_constraint(target_slot, signed_constraints);
+
+        assert!(
+            state
+                .get_block_template(target_slot)
+                .unwrap()
+                .transactions_len()
+                == 1
+        );
+
+        // This tx will exceed the committed gas limit
+        let tx = default_test_transaction(*sender, Some(1));
+
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+
+        assert!(matches!(
+            state.validate_commitment_request(&request).await,
+            Err(ValidationError::MaxCommittedGasReachedForSlot(_, 5_000_000))
+        ));
 
         Ok(())
     }
