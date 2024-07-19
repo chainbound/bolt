@@ -69,32 +69,28 @@ impl BlockTemplate {
     /// in the constraints. Use this when building a local execution payload.
     #[inline]
     pub fn as_blobs_bundle(&self) -> BlobsBundle {
-        let (commitments, proofs, blobs) = self
-            .signed_constraints_list
-            .iter()
-            .flat_map(|sc| sc.message.constraints.iter())
-            .filter_map(|c| c.transaction.blob_sidecar())
-            .fold(
-                (Vec::new(), Vec::new(), Vec::new()),
-                |(mut commitments, mut proofs, mut blobs), bs| {
-                    commitments.extend(
-                        bs.commitments
-                            .iter()
-                            .map(|c| KzgCommitment::try_from(c.as_slice()).unwrap()),
-                    );
-                    proofs.extend(
-                        bs.proofs
-                            .iter()
-                            .map(|p| KzgProof::try_from(p.as_slice()).unwrap()),
-                    );
-                    blobs.extend(
-                        bs.blobs
-                            .iter()
-                            .map(|b| Blob::try_from(b.as_slice()).unwrap()),
-                    );
-                    (commitments, proofs, blobs)
-                },
-            );
+        let (commitments, proofs, blobs) =
+            self.signed_constraints_list
+                .iter()
+                .flat_map(|sc| sc.message.constraints.iter())
+                .filter_map(|c| c.transaction.blob_sidecar())
+                .fold(
+                    (Vec::new(), Vec::new(), Vec::new()),
+                    |(mut commitments, mut proofs, mut blobs), bs| {
+                        commitments.extend(bs.commitments.iter().map(|c| {
+                            KzgCommitment::try_from(c.as_slice()).expect("both are 48 bytes")
+                        }));
+                        proofs.extend(
+                            bs.proofs.iter().map(|p| {
+                                KzgProof::try_from(p.as_slice()).expect("both are 48 bytes")
+                            }),
+                        );
+                        blobs.extend(bs.blobs.iter().map(|b| {
+                            Blob::try_from(b.as_slice()).expect("both are 131_072 bytes")
+                        }));
+                        (commitments, proofs, blobs)
+                    },
+                );
 
         BlobsBundle {
             commitments,
