@@ -60,6 +60,9 @@ pub enum ValidationError {
     /// The maximum commitments have been reached for the slot.
     #[error("Max commitments reached for slot {0}: {1}")]
     MaxCommitmentsReachedForSlot(u64, usize),
+    /// The maximum committed gas has been reached for the slot.
+    #[error("Max committed gas reached for slot {0}: {1}")]
+    MaxCommittedGasReachedForSlot(u64, u64),
     /// The signature is invalid.
     #[error("Signature error: {0:?}")]
     Signature(#[from] SignatureError),
@@ -113,6 +116,8 @@ pub struct ExecutionState<C> {
     chain_id: u64,
     /// The maximum number of commitments per slot.
     max_commitments_per_slot: NonZero<usize>,
+    /// The maximum committed gas per slot.
+    max_committed_gas_per_slot: NonZero<u64>,
     /// The KZG settings for validating blobs.
     kzg_settings: EnvKzgSettings,
     /// The state fetcher client.
@@ -145,6 +150,7 @@ impl<C: StateFetcher> ExecutionState<C> {
     pub async fn new(
         client: C,
         max_commitments_per_slot: NonZero<usize>,
+        max_committed_gas_per_slot: NonZero<u64>,
     ) -> Result<Self, TransportError> {
         let (basefee, blob_basefee, block_number, chain_id) = tokio::try_join!(
             client.get_basefee(None),
@@ -159,6 +165,7 @@ impl<C: StateFetcher> ExecutionState<C> {
             block_number,
             chain_id,
             max_commitments_per_slot,
+            max_committed_gas_per_slot,
             client,
             slot: 0,
             account_states: HashMap::new(),
@@ -206,6 +213,14 @@ impl<C: StateFetcher> ExecutionState<C> {
                 return Err(ValidationError::MaxCommitmentsReachedForSlot(
                     self.slot,
                     self.max_commitments_per_slot.get(),
+                ));
+            }
+
+            // Check if the committed gas exceeds the maximum
+            if template.committed_gas().to::<u64>() >= self.max_committed_gas_per_slot.get() {
+                return Err(ValidationError::MaxCommittedGasReachedForSlot(
+                    self.slot,
+                    self.max_committed_gas_per_slot.get(),
                 ));
             }
         }
