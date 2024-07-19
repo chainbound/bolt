@@ -29,11 +29,20 @@ pub fn calculate_max_basefee(current: u128, block_diff: u64) -> Option<u128> {
 }
 
 /// Calculates the max transaction cost (gas + value) in wei.
+///
+/// - For EIP-1559 transactions: `max_fee_per_gas * gas_limit + tx_value`.
+/// - For legacy transactions: `gas_price * gas_limit + tx_value`.
+/// - For EIP-4844 blob transactions: `max_fee_per_gas * gas_limit + tx_value +
+///   max_blob_fee_per_gas * blob_gas_used`.
 pub fn max_transaction_cost(transaction: &PooledTransactionsElement) -> U256 {
     let gas_limit = transaction.gas_limit() as u128;
 
-    let fee_cap = transaction.max_fee_per_gas();
-    let fee_cap = fee_cap + transaction.max_priority_fee_per_gas().unwrap_or(0);
+    let mut fee_cap = transaction.max_fee_per_gas();
+    fee_cap += transaction.max_priority_fee_per_gas().unwrap_or(0);
+
+    if let Some(eip4844) = transaction.as_eip4844() {
+        fee_cap += eip4844.max_fee_per_blob_gas + eip4844.blob_gas() as u128;
+    }
 
     U256::from(gas_limit * fee_cap) + transaction.value()
 }
