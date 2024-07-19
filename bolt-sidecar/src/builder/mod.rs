@@ -2,7 +2,7 @@ use alloy_primitives::U256;
 use blst::min_pk::SecretKey;
 use ethereum_consensus::{
     crypto::{KzgCommitment, PublicKey},
-    deneb::mainnet::{ExecutionPayloadHeader, MAX_BLOB_COMMITMENTS_PER_BLOCK},
+    deneb::mainnet::ExecutionPayloadHeader,
     ssz::prelude::{List, MerkleizationError},
 };
 use payload_builder::FallbackPayloadBuilder;
@@ -102,6 +102,7 @@ impl LocalBuilder {
     ) -> Result<(), BuilderError> {
         let transactions = template.as_signed_transactions();
         let blobs_bundle = template.as_blobs_bundle();
+        let kzg_commitments = blobs_bundle.commitments.clone();
 
         // 1. build a fallback payload with the given transactions, on top of
         // the current head of the chain
@@ -132,8 +133,7 @@ impl LocalBuilder {
         );
 
         // 3. sign the bid with the local builder's BLS key
-        let signed_bid =
-            self.create_signed_builder_bid(value, eth_header, blobs_bundle.commitments)?;
+        let signed_bid = self.create_signed_builder_bid(value, eth_header, kzg_commitments)?;
 
         // 4. prepare a get_payload response for when the beacon node will ask for it
         let Some(get_payload_res) =
@@ -166,11 +166,12 @@ impl LocalBuilder {
         &self,
         value: U256,
         header: ExecutionPayloadHeader,
-        blob_kzg_commitments: List<KzgCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK>,
+        blob_kzg_commitments: Vec<KzgCommitment>,
     ) -> Result<SignedBuilderBid, BuilderError> {
         // compat: convert from blst to ethereum consensus types
         let pubkey = self.secret_key.sk_to_pk().to_bytes();
         let consensus_pubkey = PublicKey::try_from(pubkey.as_slice()).expect("valid pubkey bytes");
+        let blob_kzg_commitments = List::try_from(blob_kzg_commitments).expect("valid list");
 
         let message = BuilderBid {
             header,
