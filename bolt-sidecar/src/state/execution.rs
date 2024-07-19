@@ -224,15 +224,14 @@ impl<C: StateFetcher> ExecutionState<C> {
                     self.slot,
                     self.max_committed_gas_per_slot.get(),
                 ));
-            }
-        } else if req.tx.gas_limit() >= self.max_committed_gas_per_slot.get() {
-            // Check if the committed gas limit itself exceeds the maximum when template is None
+        // Check if the committed gas exceeds the maximum
+        let template_committed_gas = self.get_block_template(target_slot).map(|t| t.committed_gas()).unwrap_or(0);
+        if template_committed_gas + req.tx.gas_limit() >= self.max_committed_gas_per_slot.get() {
             return Err(ValidationError::MaxCommittedGasReachedForSlot(
                 self.slot,
                 self.max_committed_gas_per_slot.get(),
             ));
         }
-
         // Check if the transaction size exceeds the maximum
         if req.tx.size() > self.validation_params.max_tx_input_bytes {
             return Err(ValidationError::TransactionSizeTooHigh);
