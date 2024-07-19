@@ -207,20 +207,23 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::ChainIdMismatch);
         }
 
-        // Check if there is room for more commitments
+        let max_commitments_per_slot = self.max_commitments_per_slot.get();
+        let max_committed_gas_per_slot = self.max_committed_gas_per_slot.get();
+
+        // Check if there is room for more commitments and gas in the block template
         if let Some(template) = self.get_block_template(target_slot) {
-            if template.transactions_len() >= self.max_commitments_per_slot.get() {
+            if template.transactions_len() >= max_commitments_per_slot {
                 return Err(ValidationError::MaxCommitmentsReachedForSlot(
                     self.slot,
-                    self.max_commitments_per_slot.get(),
+                    max_commitments_per_slot,
                 ));
             }
 
             // Check if the committed gas exceeds the maximum
-            if template.committed_gas().to::<u64>() >= self.max_committed_gas_per_slot.get() {
+            if template.committed_gas().to::<u64>() >= max_committed_gas_per_slot {
                 return Err(ValidationError::MaxCommittedGasReachedForSlot(
                     self.slot,
-                    self.max_committed_gas_per_slot.get(),
+                    max_committed_gas_per_slot,
                 ));
             }
         }
@@ -476,7 +479,8 @@ mod tests {
         let client = StateClient::new(anvil.endpoint_url());
 
         let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let max_gas = NonZero::new(10_000_000).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms, max_gas).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -502,7 +506,8 @@ mod tests {
         let client = StateClient::new(anvil.endpoint_url());
 
         let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let max_gas = NonZero::new(10_000_000).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms, max_gas).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -543,7 +548,8 @@ mod tests {
         let client = StateClient::new(anvil.endpoint_url());
 
         let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let max_gas = NonZero::new(10_000_000).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms, max_gas).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -596,7 +602,8 @@ mod tests {
         let client = StateClient::new(anvil.endpoint_url());
 
         let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let max_gas = NonZero::new(10_000_000).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms, max_gas).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -627,7 +634,8 @@ mod tests {
         let client = StateClient::new(anvil.endpoint_url());
 
         let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let max_gas = NonZero::new(10_000_000).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms, max_gas).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -690,7 +698,8 @@ mod tests {
         let client = StateClient::new(anvil.endpoint_url());
 
         let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let max_gas = NonZero::new(10_000_000).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms, max_gas).await?;
 
         let basefee = state.basefee();
 
@@ -725,7 +734,8 @@ mod tests {
         let provider = ProviderBuilder::new().on_http(anvil.endpoint_url());
 
         let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let max_gas = NonZero::new(10_000_000).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms, max_gas).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -792,7 +802,8 @@ mod tests {
         let client = StateClient::new(anvil.endpoint_url());
 
         let max_comms = NonZero::new(10).unwrap();
-        let mut state = ExecutionState::new(client.clone(), max_comms).await?;
+        let max_gas = NonZero::new(10_000_000).unwrap();
+        let mut state = ExecutionState::new(client.clone(), max_comms, max_gas).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
