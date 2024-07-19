@@ -168,7 +168,7 @@ where
             meta: Default::default(),
         };
 
-        tracing::info!(elapsed = ?start.elapsed(), %hash, number, "Returning locally built header");
+        tracing::info!(elapsed = ?start.elapsed(), %hash, number, ?versioned_bid, "Returning locally built header");
         Ok(Json(versioned_bid))
     }
 
