@@ -592,11 +592,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits: Limits = Limits {
-            max_commitments_per_slot: NonZero::new(10).unwrap(),
-            max_committed_gas_per_slot: NonZero::new(10_000_000).unwrap(),
-        };
-        let mut state = ExecutionState::new(client.clone(), limits).await?;
+        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
