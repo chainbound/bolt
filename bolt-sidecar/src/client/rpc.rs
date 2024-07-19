@@ -228,9 +228,8 @@ mod tests {
     use alloy::{
         consensus::constants::ETH_TO_WEI,
         primitives::{uint, Uint},
-        rpc::types::EIP1186AccountProofResponse,
     };
-    use reth_primitives::B256;
+    use dotenvy::dotenv;
 
     use crate::test_util::launch_anvil;
 
@@ -256,34 +255,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_get_proof() -> eyre::Result<()> {
-        let rpc_url = std::env::var("RPC_URL").expect("RPC_URL must be set");
-        let rpc_url = Url::parse(&rpc_url)?;
-        let rpc_client = RpcClient::new(rpc_url);
-
-        let proof: EIP1186AccountProofResponse = rpc_client
-            .0
-            .request(
-                "eth_getProof",
-                (
-                    "0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5",
-                    vec![] as Vec<B256>,
-                    "latest",
-                ),
-            )
-            .await?;
-
-        println!("proof: {:?}", proof);
-
-        let block = rpc_client.get_block(None, false).await?;
-
-        println!("root {:?}", block.header.state_root);
-
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn test_smart_contract_code() -> eyre::Result<()> {
+        dotenv().ok();
         let rpc_url = Url::parse(std::env::var("RPC_URL").unwrap().as_str())?;
         let rpc_client = RpcClient::new(rpc_url);
 
