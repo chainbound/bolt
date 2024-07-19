@@ -28,7 +28,7 @@ async fn main() -> eyre::Result<()> {
     let signer = Signer::new(config.private_key.clone().unwrap());
 
     let state_client = StateClient::new(config.execution_api_url.clone());
-    let mut execution_state = ExecutionState::new(state_client, config.limits.clone()).await?;
+    let mut execution_state = ExecutionState::new(state_client, config.limits).await?;
 
     let mevboost_client = MevBoostClient::new(config.mevboost_url.clone());
     let beacon_client = BeaconClient::new(config.beacon_api_url.clone());

@@ -136,7 +136,7 @@ impl Default for Config {
 }
 
 /// Limits for the sidecar.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct Limits {
     /// Maximum number of commitments to accept per block
     pub max_commitments_per_slot: NonZero<usize>,

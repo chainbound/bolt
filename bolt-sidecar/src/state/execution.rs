@@ -4,7 +4,7 @@ use alloy_transport::TransportError;
 use reth_primitives::{
     revm_primitives::EnvKzgSettings, BlobTransactionValidationError, PooledTransactionsElement,
 };
-use std::{collections::HashMap, num::NonZero};
+use std::collections::HashMap;
 use thiserror::Error;
 
 use crate::{
@@ -115,10 +115,8 @@ pub struct ExecutionState<C> {
     block_templates: HashMap<Slot, BlockTemplate>,
     /// The chain ID of the chain (constant).
     chain_id: u64,
-    /// The maximum number of commitments per slot.
-    max_commitments_per_slot: NonZero<usize>,
-    /// The maximum committed gas per slot.
-    max_committed_gas_per_slot: NonZero<u64>,
+    /// The limits set for the sidecar.
+    limits: Limits,
     /// The KZG settings for validating blobs.
     kzg_settings: EnvKzgSettings,
     /// The state fetcher client.
@@ -161,8 +159,7 @@ impl<C: StateFetcher> ExecutionState<C> {
             blob_basefee,
             block_number,
             chain_id,
-            max_commitments_per_slot: limits.max_commitments_per_slot,
-            max_committed_gas_per_slot: limits.max_committed_gas_per_slot,
+            limits,
             client,
             slot: 0,
             account_states: HashMap::new(),
@@ -206,10 +203,10 @@ impl<C: StateFetcher> ExecutionState<C> {
 
         // Check if there is room for more commitments
         if let Some(template) = self.get_block_template(target_slot) {
-            if template.transactions_len() >= self.max_commitments_per_slot.get() {
+            if template.transactions_len() >= self.limits.max_commitments_per_slot.get() {
                 return Err(ValidationError::MaxCommitmentsReachedForSlot(
                     self.slot,
-                    self.max_commitments_per_slot.get(),
+                    self.limits.max_commitments_per_slot.get(),
                 ));
             }
         }
@@ -219,10 +216,12 @@ impl<C: StateFetcher> ExecutionState<C> {
             .get_block_template(target_slot)
             .map(|t| t.committed_gas())
             .unwrap_or(0);
-        if template_committed_gas + req.tx.gas_limit() >= self.max_committed_gas_per_slot.get() {
+        if template_committed_gas + req.tx.gas_limit()
+            >= self.limits.max_committed_gas_per_slot.get()
+        {
             return Err(ValidationError::MaxCommittedGasReachedForSlot(
                 self.slot,
-                self.max_committed_gas_per_slot.get(),
+                self.limits.max_committed_gas_per_slot.get(),
             ));
         }
 
