@@ -1,8 +1,8 @@
 use alloy_primitives::U256;
 use blst::min_pk::SecretKey;
 use ethereum_consensus::{
-    crypto::PublicKey,
-    deneb::mainnet::ExecutionPayloadHeader,
+    crypto::{KzgCommitment, PublicKey},
+    deneb::mainnet::{ExecutionPayloadHeader, MAX_BLOB_COMMITMENTS_PER_BLOCK},
     ssz::prelude::{List, MerkleizationError},
 };
 use payload_builder::FallbackPayloadBuilder;
@@ -132,7 +132,8 @@ impl LocalBuilder {
         );
 
         // 3. sign the bid with the local builder's BLS key
-        let signed_bid = self.create_signed_builder_bid(value, eth_header)?;
+        let signed_bid =
+            self.create_signed_builder_bid(value, eth_header, blobs_bundle.commitments)?;
 
         // 4. prepare a get_payload response for when the beacon node will ask for it
         let Some(get_payload_res) =
@@ -165,6 +166,7 @@ impl LocalBuilder {
         &self,
         value: U256,
         header: ExecutionPayloadHeader,
+        blob_kzg_commitments: List<KzgCommitment, MAX_BLOB_COMMITMENTS_PER_BLOCK>,
     ) -> Result<SignedBuilderBid, BuilderError> {
         // compat: convert from blst to ethereum consensus types
         let pubkey = self.secret_key.sk_to_pk().to_bytes();
@@ -172,7 +174,7 @@ impl LocalBuilder {
 
         let message = BuilderBid {
             header,
-            blob_kzg_commitments: List::default(),
+            blob_kzg_commitments,
             public_key: consensus_pubkey,
             value,
         };
