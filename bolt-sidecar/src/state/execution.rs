@@ -204,25 +204,32 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::ChainIdMismatch);
         }
 
-        let max_commitments_per_slot = self.max_commitments_per_slot.get();
-        let max_committed_gas_per_slot = self.max_committed_gas_per_slot.get();
-
         // Check if there is room for more commitments and gas in the block template
         if let Some(template) = self.get_block_template(target_slot) {
-            if template.transactions_len() >= max_commitments_per_slot {
+            if template.transactions_len() >= self.max_commitments_per_slot.get() {
                 return Err(ValidationError::MaxCommitmentsReachedForSlot(
                     self.slot,
-                    max_commitments_per_slot,
+                    self.max_commitments_per_slot.get(),
                 ));
             }
+        }
 
+        if let Some(template) = self.get_block_template(target_slot) {
             // Check if the committed gas exceeds the maximum
-            if template.committed_gas() + req.tx.gas_limit() >= max_committed_gas_per_slot {
+            if template.committed_gas() + req.tx.gas_limit()
+                >= self.max_committed_gas_per_slot.get()
+            {
                 return Err(ValidationError::MaxCommittedGasReachedForSlot(
                     self.slot,
-                    max_committed_gas_per_slot,
+                    self.max_committed_gas_per_slot.get(),
                 ));
             }
+        } else if req.tx.gas_limit() >= self.max_committed_gas_per_slot.get() {
+            // Check if the committed gas limit itself exceeds the maximum when template is None
+            return Err(ValidationError::MaxCommittedGasReachedForSlot(
+                self.slot,
+                self.max_committed_gas_per_slot.get(),
+            ));
         }
 
         // Check if the transaction size exceeds the maximum
@@ -735,6 +742,38 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_invalid_inclusion_request_with_excess_gas() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let limits: Limits = Limits {
+            max_commitments_per_slot: NonZero::new(10).unwrap(),
+            max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
+        };
+        let mut state = ExecutionState::new(client.clone(), limits).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let tx = default_test_transaction(*sender, None).with_gas_limit(6_000_000);
+
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+
+        assert!(matches!(
+            state.validate_commitment_request(&request).await,
+            Err(ValidationError::MaxCommittedGasReachedForSlot(_, 5_000_000))
+        ));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_invalidate_inclusion_request() -> eyre::Result<()> {
         let _ = tracing_subscriber::fmt::try_init();
 
@@ -853,6 +892,66 @@ mod tests {
         state.update_head(None, target_slot).await?;
 
         assert!(state.get_block_template(target_slot).is_none());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_invalidate_inclusion_request_with_excess_gas() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let limits: Limits = Limits {
+            max_commitments_per_slot: NonZero::new(10).unwrap(),
+            max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
+        };
+        let mut state = ExecutionState::new(client.clone(), limits).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let tx = default_test_transaction(*sender, None).with_gas_limit(4_999_999);
+
+        // build the signed transaction for submission later
+        let wallet: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let signer: EthereumWallet = wallet.into();
+
+        let target_slot = 10;
+        let request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
+        let inclusion_request = request.as_inclusion_request().unwrap().clone();
+
+        assert!(state.validate_commitment_request(&request).await.is_ok());
+
+        let bls_signer = Signer::random();
+        let message = ConstraintsMessage::build(0, inclusion_request);
+        let signature = bls_signer.sign(&message.digest()).unwrap().to_string();
+        let signed_constraints = SignedConstraints { message, signature };
+
+        state.add_constraint(target_slot, signed_constraints);
+
+        assert!(
+            state
+                .get_block_template(target_slot)
+                .unwrap()
+                .transactions_len()
+                == 1
+        );
+
+        // This tx will exceed the committed gas limit
+        let tx = default_test_transaction(*sender, Some(1));
+
+        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+
+        assert!(matches!(
+            state.validate_commitment_request(&request).await,
+            Err(ValidationError::MaxCommittedGasReachedForSlot(_, 5_000_000))
+        ));
 
         Ok(())
     }
