@@ -36,6 +36,9 @@ struct Opts {
     /// Private key to sign transactions with
     #[clap(short = 'k', long, env)]
     private_key: String,
+    /// Optional nonce offset to use for the transaction
+    #[clap(short, long, default_value = "0")]
+    nonce_offset: u64,
     // Flag for generating a blob tx instead of a regular tx
     #[clap(short, long, default_value = "false")]
     blob: bool,
@@ -90,7 +93,7 @@ async fn main() -> Result<()> {
 
     let mut tx = if opts.blob { generate_random_blob_tx() } else { generate_random_tx() };
     tx.set_from(sender);
-    tx.set_nonce(provider.get_transaction_count(sender).await?);
+    tx.set_nonce(provider.get_transaction_count(sender).await? + opts.nonce_offset);
 
     let tx_signed = tx.build(&transaction_signer).await?;
     let tx_hash = tx_signed.tx_hash().to_string();
@@ -116,7 +119,6 @@ async fn main() -> Result<()> {
     );
 
     info!("Transaction hash: {}", tx_hash);
-    info!("body: {}", serde_json::to_string(&request)?);
 
     let client = reqwest::Client::new();
     let response = client
@@ -126,7 +128,11 @@ async fn main() -> Result<()> {
         .send()
         .await?;
 
-    info!("Response: {:?}", response.text().await?);
+    let response = response.text().await?;
+
+    // strip out long series of zeros in the response (to avoid spamming logs)
+    let response = response.replace(&"0".repeat(32), ".").replace(&".".repeat(4), "");
+    info!("Response: {:?}", response);
 
     Ok(())
 }
