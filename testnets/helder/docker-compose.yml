@@ -10,7 +10,7 @@ services:
     entrypoint: /bin/sh -c '/bolt-sidecar --port $$BOLT_RPC_PORT --chain helder --validator-indexes $$VALIDATOR_INDEXES --beacon-api-url $$BEACON_API_URL --execution-api-url $$EXECUTION_API_URL --engine-api-url $$ENGINE_API_URL --private-key $$SIGNING_KEY --mevboost-url http://bolt-boost:18550 --mevboost-proxy-port 18551 --jwt-hex $$JWT_HEX --fee-recipient $$FEE_RECIPIENT'
 
   bolt-boost:
-    image: ghcr.io/chainbound/bolt-boost:0.1.2-alpha
+    image: ghcr.io/chainbound/bolt-mev-boost:0.1.2-alpha
     container_name: bolt-boost
     restart: unless-stopped
     env_file: ./launch.env
