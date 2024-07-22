@@ -1,4 +1,4 @@
-use alloy_primitives::U256;
+use alloy::primitives::U256;
 use blst::min_pk::SecretKey;
 use ethereum_consensus::{
     crypto::{KzgCommitment, PublicKey},
@@ -32,13 +32,6 @@ mod compat;
 /// `engine_newPayloadV3` response error to produce a valid payload.
 pub mod payload_builder;
 
-/// Deprecated. TODO: remove
-pub mod state_root;
-
-/// Deprecated simulation manager. TODO: remove
-pub mod call_trace_manager;
-pub use call_trace_manager::{CallTraceHandle, CallTraceManager};
-
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
 #[allow(missing_docs)]
@@ -54,7 +47,7 @@ pub enum BuilderError {
     #[error("Failed HTTP request: {0}")]
     Reqwest(#[from] reqwest::Error),
     #[error("Failed while fetching from RPC: {0}")]
-    Transport(#[from] alloy_transport::TransportError),
+    Transport(#[from] alloy::transports::TransportError),
     #[error("Failed in SSZ merkleization: {0}")]
     Merkleization(#[from] MerkleizationError),
     #[error("Failed while interacting with beacon client: {0}")]

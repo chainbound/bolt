@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use alloy_rpc_types_beacon::events::HeadEvent;
+use alloy::rpc::types::beacon::events::HeadEvent;
 use tokio::sync::mpsc;
 
 use bolt_sidecar::{

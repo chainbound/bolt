@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use alloy_rpc_types_beacon::{BlsPublicKey, BlsSignature};
+use alloy::rpc::types::beacon::{BlsPublicKey, BlsSignature};
 use cb_common::pbs::{COMMIT_BOOST_API, PUBKEYS_PATH, SIGN_REQUEST_PATH};
 use cb_crypto::types::SignRequest;
 use ethereum_consensus::ssz::prelude::ssz_rs;

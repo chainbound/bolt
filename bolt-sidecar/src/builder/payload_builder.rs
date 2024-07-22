@@ -1,7 +1,8 @@
-use alloy_eips::{calc_excess_blob_gas, calc_next_block_base_fee, eip1559::BaseFeeParams};
-use alloy_primitives::{Address, Bytes, B256, U256};
-use alloy_rpc_types::Block;
-use alloy_rpc_types_engine::ExecutionPayload as AlloyExecutionPayload;
+use alloy::{
+    eips::{calc_excess_blob_gas, calc_next_block_base_fee, eip1559::BaseFeeParams},
+    primitives::{Address, Bytes, B256, U256},
+    rpc::types::{engine::ExecutionPayload as AlloyExecutionPayload, Block},
+};
 use beacon_api_client::{BlockId, StateId};
 use hex::FromHex;
 use regex::Regex;
@@ -194,6 +195,7 @@ impl FallbackPayloadBuilder {
             ommers: Vec::new(),
             transactions: transactions.to_vec(),
             withdrawals: Some(Withdrawals::new(withdrawals)),
+            requests: None,
         };
 
         let mut hints = Hints::default();
@@ -386,17 +388,20 @@ pub(crate) fn build_header_with_hints_and_context(
         blob_gas_used: Some(context.blob_gas_used),
         excess_blob_gas: Some(context.excess_blob_gas),
         parent_beacon_block_root: Some(context.parent_beacon_block_root),
+        requests_root: None,
         extra_data: context.extra_data.clone(),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use alloy_eips::eip2718::Encodable2718;
-    use alloy_network::{EthereumWallet, TransactionBuilder};
-    use alloy_primitives::{hex, Address};
-    use alloy_signer::k256::ecdsa::SigningKey;
-    use alloy_signer_local::PrivateKeySigner;
+    use alloy::{
+        eips::eip2718::Encodable2718,
+        network::{EthereumWallet, TransactionBuilder},
+        primitives::{hex, Address},
+        signers::k256::ecdsa::SigningKey,
+        signers::local::PrivateKeySigner,
+    };
     use reth_primitives::TransactionSigned;
 
     use crate::{

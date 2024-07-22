@@ -4,9 +4,11 @@
 
 use std::{collections::HashMap, time::Duration};
 
-use alloy_eips::BlockNumberOrTag;
-use alloy_primitives::{Address, Bytes, U256, U64};
-use alloy_transport::TransportError;
+use alloy::{
+    eips::BlockNumberOrTag,
+    primitives::{Address, Bytes, U256, U64},
+    transports::TransportError,
+};
 use futures::{stream::FuturesOrdered, StreamExt};
 use reqwest::Url;
 

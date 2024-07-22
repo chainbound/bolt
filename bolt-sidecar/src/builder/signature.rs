@@ -1,4 +1,4 @@
-use alloy_rpc_types_beacon::{constants::BLS_DST_SIG, BlsSignature};
+use alloy::rpc::types::beacon::{constants::BLS_DST_SIG, BlsSignature};
 use blst::min_pk::{PublicKey, SecretKey};
 use blst::BLST_ERROR;
 use ethereum_consensus::crypto::Signature;
