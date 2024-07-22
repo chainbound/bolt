@@ -13,7 +13,7 @@ services:
     image: postgres
     restart: unless-stopped
     volumes:
-      - 'psql_data:/var/lib/postgresql/data'
+      - "psql_data:/var/lib/postgresql/data"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
@@ -25,25 +25,25 @@ services:
     depends_on:
       - db
     ports:
-      - '8093:8080'
+      - "8093:8080"
     environment:
       ADMINER_PLUGINS: tables-filter tinymce
 
   builder:
-    image: ghcr.io/chainbound/bolt-builder:v0.1.0
+    image: ghcr.io/chainbound/bolt-builder:v0.1.2-alpha
     restart: unless-stopped
     volumes:
-      - 'chaindata:/var/lib/chaindata'
-      - './shared:/var/lib/shared'
-      - './network-configs:/var/lib/network-configs'
-      - './scripts/run-builder.sh:/scripts/run-builder.sh'
+      - "chaindata:/var/lib/chaindata"
+      - "./shared:/var/lib/shared"
+      - "./network-configs:/var/lib/network-configs"
+      - "./scripts/run-builder.sh:/scripts/run-builder.sh"
     environment:
       BUILDER_TX_SIGNING_KEY: "0x53321db7c1e331d93a11a41d16f004d7ff63972ec8ec7c25db329728ceeb1710"
     ports:
       # - '8545:8545'
       # - '8546:8546'
-      - '30310:30303/tcp'
-      - '30310:30303/udp'
+      - "30310:30303/tcp"
+      - "30310:30303/udp"
     # entrypoint is builder
     entrypoint: /scripts/run-builder.sh
 
@@ -51,17 +51,17 @@ services:
     image: sigp/lighthouse:latest
     restart: unless-stopped
     volumes:
-      - 'chaindata:/var/lib/chaindata'
-      - './shared:/var/lib/shared'
-      - './network-configs:/var/lib/network-configs'
-      - './scripts/run-bn.sh:/scripts/run-bn.sh'
+      - "chaindata:/var/lib/chaindata"
+      - "./shared:/var/lib/shared"
+      - "./network-configs:/var/lib/network-configs"
+      - "./scripts/run-bn.sh:/scripts/run-bn.sh"
     ports:
-      - '50050:50050/tcp'
-      - '50050:50050/udp'
+      - "50050:50050/tcp"
+      - "50050:50050/udp"
     entrypoint: /scripts/run-bn.sh
 
   relay-housekeeper:
-    image: ghcr.io/chainbound/bolt-relay:v0.1.0
+    image: ghcr.io/chainbound/bolt-relay:v0.1.2-alpha
     restart: unless-stopped
     depends_on:
       db:
@@ -84,11 +84,11 @@ services:
         "--redis-uri",
         "redis:6379",
         "--beacon-uris",
-        "http://beacon:4000"
+        "http://beacon:4000",
       ]
 
   relay-api:
-    image: ghcr.io/chainbound/bolt-relay:v0.1.0
+    image: ghcr.io/chainbound/bolt-relay:v0.1.2-alpha
     restart: unless-stopped
     depends_on:
       relay-housekeeper:
@@ -100,7 +100,7 @@ services:
       CAPELLA_FORK_VERSION: "0x40000000"
       DENEB_FORK_VERSION: "0x50132736"
     ports:
-      - '9062:9062'
+      - "9062:9062"
     command:
       [
         "api",
@@ -117,11 +117,11 @@ services:
         "--secret-key",
         "0x607a11b45a7219cc61a3d9c5fd08c7eebd602a6a19a977f8d3771d5711a550f2",
         "--listen-addr",
-        "0.0.0.0:9062"
+        "0.0.0.0:9062",
       ]
 
   relay-website:
-    image: ghcr.io/chainbound/bolt-relay:v0.1.0
+    image: ghcr.io/chainbound/bolt-relay:v0.1.2-alpha
     restart: always
     depends_on:
       relay-api:
@@ -133,7 +133,7 @@ services:
       CAPELLA_FORK_VERSION: "0x40000000"
       DENEB_FORK_VERSION: "0x50132736"
     ports:
-      - '9060:9060'
+      - "9060:9060"
     command:
       [
         "website",
@@ -144,5 +144,5 @@ services:
         "--redis-uri",
         "redis:6379",
         "--listen-addr",
-        "0.0.0.0:9060"
+        "0.0.0.0:9060",
       ]
