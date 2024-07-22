@@ -25,7 +25,8 @@ pub fn generate_random_tx() -> TransactionRequest {
 
 /// Generate random transaction with blob (eip4844)
 pub fn generate_random_blob_tx() -> TransactionRequest {
-    let sidecar: SidecarBuilder<SimpleCoder> = SidecarBuilder::from_slice(b"Blobs are fun!");
+    let random_bytes = thread_rng().gen::<[u8; 32]>();
+    let sidecar: SidecarBuilder<SimpleCoder> = SidecarBuilder::from_slice(random_bytes.as_slice());
     let sidecar: BlobTransactionSidecar = sidecar.build().unwrap();
 
     let dead_address = Address::from_str(DEAD_ADDRESS).unwrap();
@@ -35,10 +36,11 @@ pub fn generate_random_blob_tx() -> TransactionRequest {
         .with_chain_id(KURTOSIS_CHAIN_ID)
         .with_value(U256::from(100))
         .with_max_fee_per_blob_gas(100u128)
-        .max_fee_per_gas(100u128)
-        .max_priority_fee_per_gas(50u128)
+        .max_fee_per_gas(NOICE_GAS_PRICE)
+        .max_priority_fee_per_gas(NOICE_GAS_PRICE / 10)
         .with_gas_limit(1_000_000u128)
         .with_blob_sidecar(sidecar)
+        .with_input(random_bytes)
 }
 
 pub fn prepare_rpc_request(method: &str, params: Vec<Value>) -> Value {

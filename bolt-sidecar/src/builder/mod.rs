@@ -1,7 +1,7 @@
 use alloy_primitives::U256;
 use blst::min_pk::SecretKey;
 use ethereum_consensus::{
-    crypto::PublicKey,
+    crypto::{KzgCommitment, PublicKey},
     deneb::mainnet::ExecutionPayloadHeader,
     ssz::prelude::{List, MerkleizationError},
 };
@@ -95,13 +95,13 @@ impl LocalBuilder {
 
     /// Build a new payload with the given transactions. This method will
     /// cache the payload in the local builder instance, and make it available
-    ///
     pub async fn build_new_local_payload(
         &mut self,
         template: &BlockTemplate,
     ) -> Result<(), BuilderError> {
         let transactions = template.as_signed_transactions();
         let blobs_bundle = template.as_blobs_bundle();
+        let kzg_commitments = blobs_bundle.commitments.clone();
 
         // 1. build a fallback payload with the given transactions, on top of
         // the current head of the chain
@@ -132,7 +132,7 @@ impl LocalBuilder {
         );
 
         // 3. sign the bid with the local builder's BLS key
-        let signed_bid = self.create_signed_builder_bid(value, eth_header)?;
+        let signed_bid = self.create_signed_builder_bid(value, eth_header, kzg_commitments)?;
 
         // 4. prepare a get_payload response for when the beacon node will ask for it
         let Some(get_payload_res) =
@@ -159,20 +159,20 @@ impl LocalBuilder {
 
     /// transform a sealed header into a signed builder bid using
     /// the local builder's BLS key.
-    ///
-    /// TODO: add blobs bundle
     fn create_signed_builder_bid(
         &self,
         value: U256,
         header: ExecutionPayloadHeader,
+        blob_kzg_commitments: Vec<KzgCommitment>,
     ) -> Result<SignedBuilderBid, BuilderError> {
         // compat: convert from blst to ethereum consensus types
         let pubkey = self.secret_key.sk_to_pk().to_bytes();
         let consensus_pubkey = PublicKey::try_from(pubkey.as_slice()).expect("valid pubkey bytes");
+        let blob_kzg_commitments = List::try_from(blob_kzg_commitments).expect("valid list");
 
         let message = BuilderBid {
             header,
-            blob_kzg_commitments: List::default(),
+            blob_kzg_commitments,
             public_key: consensus_pubkey,
             value,
         };

@@ -76,6 +76,7 @@ impl FallbackPayloadBuilder {
 pub struct Context {
     extra_data: Bytes,
     base_fee: u64,
+    blob_gas_used: u64,
     excess_blob_gas: u64,
     prev_randao: B256,
     fee_recipient: Address,
@@ -91,7 +92,6 @@ pub struct Hints {
     pub gas_used: Option<u64>,
     pub receipts_root: Option<B256>,
     pub logs_bloom: Option<Bloom>,
-    pub blob_gas_used: Option<u64>,
     pub state_root: Option<B256>,
     pub block_hash: Option<B256>,
 }
@@ -173,8 +173,13 @@ impl FallbackPayloadBuilder {
             latest_block.header.blob_gas_used.unwrap_or_default(),
         ) as u64;
 
+        let blob_gas_used = transactions
+            .iter()
+            .fold(0, |acc, tx| acc + tx.blob_gas_used().unwrap_or_default());
+
         let ctx = Context {
             base_fee,
+            blob_gas_used,
             excess_blob_gas,
             parent_beacon_block_root,
             prev_randao,
@@ -198,7 +203,7 @@ impl FallbackPayloadBuilder {
             let header = build_header_with_hints_and_context(&latest_block, &hints, &ctx);
 
             let sealed_header = header.seal_slow();
-            let sealed_block = SealedBlock::new(sealed_header.clone(), body.clone());
+            let sealed_block = SealedBlock::new(sealed_header, body.clone());
 
             let block_hash = hints.block_hash.unwrap_or(sealed_block.hash());
 
@@ -359,7 +364,6 @@ pub(crate) fn build_header_with_hints_and_context(
     let gas_used = hints.gas_used.unwrap_or_default();
     let receipts_root = hints.receipts_root.unwrap_or_default();
     let logs_bloom = hints.logs_bloom.unwrap_or_default();
-    let blob_gas_used = hints.blob_gas_used.unwrap_or_default();
     let state_root = hints.state_root.unwrap_or_default();
 
     Header {
@@ -379,7 +383,7 @@ pub(crate) fn build_header_with_hints_and_context(
         mix_hash: context.prev_randao,
         nonce: BEACON_NONCE,
         base_fee_per_gas: Some(context.base_fee),
-        blob_gas_used: Some(blob_gas_used),
+        blob_gas_used: Some(context.blob_gas_used),
         excess_blob_gas: Some(context.excess_blob_gas),
         parent_beacon_block_root: Some(context.parent_beacon_block_root),
         extra_data: context.extra_data.clone(),

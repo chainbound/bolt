@@ -64,8 +64,8 @@ pub enum BuilderApiError {
     Timeout(#[from] tokio::time::error::Elapsed),
     #[error("Invalid fork: {0}")]
     InvalidFork(String),
-    #[error("Invalid local payload block hash. expected: {expected}, got: {have}")]
-    InvalidLocalPayloadBlockHash { expected: String, have: String },
+    #[error("Locally-built payload does not match expected signed header")]
+    LocalPayloadIntegrity(#[from] super::builder::LocalPayloadIntegrityError),
     #[error("Generic error: {0}")]
     Generic(String),
 }
@@ -109,8 +109,8 @@ impl IntoResponse for BuilderApiError {
             BuilderApiError::InvalidFork(err) => {
                 (StatusCode::BAD_REQUEST, Json(err)).into_response()
             }
-            BuilderApiError::InvalidLocalPayloadBlockHash { .. } => {
-                (StatusCode::BAD_REQUEST, self.to_string()).into_response()
+            BuilderApiError::LocalPayloadIntegrity(err) => {
+                (StatusCode::BAD_REQUEST, err.to_string()).into_response()
             }
             BuilderApiError::Generic(err) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, Json(err)).into_response()
