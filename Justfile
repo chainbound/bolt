@@ -27,6 +27,11 @@ restart:
 	@just build-images
 	@just up
 
+_restart-sidecar:
+    @just down
+    @just _build-sidecar
+    @just up
+
 # show the running containers and port mappings for the bolt devnet
 inspect:
 	kurtosis enclave inspect bolt-devnet
