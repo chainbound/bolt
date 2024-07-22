@@ -144,8 +144,9 @@ _build-mevboost:
 	cd mev-boost && docker buildx build -t ghcr.io/chainbound/bolt-mev-boost:0.1.0 . --load
 
 # build and push the docker images to the github container registry with the provided tag
+[confirm("are you sure? this will build and push new images on ghcr.io")]
 release tag:
-    docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-sidecar:${tag} --push .
-    docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-relay:${tag} --push .
-    docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-builder:${tag} --push .
-    docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-mev-boost:${tag} --push .
+    docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-sidecar:{{tag}} --push .
+    docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-relay:{{tag}} --push .
+    docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-builder:{{tag}} --push .
+    docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-mev-boost:{{tag}} --push .
