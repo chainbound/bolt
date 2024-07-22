@@ -95,7 +95,6 @@ impl LocalBuilder {
 
     /// Build a new payload with the given transactions. This method will
     /// cache the payload in the local builder instance, and make it available
-    ///
     pub async fn build_new_local_payload(
         &mut self,
         template: &BlockTemplate,
@@ -160,8 +159,6 @@ impl LocalBuilder {
 
     /// transform a sealed header into a signed builder bid using
     /// the local builder's BLS key.
-    ///
-    /// TODO: add blobs bundle
     fn create_signed_builder_bid(
         &self,
         value: U256,

@@ -195,6 +195,14 @@ impl GetPayloadResponse {
             GetPayloadResponse::Deneb(payload) => payload.execution_payload.block_hash(),
         }
     }
+
+    pub fn execution_payload(&self) -> &ExecutionPayload {
+        match self {
+            GetPayloadResponse::Capella(payload) => payload,
+            GetPayloadResponse::Bellatrix(payload) => payload,
+            GetPayloadResponse::Deneb(payload) => &payload.execution_payload,
+        }
+    }
 }
 
 /// A struct representing the current chain head.

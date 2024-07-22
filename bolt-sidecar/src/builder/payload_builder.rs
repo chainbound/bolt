@@ -196,21 +196,6 @@ impl FallbackPayloadBuilder {
             withdrawals: Some(Withdrawals::new(withdrawals)),
         };
 
-        // If there are some blob transactions, send them to the mempool
-        let blob_txs = transactions.iter().filter(|tx| tx.as_eip4844().is_some());
-        for tx in blob_txs {
-            tracing::debug!(?tx.hash, "Sending blob tx to mempool");
-            let mut bytes: Vec<u8> = Vec::new();
-            tx.encode_enveloped(&mut bytes);
-            if let Err(e) = self
-                .execution_rpc_client
-                .send_raw_transaction(bytes.into())
-                .await
-            {
-                tracing::error!(error = ?e, ?tx.hash, "Failed to send blob tx to mempool");
-            }
-        }
-
         let mut hints = Hints::default();
         let max_iterations = 20;
         let mut i = 0;
@@ -218,7 +203,7 @@ impl FallbackPayloadBuilder {
             let header = build_header_with_hints_and_context(&latest_block, &hints, &ctx);
 
             let sealed_header = header.seal_slow();
-            let sealed_block = SealedBlock::new(sealed_header.clone(), body.clone());
+            let sealed_block = SealedBlock::new(sealed_header, body.clone());
 
             let block_hash = hints.block_hash.unwrap_or(sealed_block.hash());
 
