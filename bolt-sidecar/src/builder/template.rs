@@ -115,7 +115,7 @@ impl BlockTemplate {
                 .message
                 .constraints
                 .iter()
-                .fold(0, |acc, c| acc + &c.transaction.gas_limit())
+                .fold(0, |acc, c| acc + c.transaction.gas_limit())
         })
     }
 
