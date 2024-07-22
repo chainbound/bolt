@@ -30,7 +30,7 @@ services:
       ADMINER_PLUGINS: tables-filter tinymce
 
   builder:
-    image: ghcr.io/chainbound/bolt-builder:0.1.2-alpha
+    image: ghcr.io/chainbound/bolt-builder:v0.1.2-alpha
     restart: unless-stopped
     volumes:
       - "chaindata:/var/lib/chaindata"
@@ -61,7 +61,7 @@ services:
     entrypoint: /scripts/run-bn.sh
 
   relay-housekeeper:
-    image: ghcr.io/chainbound/bolt-relay:0.1.2-alpha
+    image: ghcr.io/chainbound/bolt-relay:v0.1.2-alpha
     restart: unless-stopped
     depends_on:
       db:
@@ -88,7 +88,7 @@ services:
       ]
 
   relay-api:
-    image: ghcr.io/chainbound/bolt-relay:0.1.2-alpha
+    image: ghcr.io/chainbound/bolt-relay:v0.1.2-alpha
     restart: unless-stopped
     depends_on:
       relay-housekeeper:
@@ -121,7 +121,7 @@ services:
       ]
 
   relay-website:
-    image: ghcr.io/chainbound/bolt-relay:0.1.2-alpha
+    image: ghcr.io/chainbound/bolt-relay:v0.1.2-alpha
     restart: always
     depends_on:
       relay-api:
