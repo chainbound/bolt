@@ -27,6 +27,11 @@ restart:
 	@just build-images
 	@just up
 
+_restart-sidecar:
+    @just down
+    @just _build-sidecar
+    @just up
+
 # show the running containers and port mappings for the bolt devnet
 inspect:
 	kurtosis enclave inspect bolt-devnet
@@ -49,6 +54,11 @@ boost-logs:
 # show the logs for the bolt devnet bolt-sidecar
 sidecar-logs:
     @id=$(docker ps -n 100 | grep sidecar | awk -F' ' '{print $1}') && \
+    docker logs -f $id
+
+# show the logs for the bolt devnet for beacon node
+beacon-logs:
+    @id=$(docker ps -n 100 | grep 'cl-1-lighthouse-geth' | awk -F' ' '{print $1}') && \
     docker logs -f $id
 
 # show the logs for the bolt devnet for beacon node
