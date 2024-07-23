@@ -1,0 +1,23 @@
+[package]
+name = "bolt-rpc-client"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1.37.0", features = ["full"] }
+
+alloy = { version = "0.2.0", features = ["full"] }
+
+clap = { version = "4.5.4", features = ["derive", "env"] }
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.115"
+eyre = "0.6.12"
+rand = "0.8.5"
+url = "2.5.2"
+dotenvy = "0.15.7"
+reqwest = "0.12.3"
+
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
