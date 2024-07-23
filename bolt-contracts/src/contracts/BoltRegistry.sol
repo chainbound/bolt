@@ -50,6 +50,8 @@ contract BoltRegistry is IBoltRegistry {
             metadata
         );
 
+        operators.push(msg.sender);
+
         // Set the delegations
         for (uint256 i = 0; i < validatorIndexes.length; i++) {
             delegations[validatorIndexes[i]] = msg.sender;
