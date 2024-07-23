@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use alloy_rpc_types_beacon::events::HeadEvent;
+use alloy::rpc::types::beacon::events::HeadEvent;
 use futures::Future;
 use tokio::sync::mpsc;
 
@@ -121,18 +121,15 @@ impl<C: StateFetcher + Unpin, S: SignerBLS + Unpin> SidecarDriver<C, S> {
             }
         };
 
-        let sender = match self
+        if let Err(e) = self
             .execution_state
             .validate_commitment_request(&api_event.request)
             .await
         {
-            Ok(sender) => sender,
-            Err(e) => {
-                tracing::error!("Failed to commit request: {:?}", e);
-                let _ = api_event.response_tx.send(Err(ApiError::Validation(e)));
-                return;
-            }
-        };
+            tracing::error!("Failed to commit request: {:?}", e);
+            let _ = api_event.response_tx.send(Err(ApiError::Validation(e)));
+            return;
+        }
 
         // TODO: match when we have more request types
         let CommitmentRequest::Inclusion(request) = api_event.request;
@@ -147,7 +144,7 @@ impl<C: StateFetcher + Unpin, S: SignerBLS + Unpin> SidecarDriver<C, S> {
         // TODO: review all this `clone` usage
 
         // parse the request into constraints and sign them with the sidecar signer
-        let message = ConstraintsMessage::build(validator_index, request, sender);
+        let message = ConstraintsMessage::build(validator_index, request);
         let signature = match self.signer.sign(&message.digest()) {
             Ok(sig) => sig.to_string(),
             Err(e) => {

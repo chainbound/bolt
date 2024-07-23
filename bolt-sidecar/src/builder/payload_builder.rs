@@ -1,3 +1,5 @@
+use std::fmt;
+
 use alloy::{
     eips::{calc_excess_blob_gas, calc_next_block_base_fee, eip1559::BaseFeeParams},
     primitives::{Address, Bytes, B256, U256},
