@@ -97,6 +97,15 @@ contract BoltRegistry is IBoltRegistry {
             revert CooldownNotElapsed();
         }
 
+        // Remove operator from the operators array
+        for (uint256 i = 0; i < operators.length; i++) {
+            if (operators[i] == msg.sender) {
+                operators[i] = operators[operators.length - 1];
+                operators.pop();
+                break;
+            }
+        }
+        
         delete registrants[msg.sender];
 
         for (uint256 i = 0; i < registrant.validatorIndexes.length; i++) {
