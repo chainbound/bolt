@@ -134,11 +134,19 @@ contract BoltRegistry is IBoltRegistry {
     }
 
     function getAllRegistrants() external view returns (Registrant[] memory) {
-        Registrant[] memory _registrants = new Registrant[](operators.length);
-
+        uint256 activeCount = 0;
         for (uint256 i = 0; i < operators.length; i++) {
             if (isActiveOperator(operators[i])) {
-                _registrants[i] = registrants[operators[i]];
+                activeCount++;
+            }
+        }
+
+        Registrant[] memory _registrants = new Registrant[](activeCount);
+        uint256 index = 0;
+        for (uint256 i = 0; i < operators.length; i++) {
+            if (isActiveOperator(operators[i])) {
+                _registrants[index] = registrants[operators[i]];
+                index++;
             }
         }
 
