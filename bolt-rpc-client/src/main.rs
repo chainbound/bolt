@@ -15,7 +15,7 @@ mod utils;
 #[derive(Parser)]
 struct Opts {
     /// Bolt RPC URL to send requests to
-    #[clap(short = 'p', long, default_value = "http://remotebeast:4485", env)]
+    #[clap(short = 'p', long, default_value = "http://135.181.191.125:8015/", env)]
     rpc_url: Url,
     /// Private key to sign transactions with
     #[clap(short = 'k', long, env)]
