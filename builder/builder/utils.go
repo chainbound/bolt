@@ -202,7 +202,6 @@ func CalculateMerkleMultiProofs(
 		generalizedIndex := baseGeneralizedIndex + preconfIndex
 		generalizedIndexes[i] = generalizedIndex
 		transactionHashes[i] = tx.Hash()
-		i++
 	}
 
 	log.Info(fmt.Sprintf("[BOLT]: Calculating merkle multiproof for %d preconfirmed transaction",

@@ -366,7 +366,7 @@ func (m *BoostService) verifyInclusionProof(responsePayload *BidWithInclusionPro
 
 	// Decode the constraints, and sort them according to the utility function used
 	// TODO: this should be done before verification ideally
-	hashToConstaraints := make(HashToConstraintDecoded)
+	hashToConstraint := make(HashToConstraintDecoded)
 	for hash, constraint := range inclusionConstraints {
 		transaction := new(gethTypes.Transaction)
 		err := transaction.UnmarshalBinary(constraint.Tx)
@@ -374,12 +374,12 @@ func (m *BoostService) verifyInclusionProof(responsePayload *BidWithInclusionPro
 			log.WithError(err).Error("error unmarshalling transaction while verifying proofs")
 			return err
 		}
-		hashToConstaraints[hash] = &ConstraintDecoded{
+		hashToConstraint[hash] = &ConstraintDecoded{
 			Tx:    transaction.WithoutBlobTxSidecar(),
 			Index: constraint.Index,
 		}
 	}
-	constraints := ParseConstraintsDecoded(hashToConstaraints)
+	constraints := ParseConstraintsDecoded(hashToConstraint)
 
 	leaves := make([][]byte, len(constraints))
 
