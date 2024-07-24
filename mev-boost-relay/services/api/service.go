@@ -2158,10 +2158,9 @@ func (api *RelayAPI) updateRedisBidWithProofs(
 			api.RespondError(opts.w, http.StatusBadRequest, err.Error())
 			return nil, nil, false
 		}
-		constraints := make(map[phase0.Hash32]*Constraint)
+		constraints := make(HashToConstraintDecoded)
 		for _, signedConstraints := range *slotConstraints {
 			for _, constraint := range signedConstraints.Message.Constraints {
-				// TODO: just compute the hash instead of decoding the entire tx just for this.
 				decoded := new(types.Transaction)
 				if err := decoded.UnmarshalBinary(constraint.Tx); err != nil {
 					api.log.WithError(err).Error("could not decode transaction")
@@ -2169,7 +2168,7 @@ func (api *RelayAPI) updateRedisBidWithProofs(
 					return nil, nil, false
 				}
 				api.log.Infof("Decoded tx hash %s", decoded.Hash().String())
-				constraints[phase0.Hash32(decoded.Hash().Bytes())] = constraint
+				constraints[decoded.Hash()] = &ConstraintDecoded{Tx: decoded.WithoutBlobTxSidecar(), Index: constraint.Index}
 			}
 		}
 
