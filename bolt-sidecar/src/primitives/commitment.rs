@@ -1,8 +1,7 @@
-use hex::FromHexError;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::str::FromStr;
 
-use alloy::primitives::{keccak256, Address, Signature, SignatureError, B256};
+use alloy::primitives::{keccak256, Address, Signature, B256};
 use reth_primitives::PooledTransactionsElement;
 
 use super::TransactionExt;
@@ -61,7 +60,6 @@ pub struct InclusionRequest {
     /// The signature over the "slot" and "tx" fields by the user.
     /// A valid signature is the only proof that the user actually requested
     /// this specific commitment to be included at the given slot.
-    // #[serde(deserialize_with = "deserialize_sig", serialize_with = "serialize_sig")]
     #[serde(skip)]
     pub signature: Option<Signature>,
     /// The ec-recovered address of the signature, for internal use.
@@ -86,6 +84,10 @@ impl InclusionRequest {
     /// Sets the signature.
     pub fn set_signature(&mut self, signature: Signature) {
         self.signature = Some(signature);
+    }
+
+    pub fn set_address(&mut self, address: Address) {
+        self.sender = address;
     }
 }
 

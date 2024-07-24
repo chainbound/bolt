@@ -122,21 +122,32 @@ impl CommitmentsApiServer {
     ) -> Result<Json<JsonResponse>, Error> {
         tracing::debug!(method = payload.method, "Received new request");
 
-        let signature = signature_from_headers(&headers)?;
+        let signature = signature_from_headers(&headers).map_err(|e| {
+            tracing::error!("Failed to extract signature from headers: {:?}", e);
+            e
+        })?;
 
         match payload.method.as_str() {
             REQUEST_INCLUSION_METHOD => {
+                let request_json = payload
+                    .params
+                    .first()
+                    .ok_or(RejectionError::ValidationFailed("Bad params".to_string()))?
+                    .clone();
+
                 // Parse the inclusion request from the parameters
-                let mut inclusion_request: InclusionRequest =
-                    serde_json::from_value(payload.params.clone())
-                        .map_err(|e| RejectionError::ValidationFailed(e.to_string()))?;
+                let mut inclusion_request: InclusionRequest = serde_json::from_value(request_json)
+                    .map_err(|e| RejectionError::ValidationFailed(e.to_string()))?;
 
                 // Set the signature here for later processing
-                inclusion_request.signature = Some(signature);
+                inclusion_request.set_signature(signature);
 
                 let digest = inclusion_request.digest();
                 let address = signature.recover_address_from_prehash(&digest)?;
                 tracing::debug!(?address, "Recovered public key and associated address");
+
+                // Set the address here for later processing
+                inclusion_request.set_address(address);
 
                 let inclusion_commitment = api.request_inclusion(inclusion_request).await?;
 
@@ -159,10 +170,7 @@ impl CommitmentsApiServer {
 
 /// Extracts the signature ([SIGNATURE_HEADER]) from the HTTP headers.
 fn signature_from_headers(headers: &HeaderMap) -> Result<Signature, Error> {
-    let signature = headers.get(SIGNATURE_HEADER).ok_or({
-        tracing::error!("Missing signature");
-        Error::NoSignature
-    })?;
+    let signature = headers.get(SIGNATURE_HEADER).ok_or(Error::NoSignature)?;
 
     // Remove the "0x" prefix
     let signature = signature.to_str().map_err(|_| Error::InvalidSignature)?;
