@@ -1033,31 +1033,10 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 
 	// Here we initialize and track the constraints left to be executed along
 	// with their gas requirements
-	constraintsOrderedByIndex := make([]*types.ConstraintDecoded, 0, len(constraints))
-	constraintsWithoutIndex := make([]*types.ConstraintDecoded, 0, len(constraints))
-	constraintsTotalGasLeft := uint64(0)
-	constraintsTotalBlobGasLeft := uint64(0)
-
-	for _, constraint := range constraints {
-		if constraint.Index == nil {
-			constraintsWithoutIndex = append(constraintsWithoutIndex, constraint)
-		} else {
-			constraintsOrderedByIndex = append(constraintsOrderedByIndex, constraint)
-		}
-		constraintsTotalGasLeft += constraint.Tx.Gas()
-		constraintsTotalBlobGasLeft += constraint.Tx.BlobGas()
-	}
-
-	// Sorts the constraints by index ascending
-	sort.Slice(constraintsOrderedByIndex, func(i, j int) bool {
-		// By assumption, all constraints here have a non-nil index
-		return *constraintsOrderedByIndex[i].Index < *constraintsOrderedByIndex[j].Index
-	})
-
-	// Sorts the unindexed constraints by nonce descending (since we'll be popping them from the end)
-	sort.Slice(constraintsWithoutIndex, func(i, j int) bool {
-		return constraintsWithoutIndex[i].Tx.Nonce() > constraintsWithoutIndex[j].Tx.Nonce()
-	})
+	constraintsOrderedByIndex,
+		constraintsWithoutIndex,
+		constraintsTotalGasLeft,
+		constraintsTotalBlobGasLeft := types.ParseConstraintsDecoded(constraints)
 
 	for {
 		// `env.tcount` starts from 0 so it's correct to use it as the current index
@@ -1182,7 +1161,7 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 					// As such, we can safely exist
 					break
 				}
-				candidate = candidateTx{tx: common.Pop(&constraintsWithoutIndex).Tx, isConstraint: true}
+				candidate = candidateTx{tx: common.Shift(&constraintsWithoutIndex).Tx, isConstraint: true}
 			}
 		}
 
