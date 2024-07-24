@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/ethereum/go-ethereum/common"
 	gethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -44,13 +43,13 @@ func (c *Constraint) String() string {
 // ConstraintCache is a cache for constraints.
 type ConstraintCache struct {
 	// map of slots to all constraints for that slot
-	constraints *lru.Cache[uint64, map[common.Hash]*Constraint]
+	constraints *lru.Cache[uint64, map[gethCommon.Hash]*Constraint]
 }
 
 // NewConstraintCache creates a new constraint cache.
 // cap is the maximum number of slots to store constraints for.
 func NewConstraintCache(cap int) *ConstraintCache {
-	constraints, _ := lru.New[uint64, map[common.Hash]*Constraint](cap)
+	constraints, _ := lru.New[uint64, map[gethCommon.Hash]*Constraint](cap)
 	return &ConstraintCache{
 		constraints: constraints,
 	}
@@ -59,7 +58,7 @@ func NewConstraintCache(cap int) *ConstraintCache {
 // AddInclusionConstraint adds an inclusion constraint to the cache at the given slot for the given transaction.
 func (c *ConstraintCache) AddInclusionConstraint(slot uint64, tx Transaction, index *uint64) error {
 	if _, exists := c.constraints.Get(slot); !exists {
-		c.constraints.Add(slot, make(map[common.Hash]*Constraint))
+		c.constraints.Add(slot, make(map[gethCommon.Hash]*Constraint))
 	}
 
 	// parse transaction to get its hash and store it in the cache
@@ -82,7 +81,7 @@ func (c *ConstraintCache) AddInclusionConstraint(slot uint64, tx Transaction, in
 // AddInclusionConstraints adds multiple inclusion constraints to the cache at the given slot
 func (c *ConstraintCache) AddInclusionConstraints(slot uint64, constraints []*Constraint) error {
 	if _, exists := c.constraints.Get(slot); !exists {
-		c.constraints.Add(slot, make(map[common.Hash]*Constraint))
+		c.constraints.Add(slot, make(map[gethCommon.Hash]*Constraint))
 	}
 
 	m, _ := c.constraints.Get(slot)
@@ -99,12 +98,12 @@ func (c *ConstraintCache) AddInclusionConstraints(slot uint64, constraints []*Co
 }
 
 // Get gets the constraints at the given slot.
-func (c *ConstraintCache) Get(slot uint64) (map[common.Hash]*Constraint, bool) {
+func (c *ConstraintCache) Get(slot uint64) (map[gethCommon.Hash]*Constraint, bool) {
 	return c.constraints.Get(slot)
 }
 
 // FindTransactionByHash finds the constraint for the given transaction hash and returns it.
-func (c *ConstraintCache) FindTransactionByHash(txHash common.Hash) (*Constraint, bool) {
+func (c *ConstraintCache) FindTransactionByHash(txHash gethCommon.Hash) (*Constraint, bool) {
 	for _, hashToConstraint := range c.constraints.Values() {
 		if constraint, exists := hashToConstraint[txHash]; exists {
 			return constraint, true
