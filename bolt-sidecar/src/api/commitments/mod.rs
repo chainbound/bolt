@@ -1,3 +1,3 @@
-pub mod commitments;
 mod jsonrpc;
+mod server;
 mod spec;

@@ -170,7 +170,7 @@ pub(crate) async fn create_signed_commitment_request(
     Ok(CommitmentRequest::Inclusion(InclusionRequest {
         tx: tx_pooled,
         slot,
-        signature,
+        signature: Some(signature),
         sender: signer.address(),
     }))
 }

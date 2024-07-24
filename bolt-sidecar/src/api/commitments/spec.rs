@@ -1,4 +1,5 @@
-use axum::{http::StatusCode, response::IntoResponse, Json};
+use alloy::primitives::SignatureError;
+use axum::{extract::rejection::JsonRejection, http::StatusCode, response::IntoResponse, Json};
 use thiserror::Error;
 
 use crate::primitives::{commitment::InclusionCommitment, InclusionRequest};
@@ -17,20 +18,24 @@ pub enum Error {
     Duplicate,
     #[error("Internal server error")]
     Internal,
-    #[error("Missing signature in X-Bolt-Signature header")]
+    #[error("Missing X-Bolt-Signature header")]
     NoSignature,
     #[error("Invalid signature")]
     InvalidSignature,
+    #[error(transparent)]
+    Signature(#[from] SignatureError),
     #[error("Unknown method")]
     UnknownMethod,
+    #[error(transparent)]
+    InvalidJson(#[from] JsonRejection),
 }
 
 impl IntoResponse for Error {
     fn into_response(self) -> axum::http::Response<axum::body::Body> {
         match self {
-            Error::Rejected(error) => (
+            Error::Rejected(err) => (
                 StatusCode::BAD_REQUEST,
-                Json(JsonResponse::from_error(-32000, error.to_string())),
+                Json(JsonResponse::from_error(-32000, err.to_string())),
             )
                 .into_response(),
             Error::Duplicate => (
@@ -53,9 +58,22 @@ impl IntoResponse for Error {
                 Json(JsonResponse::from_error(-32004, self.to_string())),
             )
                 .into_response(),
+            Error::Signature(err) => (
+                StatusCode::BAD_REQUEST,
+                Json(JsonResponse::from_error(-32004, err.to_string())),
+            )
+                .into_response(),
             Error::UnknownMethod => (
                 StatusCode::BAD_REQUEST,
                 Json(JsonResponse::from_error(-32601, self.to_string())),
+            )
+                .into_response(),
+            Error::InvalidJson(err) => (
+                StatusCode::BAD_REQUEST,
+                Json(JsonResponse::from_error(
+                    -32600,
+                    format!("Invalid request: {err}"),
+                )),
             )
                 .into_response(),
         }

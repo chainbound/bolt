@@ -122,6 +122,7 @@ impl CommitmentsRpc for JsonRpcApi {
         // validate the user's signature
         let signer_address = request
             .signature
+            .unwrap()
             .recover_address_from_prehash(&request.digest())?;
 
         // TODO: relax this check to allow for external signers to request commitments

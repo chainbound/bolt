@@ -1,7 +1,8 @@
+use hex::FromHexError;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::str::FromStr;
 
-use alloy::primitives::{keccak256, Address, Signature, B256};
+use alloy::primitives::{keccak256, Address, Signature, SignatureError, B256};
 use reth_primitives::PooledTransactionsElement;
 
 use super::TransactionExt;
@@ -60,8 +61,9 @@ pub struct InclusionRequest {
     /// The signature over the "slot" and "tx" fields by the user.
     /// A valid signature is the only proof that the user actually requested
     /// this specific commitment to be included at the given slot.
-    #[serde(deserialize_with = "deserialize_sig", serialize_with = "serialize_sig")]
-    pub signature: Signature,
+    // #[serde(deserialize_with = "deserialize_sig", serialize_with = "serialize_sig")]
+    #[serde(skip)]
+    pub signature: Option<Signature>,
     /// The ec-recovered address of the signature, for internal use.
     /// If not explicitly set, this defaults to `Address::ZERO`.
     #[serde(skip)]
@@ -79,6 +81,11 @@ impl InclusionRequest {
     /// Returns true if the chain id matches, false otherwise.
     pub fn validate_chain_id(&self, chain_id: u64) -> bool {
         matches!(self.tx.chain_id(), Some(tx_chain_id) if tx_chain_id == chain_id)
+    }
+
+    /// Sets the signature.
+    pub fn set_signature(&mut self, signature: Signature) {
+        self.signature = Some(signature);
     }
 }
 
@@ -122,7 +129,7 @@ fn serialize_sig<S: serde::Serializer>(sig: &Signature, serializer: S) -> Result
 }
 
 impl InclusionRequest {
-    /// TODO: actually use SSZ encoding here
+    /// Returns the digest of the request.
     pub fn digest(&self) -> B256 {
         let mut data = Vec::new();
         data.extend_from_slice(&self.slot.to_le_bytes());
@@ -135,6 +142,28 @@ impl InclusionRequest {
 impl From<InclusionRequest> for CommitmentRequest {
     fn from(req: InclusionRequest) -> Self {
         CommitmentRequest::Inclusion(req)
+    }
+}
+
+pub trait ECDSASignatureExt {
+    /// Returns the ECDSA signature as bytes with the correct parity bit.
+    fn as_bytes_with_parity(&self) -> [u8; 65];
+    /// Rethrns the ECDSA signature as a 0x-prefixed hex string with the correct parity bit.
+    fn to_hex(&self) -> String;
+}
+
+impl ECDSASignatureExt for Signature {
+    fn as_bytes_with_parity(&self) -> [u8; 65] {
+        let parity = self.v();
+        // As bytes encodes the parity as 27/28, need to change that.
+        let mut bytes = self.as_bytes();
+        bytes[bytes.len() - 1] = if parity.y_parity() { 1 } else { 0 };
+
+        bytes
+    }
+
+    fn to_hex(&self) -> String {
+        format!("0x{}", hex::encode(self.as_bytes_with_parity()))
     }
 }
 
