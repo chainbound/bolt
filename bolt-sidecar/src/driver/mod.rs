@@ -5,7 +5,8 @@ use std::{
 };
 
 use alloy::rpc::types::beacon::events::HeadEvent;
-use futures::Future;
+use eyre::{eyre, Result};
+use futures::{Future, StreamExt};
 use tokio::sync::mpsc;
 
 use crate::{
@@ -31,16 +32,21 @@ pub struct SidecarDriver<C, S> {
     payload_requests_rx: mpsc::Receiver<FetchPayloadRequest>,
 }
 
-/// Helper macro to return an Eyre error from a poll function
+/// Helper macro to simplify the handling of `Poll::Ready` results in the driver loop.
 #[macro_export]
-macro_rules! poll_bail {
-    ($($tt:tt)*) => {
-        return Poll::Ready(Err(eyre::eyre!($($tt)*)))
+macro_rules! try_ready {
+    ($e:expr) => {
+        match $e {
+            Poll::Ready(Some(t)) => Some(t),
+            Poll::Ready(None) => return Poll::Ready(Err(eyre!("driver: channel closed"))),
+            // If the future is not ready, pass-through to the next event
+            Poll::Pending => None,
+        }
     };
 }
 
 impl<C: StateFetcher + Unpin, S: SignerBLS + Unpin> Future for SidecarDriver<C, S> {
-    type Output = eyre::Result<()>;
+    type Output = Result<()>;
 
     /// Main event loop for the sidecar driver, polling all the internal
     /// components and handling the various events.
@@ -53,49 +59,29 @@ impl<C: StateFetcher + Unpin, S: SignerBLS + Unpin> Future for SidecarDriver<C, 
         loop {
             let mut progress = false;
 
-            match this.api_events_rx.poll_recv(cx) {
-                Poll::Ready(Some(api_event)) => {
-                    this.handle_incoming_api_event(api_event);
-                    progress = true;
-                }
-                Poll::Ready(None) => poll_bail!("API events channel closed"),
-                Poll::Pending => { /* pass-through */ }
+            if let Some(api_event) = try_ready!(this.api_events_rx.poll_recv(cx)) {
+                this.handle_incoming_api_event(api_event);
+                progress = true;
             }
 
-            match this.head_tracker.poll_next_head(cx) {
-                Poll::Ready(Some(head_event)) => {
-                    this.handle_new_head_event(head_event);
-                    progress = true;
-                }
-                Poll::Ready(None) => poll_bail!("Head tracker channel closed"),
-                Poll::Pending => { /* pass-through */ }
+            if let Some(head_event) = try_ready!(this.head_tracker.poll_next_unpin(cx)) {
+                this.handle_new_head_event(head_event);
+                progress = true;
             }
 
-            match this.consensus_state.commitment_deadline.poll_wait(cx) {
-                Poll::Ready(Some(slot)) => {
-                    this.handle_commitment_deadline(slot);
-                    progress = true;
-                }
-                Poll::Ready(None) => { /* pass-through as there is no pending deadline */ }
-                Poll::Pending => { /* pass-through */ }
+            if let Some(slot) = try_ready!(this.consensus_state.commitment_deadline.poll_wait(cx)) {
+                this.handle_commitment_deadline(slot);
+                progress = true;
             }
 
-            match this.payload_requests_rx.poll_recv(cx) {
-                Poll::Ready(Some(req)) => {
-                    this.handle_fetch_payload_request(req);
-                    progress = true;
-                }
-                Poll::Ready(None) => poll_bail!("Payload request channel closed"),
-                Poll::Pending => { /* pass-through */ }
+            if let Some(req) = try_ready!(this.payload_requests_rx.poll_recv(cx)) {
+                this.handle_fetch_payload_request(req);
+                progress = true;
             }
 
-            match this.shutdown_rx.poll_recv(cx) {
-                Poll::Ready(Some(())) => {
-                    tracing::warn!("Received shutdown signal, shutting down...");
-                    return Poll::Ready(Ok(()));
-                }
-                Poll::Ready(None) => poll_bail!("Shutdown channel closed"),
-                Poll::Pending => { /* pass-through */ }
+            if this.shutdown_rx.poll_recv(cx).is_ready() {
+                tracing::warn!("Received shutdown signal, shutting down...");
+                return Poll::Ready(Ok(()));
             }
 
             // If we made any progress during the loop, continue processing, otherwise

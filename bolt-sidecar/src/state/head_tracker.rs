@@ -1,11 +1,12 @@
 use std::{
+    pin::Pin,
     task::{Context, Poll},
     time::Duration,
 };
 
 use alloy::rpc::types::beacon::events::HeadEvent;
 use beacon_api_client::Topic;
-use futures::StreamExt;
+use futures::{Stream, StreamExt};
 use tokio::{sync::mpsc, task::AbortHandle};
 
 use crate::BeaconClient;
@@ -86,9 +87,12 @@ impl HeadTracker {
     pub async fn next_head(&mut self) -> Option<HeadEvent> {
         self.new_heads_rx.recv().await
     }
+}
 
-    /// Poll for the next head event in a non-blocking way
-    pub fn poll_next_head(&mut self, cx: &mut Context<'_>) -> Poll<Option<HeadEvent>> {
+impl Stream for HeadTracker {
+    type Item = HeadEvent;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         self.new_heads_rx.poll_recv(cx)
     }
 }
