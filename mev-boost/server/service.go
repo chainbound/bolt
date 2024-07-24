@@ -343,6 +343,7 @@ func (m *BoostService) verifyInclusionProof(responsePayload *BidWithInclusionPro
 
 	// BOLT: get constraints for the slot
 	inclusionConstraints, exists := m.constraints.Get(slot)
+
 	if !exists {
 		log.Warnf("[BOLT]: No constraints found for slot %d", slot)
 		return errMissingConstraint
@@ -363,34 +364,39 @@ func (m *BoostService) verifyInclusionProof(responsePayload *BidWithInclusionPro
 		return errInvalidRoot
 	}
 
-	leaves := make([][]byte, len(inclusionConstraints))
-	i := 0
-
+	// Decode the constraints, and sort them according to the utility function used
+	// TODO: this should be done before verification ideally
+	hashToConstaraints := make(HashToConstraintDecoded)
 	for hash, constraint := range inclusionConstraints {
-		if len(constraint.Tx) == 0 {
-			log.Warnf("[BOLT]: Raw tx is empty for constraint tx hash %s", hash)
-			continue
-		}
-
-		// Compute the hash tree root for the raw preconfirmed transaction
-		// and use it as "Leaf" in the proof to be verified against
-
-		// TODO: this is pretty inefficient, we should work with the transaction already
-		// parsed without the blob here to avoid unmarshalling and marshalling again
 		transaction := new(gethTypes.Transaction)
 		err := transaction.UnmarshalBinary(constraint.Tx)
 		if err != nil {
 			log.WithError(err).Error("error unmarshalling transaction while verifying proofs")
 			return err
 		}
+		hashToConstaraints[hash] = &ConstraintDecoded{
+			Tx:    transaction.WithoutBlobTxSidecar(),
+			Index: constraint.Index,
+		}
+	}
+	constraints := ParseConstraintsDecoded(hashToConstaraints)
 
-		withoutBlob, err := transaction.WithoutBlobTxSidecar().MarshalBinary()
+	leaves := make([][]byte, len(constraints))
+
+	for i, constraint := range constraints {
+		// Compute the hash tree root for the raw preconfirmed transaction
+		// and use it as "Leaf" in the proof to be verified against
+
+		// TODO: this is pretty inefficient, we should work with the transaction already
+		// parsed without the blob here to avoid unmarshalling and marshalling again
+		transaction := constraint.Tx
+		encoded, err := transaction.MarshalBinary()
 		if err != nil {
 			log.WithError(err).Error("error marshalling transaction without blob tx sidecar")
 			return err
 		}
 
-		tx := Transaction(withoutBlob)
+		tx := Transaction(encoded)
 		txHashTreeRoot, err := tx.HashTreeRoot()
 		if err != nil {
 			return errInvalidRoot
