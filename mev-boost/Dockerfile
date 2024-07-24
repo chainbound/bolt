@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.21 AS builder
+FROM golang:1.22-alpine AS builder
 ARG VERSION
 WORKDIR /build
 
@@ -10,10 +10,10 @@ RUN go mod download
 
 ADD . .
 RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 GOOS=linux go build \
-    -trimpath \
-    -v \
-    -ldflags "-w -s -X 'github.com/flashbots/mev-boost/config.Version=$VERSION'" \
-    -o mev-boost .
+  -trimpath \
+  -v \
+  -ldflags "-w -s -X 'github.com/flashbots/mev-boost/config.Version=$VERSION'" \
+  -o mev-boost .
 
 FROM alpine
 WORKDIR /app
