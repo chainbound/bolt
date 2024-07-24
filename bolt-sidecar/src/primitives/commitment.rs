@@ -14,6 +14,29 @@ pub enum CommitmentRequest {
     Inclusion(InclusionRequest),
 }
 
+/// A signed commitment with a generic signature.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum Commitment {
+    Inclusion(InclusionCommitment),
+}
+
+/// A signed inclusion commitment with a generic signature.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InclusionCommitment {
+    request: InclusionRequest,
+    #[serde(deserialize_with = "deserialize_sig", serialize_with = "serialize_sig")]
+    signature: Signature,
+}
+
+impl From<Commitment> for InclusionCommitment {
+    fn from(commitment: Commitment) -> Self {
+        match commitment {
+            Commitment::Inclusion(inclusion) => inclusion,
+        }
+    }
+}
+
 impl CommitmentRequest {
     /// Returns a reference to the inner request if this is an inclusion request, otherwise `None`.
     pub fn as_inclusion_request(&self) -> Option<&InclusionRequest> {

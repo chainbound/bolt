@@ -5,7 +5,7 @@ use std::sync::{atomic::AtomicU64, Arc};
 
 use alloy::primitives::U256;
 use ethereum_consensus::{
-    crypto::{KzgCommitment, PublicKey as BlsPublicKey, Signature as BlsSignature},
+    crypto::KzgCommitment,
     deneb::{
         self,
         mainnet::{BlobsBundle, MAX_BLOB_COMMITMENTS_PER_BLOCK},
@@ -19,6 +19,8 @@ use ethereum_consensus::{
 };
 use reth_primitives::{BlobTransactionSidecar, Bytes, PooledTransactionsElement, TxKind, TxType};
 use tokio::sync::{mpsc, oneshot};
+
+pub use ethereum_consensus::crypto::{PublicKey as BlsPublicKey, Signature as BlsSignature};
 
 /// Commitment types, received by users wishing to receive preconfirmations.
 pub mod commitment;

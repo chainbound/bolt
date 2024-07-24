@@ -4,3 +4,6 @@ pub mod builder;
 
 /// Sidecar API spec and error handling
 pub mod spec;
+
+/// Commitments-API spec and errors.
+pub mod commitments;
