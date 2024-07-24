@@ -1054,6 +1054,11 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 		return *constraintsOrderedByIndex[i].Index < *constraintsOrderedByIndex[j].Index
 	})
 
+	// Sorts the unindexed constraints by nonce descending (since we'll be popping them from the end)
+	sort.Slice(constraintsWithoutIndex, func(i, j int) bool {
+		return constraintsWithoutIndex[i].Tx.Nonce() > constraintsWithoutIndex[j].Tx.Nonce()
+	})
+
 	for {
 		// `env.tcount` starts from 0 so it's correct to use it as the current index
 		currentTxIndex := uint64(env.tcount)
