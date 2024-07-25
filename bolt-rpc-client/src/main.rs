@@ -49,12 +49,13 @@ async fn main() -> eyre::Result<()> {
     let tx_hash = tx_signed.tx_hash().to_string();
     let tx_rlp = hex::encode(tx_signed.encoded_2718());
 
-    let url = opts.rpc_url.join("proposers/lookahead?onlyActive=true&onlyFuture=true")?;
+    // TODO: remove "cbOnly=true"
+    let url = opts.rpc_url.join("proposers/lookahead?onlyActive=true&onlyFuture=true&cbOnly=true")?;
     let lookahead_response = reqwest::get(url).await?.json::<serde_json::Value>().await?;
     let next_preconfer_slot = lookahead_response[0].get("slot").unwrap().as_u64().unwrap();
 
     let request = prepare_rpc_request(
-        "bolt_inclusionPreconfirmation",
+        "bolt_requestInclusion",
         vec![serde_json::json!({
             "slot": next_preconfer_slot,
             "tx": tx_rlp,
@@ -72,7 +73,7 @@ async fn main() -> eyre::Result<()> {
 
     let response = response.text().await?;
 
-    // strip out long series of zeros in the response (to avoid spamming logs)
+    // strip out long series of zeros in the response (to avoid spamming blob contents)
     let response = response.replace(&"0".repeat(32), ".").replace(&".".repeat(4), "");
     info!("Response: {:?}", response);
 
