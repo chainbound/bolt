@@ -1867,6 +1867,28 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 		// 	return
 		// }
 
+		for _, constraint := range message.Constraints {
+			tx := new(types.Transaction)
+			tx.UnmarshalBinary(constraint.Tx)
+			if sidecar := tx.BlobTxSidecar(); sidecar != nil {
+				consensusBlobs := make([]deneb.Blob, 0, len(sidecar.Blobs))
+				for _, blob := range sidecar.Blobs {
+					consensusBlobs = append(consensusBlobs, deneb.Blob(blob))
+				}
+				api.blobSidecarCache.Blobs = append(api.blobSidecarCache.Blobs, consensusBlobs...)
+				consensusKZGCommitments := make([]deneb.KZGCommitment, 0, len(sidecar.Commitments))
+				for _, commitment := range sidecar.Commitments {
+					consensusKZGCommitments = append(consensusKZGCommitments, deneb.KZGCommitment(commitment))
+				}
+				api.blobSidecarCache.Commitments = append(api.blobSidecarCache.Commitments, consensusKZGCommitments...)
+				consensusKZGProofs := make([]deneb.KZGProof, 0, len(sidecar.Proofs))
+				for _, proof := range sidecar.Proofs {
+					consensusKZGProofs = append(consensusKZGProofs, deneb.KZGProof(proof))
+				}
+				api.blobSidecarCache.Proofs = append(api.blobSidecarCache.Proofs, consensusKZGProofs...)
+			}
+		}
+
 		broadcastToChannels(api.constraintsConsumers, signedConstraints)
 
 		// Add the constraint to the cache.
