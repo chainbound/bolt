@@ -480,6 +480,15 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 		// BOLT: send event to web demo
 		EmitBoltDemoEvent(fmt.Sprintf("created merkle multiproof of %d constraint(s) for block %d in %v", len(constraints), opts.Block.Number(), timeForProofs))
 
+		// Strip blobs for the Blob Express Lane. For now, we will remove all of them
+		// assuming the builder will accept blobs only from preconfirmed transactions.
+		// However, a more sophisticated approach could be taken
+		versionedBlockRequest.Deneb.BlobsBundle = &builderApiDeneb.BlobsBundle{
+			Blobs:       []deneb.Blob{},
+			Commitments: []deneb.KZGCommitment{},
+			Proofs:      []deneb.KZGProof{},
+		}
+
 		versionedBlockRequestWithPreconfsProofs = &common.VersionedSubmitBlockRequestWithProofs{
 			Inner:  versionedBlockRequest,
 			Proofs: inclusionProof,
