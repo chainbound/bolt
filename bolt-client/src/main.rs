@@ -37,7 +37,7 @@ struct Opts {
     count: u64,
 
     /// Flag for using the registry to fetch the lookahead
-    #[clap(short, long, default_value_t = false)]
+    #[clap(short, long, default_value_t = false, requires_ifs([("true", "registry_address"), ("true", "beacon_client_url")]))]
     use_registry: bool,
     /// URL of the beacon client to use for fetching the lookahead
     /// (only used with the "use-registry" flag)
