@@ -9,6 +9,7 @@ edition = "2021"
 tokio = { version = "1.37.0", features = ["full"] }
 
 alloy = { version = "0.2.0", features = ["full"] }
+beacon-api-client = { git = "https://github.com/ralexstokes/ethereum-consensus", rev = "cf3c404" }
 
 clap = { version = "4.5.4", features = ["derive", "env"] }
 serde = { version = "1.0.197", features = ["derive"] }

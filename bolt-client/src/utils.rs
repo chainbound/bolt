@@ -6,6 +6,7 @@ use alloy::{
     primitives::{Address, U256},
     rpc::types::TransactionRequest,
 };
+use beacon_api_client::{mainnet::Client as BeaconApiClient, BlockId, ProposerDuty};
 use rand::{thread_rng, Rng};
 use serde_json::Value;
 
@@ -48,4 +49,23 @@ pub fn prepare_rpc_request(method: &str, params: Vec<Value>) -> Value {
         "method": method,
         "params": params,
     })
+}
+
+/// Returns the current slot from the beacon client
+pub async fn get_current_slot(beacon_api_client: &BeaconApiClient) -> eyre::Result<u64> {
+    Ok(beacon_api_client.get_beacon_header(BlockId::Head).await?.header.message.slot)
+}
+
+pub async fn get_proposer_duties(
+    beacon_api_client: &BeaconApiClient,
+    current_slot: u64,
+    current_epoch: u64,
+) -> eyre::Result<Vec<ProposerDuty>> {
+    Ok(beacon_api_client
+        .get_proposer_duties(current_epoch)
+        .await?
+        .1
+        .into_iter()
+        .filter(|duty| duty.slot > current_slot)
+        .collect::<Vec<_>>())
 }
