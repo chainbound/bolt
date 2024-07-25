@@ -21,8 +21,10 @@ import (
 
 	"github.com/NYTimes/gziphandler"
 	builderApi "github.com/attestantio/go-builder-client/api"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec"
+	deneb "github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
 	"github.com/chainbound/shardmap"
@@ -188,13 +190,16 @@ type RelayAPI struct {
 	srvStarted  uberatomic.Bool
 	srvShutdown uberatomic.Bool
 
-	beaconClient         beaconclient.IMultiBeaconClient
-	datastore            *datastore.Datastore
-	redis                *datastore.RedisCache
-	memcached            *datastore.Memcached
-	db                   database.IDatabaseService
+	beaconClient beaconclient.IMultiBeaconClient
+	datastore    *datastore.Datastore
+	redis        *datastore.RedisCache
+	memcached    *datastore.Memcached
+	db           database.IDatabaseService
+
 	constraints          *shardmap.FIFOMap[uint64, *[]*SignedConstraints]
 	constraintsConsumers []chan *SignedConstraints
+	// The partial blob sidecar built from the blob constraints, for the Blob Express Lane
+	blobSidecarCache *builderApiDeneb.BlobsBundle
 
 	headSlot     uberatomic.Uint64
 	genesisInfo  *beaconclient.GetGenesisResponse
@@ -296,6 +301,11 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		db:                   opts.DB,
 		constraints:          shardmap.NewFIFOMap[uint64, *[]*SignedConstraints](64, 8, shardmap.HashUint64), // 2 epochs cache
 		constraintsConsumers: make([]chan *SignedConstraints, 0, 10),
+		blobSidecarCache: &builderApiDeneb.BlobsBundle{
+			Commitments: make([]deneb.KZGCommitment, 6),
+			Proofs:      make([]deneb.KZGProof, 6),
+			Blobs:       make([]deneb.Blob, 6),
+		},
 
 		payloadAttributes: make(map[string]payloadAttributesHelper),
 
