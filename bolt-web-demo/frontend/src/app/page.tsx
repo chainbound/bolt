@@ -2,12 +2,14 @@
 
 import io from "socket.io-client";
 import Image from "next/image";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { createPreconfPayload } from "@/lib/wallet";
 import { EventType } from "@/lib/types";
 import { Progress } from "@/components/ui/progress";
+import { ethers } from "ethers";
+import { PRIVATE_KEY, SERVER_URL } from "@/lib/constants";
 
 type Event = {
   message: string;
@@ -15,8 +17,6 @@ type Event = {
   timestamp: string;
   link?: string;
 };
-
-export const SERVER_URL = "http://localhost:3001";
 
 export default function Home() {
   const [events, setEvents] = useState<Array<Event>>([]);
@@ -37,6 +37,16 @@ export default function Home() {
   const [beaconClientUrl, setBeaconClientUrl] = useState("");
   const [providerUrl, setProviderUrl] = useState("");
   const [explorerUrl, setExplorerUrl] = useState("");
+  const [preconfirmationRequests, setPreconfirmationRequests] = useState<
+    Array<{ slot: number; count: number }>
+  >([]);
+  const [nonce, setNonce] = useState(0);
+
+  const wallet = useMemo(() => {
+    const provider = new ethers.JsonRpcProvider(providerUrl);
+    const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
+    return wallet;
+  }, [providerUrl]);
 
   useEffect(() => {
     fetch(`${SERVER_URL}/retry-port-events`);
@@ -49,10 +59,11 @@ export default function Home() {
     const newSocket = io(SERVER_URL, { autoConnect: true });
 
     newSocket.on("new-event", (event: Event) => {
-      console.info("Event from server:", event);
+      // console.info("Event from server:", event);
 
       if (event.type === EventType.NEW_SLOT) {
-        if (Number(event.message) === preconfSlot + 64) {
+        const slot = Number(event.message);
+        if (slot === preconfSlot + 64) {
           setPreconfFinalized(true);
           setFinalizationTimerActive(false);
           dispatchEvent({
@@ -60,6 +71,14 @@ export default function Home() {
             timestamp: new Date().toISOString(),
           });
         }
+
+        // Drop old requests
+        setPreconfirmationRequests((prev) =>
+          prev.filter((req) => req.slot >= slot),
+        );
+
+        // Update the nonce
+        wallet.getNonce().then((nonce) => setNonce(nonce));
       }
 
       // If the event has a special type, handle it differently
@@ -105,7 +124,7 @@ export default function Home() {
     return () => {
       newSocket.close();
     };
-  }, [explorerUrl, preconfSlot]);
+  }, [explorerUrl, preconfSlot, wallet]);
 
   useEffect(() => {
     let interval: any = null;
@@ -149,7 +168,7 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [finalizationTimerActive]);
 
-  async function sendPreconfirmation() {
+  const sendPreconfirmation = useCallback(async () => {
     // Reset state
     setEvents([]);
     setPreconfSent(true);
@@ -160,10 +179,31 @@ export default function Home() {
     setFinalizationTime(0);
 
     try {
-      const { payload, txHash } = await createPreconfPayload(providerUrl);
+      const nonceWithPreconfs =
+        nonce +
+        preconfirmationRequests
+          .map((req) => req.count)
+          .reduce((acc, c) => acc + c, 0);
+
+      const { payload, txHash } = await createPreconfPayload(
+        wallet,
+        nonceWithPreconfs,
+      );
+
+      setPreconfirmationRequests((prev) => {
+        for (let i = 0; i < prev.length; i++) {
+          if (prev[i].slot === payload.slot) {
+            prev[i] = { ...prev[i], count: prev[i].count + 1 };
+            return [...prev];
+          }
+        }
+        prev.push({ slot: payload.slot, count: 1 });
+        return [...prev];
+      });
+
       setPreconfSlot(payload.slot);
       dispatchEvent({
-        message: `Preconfirmation request sent for tx: ${txHash} at slot ${payload.slot}`,
+        message: `Preconfirmation request sent for tx: ${txHash} at slot ${payload.slot} with nonce ${nonceWithPreconfs}`,
         timestamp: new Date().toISOString(),
       });
 
@@ -185,7 +225,7 @@ export default function Home() {
     } catch (e) {
       console.error(e);
     }
-  }
+  }, [preconfirmationRequests, nonce, wallet]);
 
   function dispatchEvent(event: Event) {
     setEvents((prev) => [event, ...prev]);
