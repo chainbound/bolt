@@ -1,10 +1,6 @@
-import { SERVER_URL } from "@/app/page";
 import { TransactionRequest, keccak256 } from "ethers";
 import { ethers } from "ethers";
-
-// Test private key, for which address[0] holds 1000 ETH in the Kurtosis devnet
-const PRIVATE_KEY =
-  "39725efee3fb28614de3bacaffe4cc4bd8c436257e2c8bb887c4b5c4be45e76d";
+import { KURTOSIS_CHAIN_ID, SERVER_URL } from "./constants";
 
 type InclusionRequestPayload = {
   slot: number;
@@ -13,16 +9,13 @@ type InclusionRequestPayload = {
 };
 
 export async function createPreconfPayload(
-  providerUrl: string
+  wallet: ethers.Wallet,
+  nonce: number,
 ): Promise<{ payload: InclusionRequestPayload; txHash: string }> {
-  // Create a Wallet instance from a private key
-  const provider = new ethers.JsonRpcProvider(providerUrl);
-  const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-
   // Define the transaction
   const tx: TransactionRequest = {
-    chainId: (await provider.getNetwork()).chainId,
-    nonce: await wallet.getNonce(),
+    chainId: KURTOSIS_CHAIN_ID,
+    nonce: nonce,
     from: await wallet.getAddress(),
     to: "0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD",
     value: ethers.parseEther("0.0069420"),
@@ -38,8 +31,6 @@ export async function createPreconfPayload(
   const signedTx = await wallet.signTransaction(populated);
   const txHash = keccak256(signedTx);
   const slot = (await getLatestSlot()) + 2;
-
-  console.log("preconf target slot: ", slot);
 
   // Create a signature over the request fields "slot" and "tx" using the same signer
   // to authenticate the preconfirmation request through bolt.
@@ -57,7 +48,7 @@ export async function createPreconfPayload(
 
 export async function getLatestSlot(): Promise<number> {
   const slotResponse = await fetch(`${SERVER_URL}/latest-slot`).then(
-    (response) => response.json()
+    (response) => response.json(),
   );
   return Number(slotResponse.slot);
 }
