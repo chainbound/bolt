@@ -4,8 +4,8 @@ echo "Starting the web demo."
 
 # Define the commands as an array
 commands=(
-    "cd bolt-web-demo/frontend && yarn && yarn dev"
-    "cd bolt-web-demo/backend && yarn && yarn dev"
+  "cd bolt-web-demo/frontend && yarn && yarn dev"
+  "cd bolt-web-demo/backend && yarn && yarn dev"
 )
 
 # Function to quit all processes on Ctrl+C
@@ -13,9 +13,9 @@ quit_all() {
   echo "Caught SIGINT, quitting all processes."
   pids=($(jobs -p))
   for pid in "${pids[@]}"; do
-    kill "$pid"  # Ensure to kill each child process
+    kill "$pid" # Ensure to kill each child process
   done
-  wait  # Wait for all processes to exit before script exits
+  wait # Wait for all processes to exit before script exits
   exit
 }
 
@@ -25,10 +25,12 @@ trap 'quit_all' SIGINT
 # Start the commands in the background
 for command in "${commands[@]}"; do
   echo "Starting: $command"
-  eval "$command" &  # Use eval to handle complex commands with CD and chaining
+  eval "$command" & # Use eval to handle complex commands with CD and chaining
 done
 
-# Open the browser 
+sleep 1
+
+# Open the browser
 if [ "$(uname)" = "Darwin" ]; then
   open "http://localhost:3000"
 elif [ "$(expr substr $(uname -s) 1 5)" = "Linux" ]; then
