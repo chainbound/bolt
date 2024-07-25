@@ -19,6 +19,8 @@ var (
 )
 
 // verifyInclusionProof verifies the proofs against the constraints, and returns an error if the proofs are invalid.
+//
+// NOTE: assumes constraints transactions are already without blobs
 func verifyInclusionProof(log *logrus.Entry, transactionsRoot phase0.Root, proof *common.InclusionProof, hashToConstraints HashToConstraintDecoded) error {
 	if proof == nil {
 		return ErrNilProof
@@ -35,13 +37,13 @@ func verifyInclusionProof(log *logrus.Entry, transactionsRoot phase0.Root, proof
 
 		// Compute the hash tree root for the raw preconfirmed transaction
 		// and use it as "Leaf" in the proof to be verified against
-		withoutBlob, err := constraint.Tx.MarshalBinary()
+		encoded, err := constraint.Tx.MarshalBinary()
 		if err != nil {
 			log.WithError(err).Error("error marshalling transaction without blob tx sidecar")
 			return err
 		}
 
-		tx := Transaction(withoutBlob)
+		tx := Transaction(encoded)
 		txHashTreeRoot, err := tx.HashTreeRoot()
 		if err != nil {
 			return ErrInvalidRoot
