@@ -56,6 +56,11 @@ sidecar-logs:
     @id=$(docker ps -n 100 | grep sidecar | awk -F' ' '{print $1}') && \
     docker logs -f $id
 
+# show the logs for the bolt devnet beacon node
+beacon-logs:
+    @id=$(docker ps -n 100 | grep 'cl-1-lighthouse-geth' | awk -F' ' '{print $1}') && \
+    docker logs -f $id
+
 # show the logs for the bolt devnet for beacon node
 beacon-logs:
     @id=$(docker ps -n 100 | grep 'cl-1-lighthouse-geth' | awk -F' ' '{print $1}') && \

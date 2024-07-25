@@ -20,14 +20,13 @@ use ethereum_consensus::{
     ssz::prelude::{ssz_rs, ByteList, ByteVector, HashTreeRoot, List},
     types::mainnet::ExecutionPayload as ConsensusExecutionPayload,
 };
-use reth_primitives::{SealedBlock, SealedHeader, TransactionSigned, Withdrawals};
+use reth_primitives::{SealedBlock, TransactionSigned, Withdrawals};
 
 /// Compatibility: convert a sealed header into an ethereum-consensus execution payload header.
 /// This requires recalculating the withdrals and transactions roots as SSZ instead of MPT roots.
 pub(crate) fn to_execution_payload_header(
-    value: &SealedHeader,
+    sealed_block: &SealedBlock,
     transactions: Vec<TransactionSigned>,
-    withdrawals: reth_primitives::Withdrawals,
 ) -> ConsensusExecutionPayloadHeader {
     // Transactions and withdrawals are treated as opaque byte arrays in consensus types
     let transactions_bytes = transactions
@@ -48,30 +47,34 @@ pub(crate) fn to_execution_payload_header(
     let mut withdrawals_ssz: List<ConsensusWithdrawal, MAX_WITHDRAWALS_PER_PAYLOAD> =
         List::default();
 
-    for w in withdrawals.iter() {
-        withdrawals_ssz.push(to_consensus_withdrawal(w));
+    if let Some(withdrawals) = sealed_block.withdrawals.as_ref() {
+        for w in withdrawals.iter() {
+            withdrawals_ssz.push(to_consensus_withdrawal(w));
+        }
     }
 
     let withdrawals_root = withdrawals_ssz
         .hash_tree_root()
         .expect("valid withdrawals root");
 
+    let header = &sealed_block.header;
+
     ConsensusExecutionPayloadHeader {
-        parent_hash: to_bytes32(value.parent_hash),
-        fee_recipient: to_bytes20(value.beneficiary),
-        state_root: to_bytes32(value.state_root),
-        receipts_root: to_bytes32(value.receipts_root),
-        logs_bloom: to_byte_vector(value.logs_bloom),
-        prev_randao: to_bytes32(value.mix_hash),
-        block_number: value.number,
-        gas_limit: value.gas_limit,
-        gas_used: value.gas_used,
-        timestamp: value.timestamp,
-        extra_data: ByteList::try_from(value.extra_data.as_ref()).unwrap(),
-        base_fee_per_gas: ssz_rs::U256::from(value.base_fee_per_gas.unwrap_or_default()),
-        block_hash: to_bytes32(value.hash()),
-        blob_gas_used: value.blob_gas_used.unwrap_or_default(),
-        excess_blob_gas: value.excess_blob_gas.unwrap_or_default(),
+        parent_hash: to_bytes32(header.parent_hash),
+        fee_recipient: to_bytes20(header.beneficiary),
+        state_root: to_bytes32(header.state_root),
+        receipts_root: to_bytes32(header.receipts_root),
+        logs_bloom: to_byte_vector(header.logs_bloom),
+        prev_randao: to_bytes32(header.mix_hash),
+        block_number: header.number,
+        gas_limit: header.gas_limit,
+        gas_used: header.gas_used,
+        timestamp: header.timestamp,
+        extra_data: ByteList::try_from(header.extra_data.as_ref()).unwrap(),
+        base_fee_per_gas: ssz_rs::U256::from(header.base_fee_per_gas.unwrap_or_default()),
+        block_hash: to_bytes32(header.hash()),
+        blob_gas_used: header.blob_gas_used.unwrap_or_default(),
+        excess_blob_gas: header.excess_blob_gas.unwrap_or_default(),
         transactions_root,
         withdrawals_root,
     }

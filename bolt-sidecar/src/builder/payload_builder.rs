@@ -1,3 +1,5 @@
+use std::fmt;
+
 use alloy::{
     eips::{calc_excess_blob_gas, calc_next_block_base_fee, eip1559::BaseFeeParams},
     primitives::{Address, Bytes, B256, U256},
@@ -39,7 +41,6 @@ const DEFAULT_EXTRA_DATA: [u8; 20] = [
 ///
 /// Find more information about this process & its reasoning here:
 /// <https://github.com/chainbound/bolt/discussions/59>
-#[allow(missing_debug_implementations)]
 pub struct FallbackPayloadBuilder {
     extra_data: Bytes,
     fee_recipient: Address,
@@ -74,7 +75,7 @@ impl FallbackPayloadBuilder {
 /// beacon chain, while others are calculated locally or from the
 /// transactions themselves.
 #[derive(Debug, Default)]
-pub struct Context {
+struct Context {
     extra_data: Bytes,
     base_fee: u64,
     blob_gas_used: u64,
@@ -88,8 +89,7 @@ pub struct Context {
 }
 
 #[derive(Debug, Default)]
-#[allow(missing_docs)]
-pub struct Hints {
+struct Hints {
     pub gas_used: Option<u64>,
     pub receipts_root: Option<B256>,
     pub logs_bloom: Option<Bloom>,
@@ -357,7 +357,7 @@ pub(crate) fn parse_geth_response(error: &str) -> Option<String> {
 }
 
 /// Build a header with the given hints and context values.
-pub(crate) fn build_header_with_hints_and_context(
+fn build_header_with_hints_and_context(
     latest_block: &Block,
     hints: &Hints,
     context: &Context,
@@ -390,6 +390,17 @@ pub(crate) fn build_header_with_hints_and_context(
         parent_beacon_block_root: Some(context.parent_beacon_block_root),
         requests_root: None,
         extra_data: context.extra_data.clone(),
+    }
+}
+
+impl fmt::Debug for FallbackPayloadBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FallbackPayloadBuilder")
+            .field("extra_data", &self.extra_data)
+            .field("fee_recipient", &self.fee_recipient)
+            .field("engine_hinter", &self.engine_hinter)
+            .field("slot_time_in_seconds", &self.slot_time_in_seconds)
+            .finish()
     }
 }
 

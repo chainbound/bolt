@@ -60,7 +60,7 @@ pub enum BuilderError {
 
 /// Local builder instance that can ingest a sealed header and
 /// create the corresponding builder bid ready for the Builder API.
-#[allow(missing_debug_implementations)]
+#[derive(Debug)]
 pub struct LocalBuilder {
     /// BLS credentials for the local builder. We use this to sign the
     /// payload bid submissions built by the sidecar.
@@ -118,27 +118,17 @@ impl LocalBuilder {
         };
 
         // 2. create a signed builder bid with the sealed block header we just created
-        let eth_header = compat::to_execution_payload_header(
-            &sealed_block.header,
-            transactions,
-            sealed_block.withdrawals.unwrap_or_default(),
-        );
+        let eth_header = compat::to_execution_payload_header(&sealed_block, transactions);
 
         // 3. sign the bid with the local builder's BLS key
         let signed_bid = self.create_signed_builder_bid(value, eth_header, kzg_commitments)?;
 
         // 4. prepare a get_payload response for when the beacon node will ask for it
-        let Some(get_payload_res) =
-            GetPayloadResponse::try_from_execution_payload(&payload_and_blobs)
-        else {
-            return Err(BuilderError::Custom(
-                "Failed to build get_payload response: invalid fork version".to_string(),
-            ));
-        };
+        let get_payload_response = GetPayloadResponse::from(payload_and_blobs);
 
         self.payload_and_bid = Some(PayloadAndBid {
             bid: signed_bid,
-            payload: get_payload_res,
+            payload: get_payload_response,
         });
 
         Ok(())
