@@ -19,7 +19,7 @@ pub fn generate_random_tx() -> TransactionRequest {
         .with_to(Address::from_str(DEAD_ADDRESS).unwrap())
         .with_chain_id(KURTOSIS_CHAIN_ID)
         .with_value(U256::from(thread_rng().gen_range(1..100)))
-        .with_gas_limit(1_000_000u128)
+        .with_gas_limit(21_000u128)
         .with_gas_price(NOICE_GAS_PRICE)
 }
 
@@ -38,7 +38,7 @@ pub fn generate_random_blob_tx() -> TransactionRequest {
         .with_max_fee_per_blob_gas(100u128)
         .max_fee_per_gas(NOICE_GAS_PRICE)
         .max_priority_fee_per_gas(NOICE_GAS_PRICE / 10)
-        .with_gas_limit(1_000_000u128)
+        .with_gas_limit(42_000u128)
         .with_blob_sidecar(sidecar)
         .with_input(random_bytes)
 }

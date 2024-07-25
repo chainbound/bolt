@@ -102,23 +102,25 @@ dora:
   fi
 
 # manually send a preconfirmation to the bolt devnet
-send-preconf:
-	cd bolt-spammer && RUST_LOG=info cargo run -- \
-		--provider-url $(kurtosis port print bolt-devnet el-1-geth-lighthouse rpc) \
-		--beacon-client-url $(kurtosis port print bolt-devnet cl-1-lighthouse-geth http) \
-		--bolt-sidecar-url http://$(kurtosis port print bolt-devnet mev-sidecar-api api)  \
-		--private-key 53321db7c1e331d93a11a41d16f004d7ff63972ec8ec7c25db329728ceeb1710 \
-		--slot head
-
-# manually send a blob preconfirmation to the bolt devnet
-send-blob-preconf:
+send-preconf count='1':
 	cd bolt-spammer && RUST_LOG=info cargo run -- \
 		--provider-url $(kurtosis port print bolt-devnet el-1-geth-lighthouse rpc) \
 		--beacon-client-url $(kurtosis port print bolt-devnet cl-1-lighthouse-geth http) \
 		--bolt-sidecar-url http://$(kurtosis port print bolt-devnet mev-sidecar-api api)  \
 		--private-key 53321db7c1e331d93a11a41d16f004d7ff63972ec8ec7c25db329728ceeb1710 \
 		--slot head \
-		--blob
+		--count {{count}}
+
+# manually send a blob preconfirmation to the bolt devnet
+send-blob-preconf count='1':
+	cd bolt-spammer && RUST_LOG=info cargo run -- \
+		--provider-url $(kurtosis port print bolt-devnet el-1-geth-lighthouse rpc) \
+		--beacon-client-url $(kurtosis port print bolt-devnet cl-1-lighthouse-geth http) \
+		--bolt-sidecar-url http://$(kurtosis port print bolt-devnet mev-sidecar-api api)  \
+		--private-key 53321db7c1e331d93a11a41d16f004d7ff63972ec8ec7c25db329728ceeb1710 \
+		--slot head \
+		--blob \
+		--count {{count}} \
 
 # build all the docker images locally
 build-images:

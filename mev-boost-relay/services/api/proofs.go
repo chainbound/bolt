@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
-	"github.com/ethereum/go-ethereum/core/types"
 	fastSsz "github.com/ferranbt/fastssz"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/sirupsen/logrus"
@@ -20,43 +19,31 @@ var (
 )
 
 // verifyInclusionProof verifies the proofs against the constraints, and returns an error if the proofs are invalid.
-func verifyInclusionProof(log *logrus.Entry, transactionsRoot phase0.Root, proof *common.InclusionProof, constraints map[phase0.Hash32]*Constraint) error {
+//
+// NOTE: assumes constraints transactions are already without blobs
+func verifyInclusionProof(log *logrus.Entry, transactionsRoot phase0.Root, proof *common.InclusionProof, hashToConstraints HashToConstraintDecoded) error {
 	if proof == nil {
 		return ErrNilProof
 	}
 
+	constraints := ParseConstraintsDecoded(hashToConstraints)
+
 	leaves := make([][]byte, len(constraints))
 
-	i := 0
-	for hash, constraint := range constraints {
+	for i, constraint := range constraints {
 		if constraint == nil {
 			return ErrNilConstraint
 		}
 
-		if len(constraint.Tx) == 0 {
-			log.Warnf("[BOLT]: Raw tx is empty for constraint tx hash %s", hash)
-			continue
-		}
-
 		// Compute the hash tree root for the raw preconfirmed transaction
 		// and use it as "Leaf" in the proof to be verified against
-
-		// TODO: this is pretty inefficient, we should work with the transaction already
-		// parsed without the blob here to avoid unmarshalling and marshalling again
-		transaction := new(types.Transaction)
-		err := transaction.UnmarshalBinary(constraint.Tx)
-		if err != nil {
-			log.WithError(err).Error("error unmarshalling transaction while verifying proofs")
-			return err
-		}
-
-		withoutBlob, err := transaction.WithoutBlobTxSidecar().MarshalBinary()
+		encoded, err := constraint.Tx.MarshalBinary()
 		if err != nil {
 			log.WithError(err).Error("error marshalling transaction without blob tx sidecar")
 			return err
 		}
 
-		tx := Transaction(withoutBlob)
+		tx := Transaction(encoded)
 		txHashTreeRoot, err := tx.HashTreeRoot()
 		if err != nil {
 			return ErrInvalidRoot

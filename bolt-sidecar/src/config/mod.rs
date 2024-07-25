@@ -146,7 +146,7 @@ pub struct Limits {
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            max_commitments_per_slot: NonZero::new(6).expect("Valid non-zero"),
+            max_commitments_per_slot: NonZero::new(128).expect("Valid non-zero"),
             max_committed_gas_per_slot: NonZero::new(10_000_000).expect("Valid non-zero"),
         }
     }

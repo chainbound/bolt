@@ -33,6 +33,8 @@ struct Opts {
     blob: bool,
     #[clap(short = 's', long, default_value = "head")]
     slot: String,
+    #[clap(short = 'C', long, default_value_t = 1)]
+    count: u64,
 }
 
 #[tokio::main]
@@ -53,45 +55,47 @@ async fn main() -> Result<()> {
     let current_slot = current_slot(&beacon_api_client).await?;
     let target_slot = if opts.slot == "head" { current_slot + 2 } else { opts.slot.parse()? };
 
-    let mut tx = if opts.blob { generate_random_blob_tx() } else { generate_random_tx() };
-    tx.set_from(sender);
-    tx.set_nonce(provider.get_transaction_count(sender).await?);
+    for i in 0..opts.count {
+        let mut tx = if opts.blob { generate_random_blob_tx() } else { generate_random_tx() };
+        tx.set_from(sender);
+        tx.set_nonce(provider.get_transaction_count(sender).await? + i);
 
-    let tx_signed = tx.build(&transaction_signer).await?;
-    let tx_hash = tx_signed.tx_hash().to_string();
-    let tx_rlp = hex::encode(tx_signed.encoded_2718());
+        let tx_signed = tx.build(&transaction_signer).await?;
+        let tx_hash = tx_signed.tx_hash().to_string();
+        let tx_rlp = hex::encode(tx_signed.encoded_2718());
 
-    let message_digest = {
-        let mut data = Vec::new();
-        data.extend_from_slice(&target_slot.to_le_bytes());
-        data.extend_from_slice(hex::decode(tx_hash.trim_start_matches("0x"))?.as_slice());
-        keccak256(data)
-    };
+        let message_digest = {
+            let mut data = Vec::new();
+            data.extend_from_slice(&target_slot.to_le_bytes());
+            data.extend_from_slice(hex::decode(tx_hash.trim_start_matches("0x"))?.as_slice());
+            keccak256(data)
+        };
 
-    let signature = wallet.sign_hash(&message_digest).await?;
-    let signature = hex::encode(signature.as_bytes());
+        let signature = wallet.sign_hash(&message_digest).await?;
+        let signature = hex::encode(signature.as_bytes());
 
-    let request = prepare_rpc_request(
-        "bolt_inclusionPreconfirmation",
-        vec![serde_json::json!({
-            "slot": target_slot,
-            "tx": tx_rlp,
-            "signature": signature,
-        })],
-    );
+        let request = prepare_rpc_request(
+            "bolt_inclusionPreconfirmation",
+            vec![serde_json::json!({
+                "slot": target_slot,
+                "tx": tx_rlp,
+                "signature": signature,
+            })],
+        );
 
-    info!("Transaction hash: {}", tx_hash);
-    info!("body: {}", serde_json::to_string(&request)?);
+        info!("Transaction hash: {}", tx_hash);
+        info!("body: {}", serde_json::to_string(&request)?);
 
-    let client = reqwest::Client::new();
-    let response = client
-        .post(&opts.bolt_sidecar_url)
-        .header("content-type", "application/json")
-        .body(serde_json::to_string(&request)?)
-        .send()
-        .await?;
+        let client = reqwest::Client::new();
+        let response = client
+            .post(&opts.bolt_sidecar_url)
+            .header("content-type", "application/json")
+            .body(serde_json::to_string(&request)?)
+            .send()
+            .await?;
 
-    info!("Response: {:?}", response.text().await?);
+        info!("Response: {:?}", response.text().await?);
+    }
 
     Ok(())
 }

@@ -156,8 +156,11 @@ func EmitBoltDemoEvent(message string) {
 
 func CalculateMerkleMultiProofs(
 	payloadTransactions types.Transactions,
-	constraints types.HashToConstraintDecoded,
+	HashToConstraintDecoded types.HashToConstraintDecoded,
 ) (inclusionProof *common.InclusionProof, rootNode *ssz.Node, err error) {
+	constraintsOrderedByIndex, constraintsWithoutIndex, _, _ := types.ParseConstraintsDecoded(HashToConstraintDecoded)
+	constraints := slices.Concat(constraintsOrderedByIndex, constraintsWithoutIndex)
+
 	// BOLT: generate merkle tree from payload transactions (we need raw RLP bytes for this)
 	rawTxs := make([]bellatrix.Transaction, len(payloadTransactions))
 	for i, tx := range payloadTransactions {
@@ -185,21 +188,20 @@ func CalculateMerkleMultiProofs(
 	baseGeneralizedIndex := int(math.Pow(float64(2), float64(21)))
 	generalizedIndexes := make([]int, len(constraints))
 	transactionHashes := make([]common.Hash, len(constraints))
-	i := 0
 
-	for hash := range constraints {
+	for i, constraint := range constraints {
+		tx := constraint.Tx
 		// get the index of the preconfirmed transaction in the block
-		preconfIndex := slices.IndexFunc(payloadTransactions, func(tx *types.Transaction) bool { return tx.Hash() == hash })
+		preconfIndex := slices.IndexFunc(payloadTransactions, func(payloadTx *types.Transaction) bool { return payloadTx.Hash() == tx.Hash() })
 		if preconfIndex == -1 {
-			log.Error(fmt.Sprintf("Preconfirmed transaction %s not found in block", hash))
+			log.Error(fmt.Sprintf("Preconfirmed transaction %s not found in block", tx.Hash()))
 			log.Error(fmt.Sprintf("block has %v transactions", len(payloadTransactions)))
 			continue
 		}
 
 		generalizedIndex := baseGeneralizedIndex + preconfIndex
 		generalizedIndexes[i] = generalizedIndex
-		transactionHashes[i] = hash
-		i++
+		transactionHashes[i] = tx.Hash()
 	}
 
 	log.Info(fmt.Sprintf("[BOLT]: Calculating merkle multiproof for %d preconfirmed transaction",
