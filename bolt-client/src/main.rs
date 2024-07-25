@@ -30,7 +30,7 @@ struct Opts {
     #[clap(short, long, default_value_t = 0, env)]
     nonce_offset: u64,
     /// Flag for generating a blob tx instead of a regular tx
-    #[clap(short, long, default_value_t = false)]
+    #[clap(short = 'B', long, default_value_t = false)]
     blob: bool,
     /// Number of transactions to send in a sequence
     #[clap(short, long, default_value_t = 1)]
