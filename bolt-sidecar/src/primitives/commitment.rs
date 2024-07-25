@@ -1,9 +1,12 @@
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::str::FromStr;
 
-use alloy::primitives::{keccak256, Signature, B256};
+use alloy::{
+    primitives::{keccak256, Address, Signature, B256},
+    signers::{Error, Signer},
+};
 
-use super::{FullTransaction, TransactionExt};
+use super::{FullTransaction, SignatureError, TransactionExt};
 
 /// Commitment requests sent by users or RPC proxies to the sidecar.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -16,7 +19,7 @@ pub enum CommitmentRequest {
 /// A signed commitment with a generic signature.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
-pub enum Commitment {
+pub enum SignedCommitment {
     Inclusion(InclusionCommitment),
 }
 
@@ -28,10 +31,10 @@ pub struct InclusionCommitment {
     signature: Signature,
 }
 
-impl From<Commitment> for InclusionCommitment {
-    fn from(commitment: Commitment) -> Self {
+impl From<SignedCommitment> for InclusionCommitment {
+    fn from(commitment: SignedCommitment) -> Self {
         match commitment {
-            Commitment::Inclusion(inclusion) => inclusion,
+            SignedCommitment::Inclusion(inclusion) => inclusion,
         }
     }
 }
@@ -44,6 +47,20 @@ impl CommitmentRequest {
             // TODO: remove this when we have more request types
             #[allow(unreachable_patterns)]
             _ => None,
+        }
+    }
+
+    /// Commits and signs the request with the provided signer. Returns a [SignedCommitment].
+    pub async fn commit_and_sign<S: Signer>(self, signer: &S) -> Result<SignedCommitment, Error> {
+        match self {
+            CommitmentRequest::Inclusion(req) => {
+                let digest = req.digest();
+                let signature = signer.sign_hash(&digest).await?;
+                Ok(SignedCommitment::Inclusion(InclusionCommitment {
+                    request: req,
+                    signature,
+                }))
+            }
         }
     }
 }
@@ -60,6 +77,8 @@ pub struct InclusionRequest {
     /// this specific commitment to be included at the given slot.
     #[serde(skip)]
     pub signature: Option<Signature>,
+    #[serde(skip)]
+    pub signer: Option<Address>,
 }
 
 impl InclusionRequest {
@@ -91,9 +110,59 @@ impl InclusionRequest {
         true
     }
 
+    /// Validates the tx size limit.
+    pub fn validate_tx_size_limit(&self, limit: usize) -> bool {
+        for tx in &self.txs {
+            if tx.size() > limit {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Validates the init code limit.
+    pub fn validate_init_code_limit(&self, limit: usize) -> bool {
+        for tx in &self.txs {
+            if tx.tx_kind().is_create() && tx.input().len() > limit {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    pub fn validate_priority_fee(&self) -> bool {
+        for tx in &self.txs {
+            if tx
+                .max_priority_fee_per_gas()
+                .is_some_and(|max_priority_fee| max_priority_fee > tx.max_fee_per_gas())
+            {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Returns the total gas limit of all transactions in this request.
+    pub fn gas_limit(&self) -> u64 {
+        self.txs.iter().map(|tx| tx.gas_limit()).sum()
+    }
+
+    /// Returns the transaction signer.
+    pub fn signer(&self) -> Option<Address> {
+        self.signer
+    }
+
     /// Sets the signature.
     pub fn set_signature(&mut self, signature: Signature) {
         self.signature = Some(signature);
+    }
+
+    /// Sets the signer.
+    pub fn set_signer(&mut self, signer: Address) {
+        self.signer = Some(signer);
     }
 
     pub fn recover_signers(&mut self) -> Result<(), SignatureError> {
@@ -105,10 +174,6 @@ impl InclusionRequest {
         Ok(())
     }
 }
-
-#[derive(Debug, thiserror::Error)]
-#[error("Invalid signature")]
-struct SignatureError;
 
 fn deserialize_sig<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where

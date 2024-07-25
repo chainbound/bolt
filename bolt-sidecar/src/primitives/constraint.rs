@@ -1,4 +1,4 @@
-use alloy::primitives::keccak256;
+use alloy::primitives::{keccak256, Address};
 use secp256k1::Message;
 use serde::Serialize;
 
@@ -109,5 +109,9 @@ impl Constraint {
         self.transaction.encode_enveloped(&mut data);
         data.extend_from_slice(&self.index.unwrap_or(0).to_le_bytes());
         data
+    }
+
+    pub fn sender(&self) -> Address {
+        self.transaction.sender().expect("Recovered sender")
     }
 }

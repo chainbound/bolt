@@ -338,11 +338,34 @@ pub struct FullTransaction {
     sender: Option<Address>,
 }
 
+impl From<PooledTransactionsElement> for FullTransaction {
+    fn from(tx: PooledTransactionsElement) -> Self {
+        Self { tx, sender: None }
+    }
+}
+
 impl std::ops::Deref for FullTransaction {
     type Target = PooledTransactionsElement;
 
     fn deref(&self) -> &Self::Target {
         &self.tx
+    }
+}
+
+impl std::ops::DerefMut for FullTransaction {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.tx
+    }
+}
+
+impl FullTransaction {
+    pub fn into_inner(self) -> PooledTransactionsElement {
+        self.tx
+    }
+
+    /// Returns the sender of the transaction, if recovered.
+    pub fn sender(&self) -> Option<Address> {
+        self.sender
     }
 }
 
@@ -363,3 +386,7 @@ impl<'de> serde::Deserialize<'de> for FullTransaction {
             .map(|tx| FullTransaction { tx, sender: None })
     }
 }
+
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid signature")]
+pub struct SignatureError;

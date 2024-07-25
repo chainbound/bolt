@@ -168,9 +168,9 @@ pub(crate) async fn create_signed_commitment_request(
     let signature = signer.sign_hash(&message_digest).await?;
 
     Ok(CommitmentRequest::Inclusion(InclusionRequest {
-        tx: tx_pooled,
+        txs: vec![tx_pooled.into()],
         slot,
         signature: Some(signature),
-        sender: signer.address(),
+        signer: Some(signer.address()),
     }))
 }

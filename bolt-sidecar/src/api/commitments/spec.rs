@@ -14,14 +14,16 @@ pub(super) const REQUEST_INCLUSION_METHOD: &str = "bolt_requestInclusion";
 pub enum Error {
     #[error("Request rejected: {0}")]
     Rejected(#[from] RejectionError),
+    #[error("{0}")]
+    ValidationFailed(String),
     #[error("Duplicate request")]
     Duplicate,
     #[error("Internal server error")]
     Internal,
     #[error("Missing X-Bolt-Signature header")]
     NoSignature,
-    #[error("Invalid signature")]
-    InvalidSignature,
+    #[error(transparent)]
+    InvalidSignature(#[from] crate::primitives::SignatureError),
     #[error(transparent)]
     Signature(#[from] SignatureError),
     #[error("Unknown method")]
@@ -53,14 +55,19 @@ impl IntoResponse for Error {
                 Json(JsonResponse::from_error(-32003, self.to_string())),
             )
                 .into_response(),
-            Error::InvalidSignature => (
+            Error::InvalidSignature(err) => (
                 StatusCode::BAD_REQUEST,
-                Json(JsonResponse::from_error(-32004, self.to_string())),
+                Json(JsonResponse::from_error(-32004, err.to_string())),
             )
                 .into_response(),
             Error::Signature(err) => (
                 StatusCode::BAD_REQUEST,
-                Json(JsonResponse::from_error(-32004, err.to_string())),
+                Json(JsonResponse::from_error(-32005, err.to_string())),
+            )
+                .into_response(),
+            Error::ValidationFailed(message) => (
+                StatusCode::BAD_REQUEST,
+                Json(JsonResponse::from_error(-32006, message)),
             )
                 .into_response(),
             Error::UnknownMethod => (

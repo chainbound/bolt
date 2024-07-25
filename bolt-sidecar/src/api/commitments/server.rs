@@ -3,7 +3,9 @@ use axum::{extract::State, http::HeaderMap, routing::post, Json};
 use axum_extra::extract::WithRejection;
 use std::{
     collections::HashSet,
+    future::Future,
     net::{SocketAddr, ToSocketAddrs},
+    pin::Pin,
     str::FromStr,
     sync::Arc,
 };
@@ -13,7 +15,7 @@ use tokio::{
 };
 
 use crate::primitives::{
-    commitment::{Commitment, InclusionCommitment},
+    commitment::{InclusionCommitment, SignedCommitment},
     CommitmentRequest, InclusionRequest,
 };
 
@@ -24,8 +26,8 @@ use super::{
 
 /// Event type emitted by the commitments API.
 pub struct Event {
-    request: CommitmentRequest,
-    response: oneshot::Sender<Result<Commitment, RejectionError>>,
+    pub request: CommitmentRequest,
+    pub response: oneshot::Sender<Result<SignedCommitment, Error>>,
 }
 
 /// The inner commitments-API handler that implements the [CommitmentsApi] spec.
@@ -66,7 +68,6 @@ impl CommitmentsApi for CommitmentsApiInner {
             .await
             .map_err(|_| Error::Internal)?
             .map(|c| c.into())
-            .map_err(Error::Rejected)
     }
 }
 
@@ -75,12 +76,29 @@ pub struct CommitmentsApiServer {
     /// The address to bind the server to. This will be updated
     /// with the actual address after the server is started.
     addr: SocketAddr,
+    signal: Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
 }
 
 impl CommitmentsApiServer {
+    /// Creates the server with the given address and default shutdown signal (CTRL+C).
     pub fn new<A: ToSocketAddrs>(addr: A) -> Self {
         Self {
             addr: addr.to_socket_addrs().unwrap().next().unwrap(),
+            signal: Some(Box::pin(async {
+                let _ = tokio::signal::ctrl_c().await;
+            })),
+        }
+    }
+
+    /// Creates the server with the given address and shutdown signal.
+    pub fn with_shutdown<A: ToSocketAddrs>(
+        self,
+        addr: A,
+        signal: impl Future<Output = ()> + Send + 'static,
+    ) -> Self {
+        Self {
+            addr: addr.to_socket_addrs().unwrap().next().unwrap(),
+            signal: Some(Box::pin(signal)),
         }
     }
 
@@ -99,8 +117,13 @@ impl CommitmentsApiServer {
 
         tracing::info!("Commitments RPC server bound to {addr}");
 
+        let signal = self.signal.take();
+
         tokio::spawn(async move {
-            if let Err(e) = axum::serve(listener, router).await {
+            if let Err(e) = axum::serve(listener, router)
+                .with_graceful_shutdown(signal.unwrap())
+                .await
+            {
                 tracing::error!("Server error: {:?}", e);
             }
         });
@@ -143,11 +166,11 @@ impl CommitmentsApiServer {
                 inclusion_request.set_signature(signature);
 
                 let digest = inclusion_request.digest();
-                let address = signature.recover_address_from_prehash(&digest)?;
-                tracing::debug!(?address, "Recovered public key and associated address");
+                let signer = signature.recover_address_from_prehash(&digest)?;
+                tracing::debug!(?signer, "Recovered public key and associated address");
 
-                // Set the address here for later processing
-                inclusion_request.set_address(address);
+                // Set the request signer
+                inclusion_request.set_signer(signer);
 
                 let inclusion_commitment = api.request_inclusion(inclusion_request).await?;
 
@@ -173,9 +196,12 @@ fn signature_from_headers(headers: &HeaderMap) -> Result<Signature, Error> {
     let signature = headers.get(SIGNATURE_HEADER).ok_or(Error::NoSignature)?;
 
     // Remove the "0x" prefix
-    let signature = signature.to_str().map_err(|_| Error::InvalidSignature)?;
+    let signature = signature
+        .to_str()
+        .map_err(|_| Error::InvalidSignature(crate::primitives::SignatureError))?;
 
-    Signature::from_str(signature).map_err(|_| Error::InvalidSignature)
+    Signature::from_str(signature)
+        .map_err(|_| Error::InvalidSignature(crate::primitives::SignatureError))
 }
 
 #[cfg(test)]

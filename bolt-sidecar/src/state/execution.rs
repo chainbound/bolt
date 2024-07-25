@@ -6,7 +6,7 @@ use alloy::{
 use reth_primitives::{
     revm_primitives::EnvKzgSettings, BlobTransactionValidationError, PooledTransactionsElement,
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Deref};
 use thiserror::Error;
 
 use crate::{
@@ -67,8 +67,8 @@ pub enum ValidationError {
     #[error("Max committed gas reached for slot {0}: {1}")]
     MaxCommittedGasReachedForSlot(u64, u64),
     /// The signature is invalid.
-    #[error("Signature error: {0:?}")]
-    Signature(#[from] SignatureError),
+    #[error(transparent)]
+    Signature(#[from] crate::primitives::SignatureError),
     /// Could not recover signature,
     #[error("Could not recover signer")]
     RecoverSigner,
@@ -191,11 +191,13 @@ impl<C: StateFetcher> ExecutionState<C> {
     /// TODO: should also validate everything in https://github.com/paradigmxyz/reth/blob/9aa44e1a90b262c472b14cd4df53264c649befc2/crates/transaction-pool/src/validate/eth.rs#L153
     pub async fn validate_commitment_request(
         &mut self,
-        request: &CommitmentRequest,
-    ) -> Result<Address, ValidationError> {
+        request: &mut CommitmentRequest,
+    ) -> Result<(), ValidationError> {
         let CommitmentRequest::Inclusion(req) = request;
 
-        let sender = req.sender;
+        let signer = req.signer().expect("Set signer");
+        req.recover_signers()?;
+
         let target_slot = req.slot;
 
         // Validate the chain ID
@@ -218,8 +220,8 @@ impl<C: StateFetcher> ExecutionState<C> {
             .get_block_template(target_slot)
             .map(|t| t.committed_gas())
             .unwrap_or(0);
-        if template_committed_gas + req.tx.gas_limit()
-            >= self.limits.max_committed_gas_per_slot.get()
+
+        if template_committed_gas + req.gas_limit() >= self.limits.max_committed_gas_per_slot.get()
         {
             return Err(ValidationError::MaxCommittedGasReachedForSlot(
                 self.slot,
@@ -228,32 +230,30 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
 
         // Check if the transaction size exceeds the maximum
-        if req.tx.size() > self.validation_params.max_tx_input_bytes {
+        if !req.validate_tx_size_limit(self.validation_params.max_tx_input_bytes) {
             return Err(ValidationError::TransactionSizeTooHigh);
         }
 
         // Check if the transaction is a contract creation and the init code size exceeds the maximum
-        if req.tx.tx_kind().is_create()
-            && req.tx.input().len() > self.validation_params.max_init_code_byte_size
-        {
+        if !req.validate_init_code_limit(self.validation_params.max_init_code_byte_size) {
             return Err(ValidationError::TransactionSizeTooHigh);
         }
 
         // Check if the gas limit is higher than the maximum block gas limit
-        if req.tx.gas_limit() > self.validation_params.block_gas_limit {
+        if req.gas_limit() > self.validation_params.block_gas_limit {
             return Err(ValidationError::GasLimitTooHigh);
         }
 
-        // Ensure max_priority_fee_per_gas is less than max_fee_per_gas, if any
-        if req
-            .tx
-            .max_priority_fee_per_gas()
-            .is_some_and(|max_priority_fee| max_priority_fee > req.tx.max_fee_per_gas())
-        {
+        // Ensure max_priority_fee_per_gas is less than max_fee_per_gas
+        if !req.validate_priority_fee() {
             return Err(ValidationError::MaxPriorityFeePerGasTooHigh);
         }
 
-        tracing::debug!(%sender, target_slot, "Trying to commit inclusion request to block template");
+        tracing::debug!(
+            ?signer,
+            target_slot,
+            "Trying to commit inclusion request to block template"
+        );
 
         // Check if the max_fee_per_gas would cover the maximum possible basefee.
         let slot_diff = target_slot.saturating_sub(self.slot);
@@ -269,89 +269,95 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::BaseFeeTooLow(max_basefee));
         }
 
-        // From previous preconfirmations requests retrieve
-        // - the nonce difference from the account state.
-        // - the balance difference from the account state.
-        // - the highest slot number for which the user has requested a preconfirmation.
-        //
-        // If the templates do not exist, or this is the first request for this sender,
-        // its diffs will be zero.
-        let (nonce_diff, balance_diff, highest_slot) = self.block_templates.iter().fold(
-            (0, U256::ZERO, 0),
-            |(nonce_diff_acc, balance_diff_acc, highest_slot), (slot, block_template)| {
-                let (nonce_diff, balance_diff, slot) = block_template
-                    .get_diff(&sender)
-                    .map(|(nonce, balance)| (nonce, balance, *slot))
-                    .unwrap_or((0, U256::ZERO, 0));
-
-                (
-                    nonce_diff_acc + nonce_diff,
-                    balance_diff_acc.saturating_add(balance_diff),
-                    u64::max(highest_slot, slot),
-                )
-            },
-        );
-
-        if target_slot < highest_slot {
-            return Err(ValidationError::SlotTooLow(highest_slot));
+        if target_slot < self.slot {
+            return Err(ValidationError::SlotTooLow(self.slot));
         }
 
-        tracing::trace!(%sender, nonce_diff, %balance_diff, "Applying diffs to account state");
+        for tx in &req.txs {
+            let sender = tx.sender().expect("Recovered sender");
 
-        let account_state = match self.account_state(&sender).copied() {
-            Some(account) => account,
-            None => {
-                // Fetch the account state from the client if it does not exist
-                let account = match self.client.get_account_state(&sender, None).await {
-                    Ok(account) => account,
-                    Err(err) => {
-                        return Err(ValidationError::Internal(format!(
-                            "Error fetching account state: {:?}",
-                            err
-                        )))
-                    }
-                };
+            // From previous preconfirmations requests retrieve
+            // - the nonce difference from the account state.
+            // - the balance difference from the account state.
+            // - the highest slot number for which the user has requested a preconfirmation.
+            //
+            // If the templates do not exist, or this is the first request for this sender,
+            // its diffs will be zero.
+            // TODO: why highest slot here?
+            let (nonce_diff, balance_diff, highest_slot) = self.block_templates.iter().fold(
+                (0, U256::ZERO, 0),
+                |(nonce_diff_acc, balance_diff_acc, highest_slot), (slot, block_template)| {
+                    let (nonce_diff, balance_diff, slot) = block_template
+                        .get_diff(&sender)
+                        .map(|(nonce, balance)| (nonce, balance, *slot))
+                        .unwrap_or((0, U256::ZERO, 0));
 
-                self.account_states.insert(sender, account);
-                account
-            }
-        };
+                    (
+                        nonce_diff_acc + nonce_diff,
+                        balance_diff_acc.saturating_add(balance_diff),
+                        u64::max(highest_slot, slot),
+                    )
+                },
+            );
 
-        let account_state_with_diffs = AccountState {
-            transaction_count: account_state.transaction_count.saturating_add(nonce_diff),
-            balance: account_state.balance.saturating_sub(balance_diff),
-            has_code: account_state.has_code,
-        };
+            tracing::trace!(?signer, nonce_diff, %balance_diff, "Applying diffs to account state");
 
-        // Validate the transaction against the account state with existing diffs
-        validate_transaction(&account_state_with_diffs, &req.tx)?;
+            let account_state = match self.account_state(&sender).copied() {
+                Some(account) => account,
+                None => {
+                    // Fetch the account state from the client if it does not exist
+                    let account = match self.client.get_account_state(&sender, None).await {
+                        Ok(account) => account,
+                        Err(err) => {
+                            return Err(ValidationError::Internal(format!(
+                                "Error fetching account state: {:?}",
+                                err
+                            )))
+                        }
+                    };
 
-        // Check EIP-4844-specific limits
-        if let Some(transaction) = req.tx.as_eip4844() {
-            if let Some(template) = self.block_templates.get(&target_slot) {
-                if template.blob_count() >= MAX_BLOBS_PER_BLOCK {
-                    return Err(ValidationError::Eip4844Limit);
+                    self.account_states.insert(sender, account);
+                    account
                 }
-            }
-
-            let PooledTransactionsElement::BlobTransaction(ref blob_transaction) = req.tx else {
-                unreachable!("EIP-4844 transaction should be a blob transaction")
             };
 
-            // Calculate max possible increase in blob basefee
-            let max_blob_basefee = calculate_max_basefee(self.blob_basefee, slot_diff)
-                .ok_or(ValidationError::MaxBaseFeeCalcOverflow)?;
+            let account_state_with_diffs = AccountState {
+                transaction_count: account_state.transaction_count.saturating_add(nonce_diff),
+                balance: account_state.balance.saturating_sub(balance_diff),
+                has_code: account_state.has_code,
+            };
 
-            tracing::debug!(%max_blob_basefee, blob_basefee = blob_transaction.transaction.max_fee_per_blob_gas, "Validating blob basefee");
-            if blob_transaction.transaction.max_fee_per_blob_gas < max_blob_basefee {
-                return Err(ValidationError::BlobBaseFeeTooLow(max_blob_basefee));
+            // Validate the transaction against the account state with existing diffs
+            validate_transaction(&account_state_with_diffs, tx)?;
+
+            // Check EIP-4844-specific limits
+            if let Some(transaction) = tx.as_eip4844() {
+                if let Some(template) = self.block_templates.get(&target_slot) {
+                    if template.blob_count() >= MAX_BLOBS_PER_BLOCK {
+                        return Err(ValidationError::Eip4844Limit);
+                    }
+                }
+
+                let PooledTransactionsElement::BlobTransaction(ref blob_transaction) = tx.deref()
+                else {
+                    unreachable!("EIP-4844 transaction should be a blob transaction")
+                };
+
+                // Calculate max possible increase in blob basefee
+                let max_blob_basefee = calculate_max_basefee(self.blob_basefee, slot_diff)
+                    .ok_or(ValidationError::MaxBaseFeeCalcOverflow)?;
+
+                tracing::debug!(%max_blob_basefee, blob_basefee = blob_transaction.transaction.max_fee_per_blob_gas, "Validating blob basefee");
+                if blob_transaction.transaction.max_fee_per_blob_gas < max_blob_basefee {
+                    return Err(ValidationError::BlobBaseFeeTooLow(max_blob_basefee));
+                }
+
+                // Validate blob against KZG settings
+                transaction.validate_blob(&blob_transaction.sidecar, self.kzg_settings.get())?;
             }
-
-            // Validate blob against KZG settings
-            transaction.validate_blob(&blob_transaction.sidecar, self.kzg_settings.get())?;
         }
 
-        Ok(sender)
+        Ok(())
     }
 
     /// Commits the transaction to the target block. Initializes a new block template
@@ -490,9 +496,12 @@ mod tests {
 
         let tx = default_test_transaction(*sender, None);
 
-        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
-        assert!(state.validate_commitment_request(&request).await.is_ok());
+        assert!(state
+            .validate_commitment_request(&mut request)
+            .await
+            .is_ok());
 
         Ok(())
     }
@@ -516,7 +525,7 @@ mod tests {
         // Create a transaction with a nonce that is too high
         let tx = default_test_transaction(*sender, Some(1));
 
-        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
         // Insert a constraint diff for slot 11
         let mut diffs = HashMap::new();
@@ -530,7 +539,7 @@ mod tests {
         );
 
         assert!(matches!(
-            state.validate_commitment_request(&request).await,
+            state.validate_commitment_request(&mut request).await,
             Err(ValidationError::SlotTooLow(11))
         ));
 
@@ -567,10 +576,10 @@ mod tests {
         // Create a transaction with a nonce that is too low
         let tx = default_test_transaction(*sender, Some(0));
 
-        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
         assert!(matches!(
-            state.validate_commitment_request(&request).await,
+            state.validate_commitment_request(&mut request).await,
             Err(ValidationError::NonceTooLow(1, 0))
         ));
 
@@ -579,10 +588,10 @@ mod tests {
         // Create a transaction with a nonce that is too high
         let tx = default_test_transaction(*sender, Some(2));
 
-        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
         assert!(matches!(
-            state.validate_commitment_request(&request).await,
+            state.validate_commitment_request(&mut request).await,
             Err(ValidationError::NonceTooHigh(1, 2))
         ));
 
@@ -609,10 +618,10 @@ mod tests {
         let tx = default_test_transaction(*sender, None)
             .with_value(uint!(11_000_U256 * Uint::from(ETH_TO_WEI)));
 
-        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
         assert!(matches!(
-            state.validate_commitment_request(&request).await,
+            state.validate_commitment_request(&mut request).await,
             Err(ValidationError::InsufficientBalance)
         ));
 
@@ -647,7 +656,9 @@ mod tests {
         let tx_bytes = request
             .as_inclusion_request()
             .unwrap()
-            .tx
+            .txs
+            .first()
+            .unwrap()
             .envelope_encoded();
         let _ = client.inner().send_raw_transaction(tx_bytes).await?;
 
@@ -658,9 +669,12 @@ mod tests {
 
         // create a new transaction and request a preconfirmation for it
         let tx = default_test_transaction(*sender, Some(1));
-        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
-        assert!(state.validate_commitment_request(&request).await.is_ok());
+        assert!(state
+            .validate_commitment_request(&mut request)
+            .await
+            .is_ok());
 
         let message = ConstraintsMessage::build(0, request.as_inclusion_request().unwrap().clone());
         let signature = signer.sign(&message.digest())?.to_string();
@@ -669,12 +683,12 @@ mod tests {
 
         // create a new transaction and request a preconfirmation for it
         let tx = default_test_transaction(*sender, Some(2));
-        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
         // this should fail because the balance is insufficient as we spent
         // all of it on the previous preconfirmation
         assert!(matches!(
-            state.validate_commitment_request(&request).await,
+            state.validate_commitment_request(&mut request).await,
             Err(ValidationError::InsufficientBalance)
         ));
 
@@ -704,10 +718,10 @@ mod tests {
             .with_max_fee_per_gas(basefee - 1)
             .with_max_priority_fee_per_gas(basefee / 2);
 
-        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
         assert!(matches!(
-            state.validate_commitment_request(&request).await,
+            state.validate_commitment_request(&mut request).await,
             Err(ValidationError::BaseFeeTooLow(_))
         ));
 
@@ -736,10 +750,10 @@ mod tests {
 
         let tx = default_test_transaction(*sender, None).with_gas_limit(6_000_000);
 
-        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
         assert!(matches!(
-            state.validate_commitment_request(&request).await,
+            state.validate_commitment_request(&mut request).await,
             Err(ValidationError::MaxCommittedGasReachedForSlot(_, 5_000_000))
         ));
 
@@ -771,10 +785,13 @@ mod tests {
         let signed = tx.clone().build(&signer).await?;
 
         let target_slot = 10;
-        let request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
+        let mut request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
         let inclusion_request = request.as_inclusion_request().unwrap().clone();
 
-        assert!(state.validate_commitment_request(&request).await.is_ok());
+        assert!(state
+            .validate_commitment_request(&mut request)
+            .await
+            .is_ok());
 
         let bls_signer = Signer::random();
         let message = ConstraintsMessage::build(0, inclusion_request);
@@ -832,10 +849,13 @@ mod tests {
         let tx = default_test_transaction(*sender, None);
 
         let target_slot = 10;
-        let request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
+        let mut request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
         let inclusion_request = request.as_inclusion_request().unwrap().clone();
 
-        assert!(state.validate_commitment_request(&request).await.is_ok());
+        assert!(state
+            .validate_commitment_request(&mut request)
+            .await
+            .is_ok());
 
         let bls_signer = Signer::random();
         let message = ConstraintsMessage::build(0, inclusion_request);
@@ -884,10 +904,13 @@ mod tests {
         let tx = default_test_transaction(*sender, None).with_gas_limit(4_999_999);
 
         let target_slot = 10;
-        let request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
+        let mut request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
         let inclusion_request = request.as_inclusion_request().unwrap().clone();
 
-        assert!(state.validate_commitment_request(&request).await.is_ok());
+        assert!(state
+            .validate_commitment_request(&mut request)
+            .await
+            .is_ok());
 
         let bls_signer = Signer::random();
         let message = ConstraintsMessage::build(0, inclusion_request);
@@ -907,10 +930,10 @@ mod tests {
         // This tx will exceed the committed gas limit
         let tx = default_test_transaction(*sender, Some(1));
 
-        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
 
         assert!(matches!(
-            state.validate_commitment_request(&request).await,
+            state.validate_commitment_request(&mut request).await,
             Err(ValidationError::MaxCommittedGasReachedForSlot(_, 5_000_000))
         ));
 

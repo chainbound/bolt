@@ -1,3 +1,3 @@
 mod jsonrpc;
-mod server;
-mod spec;
+pub mod server;
+pub mod spec;
