@@ -127,8 +127,6 @@ impl<C: StateFetcher + Unpin, S: SignerBLS + Unpin> SidecarDriver<C, S> {
             "Validation against execution state passed"
         );
 
-        // TODO: review all this `clone` usage
-
         // parse the request into constraints and sign them with the sidecar signer
         let message = ConstraintsMessage::build(validator_index, request);
         let signature = match self.signer.sign(&message.digest()) {
@@ -174,14 +172,12 @@ impl<C: StateFetcher + Unpin, S: SignerBLS + Unpin> SidecarDriver<C, S> {
         };
 
         // TODO: fix retry logic, and move this to separate task in the mevboost client itself
+        let constraints = template.signed_constraints_list.clone();
         let mevboost = self.mevboost_client.clone();
         tokio::spawn(async move {
             let max_retries = 5;
             let mut i = 0;
-            while let Err(e) = mevboost
-                .submit_constraints(&template.signed_constraints_list)
-                .await
-            {
+            while let Err(e) = mevboost.submit_constraints(&constraints).await {
                 tracing::error!(err = ?e, "Error submitting constraints to mev-boost, retrying...");
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 i += 1;
