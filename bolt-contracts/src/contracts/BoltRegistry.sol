@@ -13,6 +13,9 @@ contract BoltRegistry is IBoltRegistry {
     // Mapping to hold the registrants
     mapping(address => Registrant) public registrants;
 
+    // Array to hold operator addresses
+    address[] public operators;
+
     // Mapping that holds the relationship between validator index and operator address
     mapping(uint64 => address) public delegations;
 
@@ -46,6 +49,8 @@ contract BoltRegistry is IBoltRegistry {
             Status.ACTIVE,
             metadata
         );
+
+        operators.push(msg.sender);
 
         // Set the delegations
         for (uint256 i = 0; i < validatorIndexes.length; i++) {
@@ -92,6 +97,15 @@ contract BoltRegistry is IBoltRegistry {
             revert CooldownNotElapsed();
         }
 
+        // Remove operator from the operators array
+        for (uint256 i = 0; i < operators.length; i++) {
+            if (operators[i] == msg.sender) {
+                operators[i] = operators[operators.length - 1];
+                operators.pop();
+                break;
+            }
+        }
+        
         delete registrants[msg.sender];
 
         for (uint256 i = 0; i < registrant.validatorIndexes.length; i++) {
@@ -106,7 +120,7 @@ contract BoltRegistry is IBoltRegistry {
     /// @notice Check if an address is a based proposer opted into the protocol
     /// @param _operator The address to check
     /// @return True if the address is an active based proposer, false otherwise
-    function isActiveOperator(address _operator) external view returns (bool) {
+    function isActiveOperator(address _operator) public view returns (bool) {
         return registrants[_operator].status == Status.ACTIVE;
     }
 
@@ -128,5 +142,25 @@ contract BoltRegistry is IBoltRegistry {
         }
 
         revert NotFound();
+    }
+
+    function getAllRegistrants() external view returns (Registrant[] memory) {
+        uint256 activeCount = 0;
+        for (uint256 i = 0; i < operators.length; i++) {
+            if (isActiveOperator(operators[i])) {
+                activeCount++;
+            }
+        }
+
+        Registrant[] memory _registrants = new Registrant[](activeCount);
+        uint256 index = 0;
+        for (uint256 i = 0; i < operators.length; i++) {
+            if (isActiveOperator(operators[i])) {
+                _registrants[index] = registrants[operators[i]];
+                index++;
+            }
+        }
+
+        return _registrants;
     }
 }
