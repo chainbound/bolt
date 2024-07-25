@@ -1650,6 +1650,12 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 		}
 	}
 
+	// Blob Express Lane: add cached blobs bundle only if non-empty
+	if len(api.blobSidecarCache.Blobs) > 0 {
+		getPayloadResp.Deneb.BlobsBundle = api.blobSidecarCache
+		api.log.Infof("[BOLT]: Inserted cached blobs bundle with %d in getPayload response", len(api.blobSidecarCache.Blobs))
+	}
+
 	// Now we know this relay also has the payload
 	log = log.WithField("timestampAfterLoadResponse", time.Now().UTC().UnixMilli())
 
@@ -2727,7 +2733,7 @@ func (api *RelayAPI) handleSubmitNewBlockWithProofs(w http.ResponseWriter, req *
 		}
 	}
 
-	log.Infof("Received block bid with proofs from builder: %s", payload)
+	log.Infof("Received block bid with proofs from builder: %s.\nContains blobs bundle: %v", payload, payload.Inner.Deneb != nil)
 
 	// BOLT: Send an event to the web demo
 	slot, _ := payload.Inner.Slot()
