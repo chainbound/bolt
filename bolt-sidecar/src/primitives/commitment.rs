@@ -55,8 +55,7 @@ pub struct InclusionRequest {
     /// The consensus slot number at which the transaction should be included.
     pub slot: u64,
     /// The transaction to be included.
-    #[serde(deserialize_with = "deserialize_tx", serialize_with = "serialize_tx")]
-    pub tx: PooledTransactionsElement,
+    pub txs: Vec<FullTransaction>,
     /// The signature over the "slot" and "tx" fields by the user.
     /// A valid signature is the only proof that the user actually requested
     /// this specific commitment to be included at the given slot.
@@ -69,16 +68,32 @@ pub struct InclusionRequest {
 }
 
 impl InclusionRequest {
-    /// Validates the transaction fee against a minimum basefee.
+    /// Validates the transaction fees against a minimum basefee.
     /// Returns true if the fee is greater than or equal to the min, false otherwise.
     pub fn validate_basefee(&self, min: u128) -> bool {
-        self.tx.max_fee_per_gas() >= min
+        for tx in &self.txs {
+            if tx.max_fee_per_gas() < min {
+                return false;
+            }
+        }
+
+        true
     }
 
     /// Validates the transaction chain id against the provided chain id.
-    /// Returns true if the chain id matches, false otherwise.
+    /// Returns true if the chain id matches, false otherwise. Will always return true
+    /// for pre-EIP155 transactions.
     pub fn validate_chain_id(&self, chain_id: u64) -> bool {
-        matches!(self.tx.chain_id(), Some(tx_chain_id) if tx_chain_id == chain_id)
+        for tx in &self.txs {
+            // Check if pre-EIP155 transaction
+            if let Some(id) = tx.chain_id() {
+                if id != chain_id {
+                    return false;
+                }
+            }
+        }
+
+        true
     }
 
     /// Sets the signature.
@@ -91,25 +106,34 @@ impl InclusionRequest {
     }
 }
 
-fn deserialize_tx<'de, D>(deserializer: D) -> Result<PooledTransactionsElement, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-    let data = hex::decode(s.trim_start_matches("0x")).map_err(de::Error::custom)?;
-    PooledTransactionsElement::decode_enveloped(&mut data.as_slice()).map_err(de::Error::custom)
+/// A wrapper type for a full, complete transaction (i.e. with blob sidecars attached).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FullTransaction(PooledTransactionsElement);
+
+impl std::ops::Deref for FullTransaction {
+    type Target = PooledTransactionsElement;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
-pub(crate) fn serialize_tx<S>(
-    tx: &PooledTransactionsElement,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    let mut data = Vec::new();
-    tx.encode_enveloped(&mut data);
-    serializer.serialize_str(&format!("0x{}", hex::encode(&data)))
+impl Serialize for FullTransaction {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut data = Vec::new();
+        self.0.encode_enveloped(&mut data);
+        serializer.serialize_str(&format!("0x{}", hex::encode(&data)))
+    }
+}
+
+impl<'de> Deserialize<'de> for FullTransaction {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        let data = hex::decode(s.trim_start_matches("0x")).map_err(de::Error::custom)?;
+        PooledTransactionsElement::decode_enveloped(&mut data.as_slice())
+            .map_err(de::Error::custom)
+            .map(FullTransaction)
+    }
 }
 
 fn deserialize_sig<'de, D, T>(deserializer: D) -> Result<T, D::Error>
@@ -132,10 +156,21 @@ fn serialize_sig<S: serde::Serializer>(sig: &Signature, serializer: S) -> Result
 
 impl InclusionRequest {
     /// Returns the digest of the request.
+    /// digest = keccak256(bytes(tx_hash1) | bytes(tx_hash2) | ... | le_bytes(target_slot))
     pub fn digest(&self) -> B256 {
         let mut data = Vec::new();
+        // First field is the concatenation of all the transaction hashes
+        data.extend_from_slice(
+            &self
+                .txs
+                .iter()
+                .map(|tx| tx.hash().as_slice())
+                .collect::<Vec<_>>()
+                .concat(),
+        );
+
+        // Second field is the little endian encoding of the target slot
         data.extend_from_slice(&self.slot.to_le_bytes());
-        data.extend_from_slice(self.tx.hash().as_slice());
 
         keccak256(&data)
     }
