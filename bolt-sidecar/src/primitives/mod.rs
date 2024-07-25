@@ -3,7 +3,7 @@
 
 use std::sync::{atomic::AtomicU64, Arc};
 
-use alloy::primitives::U256;
+use alloy::primitives::{Address, U256};
 use ethereum_consensus::{
     crypto::KzgCommitment,
     deneb::{
@@ -18,6 +18,7 @@ use ethereum_consensus::{
     Fork,
 };
 use reth_primitives::{BlobTransactionSidecar, Bytes, PooledTransactionsElement, TxKind, TxType};
+use serde::de;
 use tokio::sync::{mpsc, oneshot};
 
 pub use ethereum_consensus::crypto::{PublicKey as BlsPublicKey, Signature as BlsSignature};
@@ -327,5 +328,38 @@ impl TransactionExt for PooledTransactionsElement {
             PooledTransactionsElement::BlobTransaction(blob_tx) => blob_tx.transaction.size(),
             _ => unimplemented!(),
         }
+    }
+}
+
+/// A wrapper type for a full, complete transaction (i.e. with blob sidecars attached).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FullTransaction {
+    tx: PooledTransactionsElement,
+    sender: Option<Address>,
+}
+
+impl std::ops::Deref for FullTransaction {
+    type Target = PooledTransactionsElement;
+
+    fn deref(&self) -> &Self::Target {
+        &self.tx
+    }
+}
+
+impl serde::Serialize for FullTransaction {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut data = Vec::new();
+        self.tx.encode_enveloped(&mut data);
+        serializer.serialize_str(&format!("0x{}", hex::encode(&data)))
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for FullTransaction {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        let data = hex::decode(s.trim_start_matches("0x")).map_err(de::Error::custom)?;
+        PooledTransactionsElement::decode_enveloped(&mut data.as_slice())
+            .map_err(de::Error::custom)
+            .map(|tx| FullTransaction { tx, sender: None })
     }
 }

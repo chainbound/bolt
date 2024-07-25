@@ -1,11 +1,10 @@
-use alloy::primitives::{keccak256, Address};
-use reth_primitives::PooledTransactionsElement;
+use alloy::primitives::keccak256;
 use secp256k1::Message;
 use serde::Serialize;
 
 use crate::crypto::{ecdsa::SignableECDSA, SignableBLS};
 
-use super::{commitment::serialize_tx, InclusionRequest};
+use super::{FullTransaction, InclusionRequest};
 
 /// What the proposer sidecar will need to sign to confirm the inclusion request.
 impl SignableECDSA for ConstraintsMessage {
@@ -56,11 +55,11 @@ pub struct ConstraintsMessage {
 impl ConstraintsMessage {
     /// Builds a constraints message from an inclusion request and metadata
     pub fn build(validator_index: u64, request: InclusionRequest) -> Self {
-        let constraints = vec![Constraint::from_transaction(
-            request.tx,
-            None,
-            request.sender,
-        )];
+        let mut constraints = Vec::with_capacity(request.txs.len());
+        for tx in request.txs {
+            constraints.push(Constraint::from_transaction(tx, None));
+        }
+
         Self {
             validator_index,
             slot: request.slot,
@@ -93,25 +92,14 @@ pub struct Constraint {
     /// The optional index at which the transaction needs to be included in the block
     pub index: Option<u64>,
     /// The transaction to be included in the block, in hex format
-    #[serde(rename(serialize = "tx"), serialize_with = "serialize_tx")]
-    pub(crate) transaction: PooledTransactionsElement,
-    /// The ec-recovered address of the transaction sender for internal use
-    #[serde(skip)]
-    pub(crate) sender: Address,
+    #[serde(rename(serialize = "tx"))]
+    pub(crate) transaction: FullTransaction,
 }
 
 impl Constraint {
     /// Builds a constraint from a transaction, with an optional index
-    pub fn from_transaction(
-        transaction: PooledTransactionsElement,
-        index: Option<u64>,
-        sender: Address,
-    ) -> Self {
-        Self {
-            transaction,
-            index,
-            sender,
-        }
+    pub fn from_transaction(transaction: FullTransaction, index: Option<u64>) -> Self {
+        Self { transaction, index }
     }
 
     /// Converts the constraint to a byte representation useful for signing

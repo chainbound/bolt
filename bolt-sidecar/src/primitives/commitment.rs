@@ -1,10 +1,9 @@
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::str::FromStr;
 
-use alloy::primitives::{keccak256, Address, Signature, B256};
-use reth_primitives::PooledTransactionsElement;
+use alloy::primitives::{keccak256, Signature, B256};
 
-use super::TransactionExt;
+use super::{FullTransaction, TransactionExt};
 
 /// Commitment requests sent by users or RPC proxies to the sidecar.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -61,10 +60,6 @@ pub struct InclusionRequest {
     /// this specific commitment to be included at the given slot.
     #[serde(skip)]
     pub signature: Option<Signature>,
-    /// The ec-recovered address of the signature, for internal use.
-    /// If not explicitly set, this defaults to `Address::ZERO`.
-    #[serde(skip)]
-    pub sender: Address,
 }
 
 impl InclusionRequest {
@@ -101,40 +96,19 @@ impl InclusionRequest {
         self.signature = Some(signature);
     }
 
-    pub fn set_address(&mut self, address: Address) {
-        self.sender = address;
+    pub fn recover_signers(&mut self) -> Result<(), SignatureError> {
+        for tx in &mut self.txs {
+            let signer = tx.recover_signer().ok_or(SignatureError)?;
+            tx.sender = Some(signer);
+        }
+
+        Ok(())
     }
 }
 
-/// A wrapper type for a full, complete transaction (i.e. with blob sidecars attached).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FullTransaction(PooledTransactionsElement);
-
-impl std::ops::Deref for FullTransaction {
-    type Target = PooledTransactionsElement;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Serialize for FullTransaction {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut data = Vec::new();
-        self.0.encode_enveloped(&mut data);
-        serializer.serialize_str(&format!("0x{}", hex::encode(&data)))
-    }
-}
-
-impl<'de> Deserialize<'de> for FullTransaction {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let s = String::deserialize(deserializer)?;
-        let data = hex::decode(s.trim_start_matches("0x")).map_err(de::Error::custom)?;
-        PooledTransactionsElement::decode_enveloped(&mut data.as_slice())
-            .map_err(de::Error::custom)
-            .map(FullTransaction)
-    }
-}
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid signature")]
+struct SignatureError;
 
 fn deserialize_sig<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
