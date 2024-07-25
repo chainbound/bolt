@@ -156,21 +156,18 @@ pub(crate) async fn create_signed_commitment_request(
     let raw_encoded = tx_signed.encoded_2718();
     let tx_pooled = PooledTransactionsElement::decode_enveloped(&mut raw_encoded.as_slice())?;
 
-    let tx_hash = tx_pooled.hash();
-
-    let message_digest = {
-        let mut data = Vec::new();
-        data.extend_from_slice(&slot.to_le_bytes());
-        data.extend_from_slice(tx_hash.as_slice());
-        B256::from(keccak256(data))
-    };
-
-    let signature = signer.sign_hash(&message_digest).await?;
-
-    Ok(CommitmentRequest::Inclusion(InclusionRequest {
+    let mut request = InclusionRequest {
         txs: vec![tx_pooled.into()],
         slot,
-        signature: Some(signature),
-        signer: Some(signer.address()),
-    }))
+        signature: None,
+        signer: None,
+    };
+
+    request.recover_signers()?;
+
+    let signature = signer.sign_hash(&request.digest()).await?;
+    request.set_signature(signature);
+    request.set_signer(signer.address());
+
+    Ok(CommitmentRequest::Inclusion(request))
 }

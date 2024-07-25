@@ -26,6 +26,7 @@ pub enum SignedCommitment {
 /// A signed inclusion commitment with a generic signature.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InclusionCommitment {
+    #[serde(flatten)]
     request: InclusionRequest,
     #[serde(deserialize_with = "deserialize_sig", serialize_with = "serialize_sig")]
     signature: Signature,

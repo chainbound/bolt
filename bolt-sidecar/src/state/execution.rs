@@ -1,6 +1,6 @@
 use alloy::{
     eips::eip4844::MAX_BLOBS_PER_BLOCK,
-    primitives::{Address, SignatureError, U256},
+    primitives::{Address, U256},
     transports::TransportError,
 };
 use reth_primitives::{
@@ -13,7 +13,7 @@ use crate::{
     builder::BlockTemplate,
     common::{calculate_max_basefee, validate_transaction},
     config::Limits,
-    primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot, TransactionExt},
+    primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot},
 };
 
 use super::fetcher::StateFetcher;
@@ -537,6 +537,7 @@ mod tests {
                 signed_constraints_list: vec![],
             },
         );
+        state.update_head(None, 11).await?;
 
         assert!(matches!(
             state.validate_commitment_request(&mut request).await,
