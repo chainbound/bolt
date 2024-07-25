@@ -87,6 +87,7 @@ async fn main() -> Result<()> {
 
     let mut tx = if opts.blob { generate_random_blob_tx() } else { generate_random_tx() };
     tx.set_from(sender);
+    tx.set_chain_id(provider.get_chain_id().await?);
     tx.set_nonce(provider.get_transaction_count(sender).await? + opts.nonce_offset);
 
     let tx_signed = tx.build(&transaction_signer).await?;
