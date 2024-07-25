@@ -199,7 +199,7 @@ type RelayAPI struct {
 	constraints          *shardmap.FIFOMap[uint64, *[]*SignedConstraints]
 	constraintsConsumers []chan *SignedConstraints
 	// The partial blob sidecar built from the blob constraints, for the Blob Express Lane
-	blobSidecarCache *builderApiDeneb.BlobsBundle
+	blobsBundleCache *builderApiDeneb.BlobsBundle
 
 	headSlot     uberatomic.Uint64
 	genesisInfo  *beaconclient.GetGenesisResponse
@@ -301,7 +301,7 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		db:                   opts.DB,
 		constraints:          shardmap.NewFIFOMap[uint64, *[]*SignedConstraints](64, 8, shardmap.HashUint64), // 2 epochs cache
 		constraintsConsumers: make([]chan *SignedConstraints, 0, 10),
-		blobSidecarCache: &builderApiDeneb.BlobsBundle{
+		blobsBundleCache: &builderApiDeneb.BlobsBundle{
 			Commitments: make([]deneb.KZGCommitment, 6),
 			Proofs:      make([]deneb.KZGProof, 6),
 			Blobs:       make([]deneb.Blob, 6),
@@ -1651,9 +1651,9 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	}
 
 	// Blob Express Lane: add cached blobs bundle only if non-empty
-	if len(api.blobSidecarCache.Blobs) > 0 {
-		getPayloadResp.Deneb.BlobsBundle = api.blobSidecarCache
-		api.log.Infof("[BOLT]: Inserted cached blobs bundle with %d in getPayload response", len(api.blobSidecarCache.Blobs))
+	if len(api.blobsBundleCache.Blobs) > 0 {
+		getPayloadResp.Deneb.BlobsBundle = api.blobsBundleCache
+		api.log.Infof("[BOLT]: Inserted cached blobs bundle with %d in getPayload response", len(api.blobsBundleCache.Blobs))
 	}
 
 	// Now we know this relay also has the payload
@@ -1881,17 +1881,17 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 				for _, blob := range sidecar.Blobs {
 					consensusBlobs = append(consensusBlobs, deneb.Blob(blob))
 				}
-				api.blobSidecarCache.Blobs = append(api.blobSidecarCache.Blobs, consensusBlobs...)
+				api.blobsBundleCache.Blobs = append(api.blobsBundleCache.Blobs, consensusBlobs...)
 				consensusKZGCommitments := make([]deneb.KZGCommitment, 0, len(sidecar.Commitments))
 				for _, commitment := range sidecar.Commitments {
 					consensusKZGCommitments = append(consensusKZGCommitments, deneb.KZGCommitment(commitment))
 				}
-				api.blobSidecarCache.Commitments = append(api.blobSidecarCache.Commitments, consensusKZGCommitments...)
+				api.blobsBundleCache.Commitments = append(api.blobsBundleCache.Commitments, consensusKZGCommitments...)
 				consensusKZGProofs := make([]deneb.KZGProof, 0, len(sidecar.Proofs))
 				for _, proof := range sidecar.Proofs {
 					consensusKZGProofs = append(consensusKZGProofs, deneb.KZGProof(proof))
 				}
-				api.blobSidecarCache.Proofs = append(api.blobSidecarCache.Proofs, consensusKZGProofs...)
+				api.blobsBundleCache.Proofs = append(api.blobsBundleCache.Proofs, consensusKZGProofs...)
 			}
 		}
 
