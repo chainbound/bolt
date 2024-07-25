@@ -56,6 +56,11 @@ sidecar-logs:
     @id=$(docker ps -n 100 | grep sidecar | awk -F' ' '{print $1}') && \
     docker logs -f $id
 
+# show the logs for the bolt devnet beacon node
+beacon-logs:
+    @id=$(docker ps -n 100 | grep 'cl-1-lighthouse-geth' | awk -F' ' '{print $1}') && \
+    docker logs -f $id
+
 # show the logs for the bolt devnet for beacon node
 beacon-logs:
     @id=$(docker ps -n 100 | grep 'cl-1-lighthouse-geth' | awk -F' ' '{print $1}') && \
@@ -150,3 +155,7 @@ release tag:
     cd mev-boost-relay && docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-relay:{{tag}} --push .
     cd builder && docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-builder:{{tag}} --push .
     cd mev-boost && docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-mev-boost:{{tag}} --push .
+
+# setup the remote docker builder context from our private Tailnet server
+setup-remote-builder:
+	chmod +x ./scripts/setup_remote_builder.sh && ./scripts/setup_remote_builder.sh

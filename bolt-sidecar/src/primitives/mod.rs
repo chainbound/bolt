@@ -170,27 +170,17 @@ pub enum GetPayloadResponse {
     Capella(ExecutionPayload),
     #[serde(rename = "deneb")]
     Deneb(PayloadAndBlobs),
+    #[serde(rename = "electra")]
+    Electra(PayloadAndBlobs),
 }
 
 impl GetPayloadResponse {
-    pub fn try_from_execution_payload(exec_payload: &PayloadAndBlobs) -> Option<Self> {
-        match exec_payload.execution_payload.version() {
-            Fork::Capella => Some(GetPayloadResponse::Capella(
-                exec_payload.execution_payload.clone(),
-            )),
-            Fork::Bellatrix => Some(GetPayloadResponse::Bellatrix(
-                exec_payload.execution_payload.clone(),
-            )),
-            Fork::Deneb => Some(GetPayloadResponse::Deneb(exec_payload.clone())),
-            _ => None,
-        }
-    }
-
     pub fn block_hash(&self) -> &Hash32 {
         match self {
             GetPayloadResponse::Capella(payload) => payload.block_hash(),
             GetPayloadResponse::Bellatrix(payload) => payload.block_hash(),
             GetPayloadResponse::Deneb(payload) => payload.execution_payload.block_hash(),
+            GetPayloadResponse::Electra(payload) => payload.execution_payload.block_hash(),
         }
     }
 
@@ -199,6 +189,20 @@ impl GetPayloadResponse {
             GetPayloadResponse::Capella(payload) => payload,
             GetPayloadResponse::Bellatrix(payload) => payload,
             GetPayloadResponse::Deneb(payload) => &payload.execution_payload,
+            GetPayloadResponse::Electra(payload) => &payload.execution_payload,
+        }
+    }
+}
+
+impl From<PayloadAndBlobs> for GetPayloadResponse {
+    fn from(payload_and_blobs: PayloadAndBlobs) -> Self {
+        match payload_and_blobs.execution_payload.version() {
+            Fork::Phase0 => GetPayloadResponse::Capella(payload_and_blobs.execution_payload),
+            Fork::Altair => GetPayloadResponse::Capella(payload_and_blobs.execution_payload),
+            Fork::Capella => GetPayloadResponse::Capella(payload_and_blobs.execution_payload),
+            Fork::Bellatrix => GetPayloadResponse::Bellatrix(payload_and_blobs.execution_payload),
+            Fork::Deneb => GetPayloadResponse::Deneb(payload_and_blobs),
+            Fork::Electra => GetPayloadResponse::Electra(payload_and_blobs),
         }
     }
 }
