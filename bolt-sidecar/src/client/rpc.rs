@@ -255,6 +255,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn test_smart_contract_code() -> eyre::Result<()> {
         dotenv().ok();
         let rpc_url = Url::parse(std::env::var("RPC_URL").unwrap().as_str())?;

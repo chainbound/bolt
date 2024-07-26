@@ -1,7 +1,7 @@
 use alloy::{
     eips::eip2718::Encodable2718,
     network::{EthereumWallet, TransactionBuilder},
-    primitives::{keccak256, Address, B256, U256},
+    primitives::{Address, U256},
     rpc::types::TransactionRequest,
     signers::{
         k256::{ecdsa::SigningKey as K256SigningKey, SecretKey as K256SecretKey},
@@ -156,21 +156,18 @@ pub(crate) async fn create_signed_commitment_request(
     let raw_encoded = tx_signed.encoded_2718();
     let tx_pooled = PooledTransactionsElement::decode_enveloped(&mut raw_encoded.as_slice())?;
 
-    let tx_hash = tx_pooled.hash();
-
-    let message_digest = {
-        let mut data = Vec::new();
-        data.extend_from_slice(&slot.to_le_bytes());
-        data.extend_from_slice(tx_hash.as_slice());
-        B256::from(keccak256(data))
+    let mut request = InclusionRequest {
+        txs: vec![tx_pooled.into()],
+        slot,
+        signature: None,
+        signer: None,
     };
 
-    let signature = signer.sign_hash(&message_digest).await?;
+    request.recover_signers()?;
 
-    Ok(CommitmentRequest::Inclusion(InclusionRequest {
-        tx: tx_pooled,
-        slot,
-        signature,
-        sender: signer.address(),
-    }))
+    let signature = signer.sign_hash(&request.digest()).await?;
+    request.set_signature(signature);
+    request.set_signer(signer.address());
+
+    Ok(CommitmentRequest::Inclusion(request))
 }

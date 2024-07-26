@@ -11,11 +11,13 @@ use ethereum_consensus::{
     crypto::{KzgCommitment, KzgProof},
     deneb::mainnet::{Blob, BlobsBundle},
 };
-use reth_primitives::{PooledTransactionsElement, TransactionSigned};
+use reth_primitives::TransactionSigned;
 
 use crate::{
     common::max_transaction_cost,
-    primitives::{constraint::Constraint, AccountState, SignedConstraints, TransactionExt},
+    primitives::{
+        constraint::Constraint, AccountState, FullTransaction, SignedConstraints, TransactionExt,
+    },
 };
 
 /// A block template that serves as a fallback block, but is also used
@@ -43,7 +45,7 @@ impl BlockTemplate {
 
     /// Returns the cloned list of transactions from the constraints.
     #[inline]
-    pub fn transactions(&self) -> Vec<PooledTransactionsElement> {
+    pub fn transactions(&self) -> Vec<FullTransaction> {
         self.signed_constraints_list
             .iter()
             .flat_map(|sc| sc.message.constraints.iter().map(|c| c.transaction.clone()))
@@ -60,7 +62,7 @@ impl BlockTemplate {
                 sc.message
                     .constraints
                     .iter()
-                    .map(|c| c.transaction.clone().into_transaction())
+                    .map(|c| c.transaction.clone().into_inner().into_transaction())
             })
             .collect()
     }
@@ -141,7 +143,7 @@ impl BlockTemplate {
             let max_cost = max_transaction_cost(&constraint.transaction);
             self.state_diff
                 .diffs
-                .entry(constraint.sender)
+                .entry(constraint.sender())
                 .and_modify(|(nonce, balance)| {
                     *nonce += 1;
                     *balance += max_cost;
@@ -159,7 +161,7 @@ impl BlockTemplate {
         for constraint in constraints.message.constraints.iter() {
             self.state_diff
                 .diffs
-                .entry(constraint.sender)
+                .entry(constraint.transaction.sender().expect("Recovered sender"))
                 .and_modify(|(nonce, balance)| {
                     *nonce = nonce.saturating_sub(1);
                     *balance -= max_transaction_cost(&constraint.transaction);
@@ -178,8 +180,8 @@ impl BlockTemplate {
             .iter()
             .enumerate()
             .map(|(idx, c)| (idx, &c.message.constraints))
-            .filter(|(_idx, c)| c.iter().any(|c| c.sender == address))
-            .map(|(idx, c)| (idx, c.iter().filter(|c| c.sender == address).collect()))
+            .filter(|(_idx, c)| c.iter().any(|c| c.sender() == address))
+            .map(|(idx, c)| (idx, c.iter().filter(|c| c.sender() == address).collect()))
             .collect();
 
         // For every preconfirmation, gather the max total balance cost,

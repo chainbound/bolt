@@ -3,9 +3,9 @@
 
 use std::sync::{atomic::AtomicU64, Arc};
 
-use alloy::primitives::U256;
+use alloy::primitives::{Address, U256};
 use ethereum_consensus::{
-    crypto::{KzgCommitment, PublicKey as BlsPublicKey, Signature as BlsSignature},
+    crypto::KzgCommitment,
     deneb::{
         self,
         mainnet::{BlobsBundle, MAX_BLOB_COMMITMENTS_PER_BLOCK},
@@ -18,7 +18,10 @@ use ethereum_consensus::{
     Fork,
 };
 use reth_primitives::{BlobTransactionSidecar, Bytes, PooledTransactionsElement, TxKind, TxType};
+use serde::de;
 use tokio::sync::{mpsc, oneshot};
+
+pub use ethereum_consensus::crypto::{PublicKey as BlsPublicKey, Signature as BlsSignature};
 
 /// Commitment types, received by users wishing to receive preconfirmations.
 pub mod commitment;
@@ -331,3 +334,63 @@ impl TransactionExt for PooledTransactionsElement {
         }
     }
 }
+
+/// A wrapper type for a full, complete transaction (i.e. with blob sidecars attached).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FullTransaction {
+    tx: PooledTransactionsElement,
+    sender: Option<Address>,
+}
+
+impl From<PooledTransactionsElement> for FullTransaction {
+    fn from(tx: PooledTransactionsElement) -> Self {
+        Self { tx, sender: None }
+    }
+}
+
+impl std::ops::Deref for FullTransaction {
+    type Target = PooledTransactionsElement;
+
+    fn deref(&self) -> &Self::Target {
+        &self.tx
+    }
+}
+
+impl std::ops::DerefMut for FullTransaction {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.tx
+    }
+}
+
+impl FullTransaction {
+    pub fn into_inner(self) -> PooledTransactionsElement {
+        self.tx
+    }
+
+    /// Returns the sender of the transaction, if recovered.
+    pub fn sender(&self) -> Option<Address> {
+        self.sender
+    }
+}
+
+impl serde::Serialize for FullTransaction {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut data = Vec::new();
+        self.tx.encode_enveloped(&mut data);
+        serializer.serialize_str(&format!("0x{}", hex::encode(&data)))
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for FullTransaction {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        let data = hex::decode(s.trim_start_matches("0x")).map_err(de::Error::custom)?;
+        PooledTransactionsElement::decode_enveloped(&mut data.as_slice())
+            .map_err(de::Error::custom)
+            .map(|tx| FullTransaction { tx, sender: None })
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid signature")]
+pub struct SignatureError;

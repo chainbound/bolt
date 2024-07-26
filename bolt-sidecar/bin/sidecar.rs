@@ -1,16 +1,19 @@
 use std::time::Duration;
 
-use alloy::rpc::types::beacon::events::HeadEvent;
+use alloy::{rpc::types::beacon::events::HeadEvent, signers};
 use tokio::sync::mpsc;
 
 use bolt_sidecar::{
+    commitments::{
+        server::{CommitmentsApiServer, Event},
+        spec,
+    },
     crypto::{bls::Signer, SignableBLS, SignerBLS},
-    json_rpc::api::{ApiError, ApiEvent},
     primitives::{
         CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
         SignedConstraints,
     },
-    start_builder_proxy_server, start_rpc_server,
+    start_builder_proxy_server,
     state::{ConsensusState, ExecutionState, HeadTracker, StateClient},
     BeaconClient, BuilderProxyConfig, Config, ConstraintsApi, LocalBuilder, MevBoostClient,
 };
@@ -27,6 +30,9 @@ async fn main() -> eyre::Result<()> {
     // probably it's cleanest to have the Config parser initialize a generic Signer
     let signer = Signer::new(config.private_key.clone().unwrap());
 
+    // TODO: support external signers
+    let commitment_signer = signers::local::PrivateKeySigner::random();
+
     let state_client = StateClient::new(config.execution_api_url.clone());
     let mut execution_state = ExecutionState::new(state_client, config.limits).await?;
 
@@ -34,7 +40,11 @@ async fn main() -> eyre::Result<()> {
     let beacon_client = BeaconClient::new(config.beacon_api_url.clone());
 
     let (api_events, mut api_events_rx) = mpsc::channel(1024);
-    let shutdown_tx = start_rpc_server(&config, api_events).await?;
+
+    let mut api_server = CommitmentsApiServer::new(format!("0.0.0.0:{}", config.rpc_port));
+
+    api_server.run(api_events).await?;
+
     let mut consensus_state = ConsensusState::new(
         beacon_client.clone(),
         config.validator_indexes.clone(),
@@ -65,44 +75,52 @@ async fn main() -> eyre::Result<()> {
     // TODO: parallelize this
     loop {
         tokio::select! {
-            Some(ApiEvent { request, response_tx }) = api_events_rx.recv() => {
+            Some(Event { mut request, response }) = api_events_rx.recv() => {
                 let start = std::time::Instant::now();
 
                 let validator_index = match consensus_state.validate_request(&request) {
                     Ok(index) => index,
                     Err(e) => {
                         tracing::error!(err = ?e, "Failed to validate request");
-                        let _ = response_tx.send(Err(ApiError::Custom(e.to_string())));
+                        let _ = response.send(Err(spec::Error::ValidationFailed(e.to_string())));
                         continue;
                     }
                 };
 
-                if let Err(e) = execution_state.validate_commitment_request(&request).await {
+                if let Err(e) = execution_state.validate_commitment_request(&mut request).await {
                     tracing::error!(err = ?e, "Failed to commit request");
-                    let _ = response_tx.send(Err(ApiError::Custom(e.to_string())));
+                    let _ = response.send(Err(spec::Error::ValidationFailed(e.to_string())));
                     continue;
                 };
 
                 // TODO: match when we have more request types
-                let CommitmentRequest::Inclusion(request) = request;
+                let CommitmentRequest::Inclusion(ref req) = request;
                 tracing::info!(
                     elapsed = ?start.elapsed(),
-                    tx_hash = %request.tx.hash(),
+                    digest = ?req.digest(),
                     "Validation against execution state passed"
                 );
 
                 // TODO: review all this `clone` usage
 
                 // parse the request into constraints and sign them with the sidecar signer
-                let slot = request.slot;
-                let message = ConstraintsMessage::build(validator_index, request);
+                let slot = req.slot;
+                let message = ConstraintsMessage::build(validator_index, req.clone());
                 let signature = signer.sign(&message.digest())?.to_string();
                 let signed_constraints = SignedConstraints { message, signature };
 
                 execution_state.add_constraint(slot, signed_constraints.clone());
 
-                let res = serde_json::to_value(signed_constraints).map_err(Into::into);
-                let _ = response_tx.send(res).ok();
+                // Create a commitment by signing the request with the commitment signer
+                match request.commit_and_sign(&commitment_signer).await {
+                    Ok(commitment) => {
+                        let _ = response.send(Ok(commitment));
+                    },
+                    Err(e) => {
+                        tracing::error!(err = ?e, "Failed to sign commitment");
+                        let _ = response.send(Err(spec::Error::Internal));
+                    }
+                }
             },
             Ok(HeadEvent { slot, .. }) = head_tracker.next_head() => {
                 tracing::info!(slot, "Received new head event");
@@ -163,7 +181,6 @@ async fn main() -> eyre::Result<()> {
             },
             Ok(_) = tokio::signal::ctrl_c() => {
                 tracing::info!("Received SIGINT, shutting down...");
-                shutdown_tx.send(()).await.ok();
                 break;
             }
         }

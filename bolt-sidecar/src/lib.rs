@@ -3,10 +3,11 @@
 #![deny(unused_must_use, rust_2018_idioms)]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
-/// Builder API proxy and utilities
+/// All APIs in use by the sidecar.
 mod api;
 pub use api::{
     builder::{start_builder_proxy_server, BuilderProxyConfig},
+    commitments,
     spec::{BuilderApi, ConstraintsApi},
 };
 
@@ -29,10 +30,6 @@ pub use config::{ChainConfig, Config, Opts};
 
 /// Crypto utilities, including BLS and ECDSA
 pub mod crypto;
-
-/// JSON-RPC server and handlers
-pub mod json_rpc;
-pub use json_rpc::start_rpc_server;
 
 /// Primitive types and utilities
 pub mod primitives;
