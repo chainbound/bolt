@@ -73,13 +73,13 @@ async fn main() -> Result<()> {
 
         let signature = wallet.sign_hash(&message_digest).await?;
         let signature = hex::encode(signature.as_bytes());
+        let signature_header = format!("{}:0x{}", wallet.address(), &signature);
 
         let request = prepare_rpc_request(
-            "bolt_inclusionPreconfirmation",
+            "bolt_requestInclusion",
             vec![serde_json::json!({
-                "slot": target_slot,
-                "tx": tx_rlp,
-                "signature": signature,
+                "targetSlot": target_slot,
+                "txs": vec![tx_rlp],
             })],
         );
 
@@ -90,6 +90,7 @@ async fn main() -> Result<()> {
         let response = client
             .post(&opts.bolt_sidecar_url)
             .header("content-type", "application/json")
+            .header("x-bolt-signature", signature_header)
             .body(serde_json::to_string(&request)?)
             .send()
             .await?;
