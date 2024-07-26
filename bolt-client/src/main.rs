@@ -57,21 +57,18 @@ async fn main() -> Result<()> {
     let _ = dotenvy::dotenv();
     let opts = Opts::parse();
 
-    let wallet: PrivateKeySigner = opts.private_key.parse().expect("should parse private key");
+    let wallet: PrivateKeySigner = opts.private_key.parse().expect("invalid private key");
     let transaction_signer: EthereumWallet = wallet.clone().into();
     let provider = ProviderBuilder::new().on_http(opts.rpc_url.clone());
     let sender = wallet.address();
 
     let (target_sidecar_url, target_slot) = if opts.use_registry {
         // Fetch the next preconfer slot from the registry and use it
-        let beacon_api_client = BeaconApiClient::new(
-            opts.beacon_client_url.expect("beacon_client_url is required when using the registry"),
-        );
+        let beacon_api_client = BeaconApiClient::new(opts.beacon_client_url.unwrap());
         let registry = BoltRegistry::new(opts.rpc_url, opts.registry_address);
         let curr_slot = get_current_slot(&beacon_api_client).await?;
-        let proposer_duties =
-            get_proposer_duties(&beacon_api_client, curr_slot, curr_slot / 32).await?;
-        match registry.next_preconfer_from_registry(proposer_duties).await {
+        let duties = get_proposer_duties(&beacon_api_client, curr_slot, curr_slot / 32).await?;
+        match registry.next_preconfer_from_registry(duties).await {
             Ok(Some((endpoint, slot))) => (Url::parse(&endpoint)?, slot),
             Ok(None) => bail!("no next preconfer slot found"),
             Err(e) => bail!("error fetching next preconfer slot from registry: {:?}", e),
@@ -97,16 +94,19 @@ async fn main() -> Result<()> {
     let request = prepare_rpc_request(
         "bolt_requestInclusion",
         vec![serde_json::json!({
-            "slot": target_slot,
+            "targetSlot": target_slot,
             "txs": vec![tx_rlp],
         })],
     );
 
     info!("Transaction hash: {}", tx_hash);
 
+    let signature = sign_request(&tx_hash, target_slot, &wallet).await?;
+
     let response = reqwest::Client::new()
         .post(target_sidecar_url)
         .header("content-type", "application/json")
+        .header("x-bolt-signature", signature)
         .body(serde_json::to_string(&request)?)
         .send()
         .await?;

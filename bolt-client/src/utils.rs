@@ -2,9 +2,11 @@ use std::str::FromStr;
 
 use alloy::{
     consensus::{BlobTransactionSidecar, SidecarBuilder, SimpleCoder},
+    hex,
     network::TransactionBuilder,
-    primitives::{Address, U256},
+    primitives::{keccak256, Address, U256},
     rpc::types::TransactionRequest,
+    signers::{local::PrivateKeySigner, Signer},
 };
 use beacon_api_client::{mainnet::Client as BeaconApiClient, BlockId, ProposerDuty};
 use rand::{thread_rng, Rng};
@@ -63,4 +65,41 @@ pub async fn get_proposer_duties(
         .into_iter()
         .filter(|duty| duty.slot > current_slot)
         .collect::<Vec<_>>())
+}
+
+pub async fn sign_request(
+    tx_hash: &str,
+    target_slot: u64,
+    wallet: &PrivateKeySigner,
+) -> eyre::Result<String> {
+    let digest = {
+        let mut data = Vec::new();
+        data.extend_from_slice(tx_hash.as_bytes());
+        data.extend_from_slice(target_slot.to_be_bytes().as_slice());
+        keccak256(data)
+    };
+
+    let signature = hex::encode(wallet.sign_hash(&digest).await?.as_bytes());
+
+    Ok(format!("{}:0x{}", wallet.address(), signature))
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy::signers::local::PrivateKeySigner;
+
+    #[tokio::test]
+    async fn test_sign_request() -> eyre::Result<()> {
+        let wallet = PrivateKeySigner::random();
+        let tx_hash = "0xdeadbeef";
+        let target_slot = 42;
+
+        let signature = super::sign_request(tx_hash, target_slot, &wallet).await?;
+        let parts: Vec<&str> = signature.split(':').collect();
+
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0], wallet.address().to_string());
+        assert_eq!(parts[1].len(), 130);
+        Ok(())
+    }
 }
