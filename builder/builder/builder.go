@@ -483,11 +483,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 		// Strip blobs for the Blob Express Lane. For now, we will remove all of them
 		// assuming the builder will accept blobs only from preconfirmed transactions.
 		// However, a more sophisticated approach could be taken
-		versionedBlockRequest.Deneb.BlobsBundle = &builderApiDeneb.BlobsBundle{
-			Blobs:       []deneb.Blob{},
-			Commitments: []deneb.KZGCommitment{},
-			Proofs:      []deneb.KZGProof{},
-		}
+		versionedBlockRequest.Deneb.BlobsBundle.Blobs = []deneb.Blob{}
 
 		versionedBlockRequestWithPreconfsProofs = &common.VersionedSubmitBlockRequestWithProofs{
 			Inner:  versionedBlockRequest,
