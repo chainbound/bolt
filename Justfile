@@ -7,6 +7,11 @@ demo:
 	chmod +x ./scripts/start-demo.sh
 	./scripts/start-demo.sh
 
+# run the helder web demo locally
+demo-helder:
+	chmod +x ./scripts/start-demo-helder.sh
+	./scripts/start-demo-helder.sh
+
 # spin up the bolt devnet
 up:
 	chmod +x ./scripts/start-devnet.sh
