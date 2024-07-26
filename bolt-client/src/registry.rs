@@ -27,6 +27,7 @@ impl BoltRegistry {
     /// Gets the sidecar RPC URL for a given validator index.
     ///
     /// Returns Ok(None) if the operator is not found in the registry.
+    #[allow(unused)]
     pub async fn get_sidecar_rpc_url_for_validator(
         &self,
         validator_index: u64,
@@ -159,6 +160,7 @@ mod tests {
     use std::str::FromStr;
 
     use alloy::{primitives::U256, sol_types::SolCall};
+    use beacon_api_client::ProposerDuty;
     use BoltRegistryContract::{MetaData, Status};
 
     use super::*;

@@ -61,25 +61,25 @@ async fn main() -> Result<()> {
         tx.set_nonce(provider.get_transaction_count(sender).await? + i);
 
         let tx_signed = tx.build(&transaction_signer).await?;
-        let tx_hash = tx_signed.tx_hash().to_string();
+        let tx_hash = tx_signed.tx_hash();
         let tx_rlp = hex::encode(tx_signed.encoded_2718());
 
         let message_digest = {
             let mut data = Vec::new();
+            data.extend_from_slice(tx_hash.as_slice());
             data.extend_from_slice(&target_slot.to_le_bytes());
-            data.extend_from_slice(hex::decode(tx_hash.trim_start_matches("0x"))?.as_slice());
             keccak256(data)
         };
 
         let signature = wallet.sign_hash(&message_digest).await?;
         let signature = hex::encode(signature.as_bytes());
+        let signature_header = format!("{}:0x{}", wallet.address(), &signature);
 
         let request = prepare_rpc_request(
-            "bolt_inclusionPreconfirmation",
+            "bolt_requestInclusion",
             vec![serde_json::json!({
                 "slot": target_slot,
-                "tx": tx_rlp,
-                "signature": signature,
+                "txs": vec![tx_rlp],
             })],
         );
 
@@ -90,6 +90,7 @@ async fn main() -> Result<()> {
         let response = client
             .post(&opts.bolt_sidecar_url)
             .header("content-type", "application/json")
+            .header("x-bolt-signature", signature_header)
             .body(serde_json::to_string(&request)?)
             .send()
             .await?;
