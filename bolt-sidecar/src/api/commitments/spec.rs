@@ -26,7 +26,7 @@ pub enum Error {
     #[error("Internal server error")]
     Internal,
     /// Missing signature.
-    #[error("Missing X-Bolt-Signature header")]
+    #[error("Missing '{SIGNATURE_HEADER}' header")]
     NoSignature,
     /// Invalid signature.
     #[error(transparent)]

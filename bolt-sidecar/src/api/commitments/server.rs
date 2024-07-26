@@ -106,11 +106,11 @@ impl CommitmentsApiServer {
     }
 
     /// Creates the server with the given address and shutdown signal.
-    pub fn with_shutdown<A: ToSocketAddrs>(
-        self,
-        addr: A,
-        signal: impl Future<Output = ()> + Send + 'static,
-    ) -> Self {
+    pub fn with_shutdown<A, S>(self, addr: A, signal: S) -> Self
+    where
+        A: ToSocketAddrs,
+        S: Future<Output = ()> + Send + 'static,
+    {
         Self {
             addr: addr.to_socket_addrs().unwrap().next().unwrap(),
             signal: Some(Box::pin(signal)),
@@ -211,8 +211,8 @@ impl CommitmentsApiServer {
 
                 Ok(Json(response))
             }
-            _ => {
-                tracing::error!("Unknown method: {}", payload.method);
+            other => {
+                tracing::error!("Unknown method: {}", other);
                 Err(Error::UnknownMethod)
             }
         }

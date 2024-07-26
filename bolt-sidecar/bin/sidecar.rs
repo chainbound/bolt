@@ -45,7 +45,6 @@ async fn main() -> eyre::Result<()> {
 
     api_server.run(api_events).await?;
 
-    // let shutdown_tx = start_rpc_server(&config, api_events).await?;
     let mut consensus_state = ConsensusState::new(
         beacon_client.clone(),
         config.validator_indexes.clone(),
@@ -182,7 +181,6 @@ async fn main() -> eyre::Result<()> {
             },
             Ok(_) = tokio::signal::ctrl_c() => {
                 tracing::info!("Received SIGINT, shutting down...");
-                // shutdown_tx.send(()).await.ok();
                 break;
             }
         }
