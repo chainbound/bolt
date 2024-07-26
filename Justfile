@@ -103,7 +103,7 @@ dora:
 
 # manually send a preconfirmation to the bolt devnet
 send-preconf count='1':
-	cd bolt-spammer && RUST_LOG=info cargo run -- \
+	cd bolt-kurtosis-client && RUST_LOG=info cargo run -- \
 		--provider-url $(kurtosis port print bolt-devnet el-1-geth-lighthouse rpc) \
 		--beacon-client-url $(kurtosis port print bolt-devnet cl-1-lighthouse-geth http) \
 		--bolt-sidecar-url http://$(kurtosis port print bolt-devnet mev-sidecar-api api)  \
@@ -113,7 +113,7 @@ send-preconf count='1':
 
 # manually send a blob preconfirmation to the bolt devnet
 send-blob-preconf count='1':
-	cd bolt-spammer && RUST_LOG=info cargo run -- \
+	cd bolt-kurtosis-client && RUST_LOG=info cargo run -- \
 		--provider-url $(kurtosis port print bolt-devnet el-1-geth-lighthouse rpc) \
 		--beacon-client-url $(kurtosis port print bolt-devnet cl-1-lighthouse-geth http) \
 		--bolt-sidecar-url http://$(kurtosis port print bolt-devnet mev-sidecar-api api)  \
