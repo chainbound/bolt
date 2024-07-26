@@ -64,6 +64,13 @@ impl CommitmentRequest {
             }
         }
     }
+
+    /// Returns the signature (if signed).
+    pub fn signature(&self) -> Option<&Signature> {
+        match self {
+            CommitmentRequest::Inclusion(req) => req.signature.as_ref(),
+        }
+    }
 }
 
 /// Request to include a transaction at a specific slot.

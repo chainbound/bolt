@@ -3,6 +3,7 @@ use axum::{extract::State, http::HeaderMap, routing::post, Json};
 use axum_extra::extract::WithRejection;
 use std::{
     collections::HashSet,
+    fmt::Debug,
     future::Future,
     net::{SocketAddr, ToSocketAddrs},
     pin::Pin,
@@ -25,17 +26,22 @@ use super::{
 };
 
 /// Event type emitted by the commitments API.
+#[derive(Debug)]
 pub struct Event {
+    /// The request to process.
     pub request: CommitmentRequest,
+    /// The response channel.
     pub response: oneshot::Sender<Result<SignedCommitment, Error>>,
 }
 
 /// The inner commitments-API handler that implements the [CommitmentsApi] spec.
 /// Should be wrapped by a [CommitmentsApiServer] JSON-RPC server to handle requests.
+#[derive(Debug)]
 pub struct CommitmentsApiInner {
     /// Event notification channel
     events: mpsc::Sender<Event>,
     /// Optional whitelist of ECDSA public keys
+    #[allow(unused)]
     whitelist: Option<HashSet<Address>>,
 }
 
@@ -76,7 +82,16 @@ pub struct CommitmentsApiServer {
     /// The address to bind the server to. This will be updated
     /// with the actual address after the server is started.
     addr: SocketAddr,
+    /// The shutdown signal.
     signal: Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
+}
+
+impl Debug for CommitmentsApiServer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CommitmentsApiServer")
+            .field("addr", &self.addr)
+            .finish()
+    }
 }
 
 impl CommitmentsApiServer {
@@ -228,9 +243,12 @@ mod test {
     use std::time::Duration;
 
     use alloy::primitives::TxHash;
+    use alloy::signers::k256::SecretKey;
     use alloy::signers::{local::PrivateKeySigner, Signer};
+    use serde_json::json;
 
     use crate::primitives::commitment::ECDSASignatureExt;
+    use crate::test_util::{create_signed_commitment_request, default_test_transaction};
 
     use super::*;
 
@@ -253,20 +271,104 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_simple_request() {
+    async fn test_request_unauthorized() {
         let _ = tracing_subscriber::fmt::try_init();
 
         let mut server = CommitmentsApiServer::new("0.0.0.0:0");
 
-        let (events_tx, mut events_rx) = mpsc::channel(1);
+        let (events_tx, _) = mpsc::channel(1);
 
         server.run(events_tx).await.unwrap();
-
         let addr = server.local_addr();
 
-        tracing::info!("Test server running on {addr}");
+        let sk = SecretKey::random(&mut rand::thread_rng());
+        let signer = PrivateKeySigner::from(sk.clone());
+        let tx = default_test_transaction(signer.address(), None);
+        let req = create_signed_commitment_request(tx, &sk, 12).await.unwrap();
 
-        events_rx.recv().await.unwrap();
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        let payload = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "bolt_requestInclusion",
+            "params": [req]
+        });
+
+        let url = format!("http://{addr}");
+
+        let client = reqwest::Client::new();
+        // client.post(url).header("content-type", "application/json").body(payload)
+
+        let response = client
+            .post(url)
+            .json(&payload)
+            .send()
+            .await
+            .unwrap()
+            .json::<JsonResponse>()
+            .await
+            .unwrap();
+
+        // Assert unauthorized because of missing signature
+        assert_eq!(response.error.unwrap().code, -32003);
+    }
+
+    #[tokio::test]
+    async fn test_request_success() {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let mut server = CommitmentsApiServer::new("0.0.0.0:0");
+
+        let (events_tx, mut events) = mpsc::channel(1);
+
+        server.run(events_tx).await.unwrap();
+        let addr = server.local_addr();
+
+        let sk = SecretKey::random(&mut rand::thread_rng());
+        let signer = PrivateKeySigner::from(sk.clone());
+        let tx = default_test_transaction(signer.address(), None);
+        let req = create_signed_commitment_request(tx, &sk, 12).await.unwrap();
+
+        let sig = req.signature().unwrap().to_hex();
+
+        let payload = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "bolt_requestInclusion",
+            "params": [req]
+        });
+
+        let url = format!("http://{addr}");
+
+        let client = reqwest::Client::new();
+        // client.post(url).header("content-type", "application/json").body(payload)
+
+        let (tx, rx) = oneshot::channel();
+
+        tokio::spawn(async move {
+            let response = client
+                .post(url)
+                .header(SIGNATURE_HEADER, format!("{}:{}", signer.address(), sig))
+                .json(&payload)
+                .send()
+                .await
+                .unwrap();
+
+            let json = response.json::<JsonResponse>().await.unwrap();
+
+            // Assert unauthorized because of missing signature
+            assert!(json.error.is_none());
+
+            let _ = tx.send(());
+        });
+
+        let Event { request, response } = events.recv().await.unwrap();
+
+        let commitment_signer = PrivateKeySigner::random();
+
+        let commitment = request.commit_and_sign(&commitment_signer).await.unwrap();
+
+        response.send(Ok(commitment)).unwrap();
+
+        rx.await.unwrap();
     }
 }

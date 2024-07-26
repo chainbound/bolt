@@ -6,7 +6,7 @@ use alloy::{
 use reth_primitives::{
     revm_primitives::EnvKzgSettings, BlobTransactionValidationError, PooledTransactionsElement,
 };
-use std::{arch::aarch64::vget_high_p8, collections::HashMap, ops::Deref};
+use std::{collections::HashMap, ops::Deref};
 use thiserror::Error;
 
 use crate::{

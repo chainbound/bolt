@@ -7,7 +7,7 @@ pub struct JsonPayload {
     /// The method string.
     pub method: String,
     /// Optional ID.
-    pub id: Option<String>,
+    pub id: Option<serde_json::Value>,
     /// The parameters object.
     pub params: Vec<serde_json::Value>,
 }
@@ -16,8 +16,8 @@ pub struct JsonPayload {
 pub struct JsonResponse {
     pub jsonrpc: String,
     /// Optional ID. Must be serialized as `null` if not present.
-    pub id: Option<String>,
-    #[serde(skip_serializing_if = "serde_json::Value::is_null")]
+    pub id: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "serde_json::Value::is_null", default)]
     pub result: serde_json::Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<JsonError>,
