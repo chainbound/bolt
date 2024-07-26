@@ -5,14 +5,11 @@ import Image from "next/image";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
-import { createPreconfPayload } from "@/lib/wallet";
 import { EventType } from "@/lib/types";
 import { Progress } from "@/components/ui/progress";
-import { ethers } from "ethers";
 import {
   HELDER_CHAIN_ID,
   HELDER_CHAIN_ID_HEX,
-  PRIVATE_KEY,
   SERVER_URL,
 } from "@/lib/constants";
 import { useSDK } from "@metamask/sdk-react";
