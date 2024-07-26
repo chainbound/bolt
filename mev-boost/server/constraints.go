@@ -4,6 +4,8 @@ import (
 	"slices"
 	"sort"
 
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	gethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -79,19 +81,36 @@ func (c *ConstraintCache) AddInclusionConstraint(slot uint64, tx Transaction, in
 }
 
 // AddInclusionConstraints adds multiple inclusion constraints to the cache at the given slot
-func (c *ConstraintCache) AddInclusionConstraints(slot uint64, constraints []*Constraint) error {
+func (c *ConstraintCache) AddInclusionConstraints(slot uint64, constraints []*Constraint, blobsBundleCache *builderApiDeneb.BlobsBundle) error {
 	if _, exists := c.constraints.Get(slot); !exists {
 		c.constraints.Add(slot, make(map[gethCommon.Hash]*Constraint))
 	}
 
 	m, _ := c.constraints.Get(slot)
 	for _, constraint := range constraints {
-		parsedTx := new(types.Transaction)
-		err := parsedTx.UnmarshalBinary(constraint.Tx)
+		tx := new(types.Transaction)
+		err := tx.UnmarshalBinary(constraint.Tx)
 		if err != nil {
 			return err
 		}
-		m[parsedTx.Hash()] = constraint
+		m[tx.Hash()] = constraint
+		if sidecar := tx.BlobTxSidecar(); sidecar != nil {
+			consensusBlobs := make([]deneb.Blob, 0, len(sidecar.Blobs))
+			for _, blob := range sidecar.Blobs {
+				consensusBlobs = append(consensusBlobs, deneb.Blob(blob))
+			}
+			blobsBundleCache.Blobs = append(blobsBundleCache.Blobs, consensusBlobs...)
+			consensusKZGCommitments := make([]deneb.KZGCommitment, 0, len(sidecar.Commitments))
+			for _, commitment := range sidecar.Commitments {
+				consensusKZGCommitments = append(consensusKZGCommitments, deneb.KZGCommitment(commitment))
+			}
+			blobsBundleCache.Commitments = append(blobsBundleCache.Commitments, consensusKZGCommitments...)
+			consensusKZGProofs := make([]deneb.KZGProof, 0, len(sidecar.Proofs))
+			for _, proof := range sidecar.Proofs {
+				consensusKZGProofs = append(consensusKZGProofs, deneb.KZGProof(proof))
+			}
+			blobsBundleCache.Proofs = append(blobsBundleCache.Proofs, consensusKZGProofs...)
+		}
 	}
 
 	return nil

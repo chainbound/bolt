@@ -16,11 +16,13 @@ import (
 	"time"
 
 	builderApi "github.com/attestantio/go-builder-client/api"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
 	builderApiV1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	eth2ApiV1Bellatrix "github.com/attestantio/go-eth2-client/api/v1/bellatrix"
 	eth2ApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	eth2ApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
+	"github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	fastSsz "github.com/ferranbt/fastssz"
@@ -118,6 +120,8 @@ type BoostService struct {
 
 	// BOLT: constraint cache
 	constraints *ConstraintCache
+	// BOLT-BXL: blob cache
+	blobsBundleCache *builderApiDeneb.BlobsBundle
 }
 
 // NewBoostService created a new BoostService
@@ -163,6 +167,11 @@ func NewBoostService(opts BoostServiceOpts) (*BoostService, error) {
 
 		// BOLT: Initialize the constraint cache
 		constraints: NewConstraintCache(64),
+		blobsBundleCache: &builderApiDeneb.BlobsBundle{
+			Blobs:       make([]deneb.Blob, 0),
+			Commitments: make([]deneb.KZGCommitment, 0),
+			Proofs:      make([]deneb.KZGProof, 0),
+		},
 	}, nil
 }
 
@@ -471,7 +480,7 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 
 		// Add the constraints to the cache.
 		// They will be cleared when we receive a payload for the slot in `handleGetPayload`
-		err := m.constraints.AddInclusionConstraints(constraintMessage.Slot, constraintMessage.Constraints)
+		err := m.constraints.AddInclusionConstraints(constraintMessage.Slot, constraintMessage.Constraints, m.blobsBundleCache)
 		if err != nil {
 			log.WithError(err).Errorf("error adding inclusion constraints to cache")
 			continue
@@ -571,6 +580,15 @@ func (m *BoostService) handleGetHeader(w http.ResponseWriter, req *http.Request)
 	// Prepare relay responses
 	result := bidResp{}                           // the final response, containing the highest bid (if any)
 	relays := make(map[BlockHashHex][]RelayEntry) // relays that sent the bid for a specific blockHash
+
+	// Super hacky for devnet with 2 seconds time slot --> after 500ms of get header clean the blobsBundleCache
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		m.blobsBundleCache.Blobs = []deneb.Blob{}
+		m.blobsBundleCache.Proofs = []deneb.KZGProof{}
+		m.blobsBundleCache.Commitments = []deneb.KZGCommitment{}
+		log.Infof("[BOLT]: Cleared blobsBundleCache")
+	}()
 
 	// Call the relays
 	var mu sync.Mutex
@@ -1170,9 +1188,10 @@ func (m *BoostService) processDenebPayload(w http.ResponseWriter, req *http.Requ
 				return
 			}
 
+			// TODO: here, blobs should be added from the local cache, that needs to be implemented
 			commitments := blindedBlock.Message.Body.BlobKZGCommitments
 			// Ensure that blobs are valid and matches the request
-			if len(commitments) != len(blobs.Blobs) || len(commitments) != len(blobs.Commitments) || len(commitments) != len(blobs.Proofs) {
+			if len(commitments) != len(m.blobsBundleCache.Blobs) || len(commitments) != len(blobs.Commitments) || len(commitments) != len(blobs.Proofs) {
 				log.WithFields(logrus.Fields{
 					"requestBlobCommitments":  len(commitments),
 					"responseBlobs":           len(blobs.Blobs),
