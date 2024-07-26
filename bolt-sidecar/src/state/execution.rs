@@ -6,7 +6,7 @@ use alloy::{
 use reth_primitives::{
     revm_primitives::EnvKzgSettings, BlobTransactionValidationError, PooledTransactionsElement,
 };
-use std::{collections::HashMap, ops::Deref};
+use std::{arch::aarch64::vget_high_p8, collections::HashMap, ops::Deref};
 use thiserror::Error;
 
 use crate::{
@@ -284,21 +284,26 @@ impl<C: StateFetcher> ExecutionState<C> {
             // If the templates do not exist, or this is the first request for this sender,
             // its diffs will be zero.
             // TODO: why highest slot here?
-            let (nonce_diff, balance_diff, highest_slot) = self.block_templates.iter().fold(
-                (0, U256::ZERO, 0),
-                |(nonce_diff_acc, balance_diff_acc, highest_slot), (slot, block_template)| {
-                    let (nonce_diff, balance_diff, slot) = block_template
-                        .get_diff(&sender)
-                        .map(|(nonce, balance)| (nonce, balance, *slot))
-                        .unwrap_or((0, U256::ZERO, 0));
+            let (nonce_diff, balance_diff, highest_slot_for_account) =
+                self.block_templates.iter().fold(
+                    (0, U256::ZERO, 0),
+                    |(nonce_diff_acc, balance_diff_acc, highest_slot), (slot, block_template)| {
+                        let (nonce_diff, balance_diff, slot) = block_template
+                            .get_diff(&sender)
+                            .map(|(nonce, balance)| (nonce, balance, *slot))
+                            .unwrap_or((0, U256::ZERO, 0));
 
-                    (
-                        nonce_diff_acc + nonce_diff,
-                        balance_diff_acc.saturating_add(balance_diff),
-                        u64::max(highest_slot, slot),
-                    )
-                },
-            );
+                        (
+                            nonce_diff_acc + nonce_diff,
+                            balance_diff_acc.saturating_add(balance_diff),
+                            u64::max(highest_slot, slot),
+                        )
+                    },
+                );
+
+            if target_slot < highest_slot_for_account {
+                return Err(ValidationError::SlotTooLow(highest_slot_for_account));
+            }
 
             tracing::trace!(?signer, nonce_diff, %balance_diff, "Applying diffs to account state");
 
