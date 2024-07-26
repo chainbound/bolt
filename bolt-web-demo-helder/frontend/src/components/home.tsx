@@ -48,6 +48,8 @@ export default function Home() {
   const [account, setAccount] = useState<string>();
   const { sdk, connected, connecting, provider, chainId } = useSDK();
 
+  console.log(connected, provider?.selectedAddress, chainId, account);
+
   const connect = async () => {
     try {
       const accounts = await sdk?.connect();
@@ -302,7 +304,7 @@ export default function Home() {
         </>
       ) : (
         <div className="w-full max-w-6xl pt-4">
-          {connected && Number(chainId) === HELDER_CHAIN_ID ? (
+          {provider?.selectedAddress && Number(chainId) === HELDER_CHAIN_ID ? (
             <div className="w-full">
               {preconfSent && (
                 <div className="grid gap-3 border p-4 border-gray-800 mb-4">
@@ -414,7 +416,7 @@ export default function Home() {
                 </small>
 
                 <div className="flex w-full justify-center">
-                  {connected ? (
+                  {provider?.selectedAddress ? (
                     <Button
                       className="max-w-sm"
                       onClick={async () => {
