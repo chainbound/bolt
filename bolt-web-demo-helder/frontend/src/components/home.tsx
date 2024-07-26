@@ -60,12 +60,6 @@ export default function Home() {
     }
   };
 
-  const wallet = useMemo(() => {
-    const provider = new ethers.JsonRpcProvider(providerUrl);
-    const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-    return wallet;
-  }, [providerUrl]);
-
   useEffect(() => {
     fetch(`${SERVER_URL}/retry-port-events`);
     fetch(`${SERVER_URL}/latest-slot`)
@@ -94,9 +88,6 @@ export default function Home() {
         setPreconfirmationRequests((prev) =>
           prev.filter((req) => req.slot >= slot),
         );
-
-        // Update the nonce
-        wallet.getNonce().then((nonce) => setNonce(nonce));
       }
 
       // If the event has a special type, handle it differently
@@ -142,7 +133,7 @@ export default function Home() {
     return () => {
       newSocket.close();
     };
-  }, [explorerUrl, preconfSlot, wallet]);
+  }, [explorerUrl, preconfSlot]);
 
   useEffect(() => {
     let interval: any = null;
@@ -203,47 +194,56 @@ export default function Home() {
           .map((req) => req.count)
           .reduce((acc, c) => acc + c, 0);
 
-      const { payload, txHash } = await createPreconfPayload(
-        wallet,
-        nonceWithPreconfs,
-      );
+      // setPreconfirmationRequests((prev) => {
+      //   for (let i = 0; i < prev.length; i++) {
+      //     if (prev[i].slot === payload.slot) {
+      //       prev[i] = { ...prev[i], count: prev[i].count + 1 };
+      //       return [...prev];
+      //     }
+      //   }
+      //   prev.push({ slot: payload.slot, count: 1 });
+      //   return [...prev];
+      // });
 
-      setPreconfirmationRequests((prev) => {
-        for (let i = 0; i < prev.length; i++) {
-          if (prev[i].slot === payload.slot) {
-            prev[i] = { ...prev[i], count: prev[i].count + 1 };
-            return [...prev];
-          }
-        }
-        prev.push({ slot: payload.slot, count: 1 });
-        return [...prev];
-      });
+      provider
+        ?.request({
+          method: "eth_sendTransaction",
+          // The following sends an EIP-1559 transaction. Legacy transactions are also supported.
+          params: [
+            {
+              // The user's active address.
+              from: provider.selectedAddress,
+              // Required except during contract publications.
+              to: "0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD",
+              // Only required to send ether to the recipient from the initiating external account.
+              value: "0x000069420",
+              // Customizable by the user during MetaMask confirmation.
+              gasLimit: "0xA410",
+              // Customizable by the user during MetaMask confirmation.
+              maxFeePerGas: "0x3B9ACA00", // 1 gwei
+              // Customizable by the user during MetaMask confirmation.
+              maxPriorityFeePerGas: "0x1DCD6500", // 0.5 gwei
+            },
+          ],
+        })
+        .then((txHash) => console.log(txHash))
+        .catch((error) => console.error(error));
 
-      setPreconfSlot(payload.slot);
-      dispatchEvent({
-        message: `Preconfirmation request sent for tx: ${txHash} at slot ${payload.slot} with nonce ${nonceWithPreconfs}`,
-        timestamp: new Date().toISOString(),
-      });
+      // setPreconfSlot(payload.slot);
+      // dispatchEvent({
+      //   message: `Preconfirmation request sent for tx: ${txHash} at slot ${payload.slot} with nonce ${nonceWithPreconfs}`,
+      //   timestamp: new Date().toISOString(),
+      // });
 
       // 1. POST preconfirmation.
       // The preconfirmation is considered valid as soon as the server responds with a 200 status code.
       setPreconfTimerActive(true);
       setInclusionTimerActive(true);
       setFinalizationTimerActive(true);
-
-      const res = await fetch(`${SERVER_URL}/preconfirmation`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      if (res.status === 200) {
-        console.log("Preconfirmation response was successful");
-        setPreconfTimerActive(false);
-      }
     } catch (e) {
       console.error(e);
     }
-  }, [preconfirmationRequests, nonce, wallet]);
+  }, [preconfirmationRequests, nonce, provider]);
 
   function dispatchEvent(event: Event) {
     setEvents((prev) => [event, ...prev]);
