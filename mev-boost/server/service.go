@@ -22,6 +22,7 @@ import (
 	eth2ApiV1Capella "github.com/attestantio/go-eth2-client/api/v1/capella"
 	eth2ApiV1Deneb "github.com/attestantio/go-eth2-client/api/v1/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	gethCommon "github.com/ethereum/go-ethereum/common"
 	gethTypes "github.com/ethereum/go-ethereum/core/types"
 	fastSsz "github.com/ferranbt/fastssz"
 	"github.com/flashbots/go-boost-utils/ssz"
@@ -46,11 +47,14 @@ var (
 
 // Bolt errors
 var (
-	errNilProof          = errors.New("nil proof")
-	errMissingConstraint = errors.New("missing constraint")
-	errMismatchProofSize = errors.New("proof size mismatch")
-	errInvalidProofs     = errors.New("proof verification failed")
-	errInvalidRoot       = errors.New("failed getting tx root from bid")
+	errNilProof                  = errors.New("nil proof")
+	errMissingConstraint         = errors.New("missing constraint")
+	errMismatchProofSize         = errors.New("proof size mismatch")
+	errInvalidProofs             = errors.New("proof verification failed")
+	errInvalidRoot               = errors.New("failed getting tx root from bid")
+	errNilConstraint             = errors.New("nil constraint")
+	errHashesIndexesMismatch     = errors.New("proof transaction hashes and indexes length mismatch")
+	errHashesConstraintsMismatch = errors.New("proof transaction hashes and constraints length mismatch")
 )
 
 var (
@@ -338,7 +342,7 @@ func (m *BoostService) handleRegisterValidator(w http.ResponseWriter, req *http.
 }
 
 // verifyInclusionProof verifies the proofs against the constraints, and returns an error if the proofs are invalid.
-func (m *BoostService) verifyInclusionProof(responsePayload *BidWithInclusionProofs, slot uint64) error {
+func (m *BoostService) verifyInclusionProof(transactionsRoot phase0.Root, proof *InclusionProof, slot uint64) error {
 	log := m.log.WithFields(logrus.Fields{})
 
 	// BOLT: get constraints for the slot
@@ -349,20 +353,18 @@ func (m *BoostService) verifyInclusionProof(responsePayload *BidWithInclusionPro
 		return errMissingConstraint
 	}
 
-	if responsePayload.Proofs == nil {
+	if proof == nil {
 		return errNilProof
 	}
 
-	if len(responsePayload.Proofs.TransactionHashes) != len(inclusionConstraints) {
+	if len(proof.TransactionHashes) != len(inclusionConstraints) {
 		return errMismatchProofSize
 	}
-
-	log.Infof("[BOLT]: Verifying merkle multiproofs for %d transactions", len(responsePayload.Proofs.TransactionHashes))
-
-	transactionsRoot, err := responsePayload.Bid.TransactionsRoot()
-	if err != nil {
-		return errInvalidRoot
+	if len(proof.TransactionHashes) != len(proof.GeneralizedIndexes) {
+		return errHashesIndexesMismatch
 	}
+
+	log.Infof("[BOLT]: Verifying merkle multiproofs for %d transactions", len(proof.TransactionHashes))
 
 	// Decode the constraints, and sort them according to the utility function used
 	// TODO: this should be done before verification ideally
@@ -379,18 +381,18 @@ func (m *BoostService) verifyInclusionProof(responsePayload *BidWithInclusionPro
 			Index: constraint.Index,
 		}
 	}
-	constraints := ParseConstraintsDecoded(hashToConstraint)
+	leaves := make([][]byte, len(inclusionConstraints))
+	indexes := make([]int, len(proof.GeneralizedIndexes))
 
-	leaves := make([][]byte, len(constraints))
+	for i, hash := range proof.TransactionHashes {
+		constraint, ok := hashToConstraint[gethCommon.Hash(hash)]
+		if constraint == nil || !ok {
+			return errNilConstraint
+		}
 
-	for i, constraint := range constraints {
 		// Compute the hash tree root for the raw preconfirmed transaction
 		// and use it as "Leaf" in the proof to be verified against
-
-		// TODO: this is pretty inefficient, we should work with the transaction already
-		// parsed without the blob here to avoid unmarshalling and marshalling again
-		transaction := constraint.Tx
-		encoded, err := transaction.MarshalBinary()
+		encoded, err := constraint.Tx.MarshalBinary()
 		if err != nil {
 			log.WithError(err).Error("error marshalling transaction without blob tx sidecar")
 			return err
@@ -403,16 +405,13 @@ func (m *BoostService) verifyInclusionProof(responsePayload *BidWithInclusionPro
 		}
 
 		leaves[i] = txHashTreeRoot[:]
+		indexes[i] = int(proof.GeneralizedIndexes[i])
 		i++
 	}
 
-	hashes := make([][]byte, len(responsePayload.Proofs.MerkleHashes))
-	for i, hash := range responsePayload.Proofs.MerkleHashes {
+	hashes := make([][]byte, len(proof.MerkleHashes))
+	for i, hash := range proof.MerkleHashes {
 		hashes[i] = []byte(*hash)
-	}
-	indexes := make([]int, len(responsePayload.Proofs.GeneralizedIndexes))
-	for i, index := range responsePayload.Proofs.GeneralizedIndexes {
-		indexes[i] = int(index)
 	}
 
 	currentTime := time.Now()
@@ -881,7 +880,12 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 			// BOLT: verify preconfirmation inclusion proofs. If they don't match, we don't consider the bid to be valid.
 			if responsePayload.Proofs != nil {
 				// BOLT: verify the proofs against the constraints. If they don't match, we don't consider the bid to be valid.
-				if err := m.verifyInclusionProof(responsePayload, slotUint); err != nil {
+				transactionsRoot, err := responsePayload.Bid.TransactionsRoot()
+				if err != nil {
+					log.WithError(err).Error("[BOLT]: error getting transaction root")
+					return
+				}
+				if err := m.verifyInclusionProof(transactionsRoot, responsePayload.Proofs, slotUint); err != nil {
 					log.Warnf("[BOLT]: Proof verification failed for relay %s: %s", relay.URL, err)
 					return
 				}
