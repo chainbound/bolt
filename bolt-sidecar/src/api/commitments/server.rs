@@ -158,7 +158,7 @@ impl CommitmentsApiServer {
         State(api): State<Arc<CommitmentsApiInner>>,
         WithRejection(Json(payload), _): WithRejection<Json<JsonPayload>, Error>,
     ) -> Result<Json<JsonResponse>, Error> {
-        tracing::debug!(method = payload.method, "Received new request");
+        tracing::debug!(method = payload.method, ?headers, "Received new request");
 
         let (signer, signature) = auth_from_headers(&headers).inspect_err(|e| {
             tracing::error!("Failed to extract signature from headers: {:?}", e);
@@ -199,6 +199,7 @@ impl CommitmentsApiServer {
                 // Set the request signer
                 inclusion_request.set_signer(recovered_signer);
 
+                tracing::info!(signer = ?recovered_signer, %digest, "New valid inclusion request received");
                 let inclusion_commitment = api.request_inclusion(inclusion_request).await?;
 
                 // Create the JSON-RPC response
