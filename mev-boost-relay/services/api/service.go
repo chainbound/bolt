@@ -28,6 +28,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/buger/jsonparser"
 	"github.com/chainbound/shardmap"
+	gethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
@@ -44,6 +45,7 @@ import (
 	"github.com/thedevbirb/flashbots-go-utils/cli"
 	"github.com/thedevbirb/flashbots-go-utils/httplogger"
 	uberatomic "go.uber.org/atomic"
+	"golang.org/x/crypto/sha3"
 	"golang.org/x/exp/slices"
 )
 
@@ -302,9 +304,9 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 		constraints:          shardmap.NewFIFOMap[uint64, *[]*SignedConstraints](64, 8, shardmap.HashUint64), // 2 epochs cache
 		constraintsConsumers: make([]chan *SignedConstraints, 0, 10),
 		blobsBundleCache: &builderApiDeneb.BlobsBundle{
-			Commitments: make([]deneb.KZGCommitment, 6),
-			Proofs:      make([]deneb.KZGProof, 6),
-			Blobs:       make([]deneb.Blob, 6),
+			Commitments: make([]deneb.KZGCommitment, 0, 6),
+			Proofs:      make([]deneb.KZGProof, 0, 6),
+			Blobs:       make([]deneb.Blob, 0, 6),
 		},
 
 		payloadAttributes: make(map[string]payloadAttributesHelper),
@@ -817,6 +819,12 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 		"slotHead":           headSlot,
 		"slotStartNextEpoch": (epoch + 1) * common.SlotsPerEpoch,
 	}).Infof("updated headSlot to %d", headSlot)
+
+	// Clean the blobsBundleCache on new head
+	api.blobsBundleCache.Blobs = []deneb.Blob{}
+	api.blobsBundleCache.Proofs = []deneb.KZGProof{}
+	api.blobsBundleCache.Commitments = []deneb.KZGCommitment{}
+	api.log.Info("[BOLT-BXL]: cleaned blobsBundleCache")
 }
 
 func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
@@ -1653,7 +1661,8 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// Blob Express Lane: add cached blobs bundle only if non-empty
 	if len(api.blobsBundleCache.Blobs) > 0 {
 		getPayloadResp.Deneb.BlobsBundle = api.blobsBundleCache
-		api.log.Infof("[BOLT]: Inserted cached blobs bundle with %d in getPayload response", len(api.blobsBundleCache.Blobs))
+		api.log.Infof("[BOLT]: Inserted cached blobs bundle with %d blobs, %d commitments and %d proofs in getPayload response",
+			len(api.blobsBundleCache.Blobs), len(api.blobsBundleCache.Commitments), len(api.blobsBundleCache.Proofs))
 	}
 
 	// Now we know this relay also has the payload
@@ -1717,6 +1726,7 @@ func (api *RelayAPI) handleGetPayload(w http.ResponseWriter, req *http.Request) 
 	// Publish the signed beacon block via beacon-node
 	timeBeforePublish := time.Now().UTC().UnixMilli()
 	log = log.WithField("timestampBeforePublishing", timeBeforePublish)
+	api.log.Infof("[BOLT]: to SignedBeaconBlock, getPayload blobsBundle: %s", getPayloadResp.Deneb.BlobsBundle)
 	signedBeaconBlock, err := common.SignedBlindedBeaconBlockToBeaconBlock(payload, getPayloadResp)
 	if err != nil {
 		log.WithError(err).Error("failed to convert signed blinded beacon block to beacon block")
@@ -1894,6 +1904,7 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 				api.blobsBundleCache.Proofs = append(api.blobsBundleCache.Proofs, consensusKZGProofs...)
 			}
 		}
+		api.log.Infof("[BOLT]: Added blobs bundle to cache. %d blobs, %d commitments and %d proofs ", len(api.blobsBundleCache.Blobs), len(api.blobsBundleCache.Commitments), len(api.blobsBundleCache.Proofs))
 
 		broadcastToChannels(api.constraintsConsumers, signedConstraints)
 
@@ -2359,6 +2370,8 @@ func (api *RelayAPI) handleSubmitNewBlock(w http.ResponseWriter, req *http.Reque
 		}
 	}
 
+	api.log.Infof("[BOLT]: Received new block w/out proofs. BlobsBundle %s", payload.Deneb.BlobsBundle)
+
 	nextTime = time.Now().UTC()
 	pf.Decode = uint64(nextTime.Sub(prevTime).Microseconds())
 	prevTime = nextTime
@@ -2778,6 +2791,40 @@ func (api *RelayAPI) handleSubmitNewBlockWithProofs(w http.ResponseWriter, req *
 		return
 	}
 
+	// BOLT: check that bids contains the correct blobs
+	remoteHashes := make([]gethCommon.Hash, 0)
+	for _, tx := range payload.Inner.Deneb.ExecutionPayload.Transactions {
+		if tx[0] == 0x03 { //nolint
+			type3Tx := new(types.Transaction)
+			if err := type3Tx.UnmarshalBinary(tx); err != nil {
+				log.WithError(err).Warn("[BOLT]: could not decode type 3 transaction")
+				api.RespondError(w, http.StatusBadRequest, "could not decode type 3 transaction")
+				return
+			}
+			remoteHashes = append(remoteHashes, type3Tx.BlobHashes()...)
+		}
+	}
+	// TODO (BOLT): do only when receiving constraints
+	localVersionedHashes := make([]gethCommon.Hash, 0, 6)
+	for _, commitment := range api.blobsBundleCache.Commitments {
+		commitmentHash := sha3.Sum256(commitment[:])
+		// https://eips.ethereum.org/EIPS/eip-4844#helpers
+		versionedHash := append([]byte{0x01}, commitmentHash[1:]...)
+		localVersionedHashes = append(localVersionedHashes, [32]byte(versionedHash[:32]))
+	}
+	if len(localVersionedHashes) != len(remoteHashes) {
+		message := fmt.Sprintf("[BOLT]: hashes mismatch: expected %d, got %d", len(localVersionedHashes), remoteHashes)
+		log.Errorf(message)
+		api.RespondError(w, http.StatusBadRequest, message)
+	}
+	for _, hash := range remoteHashes {
+		if !slices.Contains(localVersionedHashes, hash) {
+			message := fmt.Sprintf("[BOLT]: hash %s not found in local hashes", hash)
+			log.Errorf(message)
+			api.RespondError(w, http.StatusBadRequest, message)
+		}
+	}
+
 	builderPubkey := submission.BidTrace.BuilderPubkey
 	builderEntry, ok := api.checkBuilderEntry(w, log, builderPubkey)
 	if !ok {
@@ -2942,29 +2989,31 @@ func (api *RelayAPI) handleSubmitNewBlockWithProofs(w http.ResponseWriter, req *
 		builderEntry.collateral.Cmp(submission.BidTrace.Value.ToBig()) >= 0 &&
 		submission.BidTrace.Slot == api.optimisticSlot.Load() {
 		go api.processOptimisticBlock(opts, simResultC)
-	} else {
-		// Simulate block (synchronously).
-		requestErr, validationErr := api.simulateBlock(context.Background(), opts) // success/error logging happens inside
-		simResultC <- &blockSimResult{requestErr == nil, false, requestErr, validationErr}
-		validationDurationMs := time.Since(timeBeforeValidation).Milliseconds()
-		log = log.WithFields(logrus.Fields{
-			"timestampAfterValidation": time.Now().UTC().UnixMilli(),
-			"validationDurationMs":     validationDurationMs,
-		})
-		if requestErr != nil { // Request error
-			if os.IsTimeout(requestErr) {
-				api.RespondError(w, http.StatusGatewayTimeout, "validation request timeout")
-			} else {
-				api.RespondError(w, http.StatusBadRequest, requestErr.Error())
-			}
-			return
-		} else {
-			if validationErr != nil {
-				api.RespondError(w, http.StatusBadRequest, validationErr.Error())
-				return
-			}
-		}
 	}
+	// else {
+	// NOTE(BOLT): we skip synchronous simulation, in a truly optimistic fashion :D
+	// Simulate block (synchronously).
+	// requestErr, validationErr := api.simulateBlock(context.Background(), opts) // success/error logging happens inside
+	// simResultC <- &blockSimResult{requestErr == nil, false, requestErr, validationErr}
+	// validationDurationMs := time.Since(timeBeforeValidation).Milliseconds()
+	// log = log.WithFields(logrus.Fields{
+	// 	"timestampAfterValidation": time.Now().UTC().UnixMilli(),
+	// 	"validationDurationMs":     validationDurationMs,
+	// })
+	// if requestErr != nil { // Request error
+	// 	if os.IsTimeout(requestErr) {
+	// 		api.RespondError(w, http.StatusGatewayTimeout, "validation request timeout")
+	// 	} else {
+	// 		api.RespondError(w, http.StatusBadRequest, requestErr.Error())
+	// 	}
+	// 	return
+	// } else {
+	// 	if validationErr != nil {
+	// 		api.RespondError(w, http.StatusBadRequest, validationErr.Error())
+	// 		return
+	// 	}
+	// }
+	// }
 
 	nextTime = time.Now().UTC()
 	pf.Simulation = uint64(nextTime.Sub(prevTime).Microseconds())

@@ -13,9 +13,9 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec"
+	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/thedevbirb/flashbots-go-utils/cli"
 	"github.com/thedevbirb/flashbots-go-utils/jsonrpc"
-	"github.com/flashbots/mev-boost-relay/common"
 )
 
 var (
