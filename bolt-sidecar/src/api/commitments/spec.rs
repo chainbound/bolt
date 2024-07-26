@@ -10,26 +10,37 @@ pub(super) const SIGNATURE_HEADER: &str = "x-bolt-signature";
 
 pub(super) const REQUEST_INCLUSION_METHOD: &str = "bolt_requestInclusion";
 
+/// Error type for the commitments API.
 #[derive(Debug, Error)]
 pub enum Error {
+    /// Request rejected.
     #[error("Request rejected: {0}")]
     Rejected(#[from] RejectionError),
+    /// Request validation failed.
     #[error("{0}")]
     ValidationFailed(String),
+    /// Duplicate request.
     #[error("Duplicate request")]
     Duplicate,
+    /// Internal server error.
     #[error("Internal server error")]
     Internal,
+    /// Missing signature.
     #[error("Missing X-Bolt-Signature header")]
     NoSignature,
+    /// Invalid signature.
     #[error(transparent)]
     InvalidSignature(#[from] crate::primitives::SignatureError),
+    /// Malformed authentication header.
     #[error("Malformed authentication header")]
     MalformedHeader,
+    /// Signature error.
     #[error(transparent)]
     Signature(#[from] SignatureError),
+    /// Unknown method.
     #[error("Unknown method")]
     UnknownMethod,
+    /// Invalid JSON.
     #[error(transparent)]
     InvalidJson(#[from] JsonRejection),
 }
@@ -98,6 +109,7 @@ impl IntoResponse for Error {
 /// be returned to the user.
 #[derive(Debug, Error)]
 pub enum RejectionError {
+    /// State validation failed for this request.
     #[error("Validation failed: {0}")]
     ValidationFailed(String),
 }

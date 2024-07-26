@@ -240,8 +240,6 @@ fn auth_from_headers(headers: &HeaderMap) -> Result<(Address, Signature), Error>
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
-
     use alloy::primitives::TxHash;
     use alloy::signers::k256::SecretKey;
     use alloy::signers::{local::PrivateKeySigner, Signer};

@@ -1,7 +1,7 @@
 use alloy::{
     eips::eip2718::Encodable2718,
     network::{EthereumWallet, TransactionBuilder},
-    primitives::{keccak256, Address, B256, U256},
+    primitives::{Address, U256},
     rpc::types::TransactionRequest,
     signers::{
         k256::{ecdsa::SigningKey as K256SigningKey, SecretKey as K256SecretKey},
