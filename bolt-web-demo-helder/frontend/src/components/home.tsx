@@ -434,7 +434,7 @@ export default function Home() {
                                 {
                                   chainId: HELDER_CHAIN_ID_HEX,
                                   blockExplorerUrls: [
-                                    "https://dora.helder-devnets.xyz/",
+                                    "https://blockscout.helder-devnets.xyz/",
                                   ],
                                   chainName: "Helder Testnet",
                                   nativeCurrency: {
