@@ -61,13 +61,13 @@ async fn main() -> Result<()> {
         tx.set_nonce(provider.get_transaction_count(sender).await? + i);
 
         let tx_signed = tx.build(&transaction_signer).await?;
-        let tx_hash = tx_signed.tx_hash().to_string();
+        let tx_hash = tx_signed.tx_hash();
         let tx_rlp = hex::encode(tx_signed.encoded_2718());
 
         let message_digest = {
             let mut data = Vec::new();
+            data.extend_from_slice(tx_hash.as_slice());
             data.extend_from_slice(&target_slot.to_le_bytes());
-            data.extend_from_slice(hex::decode(tx_hash.trim_start_matches("0x"))?.as_slice());
             keccak256(data)
         };
 

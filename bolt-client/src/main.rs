@@ -98,7 +98,7 @@ async fn main() -> Result<()> {
     tx.set_nonce(provider.get_transaction_count(sender).await? + opts.nonce_offset);
 
     let tx_signed = tx.build(&transaction_signer).await?;
-    let tx_hash = tx_signed.tx_hash().to_string();
+    let tx_hash = tx_signed.tx_hash();
     let tx_rlp = hex::encode(tx_signed.encoded_2718());
 
     let request = prepare_rpc_request(
@@ -111,7 +111,7 @@ async fn main() -> Result<()> {
 
     info!("Transaction hash: {}", tx_hash);
 
-    let signature = sign_request(&tx_hash, target_slot, &wallet).await?;
+    let signature = sign_request(vec![tx_hash], target_slot, &wallet).await?;
 
     let response = reqwest::Client::new()
         .post(target_sidecar_url)
