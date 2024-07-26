@@ -75,7 +75,7 @@ pub async fn sign_request(
     let digest = {
         let mut data = Vec::new();
         data.extend_from_slice(tx_hash.as_bytes());
-        data.extend_from_slice(target_slot.to_be_bytes().as_slice());
+        data.extend_from_slice(target_slot.to_le_bytes().as_slice());
         keccak256(data)
     };
 

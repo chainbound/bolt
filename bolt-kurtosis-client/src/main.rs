@@ -78,7 +78,7 @@ async fn main() -> Result<()> {
         let request = prepare_rpc_request(
             "bolt_requestInclusion",
             vec![serde_json::json!({
-                "targetSlot": target_slot,
+                "slot": target_slot,
                 "txs": vec![tx_rlp],
             })],
         );

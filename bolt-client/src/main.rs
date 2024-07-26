@@ -21,13 +21,18 @@ use utils::*;
 #[derive(Parser)]
 struct Opts {
     /// Bolt RPC URL to send requests to
-    #[clap(short = 'p', long, default_value = "http://135.181.191.125:8015/", env)]
+    #[clap(
+        short = 'p',
+        long,
+        default_value = "http://135.181.191.125:8015/",
+        env = "BOLT_RPC_URL"
+    )]
     rpc_url: Url,
     /// Private key to sign transactions with
-    #[clap(short = 'k', long, env)]
+    #[clap(short = 'k', long, env = "BOLT_PRIVATE_KEY")]
     private_key: String,
     /// Optional nonce offset to use for the transaction
-    #[clap(short, long, default_value_t = 0, env)]
+    #[clap(short, long, default_value_t = 0, env = "BOLT_NONCE_OFFSET")]
     nonce_offset: u64,
     /// Flag for generating a blob tx instead of a regular tx
     #[clap(short = 'B', long, default_value_t = false)]
@@ -41,11 +46,16 @@ struct Opts {
     use_registry: bool,
     /// URL of the beacon client to use for fetching the lookahead
     /// (only used with the "use-registry" flag)
-    #[clap(short = 'b', long, env)]
+    #[clap(short = 'b', long, env = "BOLT_BEACON_CLIENT_URL")]
     beacon_client_url: Option<Url>,
     /// Address of the registry contract to read bolt sidecars from
     /// (only used with the "use-registry" flag)
-    #[clap(short, long, env, default_value = "0xdF11D829eeC4C192774F3Ec171D822f6Cb4C14d9")]
+    #[clap(
+        short,
+        long,
+        env = "BOLT_REGISTRY_ADDRESS",
+        default_value = "0xdF11D829eeC4C192774F3Ec171D822f6Cb4C14d9"
+    )]
     registry_address: Address,
 }
 
@@ -94,7 +104,7 @@ async fn main() -> Result<()> {
     let request = prepare_rpc_request(
         "bolt_requestInclusion",
         vec![serde_json::json!({
-            "targetSlot": target_slot,
+            "slot": target_slot,
             "txs": vec![tx_rlp],
         })],
     );
