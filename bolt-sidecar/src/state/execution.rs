@@ -67,7 +67,7 @@ pub enum ValidationError {
     #[error("Max committed gas reached for slot {0}: {1}")]
     MaxCommittedGasReachedForSlot(u64, u64),
     /// The signature is invalid.
-    #[error(transparent)]
+    #[error("Invalid signature")]
     Signature(#[from] crate::primitives::SignatureError),
     /// Could not recover signature,
     #[error("Could not recover signer")]

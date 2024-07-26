@@ -145,9 +145,8 @@ impl CommitmentsApiServer {
     ) -> Result<Json<JsonResponse>, Error> {
         tracing::debug!(method = payload.method, "Received new request");
 
-        let signature = signature_from_headers(&headers).map_err(|e| {
+        let (signer, signature) = auth_from_headers(&headers).inspect_err(|e| {
             tracing::error!("Failed to extract signature from headers: {:?}", e);
-            e
         })?;
 
         match payload.method.as_str() {
@@ -166,11 +165,24 @@ impl CommitmentsApiServer {
                 inclusion_request.set_signature(signature);
 
                 let digest = inclusion_request.digest();
-                let signer = signature.recover_address_from_prehash(&digest)?;
-                tracing::debug!(?signer, "Recovered public key and associated address");
+                let recovered_signer = signature.recover_address_from_prehash(&digest)?;
+                tracing::debug!(
+                    ?recovered_signer,
+                    "Recovered public key and associated address"
+                );
+
+                if recovered_signer != signer {
+                    tracing::error!(
+                        ?recovered_signer,
+                        ?signer,
+                        "Recovered signer does not match the provided signer"
+                    );
+
+                    return Err(Error::InvalidSignature(crate::primitives::SignatureError));
+                }
 
                 // Set the request signer
-                inclusion_request.set_signer(signer);
+                inclusion_request.set_signer(recovered_signer);
 
                 let inclusion_commitment = api.request_inclusion(inclusion_request).await?;
 
@@ -192,16 +204,23 @@ impl CommitmentsApiServer {
 }
 
 /// Extracts the signature ([SIGNATURE_HEADER]) from the HTTP headers.
-fn signature_from_headers(headers: &HeaderMap) -> Result<Signature, Error> {
-    let signature = headers.get(SIGNATURE_HEADER).ok_or(Error::NoSignature)?;
+#[inline]
+fn auth_from_headers(headers: &HeaderMap) -> Result<(Address, Signature), Error> {
+    let auth = headers.get(SIGNATURE_HEADER).ok_or(Error::NoSignature)?;
 
     // Remove the "0x" prefix
-    let signature = signature
-        .to_str()
+    let auth = auth.to_str().map_err(|_| Error::MalformedHeader)?;
+
+    let mut split = auth.split(':');
+
+    let address = split.next().ok_or(Error::MalformedHeader)?;
+    let address = Address::from_str(address).map_err(|_| Error::MalformedHeader)?;
+
+    let sig = split.next().ok_or(Error::MalformedHeader)?;
+    let sig = Signature::from_str(sig)
         .map_err(|_| Error::InvalidSignature(crate::primitives::SignatureError))?;
 
-    Signature::from_str(signature)
-        .map_err(|_| Error::InvalidSignature(crate::primitives::SignatureError))
+    Ok((address, sig))
 }
 
 #[cfg(test)]
@@ -220,12 +239,17 @@ mod test {
         let mut headers = HeaderMap::new();
         let hash = TxHash::random();
         let signer = PrivateKeySigner::random();
+        let addr = signer.address();
 
         let expected_sig = signer.sign_hash(&hash).await.unwrap();
-        headers.insert(SIGNATURE_HEADER, expected_sig.to_hex().parse().unwrap());
+        headers.insert(
+            SIGNATURE_HEADER,
+            format!("{addr}:{}", expected_sig.to_hex()).parse().unwrap(),
+        );
 
-        let signature = signature_from_headers(&headers).unwrap();
+        let (address, signature) = auth_from_headers(&headers).unwrap();
         assert_eq!(signature, expected_sig);
+        assert_eq!(address, addr);
     }
 
     #[tokio::test]

@@ -24,6 +24,8 @@ pub enum Error {
     NoSignature,
     #[error(transparent)]
     InvalidSignature(#[from] crate::primitives::SignatureError),
+    #[error("Malformed authentication header")]
+    MalformedHeader,
     #[error(transparent)]
     Signature(#[from] SignatureError),
     #[error("Unknown method")]
@@ -68,6 +70,11 @@ impl IntoResponse for Error {
             Error::ValidationFailed(message) => (
                 StatusCode::BAD_REQUEST,
                 Json(JsonResponse::from_error(-32006, message)),
+            )
+                .into_response(),
+            Error::MalformedHeader => (
+                StatusCode::BAD_REQUEST,
+                Json(JsonResponse::from_error(-32007, self.to_string())),
             )
                 .into_response(),
             Error::UnknownMethod => (

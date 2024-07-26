@@ -251,13 +251,12 @@ mod tests {
     #[test]
     fn test_deserialize_inclusion_request() {
         let json_req = r#"{
-            "tx": "0x02f86c870c72dd9d5e883e4d0183408f2382520894d2e2adf7177b7a8afddbc12d1634cf23ea1a71020180c001a08556dcfea479b34675db3fe08e29486fe719c2b22f6b0c1741ecbbdce4575cc6a01cd48009ccafd6b9f1290bbe2ceea268f94101d1d322c787018423ebcbc87ab4",
-            "signature": "0xb8623aae262785bd31d0cc6e368a9b9ab5361002edd58ece424ef5dde0544b32472d954da3f34ca9c2c2201393f9b83cdc959bd416c0af96fe3e0962a08cb92101",
-            "slot": 1
+            "slot": 10,
+            "txs": ["0x02f86c870c72dd9d5e883e4d0183408f2382520894d2e2adf7177b7a8afddbc12d1634cf23ea1a71020180c001a08556dcfea479b34675db3fe08e29486fe719c2b22f6b0c1741ecbbdce4575cc6a01cd48009ccafd6b9f1290bbe2ceea268f94101d1d322c787018423ebcbc87ab4"]
         }"#;
 
         let req: InclusionRequest = serde_json::from_str(json_req).unwrap();
-        assert_eq!(req.slot, 1);
+        assert_eq!(req.slot, 10);
 
         let deser = serde_json::to_string(&req).unwrap();
 
@@ -270,16 +269,15 @@ mod tests {
     #[test]
     fn test_deserialize_commitment_request() {
         let json_req = r#"{
-            "tx": "0x02f86c870c72dd9d5e883e4d0183408f2382520894d2e2adf7177b7a8afddbc12d1634cf23ea1a71020180c001a08556dcfea479b34675db3fe08e29486fe719c2b22f6b0c1741ecbbdce4575cc6a01cd48009ccafd6b9f1290bbe2ceea268f94101d1d322c787018423ebcbc87ab4",
-            "signature": "0xb8623aae262785bd31d0cc6e368a9b9ab5361002edd58ece424ef5dde0544b32472d954da3f34ca9c2c2201393f9b83cdc959bd416c0af96fe3e0962a08cb92101",
-            "slot": 1
+            "slot": 10,
+            "txs": ["0x02f86c870c72dd9d5e883e4d0183408f2382520894d2e2adf7177b7a8afddbc12d1634cf23ea1a71020180c001a08556dcfea479b34675db3fe08e29486fe719c2b22f6b0c1741ecbbdce4575cc6a01cd48009ccafd6b9f1290bbe2ceea268f94101d1d322c787018423ebcbc87ab4"]
         }"#;
 
         let req: CommitmentRequest = serde_json::from_str(json_req).unwrap();
 
         #[allow(irrefutable_let_patterns)]
         if let CommitmentRequest::Inclusion(req) = req {
-            assert_eq!(req.slot, 1);
+            assert_eq!(req.slot, 10);
         } else {
             panic!("Expected Inclusion request");
         }
