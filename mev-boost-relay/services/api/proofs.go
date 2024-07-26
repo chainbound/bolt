@@ -6,16 +6,19 @@ import (
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/phase0"
+	gethCommon "github.com/ethereum/go-ethereum/common"
 	fastSsz "github.com/ferranbt/fastssz"
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/sirupsen/logrus"
 )
 
 var (
-	ErrNilConstraint = errors.New("nil constraint")
-	ErrNilProof      = errors.New("nil proof")
-	ErrInvalidProofs = errors.New("proof verification failed")
-	ErrInvalidRoot   = errors.New("failed getting tx root from bid")
+	ErrNilConstraint             = errors.New("nil constraint")
+	ErrNilProof                  = errors.New("nil proof")
+	ErrInvalidProofs             = errors.New("proof verification failed")
+	ErrInvalidRoot               = errors.New("failed getting tx root from bid")
+	ErrHashesIndexesMismatch     = errors.New("proof transaction hashes and indexes length mismatch")
+	ErrHashesConstraintsMismatch = errors.New("proof transaction hashes and constraints length mismatch")
 )
 
 // verifyInclusionProof verifies the proofs against the constraints, and returns an error if the proofs are invalid.
@@ -26,12 +29,20 @@ func verifyInclusionProof(log *logrus.Entry, transactionsRoot phase0.Root, proof
 		return ErrNilProof
 	}
 
-	constraints := ParseConstraintsDecoded(hashToConstraints)
+	if len(proof.TransactionHashes) != len(proof.GeneralizedIndexes) {
+		return ErrHashesIndexesMismatch
+	}
 
-	leaves := make([][]byte, len(constraints))
+	if len(proof.TransactionHashes) != len(hashToConstraints) {
+		return ErrHashesIndexesMismatch
+	}
 
-	for i, constraint := range constraints {
-		if constraint == nil {
+	leaves := make([][]byte, len(hashToConstraints))
+	indexes := make([]int, len(proof.GeneralizedIndexes))
+
+	for i, hash := range proof.TransactionHashes {
+		constraint, ok := hashToConstraints[gethCommon.Hash(hash)]
+		if constraint == nil || !ok {
 			return ErrNilConstraint
 		}
 
@@ -50,16 +61,13 @@ func verifyInclusionProof(log *logrus.Entry, transactionsRoot phase0.Root, proof
 		}
 
 		leaves[i] = txHashTreeRoot[:]
+		indexes[i] = int(proof.GeneralizedIndexes[i])
 		i++
 	}
 
 	hashes := make([][]byte, len(proof.MerkleHashes))
 	for i, hash := range proof.MerkleHashes {
 		hashes[i] = []byte(*hash)
-	}
-	indexes := make([]int, len(proof.GeneralizedIndexes))
-	for i, index := range proof.GeneralizedIndexes {
-		indexes[i] = int(index)
 	}
 
 	currentTime := time.Now()
