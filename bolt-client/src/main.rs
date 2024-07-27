@@ -24,7 +24,7 @@ struct Opts {
     #[clap(
         short = 'p',
         long,
-        default_value = "http://135.181.191.125:8015/",
+        default_value = "http://135.181.191.125:8015/rpc",
         env = "BOLT_RPC_URL"
     )]
     rpc_url: Url,
@@ -89,7 +89,7 @@ async fn main() -> Result<()> {
             opts.rpc_url.join("proposers/lookahead?onlyActive=true&onlyFuture=true&cbOnly=true")?;
         let lookahead_response = reqwest::get(url).await?.json::<serde_json::Value>().await?;
         let next_preconfer_slot = lookahead_response[0].get("slot").unwrap().as_u64().unwrap();
-        (opts.rpc_url.join("/rpc")?, next_preconfer_slot)
+        (opts.rpc_url, next_preconfer_slot)
     };
 
     let mut tx = if opts.blob { generate_random_blob_tx() } else { generate_random_tx() };
@@ -109,9 +109,8 @@ async fn main() -> Result<()> {
         })],
     );
 
-    info!("Transaction hash: {}", tx_hash);
-
     let signature = sign_request(vec![tx_hash], target_slot, &wallet).await?;
+    info!(%tx_hash, target_slot, %target_sidecar_url, signature);
 
     let response = reqwest::Client::new()
         .post(target_sidecar_url)
