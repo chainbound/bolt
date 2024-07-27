@@ -80,14 +80,17 @@ async fn main() -> Result<()> {
         let duties = get_proposer_duties(&beacon_api_client, curr_slot, curr_slot / 32).await?;
         match registry.next_preconfer_from_registry(duties).await {
             Ok(Some((endpoint, slot))) => (Url::parse(&endpoint)?, slot),
-            Ok(None) => bail!("no next preconfer slot found"),
+            Ok(None) => bail!("no next preconfer slot found, try again later"),
             Err(e) => bail!("error fetching next preconfer slot from registry: {:?}", e),
         }
     } else {
         // TODO: remove "cbOnly=true"
         let url =
-            opts.rpc_url.join("proposers/lookahead?onlyActive=true&onlyFuture=true&cbOnly=true")?;
+            opts.rpc_url.join("proposers/lookahead?activeOnly=true&futureOnly=true&cbOnly=true")?;
         let lookahead_response = reqwest::get(url).await?.json::<serde_json::Value>().await?;
+        if lookahead_response.as_array().unwrap_or(&vec![]).is_empty() {
+            bail!("no bolt proposer found in lookahead, try again later");
+        }
         let next_preconfer_slot = lookahead_response[0].get("slot").unwrap().as_u64().unwrap();
         (opts.rpc_url, next_preconfer_slot)
     };
