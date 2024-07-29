@@ -16,7 +16,7 @@ use secp256k1::Message;
 
 use crate::{
     crypto::{ecdsa::SignableECDSA, SignableBLS},
-    primitives::{CommitmentRequest, InclusionRequest},
+    primitives::{CommitmentRequest, FullTransaction, InclusionRequest},
     Config,
 };
 
@@ -144,7 +144,7 @@ impl SignableECDSA for TestSignableData {
 /// Create a valid signed commitment request for testing purposes
 /// from the given transaction, private key of the sender, and slot.
 pub(crate) async fn create_signed_commitment_request(
-    tx: TransactionRequest,
+    txs: &[TransactionRequest],
     sk: &K256SecretKey,
     slot: u64,
 ) -> eyre::Result<CommitmentRequest> {
@@ -152,12 +152,15 @@ pub(crate) async fn create_signed_commitment_request(
     let signer = PrivateKeySigner::from_signing_key(sk.clone());
     let wallet = EthereumWallet::from(signer.clone());
 
-    let tx_signed = tx.build(&wallet).await?;
-    let raw_encoded = tx_signed.encoded_2718();
-    let tx_pooled = PooledTransactionsElement::decode_enveloped(&mut raw_encoded.as_slice())?;
-
+    let mut full_txs = Vec::with_capacity(txs.len());
+    for tx in txs {
+        let tx_signed = tx.clone().build(&wallet).await?;
+        let raw_encoded = tx_signed.encoded_2718();
+        let tx_pooled = PooledTransactionsElement::decode_enveloped(&mut raw_encoded.as_slice())?;
+        full_txs.push(FullTransaction::from(tx_pooled));
+    }
     let mut request = InclusionRequest {
-        txs: vec![tx_pooled.into()],
+        txs: full_txs,
         slot,
         signature: None,
         signer: None,
