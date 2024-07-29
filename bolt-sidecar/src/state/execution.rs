@@ -270,6 +270,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
 
         if target_slot < self.slot {
+            tracing::debug!(%target_slot, %self.slot, "Target slot lower than current slot");
             return Err(ValidationError::SlotTooLow(self.slot));
         }
 
@@ -313,6 +314,7 @@ impl<C: StateFetcher> ExecutionState<C> {
                 );
 
             if target_slot < highest_slot_for_account {
+                tracing::debug!(%target_slot, %highest_slot_for_account, "There is a request for a higher slot");
                 return Err(ValidationError::SlotTooLow(highest_slot_for_account));
             }
 
