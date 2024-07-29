@@ -39,12 +39,12 @@ pub fn generate_random_blob_tx() -> TransactionRequest {
         .with_blob_sidecar(sidecar)
 }
 
-pub fn prepare_rpc_request(method: &str, params: Vec<Value>) -> Value {
+pub fn prepare_rpc_request(method: &str, params: Value) -> Value {
     serde_json::json!({
         "id": "1",
         "jsonrpc": "2.0",
         "method": method,
-        "params": params,
+        "params": vec![params],
     })
 }
 
@@ -68,7 +68,7 @@ pub async fn get_proposer_duties(
 }
 
 pub async fn sign_request(
-    tx_hashes: Vec<&B256>,
+    tx_hashes: Vec<B256>,
     target_slot: u64,
     wallet: &PrivateKeySigner,
 ) -> eyre::Result<String> {
@@ -103,7 +103,7 @@ mod tests {
             B256::from_str("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")?;
         let target_slot = 42;
 
-        let signature = sign_request(vec![&tx_hash], target_slot, &wallet).await?;
+        let signature = sign_request(vec![tx_hash], target_slot, &wallet).await?;
         let parts: Vec<&str> = signature.split(':').collect();
 
         assert_eq!(parts.len(), 2);
@@ -123,7 +123,7 @@ mod tests {
         let wallet = PrivateKeySigner::from_str(private_key)?;
         let tx_hash = B256::from_str(tx_hash)?;
 
-        let signature = sign_request(vec![&tx_hash], target_slot, &wallet).await?;
+        let signature = sign_request(vec![tx_hash], target_slot, &wallet).await?;
 
         assert_eq!(signature, expected_signature);
 

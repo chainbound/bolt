@@ -2,13 +2,14 @@ use alloy::{
     eips::eip2718::Encodable2718,
     hex,
     network::{EthereumWallet, TransactionBuilder},
-    primitives::Address,
+    primitives::{Address, B256},
     providers::{Provider, ProviderBuilder},
     signers::local::PrivateKeySigner,
 };
 use beacon_api_client::mainnet::Client as BeaconApiClient;
 use clap::Parser;
 use eyre::{bail, Result};
+use serde_json::{json, Value};
 use tracing::info;
 use url::Url;
 
@@ -35,11 +36,14 @@ struct Opts {
     #[clap(short, long, default_value_t = 0, env = "BOLT_NONCE_OFFSET")]
     nonce_offset: u64,
     /// Flag for generating a blob tx instead of a regular tx
-    #[clap(short = 'B', long, default_value_t = false)]
+    #[clap(long, default_value_t = false)]
     blob: bool,
     /// Number of transactions to send in a sequence
     #[clap(short, long, default_value_t = 1)]
     count: u64,
+    /// Flag for sending all "count" transactions in a single bundle
+    #[clap(long, default_value_t = false)]
+    bundle: bool,
 
     /// Flag for using the registry to fetch the lookahead
     #[clap(short, long, default_value_t = false, requires_ifs([("true", "registry_address"), ("true", "beacon_client_url")]))]
@@ -65,7 +69,7 @@ async fn main() -> Result<()> {
     info!("starting bolt-client");
 
     let _ = dotenvy::dotenv();
-    let opts = Opts::parse();
+    let mut opts = Opts::parse();
 
     let wallet: PrivateKeySigner = opts.private_key.parse().expect("invalid private key");
     let transaction_signer: EthereumWallet = wallet.clone().into();
@@ -87,7 +91,7 @@ async fn main() -> Result<()> {
         // TODO: remove "cbOnly=true"
         let url =
             opts.rpc_url.join("proposers/lookahead?activeOnly=true&futureOnly=true&cbOnly=true")?;
-        let lookahead_response = reqwest::get(url).await?.json::<serde_json::Value>().await?;
+        let lookahead_response = reqwest::get(url).await?.json::<Value>().await?;
         if lookahead_response.as_array().unwrap_or(&vec![]).is_empty() {
             bail!("no bolt proposer found in lookahead, try again later");
         }
@@ -95,25 +99,62 @@ async fn main() -> Result<()> {
         (opts.rpc_url, next_preconfer_slot)
     };
 
-    let mut tx = if opts.blob { generate_random_blob_tx() } else { generate_random_tx() };
-    tx.set_from(sender);
-    tx.set_chain_id(provider.get_chain_id().await?);
-    tx.set_nonce(provider.get_transaction_count(sender).await? + opts.nonce_offset);
+    let mut txs_rlp = Vec::with_capacity(opts.count as usize);
+    let mut tx_hashes = Vec::with_capacity(opts.count as usize);
+    for _ in 0..opts.count {
+        let mut tx = if opts.blob { generate_random_blob_tx() } else { generate_random_tx() };
+        tx.set_from(sender);
+        tx.set_chain_id(provider.get_chain_id().await?);
+        tx.set_nonce(provider.get_transaction_count(sender).await? + opts.nonce_offset);
 
-    let tx_signed = tx.build(&transaction_signer).await?;
-    let tx_hash = tx_signed.tx_hash();
-    let tx_rlp = hex::encode(tx_signed.encoded_2718());
+        // Set the nonce offset for the next transaction
+        opts.nonce_offset += 1;
 
+        let tx_signed = tx.build(&transaction_signer).await?;
+        let tx_hash = tx_signed.tx_hash();
+        let tx_rlp = hex::encode(tx_signed.encoded_2718());
+
+        if opts.bundle {
+            // store transactions in a bundle to send them all at once
+            txs_rlp.push(tx_rlp);
+            tx_hashes.push(*tx_hash);
+        } else {
+            // Send rpc requests singularly for each transaction
+            send_rpc_request(
+                vec![tx_rlp.clone()],
+                vec![*tx_hash],
+                target_slot,
+                target_sidecar_url.clone(),
+                &wallet,
+            )
+            .await?;
+        }
+    }
+
+    if opts.bundle {
+        send_rpc_request(txs_rlp, tx_hashes, target_slot, target_sidecar_url, &wallet).await?;
+    }
+
+    Ok(())
+}
+
+async fn send_rpc_request(
+    txs_rlp: Vec<String>,
+    tx_hashes: Vec<B256>,
+    target_slot: u64,
+    target_sidecar_url: Url,
+    wallet: &PrivateKeySigner,
+) -> Result<()> {
     let request = prepare_rpc_request(
         "bolt_requestInclusion",
-        vec![serde_json::json!({
+        json!({
             "slot": target_slot,
-            "txs": vec![tx_rlp],
-        })],
+            "txs": txs_rlp,
+        }),
     );
 
-    let signature = sign_request(vec![tx_hash], target_slot, &wallet).await?;
-    info!(%tx_hash, target_slot, %target_sidecar_url, signature);
+    info!(?tx_hashes, target_slot, %target_sidecar_url);
+    let signature = sign_request(tx_hashes, target_slot, wallet).await?;
 
     let response = reqwest::Client::new()
         .post(target_sidecar_url)
@@ -128,6 +169,5 @@ async fn main() -> Result<()> {
     // strip out long series of zeros in the response (to avoid spamming blob contents)
     let response = response.replace(&"0".repeat(32), ".").replace(&".".repeat(4), "");
     info!("Response: {:?}", response);
-
     Ok(())
 }
