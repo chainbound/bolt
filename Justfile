@@ -169,3 +169,14 @@ release tag:
     cd mev-boost-relay && docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-relay:{{tag}} --push .
     cd builder && docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-builder:{{tag}} --push .
     cd mev-boost && docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-mev-boost:{{tag}} --push .
+
+# tag all the docker images with a new tag and push them to the github container registry
+tag oldtag newtag:
+    docker tag ghcr.io/chainbound/bolt-sidecar:{{oldtag}} ghcr.io/chainbound/bolt-sidecar:{{newtag}}
+    docker tag ghcr.io/chainbound/bolt-relay:{{oldtag}} ghcr.io/chainbound/bolt-relay:{{newtag}}
+    docker tag ghcr.io/chainbound/bolt-builder:{{oldtag}} ghcr.io/chainbound/bolt-builder:{{newtag}}
+    docker tag ghcr.io/chainbound/bolt-mev-boost:{{oldtag}} ghcr.io/chainbound/bolt-mev-boost:{{newtag}}
+    docker push ghcr.io/chainbound/bolt-sidecar:{{newtag}}
+    docker push ghcr.io/chainbound/bolt-relay:{{newtag}}
+    docker push ghcr.io/chainbound/bolt-builder:{{newtag}}
+    docker push ghcr.io/chainbound/bolt-mev-boost:{{newtag}}
