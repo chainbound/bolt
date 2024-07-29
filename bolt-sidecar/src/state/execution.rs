@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use crate::{
     builder::BlockTemplate,
-    common::{calculate_max_basefee, validate_transaction},
+    common::{calculate_max_basefee, max_transaction_cost, validate_transaction},
     config::Limits,
     primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot},
 };
@@ -273,7 +273,18 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::SlotTooLow(self.slot));
         }
 
-        for tx in &req.txs {
+        // Validate each transaction in the request against the account state,
+        // keeping track of the nonce and balance diffs, including:
+        // - any existing state in the account trie
+        // - any previously committed transactions
+        // - any previous transaction in the same request
+        //
+        // NOTE: it's also possible for a request to contain multiple transactions
+        // from different senders, in this case each sender will have its own nonce
+        // and balance diffs that will be applied to the account state.
+        let mut bundle_nonce_diff_map = HashMap::new();
+        let mut bundle_balance_diff_map = HashMap::new();
+        for tx in req.txs.iter() {
             let sender = tx.sender().expect("Recovered sender");
 
             // From previous preconfirmations requests retrieve
@@ -326,11 +337,29 @@ impl<C: StateFetcher> ExecutionState<C> {
                 }
             };
 
+            let sender_nonce_diff = bundle_nonce_diff_map.entry(sender).or_insert(0);
+            let sender_balance_diff = bundle_balance_diff_map.entry(sender).or_insert(U256::ZERO);
+
+            // Apply the diffs to this account according to the info fetched from the templates
+            // and the current bundle diffs for this sender.
             let account_state_with_diffs = AccountState {
-                transaction_count: account_state.transaction_count.saturating_add(nonce_diff),
-                balance: account_state.balance.saturating_sub(balance_diff),
+                transaction_count: account_state
+                    .transaction_count
+                    .saturating_add(nonce_diff)
+                    .saturating_add(*sender_nonce_diff),
+
+                balance: account_state
+                    .balance
+                    .saturating_sub(balance_diff)
+                    .saturating_sub(*sender_balance_diff),
+
+                // TODO(nico): what if this changes in the middle of the request?
                 has_code: account_state.has_code,
             };
+
+            // Increase the bundle nonce and balance diffs for this sender for the next iteration
+            *sender_nonce_diff += 1;
+            *sender_balance_diff += max_transaction_cost(tx);
 
             // Validate the transaction against the account state with existing diffs
             validate_transaction(&account_state_with_diffs, tx)?;
