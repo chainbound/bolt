@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use crate::{
     builder::BlockTemplate,
-    common::{calculate_max_basefee, validate_transaction},
+    common::{calculate_max_basefee, max_transaction_cost, validate_transaction},
     config::Limits,
     primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot},
 };
@@ -37,7 +37,7 @@ pub enum ValidationError {
     #[error("Transaction nonce too low. Expected {0}, got {1}")]
     NonceTooLow(u64, u64),
     /// The transaction nonce is too high.
-    #[error("Transaction nonce too high")]
+    #[error("Transaction nonce too high. Expected {0}, got {1}")]
     NonceTooHigh(u64, u64),
     /// The sender account is a smart contract and has code.
     #[error("Account has code")]
@@ -273,7 +273,18 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::SlotTooLow(self.slot));
         }
 
-        for tx in &req.txs {
+        // Validate each transaction in the request against the account state,
+        // keeping track of the nonce and balance diffs, including:
+        // - any existing state in the account trie
+        // - any previously committed transactions
+        // - any previous transaction in the same request
+        //
+        // NOTE: it's also possible for a request to contain multiple transactions
+        // from different senders, in this case each sender will have its own nonce
+        // and balance diffs that will be applied to the account state.
+        let mut bundle_nonce_diff_map = HashMap::new();
+        let mut bundle_balance_diff_map = HashMap::new();
+        for tx in req.txs.iter() {
             let sender = tx.sender().expect("Recovered sender");
 
             // From previous preconfirmations requests retrieve
@@ -326,11 +337,28 @@ impl<C: StateFetcher> ExecutionState<C> {
                 }
             };
 
+            let sender_nonce_diff = bundle_nonce_diff_map.entry(sender).or_insert(0);
+            let sender_balance_diff = bundle_balance_diff_map.entry(sender).or_insert(U256::ZERO);
+
+            // Apply the diffs to this account according to the info fetched from the templates
+            // and the current bundle diffs for this sender.
             let account_state_with_diffs = AccountState {
-                transaction_count: account_state.transaction_count.saturating_add(nonce_diff),
-                balance: account_state.balance.saturating_sub(balance_diff),
+                transaction_count: account_state
+                    .transaction_count
+                    .saturating_add(nonce_diff)
+                    .saturating_add(*sender_nonce_diff),
+
+                balance: account_state
+                    .balance
+                    .saturating_sub(balance_diff)
+                    .saturating_sub(*sender_balance_diff),
+
                 has_code: account_state.has_code,
             };
+
+            // Increase the bundle nonce and balance diffs for this sender for the next iteration
+            *sender_nonce_diff += 1;
+            *sender_balance_diff += max_transaction_cost(tx);
 
             // Validate the transaction against the account state with existing diffs
             validate_transaction(&account_state_with_diffs, tx)?;
@@ -501,7 +529,7 @@ mod tests {
 
         let tx = default_test_transaction(*sender, None);
 
-        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         assert!(state
             .validate_commitment_request(&mut request)
@@ -530,7 +558,7 @@ mod tests {
         // Create a transaction with a nonce that is too high
         let tx = default_test_transaction(*sender, Some(1));
 
-        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         // Insert a constraint diff for slot 11
         let mut diffs = HashMap::new();
@@ -582,7 +610,7 @@ mod tests {
         // Create a transaction with a nonce that is too low
         let tx = default_test_transaction(*sender, Some(0));
 
-        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         assert!(matches!(
             state.validate_commitment_request(&mut request).await,
@@ -594,7 +622,7 @@ mod tests {
         // Create a transaction with a nonce that is too high
         let tx = default_test_transaction(*sender, Some(2));
 
-        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         assert!(matches!(
             state.validate_commitment_request(&mut request).await,
@@ -624,7 +652,7 @@ mod tests {
         let tx = default_test_transaction(*sender, None)
             .with_value(uint!(11_000_U256 * Uint::from(ETH_TO_WEI)));
 
-        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         assert!(matches!(
             state.validate_commitment_request(&mut request).await,
@@ -658,7 +686,7 @@ mod tests {
 
         // burn the balance
         let tx = default_test_transaction(*sender, Some(0)).with_value(uint!(balance_to_burn));
-        let request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
         let tx_bytes = request
             .as_inclusion_request()
             .unwrap()
@@ -675,7 +703,7 @@ mod tests {
 
         // create a new transaction and request a preconfirmation for it
         let tx = default_test_transaction(*sender, Some(1));
-        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         assert!(state
             .validate_commitment_request(&mut request)
@@ -689,7 +717,7 @@ mod tests {
 
         // create a new transaction and request a preconfirmation for it
         let tx = default_test_transaction(*sender, Some(2));
-        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         // this should fail because the balance is insufficient as we spent
         // all of it on the previous preconfirmation
@@ -724,7 +752,7 @@ mod tests {
             .with_max_fee_per_gas(basefee - 1)
             .with_max_priority_fee_per_gas(basefee / 2);
 
-        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         assert!(matches!(
             state.validate_commitment_request(&mut request).await,
@@ -756,7 +784,7 @@ mod tests {
 
         let tx = default_test_transaction(*sender, None).with_gas_limit(6_000_000);
 
-        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         assert!(matches!(
             state.validate_commitment_request(&mut request).await,
@@ -791,7 +819,7 @@ mod tests {
         let signed = tx.clone().build(&signer).await?;
 
         let target_slot = 10;
-        let mut request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, target_slot).await?;
         let inclusion_request = request.as_inclusion_request().unwrap().clone();
 
         assert!(state
@@ -855,7 +883,7 @@ mod tests {
         let tx = default_test_transaction(*sender, None);
 
         let target_slot = 10;
-        let mut request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, target_slot).await?;
         let inclusion_request = request.as_inclusion_request().unwrap().clone();
 
         assert!(state
@@ -910,7 +938,7 @@ mod tests {
         let tx = default_test_transaction(*sender, None).with_gas_limit(4_999_999);
 
         let target_slot = 10;
-        let mut request = create_signed_commitment_request(tx, sender_pk, target_slot).await?;
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, target_slot).await?;
         let inclusion_request = request.as_inclusion_request().unwrap().clone();
 
         assert!(state
@@ -936,11 +964,102 @@ mod tests {
         // This tx will exceed the committed gas limit
         let tx = default_test_transaction(*sender, Some(1));
 
-        let mut request = create_signed_commitment_request(tx, sender_pk, 10).await?;
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         assert!(matches!(
             state.validate_commitment_request(&mut request).await,
             Err(ValidationError::MaxCommittedGasReachedForSlot(_, 5_000_000))
+        ));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_valid_bundle_inclusion_request() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let tx1 = default_test_transaction(*sender, Some(0));
+        let tx2 = default_test_transaction(*sender, Some(1));
+        let tx3 = default_test_transaction(*sender, Some(2));
+
+        let mut request = create_signed_commitment_request(&[tx1, tx2, tx3], sender_pk, 10).await?;
+
+        assert!(state
+            .validate_commitment_request(&mut request)
+            .await
+            .is_ok());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_invalid_bundle_inclusion_request_nonce() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let tx1 = default_test_transaction(*sender, Some(0));
+        let tx2 = default_test_transaction(*sender, Some(1));
+        let tx3 = default_test_transaction(*sender, Some(3)); // wrong nonce, should be 2
+
+        let mut request = create_signed_commitment_request(&[tx1, tx2, tx3], sender_pk, 10).await?;
+
+        assert!(matches!(
+            state.validate_commitment_request(&mut request).await,
+            Err(ValidationError::NonceTooHigh(2, 3))
+        ));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_invalid_bundle_inclusion_request_balance() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let tx1 = default_test_transaction(*sender, Some(0));
+        let tx2 = default_test_transaction(*sender, Some(1));
+        let tx3 = default_test_transaction(*sender, Some(2))
+            .with_value(uint!(11_000_U256 * Uint::from(ETH_TO_WEI)));
+
+        let mut request = create_signed_commitment_request(&[tx1, tx2, tx3], sender_pk, 10).await?;
+
+        assert!(matches!(
+            state.validate_commitment_request(&mut request).await,
+            Err(ValidationError::InsufficientBalance)
         ));
 
         Ok(())
