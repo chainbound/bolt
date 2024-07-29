@@ -39,12 +39,12 @@ pub fn generate_random_blob_tx() -> TransactionRequest {
         .with_blob_sidecar(sidecar)
 }
 
-pub fn prepare_rpc_request(method: &str, params: Vec<Value>) -> Value {
+pub fn prepare_rpc_request(method: &str, params: Value) -> Value {
     serde_json::json!({
         "id": "1",
         "jsonrpc": "2.0",
         "method": method,
-        "params": params,
+        "params": vec![params],
     })
 }
 
@@ -68,7 +68,7 @@ pub async fn get_proposer_duties(
 }
 
 pub async fn sign_request(
-    tx_hashes: Vec<&B256>,
+    tx_hashes: Vec<B256>,
     target_slot: u64,
     wallet: &PrivateKeySigner,
 ) -> eyre::Result<String> {
@@ -89,7 +89,12 @@ pub async fn sign_request(
 mod tests {
     use std::str::FromStr;
 
-    use alloy::{primitives::B256, signers::local::PrivateKeySigner};
+    use alloy::{
+        primitives::{keccak256, Signature, B256},
+        signers::local::PrivateKeySigner,
+    };
+
+    use crate::sign_request;
 
     #[tokio::test]
     async fn test_sign_request() -> eyre::Result<()> {
@@ -98,12 +103,46 @@ mod tests {
             B256::from_str("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")?;
         let target_slot = 42;
 
-        let signature = super::sign_request(vec![&tx_hash], target_slot, &wallet).await?;
+        let signature = sign_request(vec![tx_hash], target_slot, &wallet).await?;
         let parts: Vec<&str> = signature.split(':').collect();
 
         assert_eq!(parts.len(), 2);
         assert_eq!(parts[0], wallet.address().to_string());
         assert_eq!(parts[1].len(), 130);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_verify_signature() -> eyre::Result<()> {
+        // Randomly generated private key
+        let private_key = "0xfa4c3c87627a58684fb519f7b01a31ef31e56f414e8aa56a15f574381a5a7a9c";
+        let tx_hash = "0x6938dbd0649ce26af79b0cca677b493257bd87c17d25ff717feba33c8b3920b3";
+        let expected_signature = "0x10386a2aF29854954645C9710A038AcF4B2F1752:0x8db9bbcc1db5257c80138bd1df0185305918dbc8a607f63458ea885a6ccce5177a73417d693953b9f5c017a927e9c8acbf24c05b09a55f1f3fa83db57931ed9e1c";
+        let target_slot = 254464;
+
+        let wallet = PrivateKeySigner::from_str(private_key)?;
+        let tx_hash = B256::from_str(tx_hash)?;
+
+        let signature = sign_request(vec![tx_hash], target_slot, &wallet).await?;
+
+        assert_eq!(signature, expected_signature);
+
+        let expected_signer = expected_signature.split(':').next().unwrap();
+        let expected_sig = expected_signature.split(':').last().unwrap();
+        let sig = Signature::from_str(expected_sig)?;
+
+        // recompute the prehash again
+        let digest = {
+            let mut data = Vec::new();
+            data.extend_from_slice(tx_hash.as_slice());
+            data.extend_from_slice(target_slot.to_le_bytes().as_slice());
+            keccak256(data)
+        };
+
+        let recovered_address = sig.recover_address_from_prehash(&digest)?;
+        assert_eq!(recovered_address, wallet.address());
+        assert_eq!(recovered_address.to_string(), expected_signer);
+
         Ok(())
     }
 }
