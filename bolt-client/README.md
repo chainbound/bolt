@@ -19,7 +19,7 @@ This is a simple CLI tool to interact with Bolt.
 instead of relying on the RPC server:
 
 - `--use-registry`: bool flag to fetch data from a local node instead of the RPC_URL (default: false)
-- `BOLT_REGISTRY_ADDRESS` or `--registry-address`: the address of the bolt-registry contract
+- `BOLT_REGISTRY` or `--registry`: the address of the bolt-registry smart contract
 - `BOLT_BEACON_CLIENT_URL` or `--beacon-client-url`: the URL of the CL node to use
 
 1. Run the CLI tool with the desired command and arguments, if any.
