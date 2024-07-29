@@ -353,7 +353,6 @@ impl<C: StateFetcher> ExecutionState<C> {
                     .saturating_sub(balance_diff)
                     .saturating_sub(*sender_balance_diff),
 
-                // TODO(nico): what if this changes in the middle of the request?
                 has_code: account_state.has_code,
             };
 
