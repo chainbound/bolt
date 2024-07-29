@@ -1,6 +1,3 @@
-use alloy::primitives::{Address, Signature};
-use axum::{extract::State, http::HeaderMap, routing::post, Json};
-use axum_extra::extract::WithRejection;
 use std::{
     collections::HashSet,
     fmt::Debug,
@@ -10,14 +7,26 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
+
+use alloy::primitives::{Address, Signature};
+use axum::{
+    extract::State,
+    http::HeaderMap,
+    routing::{get, post},
+    Json,
+};
+use axum_extra::extract::WithRejection;
 use tokio::{
     net::TcpListener,
     sync::{mpsc, oneshot},
 };
 
-use crate::primitives::{
-    commitment::{InclusionCommitment, SignedCommitment},
-    CommitmentRequest, InclusionRequest,
+use crate::{
+    common::CARGO_PKG_VERSION,
+    primitives::{
+        commitment::{InclusionCommitment, SignedCommitment},
+        CommitmentRequest, InclusionRequest,
+    },
 };
 
 use super::{
@@ -123,6 +132,7 @@ impl CommitmentsApiServer {
 
         let router = axum::Router::new()
             .route("/", post(Self::handle_rpc))
+            .route("/version", get(Self::handle_version))
             .with_state(api);
 
         let listener = TcpListener::bind(self.addr).await?;
@@ -151,14 +161,19 @@ impl CommitmentsApiServer {
         self.addr
     }
 
+    /// Handler function for the version path.
+    async fn handle_version() -> String {
+        format!("bolt-sidecar-v{CARGO_PKG_VERSION}")
+    }
+
     /// Handler function for the root JSON-RPC path.
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, name = "RPC", fields(method = %payload.method))]
     async fn handle_rpc(
         headers: HeaderMap,
         State(api): State<Arc<CommitmentsApiInner>>,
         WithRejection(Json(payload), _): WithRejection<Json<JsonPayload>, Error>,
     ) -> Result<Json<JsonResponse>, Error> {
-        tracing::debug!(method = payload.method, ?headers, "Received new request");
+        tracing::debug!("Received new request");
 
         let (signer, signature) = auth_from_headers(&headers).inspect_err(|e| {
             tracing::error!("Failed to extract signature from headers: {:?}", e);
