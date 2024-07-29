@@ -55,10 +55,11 @@ pub struct ConstraintsMessage {
 impl ConstraintsMessage {
     /// Builds a constraints message from an inclusion request and metadata
     pub fn build(validator_index: u64, request: InclusionRequest) -> Self {
-        let mut constraints = Vec::with_capacity(request.txs.len());
-        for tx in request.txs {
-            constraints.push(Constraint::from_transaction(tx, None));
-        }
+        let constraints = request
+            .txs
+            .into_iter()
+            .map(|tx| Constraint::from_transaction(tx, None))
+            .collect();
 
         Self {
             validator_index,

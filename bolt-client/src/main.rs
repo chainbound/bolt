@@ -121,7 +121,7 @@ async fn main() -> Result<()> {
         } else {
             // Send rpc requests singularly for each transaction
             send_rpc_request(
-                vec![tx_rlp.clone()],
+                vec![tx_rlp],
                 vec![*tx_hash],
                 target_slot,
                 target_sidecar_url.clone(),
