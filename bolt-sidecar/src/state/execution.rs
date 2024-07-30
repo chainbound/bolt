@@ -11,7 +11,7 @@ use thiserror::Error;
 
 use crate::{
     builder::BlockTemplate,
-    common::{calculate_max_basefee, max_transaction_cost, validate_transaction},
+    common::{calculate_max_basefee, function_name, max_transaction_cost, validate_transaction},
     config::Limits,
     primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot},
 };
@@ -58,8 +58,8 @@ pub enum ValidationError {
     #[error("Too many EIP-4844 transactions in target block")]
     Eip4844Limit,
     /// The maximum commitments have been reached for the slot.
-    #[error("Already requested a preconfirmation for slot {0}. Slot must be >= {0}")]
-    SlotTooLow(u64),
+    #[error("Requested a preconfirmation for slot {0}. Slot must be >= {1}. Context: {2}")]
+    SlotTooLow(u64, u64, String),
     /// The maximum commitments have been reached for the slot.
     #[error("Max commitments reached for slot {0}: {1}")]
     MaxCommitmentsReachedForSlot(u64, usize),
@@ -270,7 +270,14 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
 
         if target_slot < self.slot {
-            return Err(ValidationError::SlotTooLow(self.slot));
+            return Err(ValidationError::SlotTooLow(
+                target_slot,
+                self.slot,
+                format!(
+                    "{} - request sanity check",
+                    function_name(ExecutionState::<C>::validate_commitment_request)
+                ),
+            ));
         }
 
         // Validate each transaction in the request against the account state,
@@ -313,7 +320,14 @@ impl<C: StateFetcher> ExecutionState<C> {
                 );
 
             if target_slot < highest_slot_for_account {
-                return Err(ValidationError::SlotTooLow(highest_slot_for_account));
+                return Err(ValidationError::SlotTooLow(
+                    target_slot,
+                    highest_slot_for_account,
+                    format!(
+                        "{} - highest slot for account",
+                        function_name(ExecutionState::<C>::validate_commitment_request)
+                    ),
+                ));
             }
 
             tracing::trace!(?signer, nonce_diff, %balance_diff, "Applying diffs to account state");
@@ -572,9 +586,11 @@ mod tests {
         );
         state.update_head(None, 11).await?;
 
+        let validation_err = ValidationError::SlotTooLow(10, 11, "test".to_string());
+
         assert!(matches!(
             state.validate_commitment_request(&mut request).await,
-            Err(ValidationError::SlotTooLow(11))
+            Err(validation_err)
         ));
 
         Ok(())
