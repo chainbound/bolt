@@ -47,7 +47,7 @@ struct Opts {
     bundle: bool,
 
     /// Flag for using the registry to fetch the lookahead
-    #[clap(long, default_value_t = false, requires_ifs([("true", "registry"), ("true", "beacon_client_url")]))]
+    #[clap(long, default_value_t = false, requires_ifs([("true", "registry_address"), ("true", "beacon_client_url")]))]
     use_registry: bool,
     /// URL of the beacon client to use for fetching the lookahead
     /// (only used with the "use-registry" flag)
@@ -55,8 +55,8 @@ struct Opts {
     beacon_client_url: Option<Url>,
     /// Address of the registry contract to read bolt sidecars from
     /// (only used with the "use-registry" flag)
-    #[clap(long, env = "BOLT_REGISTRY", default_value_t = DEFAULT_REGISTRY)]
-    registry: Address,
+    #[clap(long, env = "BOLT_REGISTRY_ADDRESS", default_value_t = DEFAULT_REGISTRY)]
+    registry_address: Address,
 }
 
 #[tokio::main]
@@ -75,7 +75,7 @@ async fn main() -> Result<()> {
     let (target_sidecar_url, target_slot) = if opts.use_registry {
         // Fetch the next preconfer slot from the registry and use it
         let beacon_api_client = BeaconApiClient::new(opts.beacon_client_url.unwrap());
-        let registry = BoltRegistry::new(opts.rpc_url, opts.registry);
+        let registry = BoltRegistry::new(opts.rpc_url, opts.registry_address);
         let curr_slot = get_current_slot(&beacon_api_client).await?;
         let duties = get_proposer_duties(&beacon_api_client, curr_slot, curr_slot / 32).await?;
         match registry.next_preconfer_from_registry(duties).await {
