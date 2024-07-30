@@ -8,6 +8,8 @@ use super::jsonrpc::JsonResponse;
 
 pub(super) const SIGNATURE_HEADER: &str = "x-bolt-signature";
 
+pub(super) const GET_VERSION_METHOD: &str = "bolt_getVersion";
+
 pub(super) const REQUEST_INCLUSION_METHOD: &str = "bolt_requestInclusion";
 
 /// Error type for the commitments API.

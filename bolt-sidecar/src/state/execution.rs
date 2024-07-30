@@ -249,12 +249,6 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::MaxPriorityFeePerGasTooHigh);
         }
 
-        tracing::debug!(
-            ?signer,
-            target_slot,
-            "Trying to commit inclusion request to block template"
-        );
-
         // Check if the max_fee_per_gas would cover the maximum possible basefee.
         let slot_diff = target_slot.saturating_sub(self.slot);
 
