@@ -1,5 +1,6 @@
 use alloy::primitives::U256;
 use reth_primitives::PooledTransactionsElement;
+use std::any::type_name;
 
 use crate::{
     primitives::{AccountState, TransactionExt},
@@ -80,6 +81,10 @@ pub fn validate_transaction(
     }
 
     Ok(())
+}
+
+pub(crate) fn function_name<T>(_func: T) -> &'static str {
+    type_name::<T>()
 }
 
 #[cfg(test)]
