@@ -27,48 +27,48 @@ pub const DEFAULT_MEV_BOOST_PROXY_PORT: u16 = 18551;
 #[derive(Parser, Debug)]
 pub struct Opts {
     /// Port to listen on for incoming JSON-RPC requests
-    #[clap(short = 'p', long)]
+    #[clap(long, env = "BOLT_SIDECAR_PORT")]
     pub(super) port: Option<u16>,
     /// URL for the beacon client
-    #[clap(short = 'c', long)]
+    #[clap(long, env = "BOLT_SIDECAR_BEACON_API_URL")]
     pub(super) beacon_api_url: String,
     /// URL for the MEV-Boost sidecar client to use
-    #[clap(short = 'b', long)]
+    #[clap(long, env = "BOLT_SIDECAR_MEVBOOST_URL")]
     pub(super) mevboost_url: String,
     /// Execution client API URL
-    #[clap(short = 'x', long)]
+    #[clap(long, env = "BOLT_SIDECAR_EXECUTION_API_URL")]
     pub(super) execution_api_url: String,
     /// Execution client Engine API URL
-    #[clap(short = 'e', long)]
+    #[clap(long, env = "BOLT_SIDECAR_ENGINE_API_URL")]
     pub(super) engine_api_url: String,
     /// MEV-Boost proxy server port to use
-    #[clap(short = 'y', long)]
+    #[clap(long, env = "BOLT_SIDECAR_MEVBOOST_PROXY_PORT")]
     pub(super) mevboost_proxy_port: u16,
     /// Max number of commitments to accept per block
-    #[clap(short = 'm', long)]
+    #[clap(long, env = "BOLT_SIDECAR_MAX_COMMITMENTS")]
     pub(super) max_commitments: Option<NonZero<usize>>,
     /// Max committed gas per slot
-    #[clap(short = 'g', long)]
+    #[clap(long, env = "BOLT_SIDECAR_MAX_COMMITTED_GAS")]
     pub(super) max_committed_gas: Option<NonZero<u64>>,
     /// Validator indexes of connected validators that the sidecar
     /// should accept commitments on behalf of. Accepted values:
     /// - a comma-separated list of indexes (e.g. "1,2,3,4")
     /// - a contiguous range of indexes (e.g. "1..4")
     /// - a mix of the above (e.g. "1,2..4,6..8")
-    #[clap(short = 'v', long, value_parser = ValidatorIndexes::from_str)]
+    #[clap(long, value_parser = ValidatorIndexes::from_str, env = "BOLT_SIDECAR_VALIDATOR_INDEXES")]
     pub(super) validator_indexes: ValidatorIndexes,
     /// The JWT secret token to authenticate calls to the engine API.
     ///
     /// It can either be a hex-encoded string or a file path to a file
     /// containing the hex-encoded secret.
-    #[clap(short = 'j', long)]
+    #[clap(long, env = "BOLT_SIDECAR_JWT_HEX")]
     pub(super) jwt_hex: String,
     /// The fee recipient address for fallback blocks
-    #[clap(short = 'f', long)]
+    #[clap(long, env = "BOLT_SIDECAR_FEE_RECIPIENT")]
     pub(super) fee_recipient: Address,
     /// Secret BLS key to sign fallback payloads with
     /// (If not provided, a random key will be used)
-    #[clap(short = 'K', long)]
+    #[clap(long, env = "BOLT_SIDECAR_BUILDER_PRIVATE_KEY")]
     pub(super) builder_private_key: Option<String>,
     /// Chain config for the chain on which the sidecar is running
     #[clap(flatten)]

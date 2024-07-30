@@ -333,6 +333,13 @@ impl<C: StateFetcher> ExecutionState<C> {
                 }
             };
 
+            tracing::debug!(
+                ?account_state,
+                ?nonce_diff,
+                ?balance_diff,
+                "Validating transaction"
+            );
+
             let sender_nonce_diff = bundle_nonce_diff_map.entry(sender).or_insert(0);
             let sender_balance_diff = bundle_balance_diff_map.entry(sender).or_insert(U256::ZERO);
 

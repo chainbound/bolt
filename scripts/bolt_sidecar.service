@@ -1,0 +1,12 @@
+[Unit]
+Description=Bolt Sidecar Development Service
+After=network.target
+
+[Service]
+User=shared
+ExecStart=/usr/local/bin/bolt-sidecar
+Restart=on-failure
+EnvironmentFile=/home/shared/bolt_sidecar/.env.dev
+
+[Install]
+WantedBy=multi-user.target
