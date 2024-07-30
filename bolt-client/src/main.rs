@@ -2,7 +2,7 @@ use alloy::{
     eips::eip2718::Encodable2718,
     hex,
     network::{EthereumWallet, TransactionBuilder},
-    primitives::{Address, B256},
+    primitives::{address, Address, B256},
     providers::{Provider, ProviderBuilder},
     signers::local::PrivateKeySigner,
 };
@@ -19,34 +19,35 @@ use registry::BoltRegistry;
 mod utils;
 use utils::*;
 
+// Default Bolt RPC URL (on Helder)
+pub const DEFAULT_RPC_URL: &str = "https://bolt.chainbound.io/rpc";
+
+// Default Bolt-Registry address (on Helder)
+pub const DEFAULT_REGISTRY: Address = address!("dF11D829eeC4C192774F3Ec171D822f6Cb4C14d9");
+
 #[derive(Parser)]
 struct Opts {
     /// Bolt RPC URL to send requests to
-    #[clap(
-        short = 'p',
-        long,
-        default_value = "http://135.181.191.125:8015/rpc",
-        env = "BOLT_RPC_URL"
-    )]
+    #[clap(long, default_value = DEFAULT_RPC_URL, env = "BOLT_RPC_URL")]
     rpc_url: Url,
     /// Private key to sign transactions with
     #[clap(short = 'k', long, env = "BOLT_PRIVATE_KEY")]
     private_key: String,
     /// Optional nonce offset to use for the transaction
-    #[clap(short, long, default_value_t = 0, env = "BOLT_NONCE_OFFSET")]
+    #[clap(long, default_value_t = 0, env = "BOLT_NONCE_OFFSET")]
     nonce_offset: u64,
     /// Flag for generating a blob tx instead of a regular tx
     #[clap(long, default_value_t = false)]
     blob: bool,
     /// Number of transactions to send in a sequence
-    #[clap(short, long, default_value_t = 1)]
+    #[clap(long, default_value_t = 1)]
     count: u64,
     /// Flag for sending all "count" transactions in a single bundle
     #[clap(long, default_value_t = false)]
     bundle: bool,
 
     /// Flag for using the registry to fetch the lookahead
-    #[clap(short, long, default_value_t = false, requires_ifs([("true", "registry_address"), ("true", "beacon_client_url")]))]
+    #[clap(long, default_value_t = false, requires_ifs([("true", "registry_address"), ("true", "beacon_client_url")]))]
     use_registry: bool,
     /// URL of the beacon client to use for fetching the lookahead
     /// (only used with the "use-registry" flag)
@@ -54,12 +55,7 @@ struct Opts {
     beacon_client_url: Option<Url>,
     /// Address of the registry contract to read bolt sidecars from
     /// (only used with the "use-registry" flag)
-    #[clap(
-        short,
-        long,
-        env = "BOLT_REGISTRY_ADDRESS",
-        default_value = "0xdF11D829eeC4C192774F3Ec171D822f6Cb4C14d9"
-    )]
+    #[clap(long, env = "BOLT_REGISTRY_ADDRESS", default_value_t = DEFAULT_REGISTRY)]
     registry_address: Address,
 }
 
@@ -88,12 +84,10 @@ async fn main() -> Result<()> {
             Err(e) => bail!("error fetching next preconfer slot from registry: {:?}", e),
         }
     } else {
-        // TODO: remove "cbOnly=true"
-        let url =
-            opts.rpc_url.join("proposers/lookahead?activeOnly=true&futureOnly=true&cbOnly=true")?;
+        let url = opts.rpc_url.join("proposers/lookahead?activeOnly=true&futureOnly=true")?;
         let lookahead_response = reqwest::get(url).await?.json::<Value>().await?;
         if lookahead_response.as_array().unwrap_or(&vec![]).is_empty() {
-            bail!("no bolt proposer found in lookahead, try again later");
+            bail!("no bolt proposer found in lookahead, try again later 🥲");
         }
         let next_preconfer_slot = lookahead_response[0].get("slot").unwrap().as_u64().unwrap();
         (opts.rpc_url, next_preconfer_slot)
