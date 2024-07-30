@@ -289,7 +289,6 @@ impl<C: StateFetcher> ExecutionState<C> {
             //
             // If the templates do not exist, or this is the first request for this sender,
             // its diffs will be zero.
-            // TODO: why highest slot here?
             let (nonce_diff, balance_diff, highest_slot_for_account) =
                 self.block_templates.iter().fold(
                     (0, U256::ZERO, 0),
