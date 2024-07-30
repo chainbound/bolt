@@ -186,19 +186,18 @@ impl TryFrom<Opts> for Config {
             .transpose()?;
 
         config.private_key = if let Some(sk) = opts.signing.private_key {
-            // Check if the string starts with "0x" and remove it
             let hex_sk = sk.strip_prefix("0x").unwrap_or(&sk);
-
             let sk = SecretKey::from_bytes(&hex::decode(hex_sk)?)
-                .map_err(|e| eyre::eyre!("Failed decoding BLS secret key: {:?}", e))?;
+                .map_err(|e| eyre::eyre!("Failed decoding BLS signer secret key: {:?}", e))?;
             Some(sk)
         } else {
             None
         };
 
-        if let Some(builder_private_key) = opts.builder_private_key {
-            let sk = SecretKey::from_bytes(&hex::decode(builder_private_key)?)
-                .map_err(|e| eyre::eyre!("Failed decoding BLS secret key: {:?}", e))?;
+        if let Some(builder_sk) = opts.builder_private_key {
+            let hex_sk = builder_sk.strip_prefix("0x").unwrap_or(&builder_sk);
+            let sk = SecretKey::from_bytes(&hex::decode(hex_sk)?)
+                .map_err(|e| eyre::eyre!("Failed decoding BLS builder secret key: {:?}", e))?;
             config.builder_private_key = sk;
         }
 
