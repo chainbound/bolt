@@ -1,6 +1,3 @@
-use alloy::primitives::{Address, Signature};
-use axum::{extract::State, http::HeaderMap, routing::post, Json};
-use axum_extra::extract::WithRejection;
 use std::{
     collections::HashSet,
     fmt::Debug,
@@ -10,19 +7,30 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
+
+use alloy::primitives::{Address, Signature};
+use axum::{extract::State, http::HeaderMap, routing::post, Json};
+use axum_extra::extract::WithRejection;
+use serde_json::Value;
 use tokio::{
     net::TcpListener,
     sync::{mpsc, oneshot},
 };
 
-use crate::primitives::{
-    commitment::{InclusionCommitment, SignedCommitment},
-    CommitmentRequest, InclusionRequest,
+use crate::{
+    common::CARGO_PKG_VERSION,
+    primitives::{
+        commitment::{InclusionCommitment, SignedCommitment},
+        CommitmentRequest, InclusionRequest,
+    },
 };
 
 use super::{
     jsonrpc::{JsonPayload, JsonResponse},
-    spec::{CommitmentsApi, Error, RejectionError, REQUEST_INCLUSION_METHOD, SIGNATURE_HEADER},
+    spec::{
+        CommitmentsApi, Error, RejectionError, GET_VERSION_METHOD, REQUEST_INCLUSION_METHOD,
+        SIGNATURE_HEADER,
+    },
 };
 
 /// Event type emitted by the commitments API.
@@ -152,25 +160,33 @@ impl CommitmentsApiServer {
     }
 
     /// Handler function for the root JSON-RPC path.
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, name = "RPC", fields(method = %payload.method))]
     async fn handle_rpc(
         headers: HeaderMap,
         State(api): State<Arc<CommitmentsApiInner>>,
         WithRejection(Json(payload), _): WithRejection<Json<JsonPayload>, Error>,
     ) -> Result<Json<JsonResponse>, Error> {
-        tracing::debug!(method = payload.method, ?headers, "Received new request");
+        tracing::debug!("Received new request");
 
         let (signer, signature) = auth_from_headers(&headers).inspect_err(|e| {
             tracing::error!("Failed to extract signature from headers: {:?}", e);
         })?;
 
         match payload.method.as_str() {
+            GET_VERSION_METHOD => {
+                let version_string = format!("bolt-sidecar-v{CARGO_PKG_VERSION}");
+                let result = serde_json::to_value(version_string).unwrap_or(Value::Null);
+                Ok(Json(JsonResponse {
+                    id: payload.id,
+                    result,
+                    ..Default::default()
+                }))
+            }
+
             REQUEST_INCLUSION_METHOD => {
-                let request_json = payload
-                    .params
-                    .first()
-                    .ok_or(RejectionError::ValidationFailed("Bad params".to_string()))?
-                    .clone();
+                let Some(request_json) = payload.params.first().cloned() else {
+                    return Err(RejectionError::ValidationFailed("Bad params".to_string()).into());
+                };
 
                 // Parse the inclusion request from the parameters
                 let mut inclusion_request: InclusionRequest = serde_json::from_value(request_json)
@@ -181,10 +197,6 @@ impl CommitmentsApiServer {
 
                 let digest = inclusion_request.digest();
                 let recovered_signer = signature.recover_address_from_prehash(&digest)?;
-                tracing::debug!(
-                    ?recovered_signer,
-                    "Recovered public key and associated address"
-                );
 
                 if recovered_signer != signer {
                     tracing::error!(

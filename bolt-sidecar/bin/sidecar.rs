@@ -81,14 +81,14 @@ async fn main() -> eyre::Result<()> {
                 let validator_index = match consensus_state.validate_request(&request) {
                     Ok(index) => index,
                     Err(e) => {
-                        tracing::error!(err = ?e, "Failed to validate request");
+                        tracing::error!(err = ?e, "Consensus State: Failed to validate request");
                         let _ = response.send(Err(spec::Error::ValidationFailed(e.to_string())));
                         continue;
                     }
                 };
 
                 if let Err(e) = execution_state.validate_commitment_request(&mut request).await {
-                    tracing::error!(err = ?e, "Failed to commit request");
+                    tracing::error!(err = ?e, "Execution State: Failed to validate request");
                     let _ = response.send(Err(spec::Error::ValidationFailed(e.to_string())));
                     continue;
                 };
@@ -101,15 +101,13 @@ async fn main() -> eyre::Result<()> {
                     "Validation against execution state passed"
                 );
 
-                // TODO: review all this `clone` usage
-
                 // parse the request into constraints and sign them with the sidecar signer
                 let slot = req.slot;
                 let message = ConstraintsMessage::build(validator_index, req.clone());
                 let signature = signer.sign(&message.digest())?.to_string();
                 let signed_constraints = SignedConstraints { message, signature };
 
-                execution_state.add_constraint(slot, signed_constraints.clone());
+                execution_state.add_constraint(slot, signed_constraints);
 
                 // Create a commitment by signing the request with the commitment signer
                 match request.commit_and_sign(&commitment_signer).await {

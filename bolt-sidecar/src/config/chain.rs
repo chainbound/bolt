@@ -34,15 +34,23 @@ const BUILDER_DOMAIN_HELDER: [u8; 32] =
 #[derive(Debug, Clone, Args)]
 pub struct ChainConfig {
     /// Chain on which the sidecar is running
-    #[clap(short = 'C', long, default_value = "mainnet")]
+    #[clap(long, env = "BOLT_SIDECAR_CHAIN", default_value = "mainnet")]
     chain: Chain,
     /// The deadline in the slot at which the sidecar will stop accepting
     /// new commitments for the next block (parsed as milliseconds).
-    #[clap(short = 'd', long, default_value_t = DEFAULT_COMMITMENT_DEADLINE_IN_MILLIS)]
+    #[clap(
+        long, 
+        env = "BOLT_SIDECAR_COMMITMENT_DEADLINE", 
+        default_value_t = DEFAULT_COMMITMENT_DEADLINE_IN_MILLIS)
+    ]
     commitment_deadline: u64,
     /// The slot time duration in seconds. If provided,
     /// it overrides the default for the selected [Chain].
-    #[clap(short = 's', long, default_value_t = DEFAULT_SLOT_TIME_IN_SECONDS)]
+    #[clap(
+        long, 
+        env = "BOLT_SIDECAR_SLOT_TIME",
+        default_value_t = DEFAULT_SLOT_TIME_IN_SECONDS)
+    ]
     slot_time: u64,
 }
 

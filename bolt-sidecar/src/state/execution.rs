@@ -249,12 +249,6 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::MaxPriorityFeePerGasTooHigh);
         }
 
-        tracing::debug!(
-            ?signer,
-            target_slot,
-            "Trying to commit inclusion request to block template"
-        );
-
         // Check if the max_fee_per_gas would cover the maximum possible basefee.
         let slot_diff = target_slot.saturating_sub(self.slot);
 
@@ -270,6 +264,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
 
         if target_slot < self.slot {
+            tracing::debug!(%target_slot, %self.slot, "Target slot lower than current slot");
             return Err(ValidationError::SlotTooLow(self.slot));
         }
 
@@ -294,7 +289,6 @@ impl<C: StateFetcher> ExecutionState<C> {
             //
             // If the templates do not exist, or this is the first request for this sender,
             // its diffs will be zero.
-            // TODO: why highest slot here?
             let (nonce_diff, balance_diff, highest_slot_for_account) =
                 self.block_templates.iter().fold(
                     (0, U256::ZERO, 0),
@@ -313,6 +307,7 @@ impl<C: StateFetcher> ExecutionState<C> {
                 );
 
             if target_slot < highest_slot_for_account {
+                tracing::debug!(%target_slot, %highest_slot_for_account, "There is a request for a higher slot");
                 return Err(ValidationError::SlotTooLow(highest_slot_for_account));
             }
 
@@ -336,6 +331,13 @@ impl<C: StateFetcher> ExecutionState<C> {
                     account
                 }
             };
+
+            tracing::debug!(
+                ?account_state,
+                ?nonce_diff,
+                ?balance_diff,
+                "Validating transaction"
+            );
 
             let sender_nonce_diff = bundle_nonce_diff_map.entry(sender).or_insert(0);
             let sender_balance_diff = bundle_balance_diff_map.entry(sender).or_insert(U256::ZERO);

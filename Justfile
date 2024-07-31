@@ -145,6 +145,23 @@ _build-sidecar:
 _build-mevboost:
 	cd mev-boost && docker buildx build -t ghcr.io/chainbound/bolt-mev-boost:0.1.0 . --load
 
+# deploy the bolt sidecar to the dev server
+deploy-sidecar-dev:
+    chmod +x ./scripts/deploy_bolt_sidecar.sh && ./scripts/deploy_bolt_sidecar.sh
+
+# Check the status of the sidecar service on the dev server
+status-sidecar-dev:
+    ssh shared@remotebeast "sudo systemctl status bolt_sidecar" | less
+
+# Tail the logs of the service on the dev server
+logs-sidecar-dev:
+    ssh shared@remotebeast "journalctl -qu bolt_sidecar -f"
+
+# Stop the service on the dev server
+stop-sidecar-dev:
+    ssh shared@remotebeast "sudo systemctl stop bolt_sidecar"
+
+
 # build and push the docker images to the github container registry with the provided tag
 [confirm("are you sure? this will build and push new images on ghcr.io")]
 release tag:

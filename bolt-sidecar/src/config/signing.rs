@@ -8,9 +8,17 @@ use clap::{ArgGroup, Args};
 )]
 pub struct SigningOpts {
     /// Private key to use for signing preconfirmation requests
-    #[clap(short = 'k', long)]
+    #[clap(
+        long,
+        env = "BOLT_SIDECAR_PRIVATE_KEY",
+        conflicts_with("commit_boost_url")
+    )]
     pub(super) private_key: Option<String>,
     /// URL for the commit-boost sidecar
-    #[clap(short = 'B', long, conflicts_with("private_key"))]
+    #[clap(
+        long,
+        env = "BOLT_SIDECAR_COMMIT_BOOST_URL",
+        conflicts_with("private_key")
+    )]
     pub(super) commit_boost_url: Option<String>,
 }
