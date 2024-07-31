@@ -6,7 +6,7 @@ default-run = "bolt-sidecar"
 
 [dependencies]
 # core
-clap = { version = "4.5.4", features = ["derive"] }
+clap = { version = "4.5.4", features = ["derive", "env"] }
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.7", features = ["macros"] }
 axum-extra = "0.9.3"

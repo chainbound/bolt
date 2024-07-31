@@ -289,7 +289,6 @@ impl<C: StateFetcher> ExecutionState<C> {
             //
             // If the templates do not exist, or this is the first request for this sender,
             // its diffs will be zero.
-            // TODO: why highest slot here?
             let (nonce_diff, balance_diff, highest_slot_for_account) =
                 self.block_templates.iter().fold(
                     (0, U256::ZERO, 0),
@@ -332,6 +331,13 @@ impl<C: StateFetcher> ExecutionState<C> {
                     account
                 }
             };
+
+            tracing::debug!(
+                ?account_state,
+                ?nonce_diff,
+                ?balance_diff,
+                "Validating transaction"
+            );
 
             let sender_nonce_diff = bundle_nonce_diff_map.entry(sender).or_insert(0);
             let sender_balance_diff = bundle_balance_diff_map.entry(sender).or_insert(U256::ZERO);
