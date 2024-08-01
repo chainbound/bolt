@@ -358,10 +358,6 @@ impl<C: StateFetcher> ExecutionState<C> {
                 has_code: account_state.has_code,
             };
 
-            // Increase the bundle nonce and balance diffs for this sender for the next iteration
-            *sender_nonce_diff += 1;
-            *sender_balance_diff += max_transaction_cost(tx);
-
             // Validate the transaction against the account state with existing diffs
             validate_transaction(&account_state_with_diffs, tx)?;
 
@@ -390,6 +386,10 @@ impl<C: StateFetcher> ExecutionState<C> {
                 // Validate blob against KZG settings
                 transaction.validate_blob(&blob_transaction.sidecar, self.kzg_settings.get())?;
             }
+
+            // Increase the bundle nonce and balance diffs for this sender for the next iteration
+            *sender_nonce_diff += 1;
+            *sender_balance_diff += max_transaction_cost(tx);
         }
 
         Ok(())
