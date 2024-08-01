@@ -1735,7 +1735,9 @@ func (w *worker) generateWork(params *generateParams) *newPayloadResult {
 
 	if params.constraintsCache != nil {
 		constraints, _ = params.constraintsCache.Get(params.slot)
-		log.Info(fmt.Sprintf("[BOLT]: found %d constraints for slot %d ", len(constraints), params.slot))
+		if len(constraints) > 0 {
+			log.Info(fmt.Sprintf("[BOLT]: Found %d constraints for slot %d ", len(constraints), params.slot))
+		}
 	}
 
 	blockBundles, allBundles, usedSbundles, mempoolTxHashes, err := w.fillTransactionsSelectAlgo(nil, work, constraints)

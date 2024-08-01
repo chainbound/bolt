@@ -11,7 +11,6 @@ import (
 	"math"
 	"net/http"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -139,19 +138,6 @@ func SendHTTPRequest(ctx context.Context, client http.Client, method, url string
 	}
 
 	return resp.StatusCode, nil
-}
-
-// EmitBoltDemoEvent sends a message to the web demo backend to log an event.
-// This is only used for demo purposes and should be removed in production.
-func EmitBoltDemoEvent(message string) {
-	event := strings.NewReader(fmt.Sprintf("{ \"message\": \"BOLT-BUILDER: %s\"}", message))
-	eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
-	if err != nil {
-		log.Error("Failed to send web demo event: ", err)
-	}
-	if eventRes != nil {
-		defer eventRes.Body.Close()
-	}
 }
 
 func CalculateMerkleMultiProofs(

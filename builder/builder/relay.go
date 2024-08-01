@@ -202,7 +202,6 @@ func (r *RemoteRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequ
 			number, _ := msg.Inner.BlockNumber()
 			message := fmt.Sprintf("sending block %d with proofs to relay (path: %s)", number, "/relay/v1/builder/blocks_with_proofs")
 			log.Info(message)
-			EmitBoltDemoEvent(message)
 		}
 
 		switch msg.Inner.Version {

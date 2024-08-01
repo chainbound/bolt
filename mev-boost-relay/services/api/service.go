@@ -1869,8 +1869,6 @@ func (api *RelayAPI) handleSubmitConstraints(w http.ResponseWriter, req *http.Re
 		log.Infof("Added %d constraints for slot %d and broadcasted %d to channels", len(*payload), message.Slot, len(api.constraintsConsumers))
 	}
 
-	EmitBoltDemoEvent(fmt.Sprintf("received %d valid constraints, sending to builders... (path: %s)", len(*payload), req.URL.Path))
-
 	// respond to the HTTP request
 	api.RespondOK(w, nil)
 }
@@ -2699,8 +2697,8 @@ func (api *RelayAPI) handleSubmitNewBlockWithProofs(w http.ResponseWriter, req *
 
 	// BOLT: Send an event to the web demo
 	slot, _ := payload.Inner.Slot()
-	message := fmt.Sprintf("received block bid with %d preconfirmations for slot %d", len(payload.Proofs.TransactionHashes), slot)
-	EmitBoltDemoEvent(message)
+	message := fmt.Sprintf("received block bid with %d proofs for slot %d", len(payload.Proofs.TransactionHashes), slot)
+	log.Info(message)
 
 	nextTime = time.Now().UTC()
 	pf.Decode = uint64(nextTime.Sub(prevTime).Microseconds())

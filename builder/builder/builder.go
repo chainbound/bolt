@@ -390,7 +390,9 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 				continue
 			}
 
-			EmitBoltDemoEvent(fmt.Sprintf("Received constraint from relay for slot %d, stored in cache (path: %s)", constraint.Message.Slot, SubscribeConstraintsPath))
+			for h := range decodedConstraints {
+				log.Info(fmt.Sprintf("Received constraint from relay for slot %d, stored in cache (hash: %s)", constraint.Message.Slot, h.Hex()))
+			}
 
 			// For every constraint, we need to check if it has already been seen for the associated slot
 			slotConstraints, _ := b.constraintsCache.Get(constraint.Message.Slot)
@@ -461,13 +463,11 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 
 	// BOLT: fetch constraints from the cache, which is automatically updated by the SSE subscription
 	constraints, _ := b.constraintsCache.Get(opts.PayloadAttributes.Slot)
-	log.Info(fmt.Sprintf("[BOLT]: Found %d constraints for slot %d", len(constraints), opts.PayloadAttributes.Slot))
+	if len(constraints) > 0 {
+		log.Info(fmt.Sprintf("[BOLT]: Found %d constraints for slot %d", len(constraints), opts.PayloadAttributes.Slot))
+	}
 
 	if len(constraints) > 0 {
-		message := fmt.Sprintf("sealing block %d with %d constraints", opts.Block.Number(), len(constraints))
-		log.Info(message)
-		EmitBoltDemoEvent(message)
-
 		timeStart := time.Now()
 		inclusionProof, _, err := CalculateMerkleMultiProofs(opts.Block.Transactions(), constraints)
 		timeForProofs := time.Since(timeStart)
@@ -477,8 +477,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 			return err
 		}
 
-		// BOLT: send event to web demo
-		EmitBoltDemoEvent(fmt.Sprintf("created merkle multiproof of %d constraint(s) for block %d in %v", len(constraints), opts.Block.Number(), timeForProofs))
+		log.Info(fmt.Sprintf("created merkle multiproof of %d constraint(s) for block %d in %v", len(constraints), opts.Block.Number(), timeForProofs))
 
 		versionedBlockRequestWithPreconfsProofs = &common.VersionedSubmitBlockRequestWithProofs{
 			Inner:  versionedBlockRequest,
