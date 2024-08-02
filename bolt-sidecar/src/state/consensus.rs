@@ -1,4 +1,7 @@
-use std::time::{Duration, Instant};
+use std::{
+    fmt,
+    time::{Duration, Instant},
+};
 
 use beacon_api_client::{mainnet::Client, BlockId, ProposerDuty};
 use ethereum_consensus::{deneb::BeaconBlockHeader, phase0::mainnet::SLOTS_PER_EPOCH};
@@ -54,6 +57,18 @@ pub struct ConsensusState {
     pub commitment_deadline: CommitmentDeadline,
     /// The duration of the commitment deadline.
     commitment_deadline_duration: Duration,
+}
+
+impl fmt::Debug for ConsensusState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ConsensusState")
+            .field("header", &self.header)
+            .field("epoch", &self.epoch)
+            .field("latest_slot", &self.latest_slot)
+            .field("latest_slot_timestamp", &self.latest_slot_timestamp)
+            .field("commitment_deadline", &self.commitment_deadline)
+            .finish()
+    }
 }
 
 impl ConsensusState {

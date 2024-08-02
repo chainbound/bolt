@@ -18,6 +18,10 @@ pub use client::{mevboost::MevBoostClient, rpc::RpcClient, BeaconClient};
 /// (To be refactored)
 mod common;
 
+/// Driver for the sidecar, which manages the main event loop
+pub mod driver;
+pub use driver::SidecarDriver;
+
 /// Functionality for building local block templates that can
 /// be used as a fallback for proposers. It's also used to keep
 /// any intermediary state that is needed to simulate EVM execution

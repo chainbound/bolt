@@ -255,7 +255,8 @@ where
         .route(GET_PAYLOAD_PATH, post(BuilderProxyServer::get_payload))
         .with_state(server);
 
-    let listener = TcpListener::bind(format!("0.0.0.0:{}", config.server_port)).await?;
+    let addr = format!("0.0.0.0:{}", config.server_port);
+    let listener = TcpListener::bind(addr).await?;
     axum::serve(listener, router).await?;
 
     Ok(())

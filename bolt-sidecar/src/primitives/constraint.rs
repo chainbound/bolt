@@ -2,7 +2,7 @@ use alloy::primitives::{keccak256, Address};
 use secp256k1::Message;
 use serde::Serialize;
 
-use crate::crypto::{ecdsa::SignableECDSA, SignableBLS};
+use crate::crypto::{bls::BLSSig, ecdsa::SignableECDSA, SignableBLS};
 
 use super::{FullTransaction, InclusionRequest};
 
@@ -31,12 +31,12 @@ pub type BatchedSignedConstraints = Vec<SignedConstraints>;
 /// A container for a list of constraints and the signature of the proposer sidecar.
 ///
 /// Reference: https://chainbound.github.io/bolt-docs/api/builder-api#ethv1builderconstraints
-#[derive(Serialize, Debug, Clone, PartialEq, Default)]
+#[derive(Serialize, Default, Debug, Clone, PartialEq)]
 pub struct SignedConstraints {
     /// The constraints that need to be signed.
     pub message: ConstraintsMessage,
     /// The signature of the proposer sidecar.
-    pub signature: String,
+    pub signature: BLSSig,
 }
 
 /// A message that contains the constraints that need to be signed by the proposer sidecar.

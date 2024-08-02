@@ -10,7 +10,7 @@ pub use ethereum_consensus::deneb::BlsSignature;
 pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
 
 /// A fixed-size byte array for BLS signatures.
-pub type BLSBytes = FixedBytes<96>;
+pub type BLSSig = FixedBytes<96>;
 
 /// Trait for any types that can be signed and verified with BLS.
 /// This trait is used to abstract over the signing and verification of different types.
@@ -40,14 +40,14 @@ pub trait SignableBLS {
 #[allow(dead_code)]
 pub trait SignerBLS {
     /// Sign the given data and return the signature.
-    fn sign(&self, data: &[u8]) -> eyre::Result<BLSBytes>;
+    fn sign(&self, data: &[u8]) -> eyre::Result<BLSSig>;
 }
 
 /// A generic signing trait to generate BLS signatures asynchronously.
 #[async_trait::async_trait]
 pub trait SignerBLSAsync: Send + Sync {
     /// Sign the given data and return the signature.
-    async fn sign(&self, data: &[u8]) -> eyre::Result<BLSBytes>;
+    async fn sign(&self, data: &[u8]) -> eyre::Result<BLSSig>;
 }
 
 /// A BLS signer that can sign any type that implements the `Signable` trait.
@@ -82,17 +82,17 @@ impl Signer {
 }
 
 impl SignerBLS for Signer {
-    fn sign(&self, data: &[u8]) -> eyre::Result<BLSBytes> {
+    fn sign(&self, data: &[u8]) -> eyre::Result<BLSSig> {
         let sig = sign_with_prefix(&self.key, data);
-        Ok(BLSBytes::from(sig.to_bytes()))
+        Ok(BLSSig::from(sig.to_bytes()))
     }
 }
 
 #[async_trait::async_trait]
 impl SignerBLSAsync for Signer {
-    async fn sign(&self, data: &[u8]) -> eyre::Result<BLSBytes> {
+    async fn sign(&self, data: &[u8]) -> eyre::Result<BLSSig> {
         let sig = sign_with_prefix(&self.key, data);
-        Ok(BLSBytes::from(sig.to_bytes()))
+        Ok(BLSSig::from(sig.to_bytes()))
     }
 }
 
