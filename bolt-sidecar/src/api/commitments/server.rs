@@ -149,12 +149,14 @@ impl CommitmentsApiServer {
 
         let signal = self.signal.take().expect("Signal not set");
 
-        if let Err(err) = axum::serve(listener, router)
-            .with_graceful_shutdown(signal)
-            .await
-        {
-            tracing::error!(?err, "Commitments API Server error");
-        }
+        tokio::spawn(async move {
+            if let Err(err) = axum::serve(listener, router)
+                .with_graceful_shutdown(signal)
+                .await
+            {
+                tracing::error!(?err, "Commitments API Server error");
+            }
+        });
     }
 
     /// Returns the local addr the server is listening on (or configured with).
