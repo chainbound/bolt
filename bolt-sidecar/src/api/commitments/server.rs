@@ -1,6 +1,6 @@
 use std::{
     collections::HashSet,
-    fmt::Debug,
+    fmt,
     future::Future,
     net::{SocketAddr, ToSocketAddrs},
     pin::Pin,
@@ -9,13 +9,14 @@ use std::{
 };
 
 use alloy::primitives::{Address, Signature};
-use axum::{extract::State, http::HeaderMap, routing::post, Json};
+use axum::{extract::State, http::HeaderMap, routing::post, Json, Router};
 use axum_extra::extract::WithRejection;
 use serde_json::Value;
 use tokio::{
     net::TcpListener,
     sync::{mpsc, oneshot},
 };
+use tracing::error;
 
 use crate::{
     common::CARGO_PKG_VERSION,
@@ -94,8 +95,8 @@ pub struct CommitmentsApiServer {
     signal: Option<Pin<Box<dyn Future<Output = ()> + Send>>>,
 }
 
-impl Debug for CommitmentsApiServer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for CommitmentsApiServer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CommitmentsApiServer")
             .field("addr", &self.addr)
             .finish()
@@ -125,33 +126,37 @@ impl CommitmentsApiServer {
         }
     }
 
-    /// Runs the JSON-RPC server in the background, sending events to the provided channel.
-    pub async fn run(&mut self, events_tx: mpsc::Sender<Event>) -> eyre::Result<()> {
+    /// Runs the JSON-RPC server, sending events to the provided channel.
+    pub async fn run(&mut self, events_tx: mpsc::Sender<Event>) {
         let api = Arc::new(CommitmentsApiInner::new(events_tx));
 
-        let router = axum::Router::new()
+        let router = Router::new()
             .route("/", post(Self::handle_rpc))
             .with_state(api);
 
-        let listener = TcpListener::bind(self.addr).await?;
-        let addr = listener.local_addr()?;
+        let listener = match TcpListener::bind(self.addr).await {
+            Ok(listener) => listener,
+            Err(err) => {
+                error!(?err, "Failed to bind Commitments API server");
+                panic!("Failed to bind Commitments API server");
+            }
+        };
 
+        let addr = listener.local_addr().expect("Failed to get local address");
         self.addr = addr;
 
         tracing::info!("Commitments RPC server bound to {addr}");
 
-        let signal = self.signal.take();
+        let signal = self.signal.take().expect("Signal not set");
 
         tokio::spawn(async move {
-            if let Err(e) = axum::serve(listener, router)
-                .with_graceful_shutdown(signal.unwrap())
+            if let Err(err) = axum::serve(listener, router)
+                .with_graceful_shutdown(signal)
                 .await
             {
-                tracing::error!("Server error: {:?}", e);
+                tracing::error!(?err, "Commitments API Server error");
             }
         });
-
-        Ok(())
     }
 
     /// Returns the local addr the server is listening on (or configured with).
@@ -175,10 +180,9 @@ impl CommitmentsApiServer {
         match payload.method.as_str() {
             GET_VERSION_METHOD => {
                 let version_string = format!("bolt-sidecar-v{CARGO_PKG_VERSION}");
-                let result = serde_json::to_value(version_string).unwrap_or(Value::Null);
                 Ok(Json(JsonResponse {
                     id: payload.id,
-                    result,
+                    result: Value::String(version_string),
                     ..Default::default()
                 }))
             }
@@ -289,7 +293,7 @@ mod test {
 
         let (events_tx, _) = mpsc::channel(1);
 
-        server.run(events_tx).await.unwrap();
+        server.run(events_tx).await;
         let addr = server.local_addr();
 
         let sk = SecretKey::random(&mut rand::thread_rng());
@@ -333,7 +337,7 @@ mod test {
 
         let (events_tx, mut events) = mpsc::channel(1);
 
-        server.run(events_tx).await.unwrap();
+        server.run(events_tx).await;
         let addr = server.local_addr();
 
         let sk = SecretKey::random(&mut rand::thread_rng());

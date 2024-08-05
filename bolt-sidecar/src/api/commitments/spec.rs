@@ -2,7 +2,10 @@ use alloy::primitives::SignatureError;
 use axum::{extract::rejection::JsonRejection, http::StatusCode, response::IntoResponse, Json};
 use thiserror::Error;
 
-use crate::primitives::{commitment::InclusionCommitment, InclusionRequest};
+use crate::{
+    primitives::{commitment::InclusionCommitment, InclusionRequest},
+    state::{consensus::ConsensusError, ValidationError},
+};
 
 use super::jsonrpc::JsonResponse;
 
@@ -18,9 +21,12 @@ pub enum Error {
     /// Request rejected.
     #[error("Request rejected: {0}")]
     Rejected(#[from] RejectionError),
+    /// Consensus validation failed.
+    #[error("Consensus validation error: {0}")]
+    Consensus(#[from] ConsensusError),
     /// Request validation failed.
-    #[error("{0}")]
-    ValidationFailed(String),
+    #[error("Validation failed: {0}")]
+    Validation(#[from] ValidationError),
     /// Duplicate request.
     #[error("Duplicate request")]
     Duplicate,
@@ -80,9 +86,14 @@ impl IntoResponse for Error {
                 Json(JsonResponse::from_error(-32005, err.to_string())),
             )
                 .into_response(),
-            Error::ValidationFailed(message) => (
+            Error::Consensus(err) => (
                 StatusCode::BAD_REQUEST,
-                Json(JsonResponse::from_error(-32006, message)),
+                Json(JsonResponse::from_error(-32006, err.to_string())),
+            )
+                .into_response(),
+            Error::Validation(err) => (
+                StatusCode::BAD_REQUEST,
+                Json(JsonResponse::from_error(-32006, err.to_string())),
             )
                 .into_response(),
             Error::MalformedHeader => (

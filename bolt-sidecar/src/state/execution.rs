@@ -189,7 +189,7 @@ impl<C: StateFetcher> ExecutionState<C> {
     /// and SHOULD sign it and respond to the requester.
     ///
     /// TODO: should also validate everything in https://github.com/paradigmxyz/reth/blob/9aa44e1a90b262c472b14cd4df53264c649befc2/crates/transaction-pool/src/validate/eth.rs#L153
-    pub async fn validate_commitment_request(
+    pub async fn validate_request(
         &mut self,
         request: &mut CommitmentRequest,
     ) -> Result<(), ValidationError> {
@@ -533,10 +533,7 @@ mod tests {
 
         let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
-        assert!(state
-            .validate_commitment_request(&mut request)
-            .await
-            .is_ok());
+        assert!(state.validate_request(&mut request).await.is_ok());
 
         Ok(())
     }
@@ -575,7 +572,7 @@ mod tests {
         state.update_head(None, 11).await?;
 
         assert!(matches!(
-            state.validate_commitment_request(&mut request).await,
+            state.validate_request(&mut request).await,
             Err(ValidationError::SlotTooLow(11))
         ));
 
@@ -615,7 +612,7 @@ mod tests {
         let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         assert!(matches!(
-            state.validate_commitment_request(&mut request).await,
+            state.validate_request(&mut request).await,
             Err(ValidationError::NonceTooLow(1, 0))
         ));
 
@@ -627,7 +624,7 @@ mod tests {
         let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         assert!(matches!(
-            state.validate_commitment_request(&mut request).await,
+            state.validate_request(&mut request).await,
             Err(ValidationError::NonceTooHigh(1, 2))
         ));
 
@@ -657,7 +654,7 @@ mod tests {
         let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         assert!(matches!(
-            state.validate_commitment_request(&mut request).await,
+            state.validate_request(&mut request).await,
             Err(ValidationError::InsufficientBalance)
         ));
 
@@ -707,13 +704,10 @@ mod tests {
         let tx = default_test_transaction(*sender, Some(1));
         let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
-        assert!(state
-            .validate_commitment_request(&mut request)
-            .await
-            .is_ok());
+        assert!(state.validate_request(&mut request).await.is_ok());
 
         let message = ConstraintsMessage::build(0, request.as_inclusion_request().unwrap().clone());
-        let signature = signer.sign(&message.digest())?.to_string();
+        let signature = signer.sign(&message.digest())?;
         let signed_constraints = SignedConstraints { message, signature };
         state.add_constraint(10, signed_constraints);
 
@@ -724,7 +718,7 @@ mod tests {
         // this should fail because the balance is insufficient as we spent
         // all of it on the previous preconfirmation
         assert!(matches!(
-            state.validate_commitment_request(&mut request).await,
+            state.validate_request(&mut request).await,
             Err(ValidationError::InsufficientBalance)
         ));
 
@@ -757,7 +751,7 @@ mod tests {
         let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         assert!(matches!(
-            state.validate_commitment_request(&mut request).await,
+            state.validate_request(&mut request).await,
             Err(ValidationError::BaseFeeTooLow(_))
         ));
 
@@ -789,7 +783,7 @@ mod tests {
         let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         assert!(matches!(
-            state.validate_commitment_request(&mut request).await,
+            state.validate_request(&mut request).await,
             Err(ValidationError::MaxCommittedGasReachedForSlot(_, 5_000_000))
         ));
 
@@ -824,14 +818,11 @@ mod tests {
         let mut request = create_signed_commitment_request(&[tx], sender_pk, target_slot).await?;
         let inclusion_request = request.as_inclusion_request().unwrap().clone();
 
-        assert!(state
-            .validate_commitment_request(&mut request)
-            .await
-            .is_ok());
+        assert!(state.validate_request(&mut request).await.is_ok());
 
         let bls_signer = Signer::random();
         let message = ConstraintsMessage::build(0, inclusion_request);
-        let signature = bls_signer.sign(&message.digest()).unwrap().to_string();
+        let signature = bls_signer.sign(&message.digest()).unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
         state.add_constraint(target_slot, signed_constraints);
@@ -888,14 +879,11 @@ mod tests {
         let mut request = create_signed_commitment_request(&[tx], sender_pk, target_slot).await?;
         let inclusion_request = request.as_inclusion_request().unwrap().clone();
 
-        assert!(state
-            .validate_commitment_request(&mut request)
-            .await
-            .is_ok());
+        assert!(state.validate_request(&mut request).await.is_ok());
 
         let bls_signer = Signer::random();
         let message = ConstraintsMessage::build(0, inclusion_request);
-        let signature = bls_signer.sign(&message.digest()).unwrap().to_string();
+        let signature = bls_signer.sign(&message.digest()).unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
         state.add_constraint(target_slot, signed_constraints);
@@ -943,14 +931,11 @@ mod tests {
         let mut request = create_signed_commitment_request(&[tx], sender_pk, target_slot).await?;
         let inclusion_request = request.as_inclusion_request().unwrap().clone();
 
-        assert!(state
-            .validate_commitment_request(&mut request)
-            .await
-            .is_ok());
+        assert!(state.validate_request(&mut request).await.is_ok());
 
         let bls_signer = Signer::random();
         let message = ConstraintsMessage::build(0, inclusion_request);
-        let signature = bls_signer.sign(&message.digest()).unwrap().to_string();
+        let signature = bls_signer.sign(&message.digest()).unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
         state.add_constraint(target_slot, signed_constraints);
@@ -969,7 +954,7 @@ mod tests {
         let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
         assert!(matches!(
-            state.validate_commitment_request(&mut request).await,
+            state.validate_request(&mut request).await,
             Err(ValidationError::MaxCommittedGasReachedForSlot(_, 5_000_000))
         ));
 
@@ -998,10 +983,7 @@ mod tests {
 
         let mut request = create_signed_commitment_request(&[tx1, tx2, tx3], sender_pk, 10).await?;
 
-        assert!(state
-            .validate_commitment_request(&mut request)
-            .await
-            .is_ok());
+        assert!(state.validate_request(&mut request).await.is_ok());
 
         Ok(())
     }
@@ -1029,7 +1011,7 @@ mod tests {
         let mut request = create_signed_commitment_request(&[tx1, tx2, tx3], sender_pk, 10).await?;
 
         assert!(matches!(
-            state.validate_commitment_request(&mut request).await,
+            state.validate_request(&mut request).await,
             Err(ValidationError::NonceTooHigh(2, 3))
         ));
 
@@ -1060,7 +1042,7 @@ mod tests {
         let mut request = create_signed_commitment_request(&[tx1, tx2, tx3], sender_pk, 10).await?;
 
         assert!(matches!(
-            state.validate_commitment_request(&mut request).await,
+            state.validate_request(&mut request).await,
             Err(ValidationError::InsufficientBalance)
         ));
 

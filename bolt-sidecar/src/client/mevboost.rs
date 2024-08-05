@@ -21,7 +21,7 @@ use crate::{
 };
 
 /// A client for interacting with the MEV-Boost API.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MevBoostClient {
     url: Url,
     client: reqwest::Client,
