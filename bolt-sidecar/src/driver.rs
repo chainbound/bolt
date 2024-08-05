@@ -69,6 +69,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
 
         let beacon_client = BeaconClient::new(cfg.beacon_api_url.clone());
 
+        // start the commitments api server
         let api_addr = format!("0.0.0.0:{}", cfg.rpc_port);
         let (api_events_tx, api_events_rx) = mpsc::channel(1024);
         CommitmentsApiServer::new(api_addr).run(api_events_tx).await;
@@ -91,6 +92,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
 
         let (payload_requests_tx, payload_requests_rx) = mpsc::channel(16);
 
+        // start the builder api proxy server
         tokio::spawn(async move {
             let payload_fetcher = LocalPayloadFetcher::new(payload_requests_tx);
             if let Err(err) = start_builder_proxy_server(payload_fetcher, builder_proxy_cfg).await {
