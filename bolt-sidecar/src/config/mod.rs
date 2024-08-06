@@ -3,8 +3,10 @@ use std::{fs::read_to_string, path::Path, str::FromStr};
 use alloy::primitives::Address;
 use blst::min_pk::SecretKey;
 use clap::Parser;
+use eyre::{bail, eyre, Report, Result};
 use reqwest::Url;
 use std::num::NonZero;
+use tracing::info;
 
 use crate::crypto::bls::random_bls_secret;
 
@@ -154,14 +156,14 @@ impl Default for Limits {
 
 impl Config {
     /// Parse the command-line options and return a new [`Config`] instance
-    pub fn parse_from_cli() -> eyre::Result<Self> {
+    pub fn parse_from_cli() -> Result<Self> {
         let opts = Opts::parse();
         Self::try_from(opts)
     }
 }
 
 impl TryFrom<Opts> for Config {
-    type Error = eyre::Report;
+    type Error = Report;
 
     fn try_from(opts: Opts) -> Result<Self, Self::Error> {
         let mut config = Config::default();
@@ -184,7 +186,7 @@ impl TryFrom<Opts> for Config {
         config.private_key = if let Some(sk) = opts.signing.private_key {
             let hex_sk = sk.strip_prefix("0x").unwrap_or(&sk);
             let sk = SecretKey::from_bytes(&hex::decode(hex_sk)?)
-                .map_err(|e| eyre::eyre!("Failed decoding BLS signer secret key: {:?}", e))?;
+                .map_err(|e| eyre!("Failed decoding BLS signer secret key: {:?}", e))?;
             Some(sk)
         } else {
             None
@@ -193,7 +195,7 @@ impl TryFrom<Opts> for Config {
         if let Some(builder_sk) = opts.builder_private_key {
             let hex_sk = builder_sk.strip_prefix("0x").unwrap_or(&builder_sk);
             let sk = SecretKey::from_bytes(&hex::decode(hex_sk)?)
-                .map_err(|e| eyre::eyre!("Failed decoding BLS builder secret key: {:?}", e))?;
+                .map_err(|e| eyre!("Failed decoding BLS builder secret key: {:?}", e))?;
             config.builder_private_key = sk;
         }
 
@@ -201,7 +203,7 @@ impl TryFrom<Opts> for Config {
             opts.jwt_hex.trim_start_matches("0x").to_string()
         } else if Path::new(&opts.jwt_hex).exists() {
             read_to_string(opts.jwt_hex)
-                .map_err(|e| eyre::eyre!("Failed reading JWT secret file: {:?}", e))?
+                .map_err(|e| eyre!("Failed reading JWT secret file: {:?}", e))?
                 .trim_start_matches("0x")
                 .to_string()
         } else {
@@ -210,9 +212,9 @@ impl TryFrom<Opts> for Config {
 
         // Validate the JWT secret
         if config.jwt_hex.len() != 64 {
-            eyre::bail!("Engine JWT secret must be a 32 byte hex string");
+            bail!("Engine JWT secret must be a 32 byte hex string");
         } else {
-            tracing::info!("Engine JWT secret loaded successfully");
+            info!("Engine JWT secret loaded successfully");
         }
 
         config.mevboost_proxy_port = opts.mevboost_proxy_port;

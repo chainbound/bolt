@@ -13,6 +13,7 @@ use alloy_node_bindings::{Anvil, AnvilInstance};
 use blst::min_pk::SecretKey;
 use reth_primitives::PooledTransactionsElement;
 use secp256k1::Message;
+use tracing::warn;
 
 use crate::{
     crypto::{ecdsa::SignableECDSA, SignableBLS},
@@ -74,7 +75,7 @@ pub(crate) async fn get_test_config() -> Option<Config> {
     let _ = dotenvy::dotenv();
 
     let Some(jwt) = std::env::var("ENGINE_JWT").ok() else {
-        tracing::warn!("ENGINE_JWT not found in environment variables");
+        warn!("ENGINE_JWT not found in environment variables");
         return None;
     };
 

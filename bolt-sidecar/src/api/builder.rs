@@ -19,6 +19,7 @@ use serde::Deserialize;
 use std::{sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::net::TcpListener;
+use tracing::{debug, error, info, warn};
 
 use super::spec::{
     BuilderApiError, ConstraintsApi, GET_HEADER_PATH, GET_PAYLOAD_PATH, REGISTER_VALIDATORS_PATH,
@@ -64,18 +65,18 @@ where
     /// Gets the status. Just forwards the request to mev-boost and returns the status.
     pub async fn status(State(server): State<Arc<BuilderProxyServer<T, P>>>) -> StatusCode {
         let start = std::time::Instant::now();
-        tracing::debug!("Received status request");
+        debug!("Received status request");
 
         let status = match server.proxy_target.status().await {
             Ok(status) => status,
             Err(error) => {
-                tracing::error!(%error, "Failed to get status from mev-boost");
+                error!(%error, "Failed to get status from mev-boost");
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
 
         let elapsed = start.elapsed();
-        tracing::debug!(?elapsed, "Returning status: {:?}", status);
+        debug!(?elapsed, "Returning status: {:?}", status);
 
         status
     }
@@ -89,12 +90,12 @@ where
         Json(registrations): Json<Vec<SignedValidatorRegistration>>,
     ) -> Result<StatusCode, BuilderApiError> {
         let start = std::time::Instant::now();
-        tracing::debug!("Received register validators request");
+        debug!("Received register validators request");
 
         let response = server.proxy_target.register_validators(registrations).await;
 
         let elapsed = start.elapsed();
-        tracing::debug!(?elapsed, "Returning response: {:?}", response);
+        debug!(?elapsed, "Returning response: {:?}", response);
 
         response.map(|_| StatusCode::OK)
     }
@@ -110,7 +111,7 @@ where
     ) -> Result<Json<VersionedValue<SignedBuilderBid>>, BuilderApiError> {
         let start = std::time::Instant::now();
 
-        tracing::debug!("Received get_header request");
+        debug!("Received get_header request");
         let slot = params.slot;
 
         let err = match tokio::time::timeout(
@@ -128,7 +129,7 @@ where
                     let mut local_payload = server.local_payload.lock();
                     *local_payload = None;
 
-                    tracing::debug!(elapsed = ?start.elapsed(), "Returning signed builder bid");
+                    debug!(elapsed = ?start.elapsed(), "Returning signed builder bid");
                     return Ok(Json(header));
                 }
             },
@@ -136,19 +137,19 @@ where
         };
 
         // On ANY error, we fall back to locally built block
-        tracing::warn!(slot, elapsed = ?start.elapsed(), err = ?err, "Proxy error, fetching local payload instead");
+        warn!(slot, elapsed = ?start.elapsed(), err = ?err, "Proxy error, fetching local payload instead");
 
         let Some(payload_and_bid) = server.payload_fetcher.fetch_payload(slot).await else {
             // TODO: handle failure? In this case, we don't have a fallback block
             // which means we haven't made any commitments. This means the EL should
             // fallback to local block building.
-            tracing::debug!("No local payload with commitments produced for slot {slot}");
+            debug!("No local payload with commitments produced for slot {slot}");
             return Err(BuilderApiError::FailedToFetchLocalPayload(slot));
         };
 
         let hash = payload_and_bid.bid.message.header.block_hash.clone();
         let number = payload_and_bid.bid.message.header.block_number;
-        tracing::info!(elapsed = ?start.elapsed(), %hash, "Fetched local payload for slot {slot}");
+        info!(elapsed = ?start.elapsed(), %hash, "Fetched local payload for slot {slot}");
 
         {
             // Since we've signed a local header, set the payload for
@@ -163,7 +164,7 @@ where
             meta: Default::default(),
         };
 
-        tracing::info!(elapsed = ?start.elapsed(), %hash, number, ?versioned_bid, "Returning locally built header");
+        info!(elapsed = ?start.elapsed(), %hash, number, ?versioned_bid, "Returning locally built header");
         Ok(Json(versioned_bid))
     }
 
@@ -172,18 +173,18 @@ where
         req: Request<Body>,
     ) -> Result<Json<GetPayloadResponse>, BuilderApiError> {
         let start = std::time::Instant::now();
-        tracing::debug!("Received get_payload request");
+        debug!("Received get_payload request");
 
         let body_bytes =
             body::to_bytes(req.into_body(), MAX_BLINDED_BLOCK_LENGTH).await.map_err(|e| {
-                tracing::error!(error = %e, "Failed to read request body");
+                error!(error = %e, "Failed to read request body");
                 e
             })?;
 
         // Convert to signed blinded beacon block
         let signed_blinded_block = serde_json::from_slice::<SignedBlindedBeaconBlock>(&body_bytes)
             .map_err(|e| {
-                tracing::error!(error = %e, "Failed to parse signed blinded block");
+                error!(error = %e, "Failed to parse signed blinded block");
                 e
             })?;
 
@@ -192,7 +193,7 @@ where
         if let Some(local_payload) = server.local_payload.lock().take() {
             check_locally_built_payload_integrity(&signed_blinded_block, &local_payload)?;
 
-            tracing::debug!("Valid local block found, returning: {local_payload:?}");
+            debug!("Valid local block found, returning: {local_payload:?}");
             return Ok(Json(local_payload));
         }
 
@@ -205,11 +206,11 @@ where
             .await
             .map(Json)
             .map_err(|e| {
-                tracing::error!(elapsed = ?start.elapsed(), error = %e, "Failed to get payload from mev-boost");
+                error!(elapsed = ?start.elapsed(), error = %e, "Failed to get payload from mev-boost");
                 e
             })?;
 
-        tracing::debug!(elapsed = ?start.elapsed(), "Returning payload");
+        debug!(elapsed = ?start.elapsed(), "Returning payload");
 
         Ok(payload)
     }
@@ -232,7 +233,7 @@ pub async fn start_builder_proxy_server<P>(
 where
     P: PayloadFetcher + Send + Sync + 'static,
 {
-    tracing::info!(
+    info!(
         port = config.server_port,
         target = config.mevboost_url.to_string(),
         "Starting builder proxy..."
@@ -273,7 +274,7 @@ pub enum LocalPayloadIntegrityError {
 macro_rules! assert_payload_fields_eq {
     ($expected:expr, $have:expr, $field_name:ident) => {
         if $expected != $have {
-            tracing::error!(
+            error!(
                 field_name = stringify!($field_name),
                 expected = %$expected,
                 have = %$have,

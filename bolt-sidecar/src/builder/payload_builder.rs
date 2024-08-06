@@ -15,6 +15,7 @@ use reth_primitives::{
 };
 use reth_rpc_layer::{secret_to_bearer_header, JwtSecret};
 use serde_json::Value;
+use tracing::{debug, info, trace, warn};
 
 use super::{
     compat::{to_alloy_execution_payload, to_reth_withdrawal},
@@ -106,7 +107,7 @@ impl FallbackPayloadBuilder {
     ) -> Result<SealedBlock, BuilderError> {
         // TODO: what if the latest block ends up being reorged out?
         let latest_block = self.execution_rpc_client.get_block(None, true).await?;
-        tracing::debug!(num = ?latest_block.header.number, "got latest block");
+        debug!(num = ?latest_block.header.number, "got latest block");
 
         let withdrawals = self
             .beacon_api_client
@@ -117,7 +118,7 @@ impl FallbackPayloadBuilder {
             .map(to_reth_withdrawal)
             .collect::<Vec<_>>();
 
-        tracing::debug!(amount = ?withdrawals.len(), "got withdrawals");
+        debug!(amount = ?withdrawals.len(), "got withdrawals");
 
         // let prev_randao = self
         //     .beacon_api_client
@@ -138,18 +139,18 @@ impl FallbackPayloadBuilder {
             .unwrap();
         let prev_randao = prev_randao.pointer("/data/randao").unwrap().as_str().unwrap();
         let prev_randao = B256::from_hex(prev_randao).unwrap();
-        tracing::debug!("got prev_randao");
+        debug!("got prev_randao");
 
         let parent_beacon_block_root =
             self.beacon_api_client.get_beacon_block_root(BlockId::Head).await?;
-        tracing::debug!(parent = ?parent_beacon_block_root, "got parent_beacon_block_root");
+        debug!(parent = ?parent_beacon_block_root, "got parent_beacon_block_root");
 
         let versioned_hashes = transactions
             .iter()
             .flat_map(|tx| tx.blob_versioned_hashes())
             .flatten()
             .collect::<Vec<_>>();
-        tracing::info!(amount = ?versioned_hashes.len(), "got versioned_hashes");
+        info!(amount = ?versioned_hashes.len(), "got versioned_hashes");
 
         let base_fee = calc_next_block_base_fee(
             latest_block.header.gas_used,
@@ -204,11 +205,11 @@ impl FallbackPayloadBuilder {
                 .fetch_next_payload_hint(&exec_payload, &versioned_hashes, parent_beacon_block_root)
                 .await?;
 
-            tracing::debug!("engine_hint: {:?}", engine_hint);
+            debug!("engine_hint: {:?}", engine_hint);
 
             match engine_hint {
                 EngineApiHint::BlockHash(hash) => {
-                    tracing::warn!("Should not receive block hash hint {:?}", hash);
+                    warn!("Should not receive block hash hint {:?}", hash);
                     hints.block_hash = Some(hash)
                 }
 
@@ -306,7 +307,7 @@ impl EngineHinter {
             }
         };
 
-        tracing::trace!("raw hint: {:?}", raw_hint);
+        trace!("raw hint: {:?}", raw_hint);
 
         // Match the hint value to the corresponding header field and return it
         if raw_hint.contains("blockhash mismatch") {
@@ -401,6 +402,7 @@ mod tests {
         signers::{k256::ecdsa::SigningKey, local::PrivateKeySigner},
     };
     use reth_primitives::TransactionSigned;
+    use tracing::warn;
 
     use crate::{
         builder::payload_builder::FallbackPayloadBuilder,
@@ -412,7 +414,7 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
 
         let Some(cfg) = get_test_config().await else {
-            tracing::warn!("Skipping test: missing test config");
+            warn!("Skipping test: missing test config");
             return Ok(());
         };
 

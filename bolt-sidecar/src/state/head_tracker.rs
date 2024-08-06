@@ -4,6 +4,7 @@ use alloy::rpc::types::beacon::events::HeadEvent;
 use beacon_api_client::Topic;
 use futures::StreamExt;
 use tokio::{sync::broadcast, task::AbortHandle};
+use tracing::warn;
 
 use crate::BeaconClient;
 
@@ -42,7 +43,7 @@ impl HeadTracker {
                 let mut event_stream = match beacon_client.get_events::<NewHeadsTopic>().await {
                     Ok(events) => events,
                     Err(err) => {
-                        tracing::warn!(?err, "failed to subscribe to new heads topic, retrying...");
+                        warn!(?err, "failed to subscribe to new heads topic, retrying...");
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         continue;
                     }
@@ -51,19 +52,19 @@ impl HeadTracker {
                 let event = match event_stream.next().await {
                     Some(Ok(event)) => event,
                     Some(Err(err)) => {
-                        tracing::warn!(?err, "error reading new head event stream, retrying...");
+                        warn!(?err, "error reading new head event stream, retrying...");
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         continue;
                     }
                     None => {
-                        tracing::warn!("new head event stream ended, retrying...");
+                        warn!("new head event stream ended, retrying...");
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         continue;
                     }
                 };
 
                 if let Err(err) = new_heads_tx.send(event) {
-                    tracing::warn!(?err, "failed to broadcast new head event to subscribers");
+                    warn!(?err, "failed to broadcast new head event to subscribers");
                 }
             }
         });
@@ -93,6 +94,7 @@ impl HeadTracker {
 #[cfg(test)]
 mod tests {
     use reqwest::Url;
+    use tracing::warn;
 
     use crate::{
         state::head_tracker::HeadTracker, test_util::try_get_beacon_api_url, BeaconClient,
@@ -103,7 +105,7 @@ mod tests {
         let _ = tracing_subscriber::fmt::try_init();
 
         let Some(url) = try_get_beacon_api_url().await else {
-            tracing::warn!("skipping test: beacon API URL is not reachable");
+            warn!("skipping test: beacon API URL is not reachable");
             return Ok(());
         };
 
