@@ -3047,7 +3047,8 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 			return
 		case <-ticker.C:
 			// Send a keepalive to the client
-			fmt.Fprint(w, ": keepalive\n\n")
+			// NOTE: the length of the message is intentional, do not make it shorter
+			fmt.Fprint(w, ": keepaliveeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n\n")
 			flusher.Flush()
 		case constraint := <-constraintsCh:
 			constraintJSON, err := json.Marshal([]*SignedConstraints{constraint})
