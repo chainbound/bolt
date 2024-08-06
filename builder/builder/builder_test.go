@@ -443,10 +443,7 @@ func TestSubscribeProposerConstraints(t *testing.T) {
 	_, ok := builder.constraintsCache.Get(0)
 	require.Equal(t, false, ok)
 
-	// Create authentication signed message
-	authHeader, err := builder.GenerateAuthenticationHeader()
-	require.NoError(t, err)
-	builder.subscribeToRelayForConstraints(builder.relay.Config().Endpoint, authHeader)
+	builder.subscribeToRelayForConstraints(builder.relay.Config().Endpoint)
 	// Wait 2 seconds to save all constraints in cache
 	time.Sleep(2 * time.Second)
 

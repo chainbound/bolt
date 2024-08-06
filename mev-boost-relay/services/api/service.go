@@ -3014,25 +3014,7 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	// TODO: Docs regarding this autorization schema
-	// NOTE: This authorization schema is not final, but works for now.
-	auth := req.Header.Get("Authorization")
-
-	builderPublicKey, err := validateConstraintSubscriptionAuth(auth, api.headSlot.Load())
-	if err != nil {
-		api.log.Infof("Failed to validate constraint subscription auth: %s. err: %s", auth, err)
-		http.Error(w, err.Error(), http.StatusUnauthorized)
-		return
-	}
-
-	_, ok := api.checkBuilderEntry(w, api.log, builderPublicKey)
-	if !ok {
-		api.log.Infof("Builder rejected: %s", builderPublicKey)
-		http.Error(w, "Builder rejected", http.StatusUnauthorized)
-		return
-	}
-
-	api.log.Infof("New constraints consumer with builder pubkey: %s", builderPublicKey)
+	api.log.Infof("New constraints consumer connected")
 
 	// Add the new consumer
 	constraintsCh := make(chan *SignedConstraints, 256)
@@ -3065,6 +3047,7 @@ func (api *RelayAPI) handleSubscribeConstraints(w http.ResponseWriter, req *http
 			return
 		case <-ticker.C:
 			// Send a keepalive to the client
+			// NOTE: the length of the message is intentional, do not make it shorter
 			fmt.Fprint(w, ": keepaliveeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n\n")
 			flusher.Flush()
 		case constraint := <-constraintsCh:
