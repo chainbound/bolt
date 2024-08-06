@@ -10,8 +10,13 @@ import (
 // These types are taken from https://chainbound.github.io/bolt-docs/
 
 const (
-	// NOTE: This is still a work in progress and not documented on the specs
-	MAX_CONSTRAINTS_PER_SLOT  = 256
+	// Note: we decided to set max constraints per slot to the same value
+	// as the max transactions per block in Ethereum. This allows bolt operators
+	// to decide how many commitments to include in a slot without the protocol
+	// imposing hard limits that would be really hard to change in the future.
+	//
+	// Specs: https://github.com/ethereum/consensus-specs/blob/9515f3e7e1ce893f97ac638d0280ea9026518bad/specs/bellatrix/beacon-chain.md#execution
+	MAX_CONSTRAINTS_PER_SLOT  = 1048576    // 2**20
 	MAX_BYTES_PER_TRANSACTION = 1073741824 // 2**30
 )
 
@@ -25,15 +30,15 @@ type SignedConstraints struct {
 type ConstraintsMessage struct {
 	ValidatorIndex uint64        `json:"validator_index"`
 	Slot           uint64        `json:"slot"`
-	Constraints    []*Constraint `ssz-max:"256" json:"constraints"`
+	Constraints    []*Constraint `ssz-max:"1048576" json:"constraints"`
 }
 
 type Constraint struct {
-	Tx    Transaction `ssz-max:"1048576" json:"tx"`
+	Tx    Transaction `ssz-max:"1073741824" json:"tx"`
 	Index *Index      `json:"index"`
 }
 
-// For SSZ purposes, we consider `Index` as Union[uint64, None]
+// Index is the Union[uint64, None] (For SSZ purposes)
 type Index uint64
 
 func NewIndex(i uint64) *Index {
