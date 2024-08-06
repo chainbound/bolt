@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonPayload {
@@ -7,30 +8,25 @@ pub struct JsonPayload {
     /// The method string.
     pub method: String,
     /// Optional ID.
-    pub id: Option<serde_json::Value>,
+    pub id: Option<Value>,
     /// The parameters object.
-    pub params: Vec<serde_json::Value>,
+    pub params: Vec<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JsonResponse {
     pub jsonrpc: String,
     /// Optional ID. Must be serialized as `null` if not present.
-    pub id: Option<serde_json::Value>,
-    #[serde(skip_serializing_if = "serde_json::Value::is_null", default)]
-    pub result: serde_json::Value,
+    pub id: Option<Value>,
+    #[serde(skip_serializing_if = "Value::is_null", default)]
+    pub result: Value,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<JsonError>,
 }
 
 impl Default for JsonResponse {
     fn default() -> Self {
-        Self {
-            jsonrpc: "2.0".to_string(),
-            id: None,
-            result: serde_json::Value::Null,
-            error: None,
-        }
+        Self { jsonrpc: "2.0".to_string(), id: None, result: Value::Null, error: None }
     }
 }
 
@@ -39,7 +35,7 @@ impl JsonResponse {
         Self {
             jsonrpc: "2.0".to_string(),
             id: None,
-            result: serde_json::Value::Null,
+            result: Value::Null,
             error: Some(JsonError { code, message }),
         }
     }

@@ -222,10 +222,7 @@ pub struct ChainHead {
 impl ChainHead {
     /// Create a new ChainHead instance.
     pub fn new(slot: u64, block: u64) -> Self {
-        Self {
-            slot: Arc::new(AtomicU64::new(slot)),
-            block: Arc::new(AtomicU64::new(block)),
-        }
+        Self { slot: Arc::new(AtomicU64::new(slot)), block: Arc::new(AtomicU64::new(block)) }
     }
 
     /// Get the slot number (consensus layer).

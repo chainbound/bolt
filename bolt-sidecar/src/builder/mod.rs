@@ -98,10 +98,7 @@ impl LocalBuilder {
 
         // 1. build a fallback payload with the given transactions, on top of
         // the current head of the chain
-        let sealed_block = self
-            .fallback_builder
-            .build_fallback_payload(&transactions)
-            .await?;
+        let sealed_block = self.fallback_builder.build_fallback_payload(&transactions).await?;
 
         // NOTE: we use a big value for the bid to ensure it gets chosen by mev-boost.
         // the client has no way to actually verify this, and we don't need to trust
@@ -112,10 +109,7 @@ impl LocalBuilder {
         let value = U256::from(1_000_000_000_000_000_000u128);
 
         let eth_payload = compat::to_consensus_execution_payload(&sealed_block);
-        let payload_and_blobs = PayloadAndBlobs {
-            execution_payload: eth_payload,
-            blobs_bundle,
-        };
+        let payload_and_blobs = PayloadAndBlobs { execution_payload: eth_payload, blobs_bundle };
 
         // 2. create a signed builder bid with the sealed block header we just created
         let eth_header = compat::to_execution_payload_header(&sealed_block, transactions);
@@ -126,10 +120,8 @@ impl LocalBuilder {
         // 4. prepare a get_payload response for when the beacon node will ask for it
         let get_payload_response = GetPayloadResponse::from(payload_and_blobs);
 
-        self.payload_and_bid = Some(PayloadAndBid {
-            bid: signed_bid,
-            payload: get_payload_response,
-        });
+        self.payload_and_bid =
+            Some(PayloadAndBid { bid: signed_bid, payload: get_payload_response });
 
         Ok(())
     }
@@ -153,12 +145,8 @@ impl LocalBuilder {
         let consensus_pubkey = PublicKey::try_from(pubkey.as_slice()).expect("valid pubkey bytes");
         let blob_kzg_commitments = List::try_from(blob_kzg_commitments).expect("valid list");
 
-        let message = BuilderBid {
-            header,
-            blob_kzg_commitments,
-            public_key: consensus_pubkey,
-            value,
-        };
+        let message =
+            BuilderBid { header, blob_kzg_commitments, public_key: consensus_pubkey, value };
 
         let signature = sign_builder_message(&self.chain, &self.secret_key, &message)?;
 

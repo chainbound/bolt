@@ -57,10 +57,7 @@ pub struct CommitmentsApiInner {
 impl CommitmentsApiInner {
     /// Create a new API server with an optional whitelist of ECDSA public keys.
     pub fn new(events: mpsc::Sender<Event>) -> Self {
-        Self {
-            events,
-            whitelist: None,
-        }
+        Self { events, whitelist: None }
     }
 }
 
@@ -79,10 +76,7 @@ impl CommitmentsApi for CommitmentsApiInner {
 
         self.events.send(event).await.unwrap();
 
-        response_rx
-            .await
-            .map_err(|_| Error::Internal)?
-            .map(|c| c.into())
+        response_rx.await.map_err(|_| Error::Internal)?.map(|c| c.into())
     }
 }
 
@@ -97,9 +91,7 @@ pub struct CommitmentsApiServer {
 
 impl fmt::Debug for CommitmentsApiServer {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CommitmentsApiServer")
-            .field("addr", &self.addr)
-            .finish()
+        f.debug_struct("CommitmentsApiServer").field("addr", &self.addr).finish()
     }
 }
 
@@ -130,9 +122,7 @@ impl CommitmentsApiServer {
     pub async fn run(&mut self, events_tx: mpsc::Sender<Event>) {
         let api = Arc::new(CommitmentsApiInner::new(events_tx));
 
-        let router = Router::new()
-            .route("/", post(Self::handle_rpc))
-            .with_state(api);
+        let router = Router::new().route("/", post(Self::handle_rpc)).with_state(api);
 
         let listener = match TcpListener::bind(self.addr).await {
             Ok(listener) => listener,
@@ -150,10 +140,7 @@ impl CommitmentsApiServer {
         let signal = self.signal.take().expect("Signal not set");
 
         tokio::spawn(async move {
-            if let Err(err) = axum::serve(listener, router)
-                .with_graceful_shutdown(signal)
-                .await
-            {
+            if let Err(err) = axum::serve(listener, router).with_graceful_shutdown(signal).await {
                 tracing::error!(?err, "Commitments API Server error");
             }
         });
@@ -257,13 +244,16 @@ fn auth_from_headers(headers: &HeaderMap) -> Result<(Address, Signature), Error>
 
 #[cfg(test)]
 mod test {
-    use alloy::primitives::TxHash;
-    use alloy::signers::k256::SecretKey;
-    use alloy::signers::{local::PrivateKeySigner, Signer};
+    use alloy::{
+        primitives::TxHash,
+        signers::{k256::SecretKey, local::PrivateKeySigner, Signer},
+    };
     use serde_json::json;
 
-    use crate::primitives::commitment::ECDSASignatureExt;
-    use crate::test_util::{create_signed_commitment_request, default_test_transaction};
+    use crate::{
+        primitives::commitment::ECDSASignatureExt,
+        test_util::{create_signed_commitment_request, default_test_transaction},
+    };
 
     use super::*;
 
@@ -275,10 +265,8 @@ mod test {
         let addr = signer.address();
 
         let expected_sig = signer.sign_hash(&hash).await.unwrap();
-        headers.insert(
-            SIGNATURE_HEADER,
-            format!("{addr}:{}", expected_sig.to_hex()).parse().unwrap(),
-        );
+        headers
+            .insert(SIGNATURE_HEADER, format!("{addr}:{}", expected_sig.to_hex()).parse().unwrap());
 
         let (address, signature) = auth_from_headers(&headers).unwrap();
         assert_eq!(signature, expected_sig);
@@ -299,9 +287,7 @@ mod test {
         let sk = SecretKey::random(&mut rand::thread_rng());
         let signer = PrivateKeySigner::from(sk.clone());
         let tx = default_test_transaction(signer.address(), None);
-        let req = create_signed_commitment_request(&[tx], &sk, 12)
-            .await
-            .unwrap();
+        let req = create_signed_commitment_request(&[tx], &sk, 12).await.unwrap();
 
         let payload = json!({
             "jsonrpc": "2.0",
@@ -343,9 +329,7 @@ mod test {
         let sk = SecretKey::random(&mut rand::thread_rng());
         let signer = PrivateKeySigner::from(sk.clone());
         let tx = default_test_transaction(signer.address(), None);
-        let req = create_signed_commitment_request(&[tx], &sk, 12)
-            .await
-            .unwrap();
+        let req = create_signed_commitment_request(&[tx], &sk, 12).await.unwrap();
 
         let sig = req.signature().unwrap().to_hex();
 

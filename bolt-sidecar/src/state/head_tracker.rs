@@ -68,10 +68,7 @@ impl HeadTracker {
             }
         });
 
-        Self {
-            new_heads_rx,
-            quit: task.abort_handle(),
-        }
+        Self { new_heads_rx, quit: task.abort_handle() }
     }
 
     /// Stop the tracker and cleanup resources

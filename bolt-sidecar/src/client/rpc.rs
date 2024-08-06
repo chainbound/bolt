@@ -17,7 +17,7 @@ use alloy::{
                 geth::{GethDebugTracingCallOptions, GethTrace},
                 parity::{TraceResults, TraceType},
             },
-            {Block, EIP1186AccountProofResponse, FeeHistory, TransactionRequest},
+            Block, EIP1186AccountProofResponse, FeeHistory, TransactionRequest,
         },
     },
     transports::{http::Http, TransportErrorKind, TransportResult},
@@ -59,10 +59,8 @@ impl RpcClient {
     pub async fn get_basefee(&self, block_number: Option<u64>) -> TransportResult<u128> {
         let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
 
-        let fee_history: FeeHistory = self
-            .0
-            .request("eth_feeHistory", (U64::from(1), tag, &[] as &[f64]))
-            .await?;
+        let fee_history: FeeHistory =
+            self.0.request("eth_feeHistory", (U64::from(1), tag, &[] as &[f64])).await?;
 
         Ok(fee_history.latest_block_base_fee().unwrap())
     }
@@ -74,10 +72,8 @@ impl RpcClient {
         let block_count = U64::from(1);
         let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
         let reward_percentiles: Vec<f64> = vec![];
-        let fee_history: FeeHistory = self
-            .0
-            .request("eth_feeHistory", (block_count, tag, &reward_percentiles))
-            .await?;
+        let fee_history: FeeHistory =
+            self.0.request("eth_feeHistory", (block_count, tag, &reward_percentiles)).await?;
 
         Ok(fee_history.latest_block_blob_base_fee().unwrap_or(0))
     }
@@ -99,17 +95,13 @@ impl RpcClient {
 
         let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
 
-        let balance = batch
-            .add_call("eth_getBalance", &(address, tag))
-            .expect("Correct parameters");
+        let balance =
+            batch.add_call("eth_getBalance", &(address, tag)).expect("Correct parameters");
 
-        let tx_count = batch
-            .add_call("eth_getTransactionCount", &(address, tag))
-            .expect("Correct parameters");
+        let tx_count =
+            batch.add_call("eth_getTransactionCount", &(address, tag)).expect("Correct parameters");
 
-        let code = batch
-            .add_call("eth_getCode", &(address, tag))
-            .expect("Correct parameters");
+        let code = batch.add_call("eth_getCode", &(address, tag)).expect("Correct parameters");
 
         // After the batch is complete, we can get the results.
         // Note that requests may error separately!
@@ -119,11 +111,7 @@ impl RpcClient {
         let balance: U256 = balance.await?;
         let code: Bytes = code.await?;
 
-        Ok(AccountState {
-            balance,
-            transaction_count: tx_count.to(),
-            has_code: !code.is_empty(),
-        })
+        Ok(AccountState { balance, transaction_count: tx_count.to(), has_code: !code.is_empty() })
     }
 
     /// Get the block with the given number. If `None`, the latest block is returned.
@@ -157,20 +145,13 @@ impl RpcClient {
         let mut proofs: Vec<Waiter<EIP1186AccountProofResponse>> = Vec::new();
 
         for params in opts {
-            proofs.push(
-                batch
-                    .add_call("eth_getProof", &params)
-                    .expect("Correct parameters"),
-            );
+            proofs.push(batch.add_call("eth_getProof", &params).expect("Correct parameters"));
         }
 
         batch.send().await?;
 
         // Important: join_all will preserve the order of the proofs
-        join_all(proofs)
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
+        join_all(proofs).await.into_iter().collect::<Result<Vec<_>, _>>()
     }
 
     /// Performs multiple call traces on top of the same block. i.e. transaction n will be executed
@@ -246,10 +227,7 @@ mod tests {
         let account_state = client.get_account_state(addr, None).await.unwrap();
 
         // Accounts in Anvil start with 10_000 ETH
-        assert_eq!(
-            account_state.balance,
-            uint!(10_000U256 * Uint::from(ETH_TO_WEI))
-        );
+        assert_eq!(account_state.balance, uint!(10_000U256 * Uint::from(ETH_TO_WEI)));
 
         assert_eq!(account_state.transaction_count, 0);
     }

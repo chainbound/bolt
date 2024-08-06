@@ -6,8 +6,7 @@ use std::{
 use alloy::{
     pubsub::PubSubFrontend,
     rpc::client::{self as alloyClient, ClientBuilder, WsConnect},
-    transports::RpcError,
-    transports::TransportError,
+    transports::{RpcError, TransportError},
 };
 
 use reqwest::Url;

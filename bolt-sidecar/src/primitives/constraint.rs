@@ -55,17 +55,10 @@ pub struct ConstraintsMessage {
 impl ConstraintsMessage {
     /// Builds a constraints message from an inclusion request and metadata
     pub fn build(validator_index: u64, request: InclusionRequest) -> Self {
-        let constraints = request
-            .txs
-            .into_iter()
-            .map(|tx| Constraint::from_transaction(tx, None))
-            .collect();
+        let constraints =
+            request.txs.into_iter().map(|tx| Constraint::from_transaction(tx, None)).collect();
 
-        Self {
-            validator_index,
-            slot: request.slot,
-            constraints,
-        }
+        Self { validator_index, slot: request.slot, constraints }
     }
 }
 

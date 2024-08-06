@@ -52,8 +52,8 @@ impl BlockTemplate {
             .collect()
     }
 
-    /// Converts the list of signed constraints into a list of signed transactions. Use this when building
-    /// a local execution payload.
+    /// Converts the list of signed constraints into a list of signed transactions. Use this when
+    /// building a local execution payload.
     #[inline]
     pub fn as_signed_transactions(&self) -> Vec<TransactionSigned> {
         self.signed_constraints_list
@@ -94,30 +94,20 @@ impl BlockTemplate {
                     },
                 );
 
-        BlobsBundle {
-            commitments,
-            proofs,
-            blobs,
-        }
+        BlobsBundle { commitments, proofs, blobs }
     }
 
     /// Returns the length of the transactions in the block template.
     #[inline]
     pub fn transactions_len(&self) -> usize {
-        self.signed_constraints_list
-            .iter()
-            .fold(0, |acc, sc| acc + sc.message.constraints.len())
+        self.signed_constraints_list.iter().fold(0, |acc, sc| acc + sc.message.constraints.len())
     }
 
     /// Returns the committed gas in the block template.
     #[inline]
     pub fn committed_gas(&self) -> u64 {
         self.signed_constraints_list.iter().fold(0, |acc, sc| {
-            acc + sc
-                .message
-                .constraints
-                .iter()
-                .fold(0, |acc, c| acc + c.transaction.gas_limit())
+            acc + sc.message.constraints.iter().fold(0, |acc, c| acc + c.transaction.gas_limit())
         })
     }
 
@@ -221,8 +211,8 @@ pub struct StateDiff {
 
 impl StateDiff {
     /// Returns a tuple of the nonce and balance diff for the given address.
-    /// The nonce diff should be added to the current nonce, the balance diff should be subtracted from
-    /// the current balance.
+    /// The nonce diff should be added to the current nonce, the balance diff should be subtracted
+    /// from the current balance.
     pub fn get_diff(&self, address: &Address) -> Option<(u64, U256)> {
         self.diffs.get(address).copied()
     }

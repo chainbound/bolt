@@ -104,8 +104,8 @@ impl ConsensusState {
         }
 
         // If the request is for the next slot, check if it's within the commitment deadline
-        if req.slot == self.latest_slot + 1
-            && self.latest_slot_timestamp + self.commitment_deadline_duration < Instant::now()
+        if req.slot == self.latest_slot + 1 &&
+            self.latest_slot_timestamp + self.commitment_deadline_duration < Instant::now()
         {
             return Err(ConsensusError::DeadlineExceeded);
         }
@@ -122,10 +122,7 @@ impl ConsensusState {
         self.commitment_deadline =
             CommitmentDeadline::new(head + 1, self.commitment_deadline_duration);
 
-        let update = self
-            .beacon_api_client
-            .get_beacon_header(BlockId::Slot(head))
-            .await?;
+        let update = self.beacon_api_client.get_beacon_header(BlockId::Slot(head)).await?;
 
         self.header = update.header.message;
 
@@ -180,21 +177,9 @@ mod tests {
     async fn test_find_validator_index_for_slot() {
         // Sample proposer duties
         let proposer_duties = vec![
-            ProposerDuty {
-                public_key: Default::default(),
-                slot: 1,
-                validator_index: 100,
-            },
-            ProposerDuty {
-                public_key: Default::default(),
-                slot: 2,
-                validator_index: 101,
-            },
-            ProposerDuty {
-                public_key: Default::default(),
-                slot: 3,
-                validator_index: 102,
-            },
+            ProposerDuty { public_key: Default::default(), slot: 1, validator_index: 100 },
+            ProposerDuty { public_key: Default::default(), slot: 2, validator_index: 101 },
+            ProposerDuty { public_key: Default::default(), slot: 3, validator_index: 102 },
         ];
 
         // Validator indexes that we are interested in
@@ -204,11 +189,7 @@ mod tests {
         let state = ConsensusState {
             beacon_api_client: Client::new(Url::parse("http://localhost").unwrap()),
             header: BeaconBlockHeader::default(),
-            epoch: Epoch {
-                value: 0,
-                start_slot: 0,
-                proposer_duties,
-            },
+            epoch: Epoch { value: 0, start_slot: 0, proposer_duties },
             latest_slot_timestamp: Instant::now(),
             commitment_deadline: CommitmentDeadline::new(0, Duration::from_secs(1)),
             validator_indexes,

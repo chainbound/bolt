@@ -138,10 +138,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
 
     /// Handle an incoming API event, validating the request and responding with a commitment.
     async fn handle_incoming_api_event(&mut self, event: CommitmentEvent) {
-        let CommitmentEvent {
-            mut request,
-            response,
-        } = event;
+        let CommitmentEvent { mut request, response } = event;
         info!("Received new commitment request: {:?}", request);
         let start = Instant::now();
 

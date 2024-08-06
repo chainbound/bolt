@@ -39,18 +39,18 @@ pub struct ChainConfig {
     /// The deadline in the slot at which the sidecar will stop accepting
     /// new commitments for the next block (parsed as milliseconds).
     #[clap(
-        long, 
+        long,
         env = "BOLT_SIDECAR_COMMITMENT_DEADLINE", 
-        default_value_t = DEFAULT_COMMITMENT_DEADLINE_IN_MILLIS)
-    ]
+        default_value_t = DEFAULT_COMMITMENT_DEADLINE_IN_MILLIS
+    )]
     commitment_deadline: u64,
     /// The slot time duration in seconds. If provided,
     /// it overrides the default for the selected [Chain].
     #[clap(
-        long, 
+        long,
         env = "BOLT_SIDECAR_SLOT_TIME",
-        default_value_t = DEFAULT_SLOT_TIME_IN_SECONDS)
-    ]
+        default_value_t = DEFAULT_SLOT_TIME_IN_SECONDS
+    )]
     slot_time: u64,
 }
 
@@ -130,31 +130,18 @@ impl ChainConfig {
 #[cfg(test)]
 impl ChainConfig {
     pub fn mainnet() -> Self {
-        Self {
-            chain: Chain::Mainnet,
-            ..Default::default()
-        }
+        Self { chain: Chain::Mainnet, ..Default::default() }
     }
 
     pub fn holesky() -> Self {
-        Self {
-            chain: Chain::Holesky,
-            ..Default::default()
-        }
+        Self { chain: Chain::Holesky, ..Default::default() }
     }
 
     pub fn helder() -> Self {
-        Self {
-            chain: Chain::Helder,
-            ..Default::default()
-        }
+        Self { chain: Chain::Helder, ..Default::default() }
     }
 
     pub fn kurtosis(slot_time_in_seconds: u64, commitment_deadline: u64) -> Self {
-        Self {
-            chain: Chain::Kurtosis,
-            slot_time: slot_time_in_seconds,
-            commitment_deadline,
-        }
+        Self { chain: Chain::Kurtosis, slot_time: slot_time_in_seconds, commitment_deadline }
     }
 }

@@ -32,10 +32,7 @@ impl MevBoostClient {
     pub fn new<U: Into<Url>>(url: U) -> Self {
         Self {
             url: url.into(),
-            client: reqwest::ClientBuilder::new()
-                .user_agent("bolt-sidecar")
-                .build()
-                .unwrap(),
+            client: reqwest::ClientBuilder::new().user_agent("bolt-sidecar").build().unwrap(),
         }
     }
 

@@ -2,8 +2,7 @@ use alloy::primitives::FixedBytes;
 use blst::{min_pk::Signature, BLST_ERROR};
 use rand::RngCore;
 
-pub use blst::min_pk::PublicKey as BlsPublicKey;
-pub use blst::min_pk::SecretKey as BlsSecretKey;
+pub use blst::min_pk::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
 pub use ethereum_consensus::deneb::BlsSignature;
 
 /// The BLS Domain Separator used in Ethereum 2.0.
@@ -31,8 +30,8 @@ pub trait SignableBLS {
     ///
     /// Note: The default implementation should be used where possible.
     fn verify(&self, signature: &Signature, pubkey: &BlsPublicKey) -> bool {
-        signature.verify(false, &self.digest(), BLS_DST_PREFIX, &[], pubkey, true)
-            == BLST_ERROR::BLST_SUCCESS
+        signature.verify(false, &self.digest(), BLS_DST_PREFIX, &[], pubkey, true) ==
+            BLST_ERROR::BLST_SUCCESS
     }
 }
 
@@ -64,9 +63,7 @@ impl Signer {
 
     /// Create a signer with a random BLS key.
     pub fn random() -> Self {
-        Self {
-            key: random_bls_secret(),
-        }
+        Self { key: random_bls_secret() }
     }
 
     /// Verify the signature of the object with the given public key.
@@ -128,9 +125,7 @@ mod tests {
         let pubkey = key.sk_to_pk();
         let signer = Signer::new(key);
 
-        let msg = TestSignableData {
-            data: vec![1, 2, 3, 4],
-        };
+        let msg = TestSignableData { data: vec![1, 2, 3, 4] };
 
         let signature = SignerBLS::sign(&signer, &msg.digest()).unwrap();
         let sig = blst::min_pk::Signature::from_bytes(signature.as_ref()).unwrap();

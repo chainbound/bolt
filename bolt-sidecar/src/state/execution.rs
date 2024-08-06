@@ -183,8 +183,8 @@ impl<C: StateFetcher> ExecutionState<C> {
     /// NOTE: This function only simulates against execution state, it does not consider
     /// timing or proposer slot targets.
     ///
-    /// If the commitment is invalid because of nonce, basefee or balance errors, it will return an error.
-    /// If the commitment is valid, its account state
+    /// If the commitment is invalid because of nonce, basefee or balance errors, it will return an
+    /// error. If the commitment is valid, its account state
     /// will be cached. If this is succesful, any callers can be sure that the commitment is valid
     /// and SHOULD sign it and respond to the requester.
     ///
@@ -216,10 +216,8 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
 
         // Check if the committed gas exceeds the maximum
-        let template_committed_gas = self
-            .get_block_template(target_slot)
-            .map(|t| t.committed_gas())
-            .unwrap_or(0);
+        let template_committed_gas =
+            self.get_block_template(target_slot).map(|t| t.committed_gas()).unwrap_or(0);
 
         if template_committed_gas + req.gas_limit() >= self.limits.max_committed_gas_per_slot.get()
         {
@@ -234,7 +232,8 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::TransactionSizeTooHigh);
         }
 
-        // Check if the transaction is a contract creation and the init code size exceeds the maximum
+        // Check if the transaction is a contract creation and the init code size exceeds the
+        // maximum
         if !req.validate_init_code_limit(self.validation_params.max_init_code_byte_size) {
             return Err(ValidationError::TransactionSizeTooHigh);
         }
@@ -332,12 +331,7 @@ impl<C: StateFetcher> ExecutionState<C> {
                 }
             };
 
-            tracing::debug!(
-                ?account_state,
-                ?nonce_diff,
-                ?balance_diff,
-                "Validating transaction"
-            );
+            tracing::debug!(?account_state, ?nonce_diff, ?balance_diff, "Validating transaction");
 
             let sender_nonce_diff = bundle_nonce_diff_map.entry(sender).or_insert(0);
             let sender_balance_diff = bundle_balance_diff_map.entry(sender).or_insert(U256::ZERO);
@@ -441,14 +435,16 @@ impl<C: StateFetcher> ExecutionState<C> {
         self.refresh_templates();
     }
 
-    /// Refreshes the block templates with the latest account states and removes any invalid transactions by checking
-    /// the nonce and balance of the account after applying the state diffs.
+    /// Refreshes the block templates with the latest account states and removes any invalid
+    /// transactions by checking the nonce and balance of the account after applying the state
+    /// diffs.
     fn refresh_templates(&mut self) {
         for (address, account_state) in self.account_states.iter_mut() {
             tracing::trace!(%address, ?account_state, "Refreshing template...");
             // Iterate over all block templates and apply the state diff
             for (_, template) in self.block_templates.iter_mut() {
-                // Retain only signed constraints where transactions are still valid based on the canonical account states.
+                // Retain only signed constraints where transactions are still valid based on the
+                // canonical account states.
                 template.retain(*address, *account_state);
 
                 // Update the account state with the remaining state diff for the next iteration.
@@ -491,8 +487,7 @@ pub struct StateUpdate {
 #[cfg(test)]
 mod tests {
     use crate::builder::template::StateDiff;
-    use std::str::FromStr;
-    use std::{num::NonZero, time::Duration};
+    use std::{num::NonZero, str::FromStr, time::Duration};
 
     use alloy::{
         consensus::constants::ETH_TO_WEI,
@@ -564,10 +559,7 @@ mod tests {
         diffs.insert(*sender, (1, U256::ZERO));
         state.block_templates.insert(
             11,
-            BlockTemplate {
-                state_diff: StateDiff { diffs },
-                signed_constraints_list: vec![],
-            },
+            BlockTemplate { state_diff: StateDiff { diffs }, signed_constraints_list: vec![] },
         );
         state.update_head(None, 11).await?;
 
@@ -600,10 +592,7 @@ mod tests {
         diffs.insert(*sender, (1, U256::ZERO));
         state.block_templates.insert(
             9,
-            BlockTemplate {
-                state_diff: StateDiff { diffs },
-                signed_constraints_list: vec![],
-            },
+            BlockTemplate { state_diff: StateDiff { diffs }, signed_constraints_list: vec![] },
         );
 
         // Create a transaction with a nonce that is too low
@@ -686,13 +675,8 @@ mod tests {
         // burn the balance
         let tx = default_test_transaction(*sender, Some(0)).with_value(uint!(balance_to_burn));
         let request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
-        let tx_bytes = request
-            .as_inclusion_request()
-            .unwrap()
-            .txs
-            .first()
-            .unwrap()
-            .envelope_encoded();
+        let tx_bytes =
+            request.as_inclusion_request().unwrap().txs.first().unwrap().envelope_encoded();
         let _ = client.inner().send_raw_transaction(tx_bytes).await?;
 
         // wait for the transaction to be included to update the sender balance
@@ -827,30 +811,17 @@ mod tests {
 
         state.add_constraint(target_slot, signed_constraints);
 
-        assert!(
-            state
-                .get_block_template(target_slot)
-                .unwrap()
-                .transactions_len()
-                == 1
-        );
+        assert!(state.get_block_template(target_slot).unwrap().transactions_len() == 1);
 
-        let notif = provider
-            .send_raw_transaction(&signed.encoded_2718())
-            .await?;
+        let notif = provider.send_raw_transaction(&signed.encoded_2718()).await?;
 
         // Wait for confirmation
         let receipt = notif.get_receipt().await?;
 
         // Update the head, which should invalidate the transaction due to a nonce conflict
-        state
-            .update_head(receipt.block_number, receipt.block_number.unwrap())
-            .await?;
+        state.update_head(receipt.block_number, receipt.block_number.unwrap()).await?;
 
-        let transactions_len = state
-            .get_block_template(target_slot)
-            .unwrap()
-            .transactions_len();
+        let transactions_len = state.get_block_template(target_slot).unwrap().transactions_len();
 
         assert!(transactions_len == 0);
 
@@ -888,13 +859,7 @@ mod tests {
 
         state.add_constraint(target_slot, signed_constraints);
 
-        assert!(
-            state
-                .get_block_template(target_slot)
-                .unwrap()
-                .transactions_len()
-                == 1
-        );
+        assert!(state.get_block_template(target_slot).unwrap().transactions_len() == 1);
 
         // fast-forward the head to the target slot, which should invalidate the entire template
         // because it's now stale.
@@ -940,13 +905,7 @@ mod tests {
 
         state.add_constraint(target_slot, signed_constraints);
 
-        assert!(
-            state
-                .get_block_template(target_slot)
-                .unwrap()
-                .transactions_len()
-                == 1
-        );
+        assert!(state.get_block_template(target_slot).unwrap().transactions_len() == 1);
 
         // This tx will exceed the committed gas limit
         let tx = default_test_transaction(*sender, Some(1));

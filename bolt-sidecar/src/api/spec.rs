@@ -96,9 +96,7 @@ impl IntoResponse for BuilderApiError {
             }
             BuilderApiError::ReqwestError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                StatusCode::INTERNAL_SERVER_ERROR
-                    .canonical_reason()
-                    .unwrap(),
+                StatusCode::INTERNAL_SERVER_ERROR.canonical_reason().unwrap(),
             )
                 .into_response(),
             BuilderApiError::Timeout(_) => (

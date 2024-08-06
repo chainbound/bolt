@@ -56,62 +56,50 @@ pub enum Error {
 impl IntoResponse for Error {
     fn into_response(self) -> axum::http::Response<axum::body::Body> {
         match self {
-            Error::Rejected(err) => (
-                StatusCode::BAD_REQUEST,
-                Json(JsonResponse::from_error(-32000, err.to_string())),
-            )
-                .into_response(),
-            Error::Duplicate => (
-                StatusCode::BAD_REQUEST,
-                Json(JsonResponse::from_error(-32001, self.to_string())),
-            )
-                .into_response(),
+            Error::Rejected(err) => {
+                (StatusCode::BAD_REQUEST, Json(JsonResponse::from_error(-32000, err.to_string())))
+                    .into_response()
+            }
+            Error::Duplicate => {
+                (StatusCode::BAD_REQUEST, Json(JsonResponse::from_error(-32001, self.to_string())))
+                    .into_response()
+            }
             Error::Internal => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(JsonResponse::from_error(-32002, self.to_string())),
             )
                 .into_response(),
-            Error::NoSignature => (
-                StatusCode::BAD_REQUEST,
-                Json(JsonResponse::from_error(-32003, self.to_string())),
-            )
-                .into_response(),
-            Error::InvalidSignature(err) => (
-                StatusCode::BAD_REQUEST,
-                Json(JsonResponse::from_error(-32004, err.to_string())),
-            )
-                .into_response(),
-            Error::Signature(err) => (
-                StatusCode::BAD_REQUEST,
-                Json(JsonResponse::from_error(-32005, err.to_string())),
-            )
-                .into_response(),
-            Error::Consensus(err) => (
-                StatusCode::BAD_REQUEST,
-                Json(JsonResponse::from_error(-32006, err.to_string())),
-            )
-                .into_response(),
-            Error::Validation(err) => (
-                StatusCode::BAD_REQUEST,
-                Json(JsonResponse::from_error(-32006, err.to_string())),
-            )
-                .into_response(),
-            Error::MalformedHeader => (
-                StatusCode::BAD_REQUEST,
-                Json(JsonResponse::from_error(-32007, self.to_string())),
-            )
-                .into_response(),
-            Error::UnknownMethod => (
-                StatusCode::BAD_REQUEST,
-                Json(JsonResponse::from_error(-32601, self.to_string())),
-            )
-                .into_response(),
+            Error::NoSignature => {
+                (StatusCode::BAD_REQUEST, Json(JsonResponse::from_error(-32003, self.to_string())))
+                    .into_response()
+            }
+            Error::InvalidSignature(err) => {
+                (StatusCode::BAD_REQUEST, Json(JsonResponse::from_error(-32004, err.to_string())))
+                    .into_response()
+            }
+            Error::Signature(err) => {
+                (StatusCode::BAD_REQUEST, Json(JsonResponse::from_error(-32005, err.to_string())))
+                    .into_response()
+            }
+            Error::Consensus(err) => {
+                (StatusCode::BAD_REQUEST, Json(JsonResponse::from_error(-32006, err.to_string())))
+                    .into_response()
+            }
+            Error::Validation(err) => {
+                (StatusCode::BAD_REQUEST, Json(JsonResponse::from_error(-32006, err.to_string())))
+                    .into_response()
+            }
+            Error::MalformedHeader => {
+                (StatusCode::BAD_REQUEST, Json(JsonResponse::from_error(-32007, self.to_string())))
+                    .into_response()
+            }
+            Error::UnknownMethod => {
+                (StatusCode::BAD_REQUEST, Json(JsonResponse::from_error(-32601, self.to_string())))
+                    .into_response()
+            }
             Error::InvalidJson(err) => (
                 StatusCode::BAD_REQUEST,
-                Json(JsonResponse::from_error(
-                    -32600,
-                    format!("Invalid request: {err}"),
-                )),
+                Json(JsonResponse::from_error(-32600, format!("Invalid request: {err}"))),
             )
                 .into_response(),
         }
