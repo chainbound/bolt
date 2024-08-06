@@ -34,7 +34,7 @@ type ConstraintsMessage struct {
 }
 
 type Constraint struct {
-	Tx    Transaction `ssz-max:"1048576" json:"tx"`
+	Tx    Transaction `ssz-max:"1073741824" json:"tx"`
 	Index *Index      `json:"index"`
 }
 
