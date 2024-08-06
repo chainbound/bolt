@@ -169,3 +169,11 @@ release tag:
     cd mev-boost-relay && docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-relay:{{tag}} --push .
     cd builder && docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-builder:{{tag}} --push .
     cd mev-boost && docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/chainbound/bolt-mev-boost:{{tag}} --push .
+
+# perform the forkdiff analysis on the provided flashbots upstream repository
+# - "repo_name" valid options are: mev-boost-relay, mev-boost, builder
+# - "tag" is the name of the git branch or tag to compare against in the original remote
+#
+# example: "just fb-forkdiff mev-boost develop"
+fb-forkdiff repo_name tag:
+    chmod +x ./scripts/flashbots-forkdiff.sh && ./scripts/flashbots-forkdiff.sh {{repo_name}} {{tag}}
