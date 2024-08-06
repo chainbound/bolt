@@ -10,6 +10,7 @@ use alloy::{
 };
 use beacon_api_client::ProposerDuty;
 use reqwest::Client;
+use tracing::info;
 use url::Url;
 use BoltRegistryContract::{BoltRegistryContractErrors, BoltRegistryContractInstance, Registrant};
 
@@ -87,7 +88,7 @@ impl BoltRegistry {
                 Ok(Some(token_raw)) => {
                     next_preconfer_slot = duty.slot;
                     proposer_rpc = token_raw.metadata.rpc;
-                    tracing::info!(
+                    info!(
                         "pre-confirmation will be sent for slot {} to validator with index {} at url {}",
                         duty.slot,
                         duty.validator_index,
@@ -99,10 +100,7 @@ impl BoltRegistry {
                     // Handle the case where the result is Ok but contains None.
                     // You might want to continue to the next iteration, log something, or handle it
                     // in another way.
-                    tracing::info!(
-                        "No registrant found for validator index {}",
-                        duty.validator_index
-                    );
+                    info!("No registrant found for validator index {}", duty.validator_index);
                     continue;
                 }
                 Err(e) => {

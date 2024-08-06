@@ -6,6 +6,7 @@ use cb_crypto::types::SignRequest;
 use ethereum_consensus::ssz::prelude::ssz_rs;
 use parking_lot::RwLock;
 use thiserror::Error;
+use tracing::{debug, error, info};
 
 use crate::crypto::bls::SignerBLSAsync;
 
@@ -53,12 +54,12 @@ impl CommitBoostClient {
         loop {
             let url = self.url_from_path(PUBKEYS_PATH);
 
-            tracing::info!(url, "Loading public keys from commit-boost");
+            info!(url, "Loading public keys from commit-boost");
 
             let response = match self.client.get(url).send().await {
                 Ok(res) => res,
                 Err(e) => {
-                    tracing::error!(err = ?e, "failed to get public keys from commit-boost, retrying...");
+                    error!(err = ?e, "failed to get public keys from commit-boost, retrying...");
                     tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                     continue;
                 }
@@ -69,7 +70,7 @@ impl CommitBoostClient {
 
             if !status.is_success() {
                 let err = String::from_utf8_lossy(&response_bytes).into_owned();
-                tracing::error!(err, ?status, "failed to get public keys, retrying...");
+                error!(err, ?status, "failed to get public keys, retrying...");
                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                 continue;
             }
@@ -112,7 +113,7 @@ impl SignerBLSAsync for CommitBoostClient {
 
         let url = self.url_from_path(SIGN_REQUEST_PATH);
 
-        tracing::debug!(url, ?request, "Requesting signature from commit_boost");
+        debug!(url, ?request, "Requesting signature from commit_boost");
 
         let response = reqwest::Client::new().post(url).json(&request).send().await?;
 
@@ -121,7 +122,7 @@ impl SignerBLSAsync for CommitBoostClient {
 
         if !status.is_success() {
             let err = String::from_utf8_lossy(&response_bytes).into_owned();
-            tracing::error!(err, "failed to get signature");
+            error!(err, "failed to get signature");
             return Err(eyre::eyre!(CommitBoostError::NoSignature(err)));
         }
 

@@ -16,7 +16,7 @@ use tokio::{
     net::TcpListener,
     sync::{mpsc, oneshot},
 };
-use tracing::error;
+use tracing::{debug, error, info, instrument};
 
 use crate::{
     common::CARGO_PKG_VERSION,
@@ -135,13 +135,13 @@ impl CommitmentsApiServer {
         let addr = listener.local_addr().expect("Failed to get local address");
         self.addr = addr;
 
-        tracing::info!("Commitments RPC server bound to {addr}");
+        info!("Commitments RPC server bound to {addr}");
 
         let signal = self.signal.take().expect("Signal not set");
 
         tokio::spawn(async move {
             if let Err(err) = axum::serve(listener, router).with_graceful_shutdown(signal).await {
-                tracing::error!(?err, "Commitments API Server error");
+                error!(?err, "Commitments API Server error");
             }
         });
     }
@@ -152,16 +152,16 @@ impl CommitmentsApiServer {
     }
 
     /// Handler function for the root JSON-RPC path.
-    #[tracing::instrument(skip_all, name = "RPC", fields(method = %payload.method))]
+    #[instrument(skip_all, name = "RPC", fields(method = %payload.method))]
     async fn handle_rpc(
         headers: HeaderMap,
         State(api): State<Arc<CommitmentsApiInner>>,
         WithRejection(Json(payload), _): WithRejection<Json<JsonPayload>, Error>,
     ) -> Result<Json<JsonResponse>, Error> {
-        tracing::debug!("Received new request");
+        debug!("Received new request");
 
         let (signer, signature) = auth_from_headers(&headers).inspect_err(|e| {
-            tracing::error!("Failed to extract signature from headers: {:?}", e);
+            error!("Failed to extract signature from headers: {:?}", e);
         })?;
 
         match payload.method.as_str() {
@@ -190,7 +190,7 @@ impl CommitmentsApiServer {
                 let recovered_signer = signature.recover_address_from_prehash(&digest)?;
 
                 if recovered_signer != signer {
-                    tracing::error!(
+                    error!(
                         ?recovered_signer,
                         ?signer,
                         "Recovered signer does not match the provided signer"
@@ -202,7 +202,7 @@ impl CommitmentsApiServer {
                 // Set the request signer
                 inclusion_request.set_signer(recovered_signer);
 
-                tracing::info!(signer = ?recovered_signer, %digest, "New valid inclusion request received");
+                info!(signer = ?recovered_signer, %digest, "New valid inclusion request received");
                 let inclusion_commitment = api.request_inclusion(inclusion_request).await?;
 
                 // Create the JSON-RPC response
@@ -215,7 +215,7 @@ impl CommitmentsApiServer {
                 Ok(Json(response))
             }
             other => {
-                tracing::error!("Unknown method: {}", other);
+                error!("Unknown method: {}", other);
                 Err(Error::UnknownMethod)
             }
         }

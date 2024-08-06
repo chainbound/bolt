@@ -8,6 +8,7 @@ use ethereum_consensus::{
     builder::SignedValidatorRegistration, deneb::mainnet::SignedBlindedBeaconBlock, Fork,
 };
 use reqwest::Url;
+use tracing::error;
 
 use crate::{
     api::{
@@ -38,7 +39,7 @@ impl MevBoostClient {
 
     fn endpoint(&self, path: &str) -> Url {
         self.url.join(path).unwrap_or_else(|e| {
-            tracing::error!(err = ?e, "Failed to join path: {} with url: {}", path, self.url);
+            error!(err = ?e, "Failed to join path: {} with url: {}", path, self.url);
             self.url.clone()
         })
     }

@@ -31,6 +31,7 @@ pub use commitment::{CommitmentRequest, InclusionRequest};
 /// for validation.
 pub mod constraint;
 pub use constraint::{BatchedSignedConstraints, ConstraintsMessage, SignedConstraints};
+use tracing::{error, info};
 
 /// An alias for a Beacon Chain slot number
 pub type Slot = u64;
@@ -125,7 +126,7 @@ impl PayloadFetcher for LocalPayloadFetcher {
         match response_rx.await {
             Ok(res) => res,
             Err(e) => {
-                tracing::error!(err = ?e, "Failed to fetch payload");
+                error!(err = ?e, "Failed to fetch payload");
                 None
             }
         }
@@ -143,7 +144,7 @@ pub struct NoopPayloadFetcher;
 #[async_trait::async_trait]
 impl PayloadFetcher for NoopPayloadFetcher {
     async fn fetch_payload(&self, slot: u64) -> Option<PayloadAndBid> {
-        tracing::info!(slot, "Fetch payload called");
+        info!(slot, "Fetch payload called");
         None
     }
 }

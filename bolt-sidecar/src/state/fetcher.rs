@@ -11,6 +11,7 @@ use alloy::{
 };
 use futures::{stream::FuturesOrdered, StreamExt};
 use reqwest::Url;
+use tracing::error;
 
 use crate::{client::rpc::RpcClient, primitives::AccountState};
 
@@ -197,7 +198,7 @@ impl StateFetcher for StateClient {
                         return Err(e);
                     }
 
-                    tracing::error!(error = ?e, "Error getting account state, retrying...");
+                    error!(error = ?e, "Error getting account state, retrying...");
                     tokio::time::sleep(self.retry_backoff).await;
                 }
             }

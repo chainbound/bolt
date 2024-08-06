@@ -8,6 +8,7 @@ use reth_primitives::{
 };
 use std::{collections::HashMap, ops::Deref};
 use thiserror::Error;
+use tracing::{debug, trace};
 
 use crate::{
     builder::BlockTemplate,
@@ -255,7 +256,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         let max_basefee = calculate_max_basefee(self.basefee, slot_diff)
             .ok_or(ValidationError::MaxBaseFeeCalcOverflow)?;
 
-        tracing::debug!(%slot_diff, basefee = self.basefee, %max_basefee, "Validating basefee");
+        debug!(%slot_diff, basefee = self.basefee, %max_basefee, "Validating basefee");
 
         // Validate the base fee
         if !req.validate_basefee(max_basefee) {
@@ -263,7 +264,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
 
         if target_slot < self.slot {
-            tracing::debug!(%target_slot, %self.slot, "Target slot lower than current slot");
+            debug!(%target_slot, %self.slot, "Target slot lower than current slot");
             return Err(ValidationError::SlotTooLow(self.slot));
         }
 
@@ -306,11 +307,11 @@ impl<C: StateFetcher> ExecutionState<C> {
                 );
 
             if target_slot < highest_slot_for_account {
-                tracing::debug!(%target_slot, %highest_slot_for_account, "There is a request for a higher slot");
+                debug!(%target_slot, %highest_slot_for_account, "There is a request for a higher slot");
                 return Err(ValidationError::SlotTooLow(highest_slot_for_account));
             }
 
-            tracing::trace!(?signer, nonce_diff, %balance_diff, "Applying diffs to account state");
+            trace!(?signer, nonce_diff, %balance_diff, "Applying diffs to account state");
 
             let account_state = match self.account_state(&sender).copied() {
                 Some(account) => account,
@@ -331,7 +332,7 @@ impl<C: StateFetcher> ExecutionState<C> {
                 }
             };
 
-            tracing::debug!(?account_state, ?nonce_diff, ?balance_diff, "Validating transaction");
+            debug!(?account_state, ?nonce_diff, ?balance_diff, "Validating transaction");
 
             let sender_nonce_diff = bundle_nonce_diff_map.entry(sender).or_insert(0);
             let sender_balance_diff = bundle_balance_diff_map.entry(sender).or_insert(U256::ZERO);
@@ -372,7 +373,7 @@ impl<C: StateFetcher> ExecutionState<C> {
                 let max_blob_basefee = calculate_max_basefee(self.blob_basefee, slot_diff)
                     .ok_or(ValidationError::MaxBaseFeeCalcOverflow)?;
 
-                tracing::debug!(%max_blob_basefee, blob_basefee = blob_transaction.transaction.max_fee_per_blob_gas, "Validating blob basefee");
+                debug!(%max_blob_basefee, blob_basefee = blob_transaction.transaction.max_fee_per_blob_gas, "Validating blob basefee");
                 if blob_transaction.transaction.max_fee_per_blob_gas < max_blob_basefee {
                     return Err(ValidationError::BlobBaseFeeTooLow(max_blob_basefee));
                 }
@@ -414,7 +415,7 @@ impl<C: StateFetcher> ExecutionState<C> {
 
         let accounts = self.account_states.keys().collect::<Vec<_>>();
         let update = self.client.get_state_update(accounts, block_number).await?;
-        tracing::trace!(%slot, ?update, "Applying execution state update");
+        trace!(%slot, ?update, "Applying execution state update");
 
         self.apply_state_update(update);
 
@@ -440,7 +441,7 @@ impl<C: StateFetcher> ExecutionState<C> {
     /// diffs.
     fn refresh_templates(&mut self) {
         for (address, account_state) in self.account_states.iter_mut() {
-            tracing::trace!(%address, ?account_state, "Refreshing template...");
+            trace!(%address, ?account_state, "Refreshing template...");
             // Iterate over all block templates and apply the state diff
             for (_, template) in self.block_templates.iter_mut() {
                 // Retain only signed constraints where transactions are still valid based on the

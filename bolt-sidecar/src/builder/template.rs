@@ -12,6 +12,7 @@ use ethereum_consensus::{
     deneb::mainnet::{Blob, BlobsBundle},
 };
 use reth_primitives::TransactionSigned;
+use tracing::warn;
 
 use crate::{
     common::max_transaction_cost,
@@ -188,7 +189,7 @@ impl BlockTemplate {
 
         if state.balance < max_total_cost || state.transaction_count > min_nonce {
             // Remove invalidated constraints due to balance / nonce of chain state
-            tracing::warn!(
+            warn!(
                 %address,
                 "Removing invalidated constraints for address"
             );
