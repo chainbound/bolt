@@ -1,9 +1,13 @@
 use alloy::rpc::types::beacon::{constants::BLS_DST_SIG, BlsSignature};
-use blst::min_pk::{PublicKey, SecretKey};
-use blst::BLST_ERROR;
-use ethereum_consensus::crypto::Signature;
-use ethereum_consensus::deneb::{compute_fork_data_root, Domain, DomainType, Root};
-use ethereum_consensus::ssz::prelude::{HashTreeRoot, MerkleizationError};
+use blst::{
+    min_pk::{PublicKey, SecretKey},
+    BLST_ERROR,
+};
+use ethereum_consensus::{
+    crypto::Signature,
+    deneb::{compute_fork_data_root, Domain, DomainType, Root},
+    ssz::prelude::{HashTreeRoot, MerkleizationError},
+};
 use tree_hash::TreeHash;
 use tree_hash_derive::TreeHash;
 
@@ -81,10 +85,7 @@ struct SigningData {
 
 /// Compute the signing root for a given object root and signing domain.
 pub fn compute_signing_root(object_root: [u8; 32], signing_domain: [u8; 32]) -> [u8; 32] {
-    let signing_data = SigningData {
-        object_root,
-        signing_domain,
-    };
+    let signing_data = SigningData { object_root, signing_domain };
     signing_data.tree_hash_root().0
 }
 
@@ -120,16 +121,10 @@ mod tests {
     #[test]
     fn test_compute_builder_domain() {
         let mainnet = ChainConfig::mainnet();
-        assert_eq!(
-            compute_builder_domain(mainnet.fork_version(), None),
-            mainnet.builder_domain()
-        );
+        assert_eq!(compute_builder_domain(mainnet.fork_version(), None), mainnet.builder_domain());
 
         let holesky = ChainConfig::holesky();
-        assert_eq!(
-            compute_builder_domain(holesky.fork_version(), None),
-            holesky.builder_domain()
-        );
+        assert_eq!(compute_builder_domain(holesky.fork_version(), None), holesky.builder_domain());
 
         let kurtosis = ChainConfig::kurtosis(0, 0);
         assert_eq!(
@@ -138,9 +133,6 @@ mod tests {
         );
 
         let helder = ChainConfig::helder();
-        assert_eq!(
-            compute_builder_domain(helder.fork_version(), None),
-            helder.builder_domain()
-        );
+        assert_eq!(compute_builder_domain(helder.fork_version(), None), helder.builder_domain());
     }
 }

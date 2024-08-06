@@ -18,9 +18,7 @@ pub trait SignableECDSA {
     ///
     /// Note: The default implementation should be used where possible.
     fn verify(&self, signature: &Signature, pubkey: &PublicKey) -> bool {
-        secp256k1::Secp256k1::new()
-            .verify_ecdsa(&self.digest(), signature, pubkey)
-            .is_ok()
+        secp256k1::Secp256k1::new().verify_ecdsa(&self.digest(), signature, pubkey).is_ok()
     }
 }
 
@@ -65,9 +63,7 @@ mod tests {
         let secp256k1_key = SecretKey::from_slice(&[1; 32]).unwrap();
         let signer = ECDSASigner::new(secp256k1_key);
 
-        let message = TestSignableData {
-            data: vec![1, 2, 3, 4],
-        };
+        let message = TestSignableData { data: vec![1, 2, 3, 4] };
 
         let signature = signer.sign_ecdsa(&message);
         let pubkey = PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &secp256k1_key);

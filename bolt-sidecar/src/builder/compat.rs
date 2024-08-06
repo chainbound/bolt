@@ -29,10 +29,7 @@ pub(crate) fn to_execution_payload_header(
     transactions: Vec<TransactionSigned>,
 ) -> ConsensusExecutionPayloadHeader {
     // Transactions and withdrawals are treated as opaque byte arrays in consensus types
-    let transactions_bytes = transactions
-        .iter()
-        .map(|t| t.envelope_encoded())
-        .collect::<Vec<_>>();
+    let transactions_bytes = transactions.iter().map(|t| t.envelope_encoded()).collect::<Vec<_>>();
 
     let mut transactions_ssz: List<Transaction, MAX_TRANSACTIONS_PER_PAYLOAD> = List::default();
 
@@ -40,9 +37,7 @@ pub(crate) fn to_execution_payload_header(
         transactions_ssz.push(Transaction::try_from(tx.as_ref()).unwrap());
     }
 
-    let transactions_root = transactions_ssz
-        .hash_tree_root()
-        .expect("valid transactions root");
+    let transactions_root = transactions_ssz.hash_tree_root().expect("valid transactions root");
 
     let mut withdrawals_ssz: List<ConsensusWithdrawal, MAX_WITHDRAWALS_PER_PAYLOAD> =
         List::default();
@@ -53,9 +48,7 @@ pub(crate) fn to_execution_payload_header(
         }
     }
 
-    let withdrawals_root = withdrawals_ssz
-        .hash_tree_root()
-        .expect("valid withdrawals root");
+    let withdrawals_root = withdrawals_ssz.hash_tree_root().expect("valid withdrawals root");
 
     let header = &sealed_block.header;
 

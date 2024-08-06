@@ -57,10 +57,7 @@ impl CommitmentRequest {
             CommitmentRequest::Inclusion(req) => {
                 let digest = req.digest();
                 let signature = signer.sign_hash(&digest).await?;
-                Ok(SignedCommitment::Inclusion(InclusionCommitment {
-                    request: req,
-                    signature,
-                }))
+                Ok(SignedCommitment::Inclusion(InclusionCommitment { request: req, signature }))
             }
         }
     }
@@ -208,12 +205,7 @@ impl InclusionRequest {
         let mut data = Vec::new();
         // First field is the concatenation of all the transaction hashes
         data.extend_from_slice(
-            &self
-                .txs
-                .iter()
-                .map(|tx| tx.hash().as_slice())
-                .collect::<Vec<_>>()
-                .concat(),
+            &self.txs.iter().map(|tx| tx.hash().as_slice()).collect::<Vec<_>>().concat(),
         );
 
         // Second field is the little endian encoding of the target slot

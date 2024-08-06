@@ -35,8 +35,8 @@ pub fn calculate_max_basefee(current: u128, block_diff: u64) -> Option<u128> {
 ///
 /// - For EIP-1559 transactions: `max_fee_per_gas * gas_limit + tx_value`.
 /// - For legacy transactions: `gas_price * gas_limit + tx_value`.
-/// - For EIP-4844 blob transactions: `max_fee_per_gas * gas_limit + tx_value +
-///   max_blob_fee_per_gas * blob_gas_used`.
+/// - For EIP-4844 blob transactions: `max_fee_per_gas * gas_limit + tx_value + max_blob_fee_per_gas
+///   * blob_gas_used`.
 pub fn max_transaction_cost(transaction: &PooledTransactionsElement) -> U256 {
     let gas_limit = transaction.gas_limit() as u128;
 
@@ -51,7 +51,8 @@ pub fn max_transaction_cost(transaction: &PooledTransactionsElement) -> U256 {
 }
 
 /// This function validates a transaction against an account state. It checks 2 things:
-/// 1. The nonce of the transaction must be higher than the account's nonce, but not higher than current + 1.
+/// 1. The nonce of the transaction must be higher than the account's nonce, but not higher than
+///    current + 1.
 /// 2. The balance of the account must be higher than the transaction's max cost.
 pub fn validate_transaction(
     account_state: &AccountState,

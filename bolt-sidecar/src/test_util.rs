@@ -159,12 +159,7 @@ pub(crate) async fn create_signed_commitment_request(
         let tx_pooled = PooledTransactionsElement::decode_enveloped(&mut raw_encoded.as_slice())?;
         full_txs.push(FullTransaction::from(tx_pooled));
     }
-    let mut request = InclusionRequest {
-        txs: full_txs,
-        slot,
-        signature: None,
-        signer: None,
-    };
+    let mut request = InclusionRequest { txs: full_txs, slot, signature: None, signer: None };
 
     request.recover_signers()?;
 

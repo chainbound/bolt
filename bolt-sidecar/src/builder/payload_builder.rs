@@ -129,30 +129,19 @@ impl FallbackPayloadBuilder {
         // when using the beacon_api_client crate directly, so we use reqwest temporarily.
         // this is to be refactored.
         let prev_randao = reqwest::Client::new()
-            .get(
-                self.beacon_api_client
-                    .endpoint
-                    .join("/eth/v1/beacon/states/head/randao")
-                    .unwrap(),
-            )
+            .get(self.beacon_api_client.endpoint.join("/eth/v1/beacon/states/head/randao").unwrap())
             .send()
             .await
             .unwrap()
             .json::<Value>()
             .await
             .unwrap();
-        let prev_randao = prev_randao
-            .pointer("/data/randao")
-            .unwrap()
-            .as_str()
-            .unwrap();
+        let prev_randao = prev_randao.pointer("/data/randao").unwrap().as_str().unwrap();
         let prev_randao = B256::from_hex(prev_randao).unwrap();
         tracing::debug!("got prev_randao");
 
-        let parent_beacon_block_root = self
-            .beacon_api_client
-            .get_beacon_block_root(BlockId::Head)
-            .await?;
+        let parent_beacon_block_root =
+            self.beacon_api_client.get_beacon_block_root(BlockId::Head).await?;
         tracing::debug!(parent = ?parent_beacon_block_root, "got parent_beacon_block_root");
 
         let versioned_hashes = transactions
@@ -174,9 +163,8 @@ impl FallbackPayloadBuilder {
             latest_block.header.blob_gas_used.unwrap_or_default(),
         ) as u64;
 
-        let blob_gas_used = transactions
-            .iter()
-            .fold(0, |acc, tx| acc + tx.blob_gas_used().unwrap_or_default());
+        let blob_gas_used =
+            transactions.iter().fold(0, |acc, tx| acc + tx.blob_gas_used().unwrap_or_default());
 
         let ctx = Context {
             base_fee,
@@ -410,8 +398,7 @@ mod tests {
         eips::eip2718::Encodable2718,
         network::{EthereumWallet, TransactionBuilder},
         primitives::{hex, Address},
-        signers::k256::ecdsa::SigningKey,
-        signers::local::PrivateKeySigner,
+        signers::{k256::ecdsa::SigningKey, local::PrivateKeySigner},
     };
     use reth_primitives::TransactionSigned;
 

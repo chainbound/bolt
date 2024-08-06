@@ -58,11 +58,7 @@ where
     P: PayloadFetcher + Send + Sync,
 {
     pub fn new(proxy_target: T, payload_fetcher: P) -> Self {
-        Self {
-            proxy_target,
-            local_payload: Mutex::new(None),
-            payload_fetcher,
-        }
+        Self { proxy_target, local_payload: Mutex::new(None), payload_fetcher }
     }
 
     /// Gets the status. Just forwards the request to mev-boost and returns the status.
@@ -127,7 +123,8 @@ where
                 Err(builder_err) => builder_err,
                 Ok(header) => {
                     // Clear the local payload cache if we have a successful response
-                    // By definition of `server.local_payload`, this will be `Some` IFF we have signed a local header
+                    // By definition of `server.local_payload`, this will be `Some` IFF we have
+                    // signed a local header
                     let mut local_payload = server.local_payload.lock();
                     *local_payload = None;
 
@@ -177,9 +174,8 @@ where
         let start = std::time::Instant::now();
         tracing::debug!("Received get_payload request");
 
-        let body_bytes = body::to_bytes(req.into_body(), MAX_BLINDED_BLOCK_LENGTH)
-            .await
-            .map_err(|e| {
+        let body_bytes =
+            body::to_bytes(req.into_body(), MAX_BLINDED_BLOCK_LENGTH).await.map_err(|e| {
                 tracing::error!(error = %e, "Failed to read request body");
                 e
             })?;
@@ -200,8 +196,9 @@ where
             return Ok(Json(local_payload));
         }
 
-        // TODO: how do we deal with failures here? What if we submit the signed blinded block but don't get a response?
-        // should we ignore the error or proceed with a local block (highly risky -> equivocation risk)
+        // TODO: how do we deal with failures here? What if we submit the signed blinded block but
+        // don't get a response? should we ignore the error or proceed with a local block
+        // (highly risky -> equivocation risk)
         let payload = server
             .proxy_target
             .get_payload(signed_blinded_block)
@@ -247,10 +244,7 @@ where
     let router = Router::new()
         .route("/", get(index))
         .route(STATUS_PATH, get(BuilderProxyServer::status))
-        .route(
-            REGISTER_VALIDATORS_PATH,
-            post(BuilderProxyServer::register_validators),
-        )
+        .route(REGISTER_VALIDATORS_PATH, post(BuilderProxyServer::register_validators))
         .route(GET_HEADER_PATH, get(BuilderProxyServer::get_header))
         .route(GET_PAYLOAD_PATH, post(BuilderProxyServer::get_payload))
         .with_state(server);
@@ -272,11 +266,7 @@ pub enum LocalPayloadIntegrityError {
         "Locally built payload does not match signed header. 
         {field_name} mismatch: expected {expected}, have {have}"
     )]
-    FieldMismatch {
-        field_name: String,
-        expected: String,
-        have: String,
-    },
+    FieldMismatch { field_name: String, expected: String, have: String },
 }
 
 /// Helper macro to compare fields of the signed header and the local block.
@@ -395,9 +385,7 @@ fn check_locally_built_payload_integrity(
 
     assert_payload_fields_eq!(
         &header_signed_by_cl.excess_blob_gas,
-        &local_execution_payload
-            .excess_blob_gas()
-            .unwrap_or_default(),
+        &local_execution_payload.excess_blob_gas().unwrap_or_default(),
         ExcessBlobGas
     );
 

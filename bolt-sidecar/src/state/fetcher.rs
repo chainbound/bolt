@@ -56,10 +56,7 @@ pub struct StateClient {
 impl StateClient {
     /// Create a new `StateClient` with the given URL and maximum retries.
     pub fn new<U: Into<Url>>(url: U) -> Self {
-        Self {
-            client: RpcClient::new(url),
-            retry_backoff: Duration::from_millis(RETRY_BACKOFF_MS),
-        }
+        Self { client: RpcClient::new(url), retry_backoff: Duration::from_millis(RETRY_BACKOFF_MS) }
     }
 }
 
@@ -94,12 +91,9 @@ impl StateFetcher for StateClient {
             let nonce = batch
                 .add_call("eth_getTransactionCount", &(addr, tag))
                 .expect("Invalid parameters");
-            let balance = batch
-                .add_call("eth_getBalance", &(addr, tag))
-                .expect("Invalid parameters");
-            let code = batch
-                .add_call("eth_getCode", &(addr, tag))
-                .expect("Invalid parameters");
+            let balance =
+                batch.add_call("eth_getBalance", &(addr, tag)).expect("Invalid parameters");
+            let code = batch.add_call("eth_getCode", &(addr, tag)).expect("Invalid parameters");
 
             // Push the futures onto ordered list
             nonce_futs.push_back(nonce);
@@ -149,11 +143,7 @@ impl StateFetcher for StateClient {
                 .and_modify(|s: &mut AccountState| {
                     s.balance = balance;
                 })
-                .or_insert(AccountState {
-                    transaction_count: 0,
-                    balance,
-                    has_code: false,
-                });
+                .or_insert(AccountState { transaction_count: 0, balance, has_code: false });
         }
 
         for (addr, code) in addresses.iter().zip(code_vec) {

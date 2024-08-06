@@ -25,10 +25,7 @@ pub fn make_get_payload_response() -> GetPayloadResponse {
 
     let blobs_bundle = BlobsBundle::default();
 
-    GetPayloadResponse::Deneb(PayloadAndBlobs {
-        execution_payload,
-        blobs_bundle,
-    })
+    GetPayloadResponse::Deneb(PayloadAndBlobs { execution_payload, blobs_bundle })
 }
 
 pub struct MockMevBoost {
@@ -45,9 +42,7 @@ impl MockMevBoost {
 #[async_trait::async_trait]
 impl BuilderApi for MockMevBoost {
     async fn status(&self) -> Result<StatusCode, BuilderApiError> {
-        Err(BuilderApiError::Generic(
-            "MockMevBoost does not support getting status".to_string(),
-        ))
+        Err(BuilderApiError::Generic("MockMevBoost does not support getting status".to_string()))
     }
 
     async fn register_validators(

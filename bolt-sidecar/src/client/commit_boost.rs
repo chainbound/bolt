@@ -114,11 +114,7 @@ impl SignerBLSAsync for CommitBoostClient {
 
         tracing::debug!(url, ?request, "Requesting signature from commit_boost");
 
-        let response = reqwest::Client::new()
-            .post(url)
-            .json(&request)
-            .send()
-            .await?;
+        let response = reqwest::Client::new().post(url).json(&request).send().await?;
 
         let status = response.status();
         let response_bytes = response.bytes().await?;

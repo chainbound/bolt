@@ -1,5 +1,6 @@
 //! The `state` module is responsible for keeping a local copy of relevant state that is needed
-//! to simulate commitments against. It is updated on every block. It has both execution state and consensus state.
+//! to simulate commitments against. It is updated on every block. It has both execution state and
+//! consensus state.
 
 use std::{
     pin::Pin,
