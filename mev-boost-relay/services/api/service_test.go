@@ -398,17 +398,6 @@ func TestSubscribeToConstraints(t *testing.T) {
 	// Wait for the server to start
 	time.Sleep(500 * time.Millisecond)
 
-	// Setup information of the builder making the request
-	builderPrivateKey, builderPublicKey, err := bls.GenerateNewKeypair()
-	require.NoError(t, err)
-	var phase0BuilderPublicKey phase0.BLSPubKey = builderPublicKey.Bytes()
-
-	headSlot := backend.relay.headSlot.Load()
-	message, err := json.Marshal(ConstraintSubscriptionAuth{PublicKey: phase0BuilderPublicKey, Slot: headSlot})
-	require.NoError(t, err)
-	signatureEC := bls.Sign(builderPrivateKey, message)
-	subscriptionSignatureJSON := `"` + phase0.BLSSignature(bls.SignatureToBytes(signatureEC)[:]).String() + `"`
-
 	// Run the request in a goroutine so that it doesn't block the test,
 	// but it finishes as soon as the message is sent over the channel
 	go func() {
@@ -417,10 +406,6 @@ func TestSubscribeToConstraints(t *testing.T) {
 		if err != nil {
 			log.Fatalf("Failed to create request: %v", err)
 		}
-
-		// Add authentication
-		authHeader := "BOLT " + subscriptionSignatureJSON + "," + string(message)
-		req.Header.Set("Authorization", authHeader)
 
 		// Send the request
 		client := &http.Client{}

@@ -256,46 +256,23 @@ func (b *Builder) Start() error {
 	return b.SubscribeProposerConstraints()
 }
 
-// GenerateAuthenticationHeader generates an authentication string for the builder
-// to subscribe to SSE constraint events emitted by relays
-func (b *Builder) GenerateAuthenticationHeader() (string, error) {
-	// NOTE: the `slot` acts similarly to a nonce for the message to sign, to avoid replay attacks.
-	slot := b.slotAttrs.Slot
-	message, err := json.Marshal(common.ConstraintSubscriptionAuth{PublicKey: b.builderPublicKey, Slot: slot})
-	if err != nil {
-		log.Error(fmt.Sprintf("Failed to marshal auth message: %v", err))
-		return "", err
-	}
-	signatureEC := bls.Sign(b.builderSecretKey, message)
-	subscriptionSignatureJSON := `"` + phase0.BLSSignature(bls.SignatureToBytes(signatureEC)[:]).String() + `"`
-	authHeader := "BOLT " + subscriptionSignatureJSON + "," + string(message)
-	return authHeader, nil
-}
-
 // SubscribeProposerConstraints subscribes to the constraints made by Bolt proposers
 // which the builder pulls from relay(s) using SSE.
 func (b *Builder) SubscribeProposerConstraints() error {
-	// Create authentication signed message
-	authHeader, err := b.GenerateAuthenticationHeader()
-	if err != nil {
-		log.Error(fmt.Sprintf("Failed to generate authentication header: %v", err))
-		return err
-	}
-
 	// Check if `b.relay` is a RemoteRelayAggregator, if so we need to subscribe to
 	// the constraints made available by all the relays
 	relayAggregator, ok := b.relay.(*RemoteRelayAggregator)
 	if ok {
 		for _, relay := range relayAggregator.relays {
-			go b.subscribeToRelayForConstraints(relay.Config().Endpoint, authHeader)
+			go b.subscribeToRelayForConstraints(relay.Config().Endpoint)
 		}
 	} else {
-		go b.subscribeToRelayForConstraints(b.relay.Config().Endpoint, authHeader)
+		go b.subscribeToRelayForConstraints(b.relay.Config().Endpoint)
 	}
 	return nil
 }
 
-func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader string) error {
+func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error {
 	attempts := 0
 	maxAttempts := 60 // Max 10 minutes of retries
 	retryInterval := 10 * time.Second
@@ -315,7 +292,6 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint, authHeader s
 			log.Error(fmt.Sprintf("Failed to create new http request: %v", err))
 			return err
 		}
-		req.Header.Set("Authorization", authHeader)
 
 		client := http.Client{}
 
