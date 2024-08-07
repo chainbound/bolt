@@ -123,7 +123,7 @@ impl ConsensusState {
         self.latest_slot_timestamp = Instant::now();
         self.latest_slot = head;
 
-        // Get the current value of slot and epoch
+        // Calculate the current value of epoch
         let epoch = head / SLOTS_PER_EPOCH;
 
         // If the epoch has changed, update the proposer duties

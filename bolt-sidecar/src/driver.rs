@@ -166,7 +166,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
                 }
                 Some(slot) = slot_stream.next() => {
                     if let Err(e) = self.consensus.update_slot(slot).await {
-                        error!(err = ?e, "Failed to update consensus state head");
+                        error!(err = ?e, "Failed to update consensus state slot");
                     }
                 }
             }
@@ -228,7 +228,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         };
     }
 
-    /// Handle a new head event, updating the execution and consensus state.
+    /// Handle a new head event, updating the execution state.
     async fn handle_new_head_event(&mut self, head_event: HeadEvent) {
         let slot = head_event.slot;
         info!(slot, "Received new head event");
