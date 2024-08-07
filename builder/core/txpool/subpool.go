@@ -67,14 +67,6 @@ type LazyResolver interface {
 	Get(hash common.Hash) *types.Transaction
 }
 
-type MockLazyResolver struct {
-	Transactions map[common.Hash]*types.Transaction
-}
-
-func (m *MockLazyResolver) Get(hash common.Hash) *types.Transaction {
-	return m.Transactions[hash]
-}
-
 // AddressReserver is passed by the main transaction pool to subpools, so they
 // may request (and relinquish) exclusive access to certain addresses.
 type AddressReserver func(addr common.Address, reserve bool) error

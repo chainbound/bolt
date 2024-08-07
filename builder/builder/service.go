@@ -290,7 +290,6 @@ func Register(stack *node.Node, backend *eth.Ethereum, cfg *Config) error {
 	}
 
 	builderArgs := BuilderArgs{
-		boltCCEndpoint:                cfg.BuilderMevSidecarEndpoint,
 		sk:                            builderSk,
 		blockConsumer:                 blockConsumer,
 		ds:                            ds,

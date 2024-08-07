@@ -747,13 +747,6 @@ var (
 		Value:    "",
 		Category: flags.BuilderCategory,
 	}
-	BuilderMevSidecarEndpoint = &cli.StringFlag{
-		Name:     "builder.mev_sidecar_endpoint",
-		Usage:    "MEV sidecar endpoint to connect to for Bolt CC",
-		EnvVars:  []string{"BUILDER_MEV_SIDECAR_ENDPOINT"},
-		Value:    "",
-		Category: flags.BuilderCategory,
-	}
 
 	// Builder rate limit settings
 
@@ -1627,7 +1620,6 @@ func SetBuilderConfig(ctx *cli.Context, cfg *builder.Config) {
 	cfg.BeaconEndpoints = strings.Split(ctx.String(BuilderBeaconEndpoints.Name), ",")
 	cfg.RemoteRelayEndpoint = ctx.String(BuilderRemoteRelayEndpoint.Name)
 	cfg.SecondaryRemoteRelayEndpoints = strings.Split(ctx.String(BuilderSecondaryRemoteRelayEndpoints.Name), ",")
-	cfg.BuilderMevSidecarEndpoint = ctx.String(BuilderMevSidecarEndpoint.Name)
 	// NOTE: This flag is deprecated and will be removed in the future in favor of BuilderBlockValidationBlacklistSourceFilePath
 	if ctx.IsSet(MinerBlocklistFileFlag.Name) {
 		cfg.ValidationBlocklist = ctx.String(MinerBlocklistFileFlag.Name)
