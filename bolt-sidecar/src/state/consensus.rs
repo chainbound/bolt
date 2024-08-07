@@ -3,8 +3,8 @@ use std::{
     time::{Duration, Instant},
 };
 
-use beacon_api_client::{mainnet::Client, BlockId, ProposerDuty};
-use ethereum_consensus::{deneb::BeaconBlockHeader, phase0::mainnet::SLOTS_PER_EPOCH};
+use beacon_api_client::{mainnet::Client, ProposerDuty};
+use ethereum_consensus::phase0::mainnet::SLOTS_PER_EPOCH;
 
 use super::CommitmentDeadline;
 use crate::{
@@ -41,7 +41,6 @@ pub struct Epoch {
 #[allow(missing_debug_implementations)]
 pub struct ConsensusState {
     beacon_api_client: Client,
-    header: BeaconBlockHeader,
     epoch: Epoch,
     validator_indexes: ValidatorIndexes,
     // Timestamp of when the latest slot was received
@@ -62,7 +61,6 @@ pub struct ConsensusState {
 impl fmt::Debug for ConsensusState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ConsensusState")
-            .field("header", &self.header)
             .field("epoch", &self.epoch)
             .field("latest_slot", &self.latest_slot)
             .field("latest_slot_timestamp", &self.latest_slot_timestamp)
@@ -81,7 +79,6 @@ impl ConsensusState {
         ConsensusState {
             beacon_api_client,
             validator_indexes,
-            header: BeaconBlockHeader::default(),
             epoch: Epoch::default(),
             latest_slot: Default::default(),
             latest_slot_timestamp: Instant::now(),
@@ -117,21 +114,16 @@ impl ConsensusState {
     }
 
     /// Update the latest head and fetch the relevant data from the beacon chain.
-    pub async fn update_head(&mut self, head: u64) -> Result<(), ConsensusError> {
+    pub async fn update_slot(&mut self, slot: u64) -> Result<(), ConsensusError> {
         // Reset the commitment deadline to start counting for the next slot.
         self.commitment_deadline =
-            CommitmentDeadline::new(head + 1, self.commitment_deadline_duration);
-
-        let update = self.beacon_api_client.get_beacon_header(BlockId::Slot(head)).await?;
-
-        self.header = update.header.message;
+            CommitmentDeadline::new(slot + 1, self.commitment_deadline_duration);
 
         // Update the timestamp with current time
         self.latest_slot_timestamp = Instant::now();
-        self.latest_slot = head;
+        self.latest_slot = slot;
 
-        // Get the current value of slot and epoch
-        let slot = self.header.slot;
+        // Calculate the current value of epoch
         let epoch = slot / SLOTS_PER_EPOCH;
 
         // If the epoch has changed, update the proposer duties
@@ -169,9 +161,12 @@ impl ConsensusState {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use beacon_api_client::ProposerDuty;
     use reqwest::Url;
+    use tracing::warn;
+
+    use super::*;
+    use crate::test_util::try_get_beacon_api_url;
 
     #[tokio::test]
     async fn test_find_validator_index_for_slot() {
@@ -188,7 +183,6 @@ mod tests {
         // Create a ConsensusState with the sample proposer duties and validator indexes
         let state = ConsensusState {
             beacon_api_client: Client::new(Url::parse("http://localhost").unwrap()),
-            header: BeaconBlockHeader::default(),
             epoch: Epoch { value: 0, start_slot: 0, proposer_duties },
             latest_slot_timestamp: Instant::now(),
             commitment_deadline: CommitmentDeadline::new(0, Duration::from_secs(1)),
@@ -206,5 +200,51 @@ mod tests {
             state.find_validator_index_for_slot(4),
             Err(ConsensusError::ValidatorNotFound)
         ));
+    }
+
+    #[tokio::test]
+    async fn test_update_slot() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let commitment_deadline_duration = Duration::from_secs(1);
+        let validator_indexes = ValidatorIndexes::from(vec![100, 101, 102]);
+
+        let Some(url) = try_get_beacon_api_url().await else {
+            warn!("skipping test: beacon API URL is not reachable");
+            return Ok(());
+        };
+
+        let beacon_client = BeaconClient::new(Url::parse(url).unwrap());
+
+        // Create the initial ConsensusState
+        let mut state = ConsensusState {
+            beacon_api_client: beacon_client,
+            epoch: Epoch::default(),
+            latest_slot: Default::default(),
+            latest_slot_timestamp: Instant::now(),
+            validator_indexes,
+            commitment_deadline: CommitmentDeadline::new(0, commitment_deadline_duration),
+            commitment_deadline_duration,
+        };
+
+        // Update the slot to 32
+        state.update_slot(32).await.unwrap();
+
+        // Check values were updated correctly
+        assert_eq!(state.latest_slot, 32);
+        assert!(state.latest_slot_timestamp.elapsed().as_secs() < 1);
+        assert_eq!(state.epoch.value, 1);
+        assert_eq!(state.epoch.start_slot, 32);
+
+        // Update the slot to 63, which should not update the epoch
+        state.update_slot(63).await.unwrap();
+
+        // Check values were updated correctly
+        assert_eq!(state.latest_slot, 63);
+        assert!(state.latest_slot_timestamp.elapsed().as_secs() < 1);
+        assert_eq!(state.epoch.value, 1);
+        assert_eq!(state.epoch.start_slot, 32);
+
+        Ok(())
     }
 }
