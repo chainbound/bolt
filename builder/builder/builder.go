@@ -110,7 +110,6 @@ type Builder struct {
 
 // BuilderArgs is a struct that contains all the arguments needed to create a new Builder
 type BuilderArgs struct {
-	boltCCEndpoint                string
 	sk                            *bls.SecretKey
 	ds                            flashbotsextra.IDatabaseService
 	blockConsumer                 flashbotsextra.BlockConsumer

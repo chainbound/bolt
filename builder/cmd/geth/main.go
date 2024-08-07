@@ -176,7 +176,6 @@ var (
 		utils.BuilderBeaconEndpoints,
 		utils.BuilderRemoteRelayEndpoint,
 		utils.BuilderSecondaryRemoteRelayEndpoints,
-		utils.BuilderMevSidecarEndpoint,
 		utils.BuilderRateLimitDuration,
 		utils.BuilderRateLimitMaxBurst,
 		utils.BuilderBlockResubmitInterval,

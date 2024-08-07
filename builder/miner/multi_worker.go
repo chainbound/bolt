@@ -152,7 +152,6 @@ func (w *multiWorker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			r := w.getSealingBlock(fullParams)
 			if r.err == nil {
 				workerPayload.update(r, time.Since(start))
-				// prepend preconfirmations here
 			} else {
 				log.Error("Error while sealing block", "err", r.err)
 				workerPayload.Cancel()
