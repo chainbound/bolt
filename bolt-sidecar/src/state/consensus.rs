@@ -161,9 +161,12 @@ impl ConsensusState {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use beacon_api_client::ProposerDuty;
     use reqwest::Url;
+    use tracing::warn;
+
+    use super::*;
+    use crate::test_util::try_get_beacon_api_url;
 
     #[tokio::test]
     async fn test_find_validator_index_for_slot() {
@@ -197,5 +200,51 @@ mod tests {
             state.find_validator_index_for_slot(4),
             Err(ConsensusError::ValidatorNotFound)
         ));
+    }
+
+    #[tokio::test]
+    async fn test_update_slot() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let commitment_deadline_duration = Duration::from_secs(1);
+        let validator_indexes = ValidatorIndexes::from(vec![100, 101, 102]);
+
+        let Some(url) = try_get_beacon_api_url().await else {
+            warn!("skipping test: beacon API URL is not reachable");
+            return Ok(());
+        };
+
+        let beacon_client = BeaconClient::new(Url::parse(url).unwrap());
+
+        // Create the initial ConsensusState
+        let mut state = ConsensusState {
+            beacon_api_client: beacon_client,
+            epoch: Epoch::default(),
+            latest_slot: Default::default(),
+            latest_slot_timestamp: Instant::now(),
+            validator_indexes,
+            commitment_deadline: CommitmentDeadline::new(0, commitment_deadline_duration),
+            commitment_deadline_duration,
+        };
+
+        // Update the slot to 32
+        state.update_slot(32).await.unwrap();
+
+        // Check values were updated correctly
+        assert_eq!(state.latest_slot, 32);
+        assert!(state.latest_slot_timestamp.elapsed().as_secs() < 1);
+        assert_eq!(state.epoch.value, 1);
+        assert_eq!(state.epoch.start_slot, 32);
+
+        // Update the slot to 63, which should not update the epoch
+        state.update_slot(63).await.unwrap();
+
+        // Check values were updated correctly
+        assert_eq!(state.latest_slot, 63);
+        assert!(state.latest_slot_timestamp.elapsed().as_secs() < 1);
+        assert_eq!(state.epoch.value, 1);
+        assert_eq!(state.epoch.start_slot, 32);
+
+        Ok(())
     }
 }
