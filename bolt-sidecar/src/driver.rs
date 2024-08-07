@@ -1,3 +1,4 @@
+use core::fmt;
 use std::time::{Duration, Instant};
 
 use alloy::{
@@ -5,6 +6,11 @@ use alloy::{
     signers::{local::PrivateKeySigner, Signer as SignerECDSA},
 };
 use beacon_api_client::mainnet::Client as BeaconClient;
+use ethereum_consensus::{
+    clock::{from_system_time, Clock, SystemTimeProvider},
+    phase0::mainnet::SLOTS_PER_EPOCH,
+};
+use futures::StreamExt;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
@@ -24,7 +30,6 @@ use crate::{
 };
 
 /// The driver for the sidecar, responsible for managing the main event loop.
-#[derive(Debug)]
 pub struct SidecarDriver<C, BLS, ECDSA> {
     head_tracker: HeadTracker,
     execution: ExecutionState<C>,
@@ -35,6 +40,23 @@ pub struct SidecarDriver<C, BLS, ECDSA> {
     mevboost_client: MevBoostClient,
     api_events_rx: mpsc::Receiver<CommitmentEvent>,
     payload_requests_rx: mpsc::Receiver<FetchPayloadRequest>,
+    consensus_clock: Clock<SystemTimeProvider>,
+}
+
+impl fmt::Debug for SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SidecarDriver")
+            .field("head_tracker", &self.head_tracker)
+            .field("execution", &self.execution)
+            .field("consensus", &self.consensus)
+            .field("constraint_signer", &self.constraint_signer)
+            .field("commitment_signer", &self.commitment_signer)
+            .field("local_builder", &self.local_builder)
+            .field("mevboost_client", &self.mevboost_client)
+            .field("api_events_rx", &self.api_events_rx)
+            .field("payload_requests_rx", &self.payload_requests_rx)
+            .finish()
+    }
 }
 
 impl SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
@@ -79,12 +101,17 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         // (as we don't need to specify genesis time and slot duration)
         let head_tracker = HeadTracker::start(beacon_client.clone());
 
+        // Initialize the consensus clock.
+        let consensus_clock = from_system_time(
+            head_tracker.beacon_genesis_timestamp(),
+            cfg.chain.slot_time(),
+            SLOTS_PER_EPOCH,
+        );
+
         let consensus = ConsensusState::new(
             beacon_client,
             cfg.validator_indexes.clone(),
             cfg.chain.commitment_deadline(),
-            cfg.chain.slot_time(),
-            head_tracker.beacon_genesis_timestamp(),
         );
 
         let builder_proxy_cfg = BuilderProxyConfig {
@@ -112,6 +139,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
             mevboost_client,
             api_events_rx,
             payload_requests_rx,
+            consensus_clock,
         })
     }
 
@@ -120,6 +148,8 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
     /// Any errors encountered are contained to the specific `handler` in which
     /// they occurred, and the driver will continue to run as long as possible.
     pub async fn run_forever(mut self) -> ! {
+        let mut slot_stream = self.consensus_clock.clone().into_stream();
+
         loop {
             tokio::select! {
                 Some(api_event) = self.api_events_rx.recv() => {
@@ -128,11 +158,16 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
                 Ok(head_event) = self.head_tracker.next_head() => {
                     self.handle_new_head_event(head_event).await;
                 }
-                slot = self.consensus.commitment_deadline() => {
+                Some(slot) = self.consensus.commitment_deadline.wait() => {
                     self.handle_commitment_deadline(slot);
                 }
                 Some(payload_request) = self.payload_requests_rx.recv() => {
                     self.handle_fetch_payload_request(payload_request);
+                }
+                Some(slot) = slot_stream.next() => {
+                    if let Err(e) = self.consensus.update_slot(slot).await {
+                        error!(err = ?e, "Failed to update consensus state head");
+                    }
                 }
             }
         }
@@ -201,10 +236,6 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         // We use None to signal that we want to fetch the latest EL head
         if let Err(e) = self.execution.update_head(None, slot).await {
             error!(err = ?e, "Failed to update execution state head");
-        }
-
-        if let Err(e) = self.consensus.update_head(slot).await {
-            error!(err = ?e, "Failed to update consensus state head");
         }
     }
 
