@@ -74,16 +74,18 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         let (api_events_tx, api_events_rx) = mpsc::channel(1024);
         CommitmentsApiServer::new(api_addr).run(api_events_tx).await;
 
-        let consensus = ConsensusState::new(
-            beacon_client.clone(),
-            cfg.validator_indexes.clone(),
-            cfg.chain.commitment_deadline(),
-        );
-
         // TODO: this can be replaced with ethereum_consensus::clock::from_system_time()
         // but using beacon node events is easier to work on a custom devnet for now
         // (as we don't need to specify genesis time and slot duration)
-        let head_tracker = HeadTracker::start(beacon_client);
+        let head_tracker = HeadTracker::start(beacon_client.clone());
+
+        let consensus = ConsensusState::new(
+            beacon_client,
+            cfg.validator_indexes.clone(),
+            cfg.chain.commitment_deadline(),
+            cfg.chain.slot_time(),
+            head_tracker.beacon_genesis_timestamp(),
+        );
 
         let builder_proxy_cfg = BuilderProxyConfig {
             mevboost_url: cfg.mevboost_url.clone(),
@@ -126,7 +128,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
                 Ok(head_event) = self.head_tracker.next_head() => {
                     self.handle_new_head_event(head_event).await;
                 }
-                Some(slot) = self.consensus.commitment_deadline.wait() => {
+                slot = self.consensus.commitment_deadline() => {
                     self.handle_commitment_deadline(slot);
                 }
                 Some(payload_request) = self.payload_requests_rx.recv() => {

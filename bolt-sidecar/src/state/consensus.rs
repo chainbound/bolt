@@ -4,9 +4,12 @@ use std::{
 };
 
 use beacon_api_client::{mainnet::Client, BlockId, ProposerDuty};
-use ethereum_consensus::{deneb::BeaconBlockHeader, phase0::mainnet::SLOTS_PER_EPOCH};
+use ethereum_consensus::{
+    clock::{from_system_time, Clock, SystemTimeProvider},
+    deneb::BeaconBlockHeader,
+    phase0::mainnet::SLOTS_PER_EPOCH,
+};
 
-use super::CommitmentDeadline;
 use crate::{
     config::ValidatorIndexes,
     primitives::{CommitmentRequest, Slot},
@@ -53,8 +56,8 @@ pub struct ConsensusState {
     ///
     /// This is used to prevent the sidecar from accepting commitments
     /// which won't have time to be included by the PBS pipeline.
-    // commitment_deadline: u64,
-    pub commitment_deadline: CommitmentDeadline,
+    // consensus_clock: u64,
+    pub consensus_clock: Clock<SystemTimeProvider>,
     /// The duration of the commitment deadline.
     commitment_deadline_duration: Duration,
 }
@@ -66,7 +69,6 @@ impl fmt::Debug for ConsensusState {
             .field("epoch", &self.epoch)
             .field("latest_slot", &self.latest_slot)
             .field("latest_slot_timestamp", &self.latest_slot_timestamp)
-            .field("commitment_deadline", &self.commitment_deadline)
             .finish()
     }
 }
@@ -77,6 +79,8 @@ impl ConsensusState {
         beacon_api_client: BeaconClient,
         validator_indexes: ValidatorIndexes,
         commitment_deadline_duration: Duration,
+        slot_time: u64,
+        genesis_timestamp: u64,
     ) -> Self {
         ConsensusState {
             beacon_api_client,
@@ -85,7 +89,7 @@ impl ConsensusState {
             epoch: Epoch::default(),
             latest_slot: Default::default(),
             latest_slot_timestamp: Instant::now(),
-            commitment_deadline: CommitmentDeadline::new(0, commitment_deadline_duration),
+            consensus_clock: from_system_time(genesis_timestamp, slot_time, SLOTS_PER_EPOCH),
             commitment_deadline_duration,
         }
     }
@@ -118,10 +122,6 @@ impl ConsensusState {
 
     /// Update the latest head and fetch the relevant data from the beacon chain.
     pub async fn update_head(&mut self, head: u64) -> Result<(), ConsensusError> {
-        // Reset the commitment deadline to start counting for the next slot.
-        self.commitment_deadline =
-            CommitmentDeadline::new(head + 1, self.commitment_deadline_duration);
-
         let update = self.beacon_api_client.get_beacon_header(BlockId::Slot(head)).await?;
 
         self.header = update.header.message;
@@ -143,6 +143,12 @@ impl ConsensusState {
         }
 
         Ok(())
+    }
+
+    /// Get the slot for the next commitment deadline.
+    pub async fn commitment_deadline(&self) -> Slot {
+        tokio::time::sleep(self.commitment_deadline_duration).await;
+        self.consensus_clock.current_slot().unwrap_or(self.latest_slot + 1)
     }
 
     /// Fetch proposer duties for the given epoch.
@@ -191,7 +197,7 @@ mod tests {
             header: BeaconBlockHeader::default(),
             epoch: Epoch { value: 0, start_slot: 0, proposer_duties },
             latest_slot_timestamp: Instant::now(),
-            commitment_deadline: CommitmentDeadline::new(0, Duration::from_secs(1)),
+            consensus_clock: from_system_time(0, 12, SLOTS_PER_EPOCH),
             validator_indexes,
             commitment_deadline_duration: Duration::from_secs(1),
             latest_slot: 0,
