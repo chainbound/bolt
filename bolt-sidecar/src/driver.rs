@@ -7,7 +7,7 @@ use alloy::{
 };
 use beacon_api_client::mainnet::Client as BeaconClient;
 use ethereum_consensus::{
-    clock::{from_system_time, Clock, SystemTimeProvider},
+    clock::{self, SlotStream, SystemTimeProvider},
     phase0::mainnet::SLOTS_PER_EPOCH,
 };
 use futures::StreamExt;
@@ -40,7 +40,8 @@ pub struct SidecarDriver<C, BLS, ECDSA> {
     mevboost_client: MevBoostClient,
     api_events_rx: mpsc::Receiver<CommitmentEvent>,
     payload_requests_rx: mpsc::Receiver<FetchPayloadRequest>,
-    consensus_clock: Clock<SystemTimeProvider>,
+    /// Stream of slots made from the consensus clock
+    slot_stream: SlotStream<SystemTimeProvider>,
 }
 
 impl fmt::Debug for SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
@@ -101,12 +102,15 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         // (as we don't need to specify genesis time and slot duration)
         let head_tracker = HeadTracker::start(beacon_client.clone());
 
+        // TODO: head tracker initializes the genesis timestamp with '0' value
+        // we should add an async fn to fetch the value for safety
         // Initialize the consensus clock.
-        let consensus_clock = from_system_time(
+        let consensus_clock = clock::from_system_time(
             head_tracker.beacon_genesis_timestamp(),
             cfg.chain.slot_time(),
             SLOTS_PER_EPOCH,
         );
+        let slot_stream = consensus_clock.into_stream();
 
         let consensus = ConsensusState::new(
             beacon_client,
@@ -139,7 +143,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
             mevboost_client,
             api_events_rx,
             payload_requests_rx,
-            consensus_clock,
+            slot_stream,
         })
     }
 
@@ -148,8 +152,6 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
     /// Any errors encountered are contained to the specific `handler` in which
     /// they occurred, and the driver will continue to run as long as possible.
     pub async fn run_forever(mut self) -> ! {
-        let mut slot_stream = self.consensus_clock.clone().into_stream();
-
         loop {
             tokio::select! {
                 Some(api_event) = self.api_events_rx.recv() => {
@@ -164,7 +166,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
                 Some(payload_request) = self.payload_requests_rx.recv() => {
                     self.handle_fetch_payload_request(payload_request);
                 }
-                Some(slot) = slot_stream.next() => {
+                Some(slot) = self.slot_stream.next() => {
                     if let Err(e) = self.consensus.update_slot(slot).await {
                         error!(err = ?e, "Failed to update consensus state slot");
                     }

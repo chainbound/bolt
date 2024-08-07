@@ -114,17 +114,17 @@ impl ConsensusState {
     }
 
     /// Update the latest head and fetch the relevant data from the beacon chain.
-    pub async fn update_slot(&mut self, head: u64) -> Result<(), ConsensusError> {
+    pub async fn update_slot(&mut self, slot: u64) -> Result<(), ConsensusError> {
         // Reset the commitment deadline to start counting for the next slot.
         self.commitment_deadline =
-            CommitmentDeadline::new(head + 1, self.commitment_deadline_duration);
+            CommitmentDeadline::new(slot + 1, self.commitment_deadline_duration);
 
         // Update the timestamp with current time
         self.latest_slot_timestamp = Instant::now();
-        self.latest_slot = head;
+        self.latest_slot = slot;
 
         // Calculate the current value of epoch
-        let epoch = head / SLOTS_PER_EPOCH;
+        let epoch = slot / SLOTS_PER_EPOCH;
 
         // If the epoch has changed, update the proposer duties
         if epoch != self.epoch.value {
