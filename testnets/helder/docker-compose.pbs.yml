@@ -30,7 +30,7 @@ services:
       ADMINER_PLUGINS: tables-filter tinymce
 
   builder:
-    image: ghcr.io/chainbound/bolt-builder:v0.1.3-alpha
+    image: ghcr.io/chainbound/bolt-builder:v0.2.0-alpha
     restart: unless-stopped
     volumes:
       - "chaindata:/var/lib/chaindata"
@@ -61,7 +61,7 @@ services:
     entrypoint: /scripts/run-bn.sh
 
   relay-housekeeper:
-    image: ghcr.io/chainbound/bolt-relay:v0.1.3-alpha
+    image: ghcr.io/chainbound/bolt-relay:v0.2.0-alpha
     restart: unless-stopped
     depends_on:
       db:
@@ -84,11 +84,11 @@ services:
         "--redis-uri",
         "redis:6379",
         "--beacon-uris",
-        "http://beacon:4000",
+        "http://beacon:4000"
       ]
 
   relay-api:
-    image: ghcr.io/chainbound/bolt-relay:v0.1.3-alpha
+    image: ghcr.io/chainbound/bolt-relay:v0.2.0-alpha
     restart: unless-stopped
     depends_on:
       relay-housekeeper:
@@ -117,11 +117,11 @@ services:
         "--secret-key",
         "0x607a11b45a7219cc61a3d9c5fd08c7eebd602a6a19a977f8d3771d5711a550f2",
         "--listen-addr",
-        "0.0.0.0:9062",
+        "0.0.0.0:9062"
       ]
 
   relay-website:
-    image: ghcr.io/chainbound/bolt-relay:v0.1.3-alpha
+    image: ghcr.io/chainbound/bolt-relay:v0.2.0-alpha
     restart: always
     depends_on:
       relay-api:
@@ -144,5 +144,5 @@ services:
         "--redis-uri",
         "redis:6379",
         "--listen-addr",
-        "0.0.0.0:9060",
+        "0.0.0.0:9060"
       ]
