@@ -1,14 +1,7 @@
-use std::{
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    time::Duration,
-};
-
 use alloy::rpc::types::beacon::events::HeadEvent;
 use beacon_api_client::Topic;
 use futures::StreamExt;
+use std::time::Duration;
 use tokio::{sync::broadcast, task::AbortHandle, time::sleep};
 use tracing::warn;
 
@@ -26,8 +19,6 @@ const RETRY_DELAY: Duration = Duration::from_secs(1);
 pub struct HeadTracker {
     /// Channel to receive updates of the "Head" beacon topic
     new_heads_rx: broadcast::Receiver<HeadEvent>,
-    /// The genesis timestamp of the beacon chain, used for calculating proposal times
-    beacon_genesis_timestamp: Arc<AtomicU64>,
     /// Handle to the background task that listens for new head events.
     /// Kept to allow for graceful shutdown.
     quit: AbortHandle,
@@ -49,24 +40,8 @@ impl HeadTracker {
     pub fn start(beacon_client: BeaconClient) -> Self {
         let (new_heads_tx, new_heads_rx) = broadcast::channel(32);
 
-        let beacon_genesis_timestamp = Arc::new(AtomicU64::new(0));
-        let beacon_genesis_timestamp_clone = beacon_genesis_timestamp.clone();
-
         let task = tokio::spawn(async move {
             loop {
-                // First, try to get the genesis timestamp and cache it.
-                let genesis_time = loop {
-                    match beacon_client.get_genesis_details().await {
-                        Ok(genesis_info) => break genesis_info.genesis_time,
-                        Err(err) => {
-                            warn!(?err, "failed to get genesis details");
-                            sleep(RETRY_DELAY).await;
-                            continue;
-                        }
-                    }
-                };
-                beacon_genesis_timestamp_clone.store(genesis_time, Ordering::Relaxed);
-
                 let mut event_stream = match beacon_client.get_events::<NewHeadsTopic>().await {
                     Ok(events) => events,
                     Err(err) => {
@@ -96,7 +71,7 @@ impl HeadTracker {
             }
         });
 
-        Self { new_heads_rx, beacon_genesis_timestamp, quit: task.abort_handle() }
+        Self { new_heads_rx, quit: task.abort_handle() }
     }
 
     /// Stop the tracker and cleanup resources
@@ -115,11 +90,6 @@ impl HeadTracker {
     /// the tracker, but only new ones received after the call to this method
     pub fn subscribe_new_heads(&self) -> broadcast::Receiver<HeadEvent> {
         self.new_heads_rx.resubscribe()
-    }
-
-    /// Get the genesis timestamp of the beacon chain
-    pub fn beacon_genesis_timestamp(&self) -> u64 {
-        self.beacon_genesis_timestamp.load(Ordering::Relaxed)
     }
 }
 

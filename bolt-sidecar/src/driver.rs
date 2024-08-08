@@ -102,14 +102,14 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         // (as we don't need to specify genesis time and slot duration)
         let head_tracker = HeadTracker::start(beacon_client.clone());
 
+        // Get the genesis time.
+        let genesis_time = beacon_client.get_genesis_details().await?.genesis_time;
+
         // TODO: head tracker initializes the genesis timestamp with '0' value
         // we should add an async fn to fetch the value for safety
         // Initialize the consensus clock.
-        let consensus_clock = clock::from_system_time(
-            head_tracker.beacon_genesis_timestamp(),
-            cfg.chain.slot_time(),
-            SLOTS_PER_EPOCH,
-        );
+        let consensus_clock =
+            clock::from_system_time(genesis_time, cfg.chain.slot_time(), SLOTS_PER_EPOCH);
         let slot_stream = consensus_clock.into_stream();
 
         let consensus = ConsensusState::new(

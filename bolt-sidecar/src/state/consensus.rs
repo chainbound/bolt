@@ -5,6 +5,7 @@ use std::{
 
 use beacon_api_client::{mainnet::Client, ProposerDuty};
 use ethereum_consensus::phase0::mainnet::SLOTS_PER_EPOCH;
+use tracing::debug;
 
 use super::CommitmentDeadline;
 use crate::{
@@ -101,8 +102,8 @@ impl ConsensusState {
         }
 
         // If the request is for the next slot, check if it's within the commitment deadline
-        if req.slot == self.latest_slot + 1 &&
-            self.latest_slot_timestamp + self.commitment_deadline_duration < Instant::now()
+        if req.slot == self.latest_slot + 1
+            && self.latest_slot_timestamp + self.commitment_deadline_duration < Instant::now()
         {
             return Err(ConsensusError::DeadlineExceeded);
         }
@@ -115,6 +116,7 @@ impl ConsensusState {
 
     /// Update the latest head and fetch the relevant data from the beacon chain.
     pub async fn update_slot(&mut self, slot: u64) -> Result<(), ConsensusError> {
+        debug!("Updating slot to {slot}");
         // Reset the commitment deadline to start counting for the next slot.
         self.commitment_deadline =
             CommitmentDeadline::new(slot + 1, self.commitment_deadline_duration);
@@ -128,6 +130,7 @@ impl ConsensusState {
 
         // If the epoch has changed, update the proposer duties
         if epoch != self.epoch.value {
+            debug!("Updating epoch to {epoch}");
             self.epoch.value = epoch;
             self.epoch.start_slot = epoch * SLOTS_PER_EPOCH;
 
