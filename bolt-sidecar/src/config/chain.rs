@@ -1,7 +1,6 @@
-use std::time::Duration;
-
 use alloy::primitives::b256;
 use clap::{Args, ValueEnum};
+use std::time::Duration;
 
 /// Default commitment deadline duration.
 ///
@@ -40,7 +39,7 @@ pub struct ChainConfig {
     /// new commitments for the next block (parsed as milliseconds).
     #[clap(
         long,
-        env = "BOLT_SIDECAR_COMMITMENT_DEADLINE", 
+        env = "BOLT_SIDECAR_COMMITMENT_DEADLINE",
         default_value_t = DEFAULT_COMMITMENT_DEADLINE_IN_MILLIS
     )]
     commitment_deadline: u64,
