@@ -64,7 +64,13 @@ geth init --datadir=$DATADIR --state.scheme=hash $DEVNET_PATH/genesis.json \
 ## Beacon Node
 
 > [!IMPORTANT]  
-> The beacon node’s `builder-api` should point to the Bolt sidecar API to activate Bolt!
+> The beacon node’s `builder-api` should point to the Bolt sidecar API to activate Bolt! It MUST also have
+> the following flags enabled:
+> ```
+> --always-prefer-builder-payload
+> --builder-fallback-disable-checks
+> ```
+> These flags ensure that no local payload is produced that does not respect the commitments made.
 
 Lighthouse:
 
@@ -97,7 +103,9 @@ lighthouse beacon_node \
     --testnet-dir=$DEVNET_PATH \
     --jwt-secrets=jwtsecret \
     --boot-nodes=enr:-Iq4QK3EWjpB_Wh4Nh9qDWsIlkwCo-ltVJIOZintRmXlq4BqSO3MgChdjo5bNSc_dBVcnhM_CZidGE-CMjazCeJhn7OGAZA6aA31gmlkgnY0gmlwhDQ6SFGJc2VjcDI1NmsxoQN4MIj6Xe7PBxpfvrpyDe2OkrcIq0gdj38hHXpWjB6Zl4N1ZHCCIyk,enr:-LK4QJIhICEs-MIlzVGEOJRco5B3eR1HjsoPrnlNdCifHlT_NQCaY51Z-ntBIgUQmNRcEBqBogOhh43BYdMR_d9Z-DgKh2F0dG5ldHOIAAYAAAAAAACEZXRoMpBLd1oGYBMnNj9CDwAAAAAAgmlkgnY0gmlwhDQ6SFGJc2VjcDI1NmsxoQOy0WhSLuSWpKXex_SG9dn4bOk-LURo7ZjaUuQ1Fbdbk4N0Y3CCIyiDdWRwgiMo,enr:-MS4QKp7W7f8BsoB04SovlJFZDhs67ZgFK_h5TwBXItLoJfGMPDCLnReASmmig_7kxCNf08e68FrCVM3FcPV0ttR92sWh2F0dG5ldHOIAAAwAAAAAACEZXRoMpBLd1oGYBMnNj9CDwAAAAAAgmlkgnY0gmlwhBLAKEyEcXVpY4IjKYlzZWNwMjU2azGhAxUCn447F0j2DEeA-PqFdp5GP3VpXRWgia2yKjeT62G2iHN5bmNuZXRzAIN0Y3CCIyiDdWRwgiMo,enr:-MS4QAvcfEmj00GqJcvkjcvQIhBi6pJQ9Znnp2Hr_Hh4YEOzWMENkleVt-vGAAgz8bhFedR5JkcfuzHTzY-9EpB43n4Ph2F0dG5ldHOIAAAAAAAAAMCEZXRoMpBLd1oGYBMnNj9CDwAAAAAAgmlkgnY0gmlwhCOcsdeEcXVpY4IjKYlzZWNwMjU2azGhAo8AZqqrsuBrbMLHdavhLdAxLWpcSk-SPDuqjJt5Fe_oiHN5bmNuZXRzD4N0Y3CCIyiDdWRwgiMo,enr:-MS4QDvmIhX8vI8_kK62XXbO9gnrm-YuzXKo-OS07uRKLgijLfxeUPvtKU-Ps2RnxOEoNq9RPqhbeVdAVYO71eAJvRkPh2F0dG5ldHOIAAAAAAAAABiEZXRoMpBLd1oGYBMnNj9CDwAAAAAAgmlkgnY0gmlwhBLHueyEcXVpY4IjKYlzZWNwMjU2azGhA4ZmLIctckMGhbOwtpgUI2RNeH2S7LXmwpX_onBAfW_AiHN5bmNuZXRzD4N0Y3CCIyiDdWRwgiMo,enr:-MS4QGcM6eqjhCp_Ag7gMzkU8ks7F-S2QsoIdeEsbcB8TPefYK19ymkwmTcpmZfbTJRMwwAvqdOMmGWEAI5GYv_7xZwTh2F0dG5ldHOIAAAAAAAMAACEZXRoMpBLd1oGYBMnNj9CDwAAAAAAgmlkgnY0gmlwhDQcma6EcXVpY4IjKYlzZWNwMjU2azGhAnXOGXUDHbcgGJeZ9-ftr8cihtkyfUfNlpQNe9G8P2PCiHN5bmNuZXRzD4N0Y3CCIyiDdWRwgiMo \
-    --builder=localhost:18551 # This will be the Bolt builder API
+    --builder=localhost:18551 \ # This will be the Bolt builder API
+    --always-prefer-builder-payload \ # This will always prefer the builder payload
+    --builder-fallback-disable-checks # This will disable chain health checking and local building in response
 ```
 
 ## Bolt Sidecar + Bolt MEV-Boost
@@ -140,6 +148,9 @@ VALIDATOR_INDEXES=""
 
 # Bolt-enabled relay on Helder
 BOLT_RELAY="http://0xa55c1285d84ba83a5ad26420cd5ad3091e49c55a813eee651cd467db38a8c8e63192f47955e9376f6b42f6d190571cb5@135.181.191.125:9062"
+
+# Genesis fork version for Helder
+GENESIS_FORK_VERSION="0x10000000"
 ```
 
 Then, simply run `docker compose up`. This will start the sidecar and the modified mev-boost.
