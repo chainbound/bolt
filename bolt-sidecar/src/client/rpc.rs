@@ -17,7 +17,7 @@ use alloy::{
                 geth::{GethDebugTracingCallOptions, GethTrace},
                 parity::{TraceResults, TraceType},
             },
-            Block, EIP1186AccountProofResponse, FeeHistory, TransactionRequest,
+            Block, EIP1186AccountProofResponse, FeeHistory, Transaction, TransactionRequest,
         },
     },
     transports::{http::Http, TransportErrorKind, TransportResult},
@@ -186,6 +186,11 @@ impl RpcClient {
     pub async fn send_raw_transaction(&self, raw: Bytes) -> TransportResult<B256> {
         self.0.request("eth_sendRawTransaction", [raw]).await
     }
+
+    /// Get the transaction data by Hash of it.
+    pub async fn get_transaction_by_hash(&self, raw: Bytes) -> TransportResult<Transaction> {
+        self.0.request("eth_getTransactionByHash", [raw]).await
+    }
 }
 
 impl Deref for RpcClient {
@@ -204,15 +209,21 @@ impl DerefMut for RpcClient {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
+    use std::{str::FromStr, time::Duration};
 
     use alloy::{
         consensus::constants::ETH_TO_WEI,
+        network::TransactionBuilder,
         primitives::{uint, Uint},
     };
     use dotenvy::dotenv;
 
-    use crate::test_util::launch_anvil;
+    use crate::{
+        config::Limits,
+        crypto::bls::Signer,
+        state::{fetcher::StateFetcher, ExecutionState, StateClient},
+        test_util::{create_signed_commitment_request, default_test_transaction, launch_anvil},
+    };
 
     use super::*;
 
@@ -244,6 +255,47 @@ mod tests {
         let account = rpc_client.get_account_state(&addr, None).await?;
 
         assert!(account.has_code);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_transaction_by_hash() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        // Set the sender balance to just enough to pay for 1 transaction
+        let balance = U256::from_str("500000000000000").unwrap(); // leave just 0.0005 ETH
+        let sender_account = client.get_account_state(sender, None).await.unwrap();
+        let balance_to_burn = sender_account.balance - balance;
+
+        // burn the balance
+        let tx = default_test_transaction(*sender, Some(0)).with_value(uint!(balance_to_burn));
+        let request = create_signed_commitment_request(&[tx.clone()], sender_pk, 10).await?;
+        let tx_bytes =
+            request.as_inclusion_request().unwrap().txs.first().unwrap().envelope_encoded();
+        let hash = client.inner().send_raw_transaction(tx_bytes).await?;
+
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let response = client.inner().get_transaction_by_hash(hash.into()).await?;
+        tracing::info!("{:?}", response);
+
+        assert_eq!(response.clone().chain_id, tx.clone().chain_id());
+        assert_eq!(response.clone().from, tx.clone().from.unwrap());
 
         Ok(())
     }
