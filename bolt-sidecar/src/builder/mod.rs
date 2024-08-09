@@ -106,7 +106,7 @@ impl LocalBuilder {
         //
         // NOTE: we don't strictly need this. The validator & beacon nodes have options
         // to ALWAYS prefer PBS blocks. This is a safety measure that doesn't hurt to keep.
-        let value = U256::from(1_000_000_000_000_000_000u128);
+        let value = U256::from(100_000_000_000_000_000_000u128);
 
         let eth_payload = compat::to_consensus_execution_payload(&sealed_block);
         let payload_and_blobs = PayloadAndBlobs { execution_payload: eth_payload, blobs_bundle };
