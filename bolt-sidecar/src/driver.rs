@@ -87,30 +87,16 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         fetcher: C,
     ) -> eyre::Result<Self> {
         let mevboost_client = MevBoostClient::new(cfg.mevboost_url.clone());
-        let execution = ExecutionState::new(fetcher, cfg.limits).await?;
-        let local_builder = LocalBuilder::new(&cfg);
-
         let beacon_client = BeaconClient::new(cfg.beacon_api_url.clone());
+        let execution = ExecutionState::new(fetcher, cfg.limits).await?;
 
-        // start the commitments api server
-        let api_addr = format!("0.0.0.0:{}", cfg.rpc_port);
-        let (api_events_tx, api_events_rx) = mpsc::channel(1024);
-        CommitmentsApiServer::new(api_addr).run(api_events_tx).await;
-
-        // TODO: this can be replaced with ethereum_consensus::clock::from_system_time()
-        // but using beacon node events is easier to work on a custom devnet for now
-        // (as we don't need to specify genesis time and slot duration)
-        let head_tracker = HeadTracker::start(beacon_client.clone());
-
-        // Get the genesis time.
         let genesis_time = beacon_client.get_genesis_details().await?.genesis_time;
+        let slot_stream =
+            clock::from_system_time(genesis_time, cfg.chain.slot_time(), SLOTS_PER_EPOCH)
+                .into_stream();
 
-        // TODO: head tracker initializes the genesis timestamp with '0' value
-        // we should add an async fn to fetch the value for safety
-        // Initialize the consensus clock.
-        let consensus_clock =
-            clock::from_system_time(genesis_time, cfg.chain.slot_time(), SLOTS_PER_EPOCH);
-        let slot_stream = consensus_clock.into_stream();
+        let local_builder = LocalBuilder::new(&cfg, beacon_client.clone(), genesis_time);
+        let head_tracker = HeadTracker::start(beacon_client.clone());
 
         let consensus = ConsensusState::new(
             beacon_client,
@@ -118,12 +104,11 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
             cfg.chain.commitment_deadline(),
         );
 
+        let (payload_requests_tx, payload_requests_rx) = mpsc::channel(16);
         let builder_proxy_cfg = BuilderProxyConfig {
             mevboost_url: cfg.mevboost_url.clone(),
             server_port: cfg.mevboost_proxy_port,
         };
-
-        let (payload_requests_tx, payload_requests_rx) = mpsc::channel(16);
 
         // start the builder api proxy server
         tokio::spawn(async move {
@@ -132,6 +117,11 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
                 error!(?err, "Builder API proxy server failed");
             }
         });
+
+        // start the commitments api server
+        let api_addr = format!("0.0.0.0:{}", cfg.rpc_port);
+        let (api_events_tx, api_events_rx) = mpsc::channel(1024);
+        CommitmentsApiServer::new(api_addr).run(api_events_tx).await;
 
         Ok(SidecarDriver {
             head_tracker,
@@ -241,13 +231,18 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         }
     }
 
-    /// Handle a commitment deadline event, submitting constraints to the MEV-Boost service.
+    /// Handle a commitment deadline event, submitting constraints to the MEV-Boost service
+    /// and starting to build a local payload for the given target slot.
     async fn handle_commitment_deadline(&mut self, slot: u64) {
         debug!(slot, "Commitment deadline reached, building local block");
 
         let Some(template) = self.execution.get_block_template(slot) else {
             warn!("No block template found for slot {slot} when requested");
             return;
+        };
+
+        if let Err(e) = self.local_builder.build_new_local_payload(slot, template).await {
+            error!(err = ?e, "Error while building local payload at deadline for slot {slot}");
         };
 
         // TODO: fix retry logic, and move this to separate task in the mevboost client itself
@@ -266,10 +261,6 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
                 }
             }
         });
-
-        if let Err(e) = self.local_builder.build_new_local_payload(template).await {
-            tracing::error!(err = ?e, "CRITICAL: Error while building local payload at slot deadline for {slot}");
-        };
     }
 
     /// Handle a fetch payload request, responding with the local payload if available.

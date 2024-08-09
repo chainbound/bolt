@@ -48,12 +48,13 @@ pub struct FallbackPayloadBuilder {
     beacon_api_client: BeaconClient,
     execution_rpc_client: RpcClient,
     engine_hinter: EngineHinter,
-    slot_time_in_seconds: u64,
+    slot_time: u64,
+    genesis_time: u64,
 }
 
 impl FallbackPayloadBuilder {
     /// Create a new fallback payload builder
-    pub fn new(config: &Config) -> Self {
+    pub fn new(config: &Config, beacon_api_client: BeaconClient, genesis_time: u64) -> Self {
         let engine_hinter = EngineHinter {
             client: reqwest::Client::new(),
             jwt_hex: config.jwt_hex.to_string(),
@@ -64,9 +65,10 @@ impl FallbackPayloadBuilder {
             engine_hinter,
             extra_data: DEFAULT_EXTRA_DATA.into(),
             fee_recipient: config.fee_recipient,
-            beacon_api_client: BeaconClient::new(config.beacon_api_url.clone()),
             execution_rpc_client: RpcClient::new(config.execution_api_url.clone()),
-            slot_time_in_seconds: config.chain.slot_time(),
+            slot_time: config.chain.slot_time(),
+            genesis_time,
+            beacon_api_client,
         }
     }
 }
@@ -86,7 +88,7 @@ struct Context {
     transactions_root: B256,
     withdrawals_root: B256,
     parent_beacon_block_root: B256,
-    slot_time_in_seconds: u64,
+    block_timestamp: u64,
 }
 
 #[derive(Debug, Default)]
@@ -103,43 +105,20 @@ impl FallbackPayloadBuilder {
     /// to provide a valid payload that fulfills the commitments made by Bolt.
     pub async fn build_fallback_payload(
         &self,
+        target_slot: u64,
         transactions: &[TransactionSigned],
     ) -> Result<SealedBlock, BuilderError> {
-        // TODO: what if the latest block ends up being reorged out?
+        // We fetch the latest block to get the necessary parent values for the new block.
+        // For the timestamp, we must use the one expected by the beacon chain instead, to
+        // prevent edge cases where the proposer before us has missed their slot.
         let latest_block = self.execution_rpc_client.get_block(None, true).await?;
         debug!(num = ?latest_block.header.number, "got latest block");
 
-        let withdrawals = self
-            .beacon_api_client
-            // Slot: Defaults to the slot after the parent state if not specified.
-            .get_expected_withdrawals(StateId::Head, None)
-            .await?
-            .into_iter()
-            .map(to_reth_withdrawal)
-            .collect::<Vec<_>>();
-
+        let withdrawals = self.get_withdrawals_for_slot(target_slot).await?;
         debug!(amount = ?withdrawals.len(), "got withdrawals");
 
-        // let prev_randao = self
-        //     .beacon_api_client
-        //     .get_randao(StateId::Head, None)
-        //     .await?;
-        // let prev_randao = B256::from_slice(&prev_randao);
-
-        // NOTE: for some reason, this call fails with an ApiResult deserialization error
-        // when using the beacon_api_client crate directly, so we use reqwest temporarily.
-        // this is to be refactored.
-        let prev_randao = reqwest::Client::new()
-            .get(self.beacon_api_client.endpoint.join("/eth/v1/beacon/states/head/randao").unwrap())
-            .send()
-            .await
-            .unwrap()
-            .json::<Value>()
-            .await
-            .unwrap();
-        let prev_randao = prev_randao.pointer("/data/randao").unwrap().as_str().unwrap();
-        let prev_randao = B256::from_hex(prev_randao).unwrap();
-        debug!("got prev_randao");
+        let prev_randao = self.get_prev_randao().await?;
+        debug!(randao = ?prev_randao, "got prev_randao");
 
         let parent_beacon_block_root =
             self.beacon_api_client.get_beacon_block_root(BlockId::Head).await?;
@@ -167,6 +146,11 @@ impl FallbackPayloadBuilder {
         let blob_gas_used =
             transactions.iter().fold(0, |acc, tx| acc + tx.blob_gas_used().unwrap_or_default());
 
+        // We must calculate the next block timestamp manually rather than rely on the
+        // previous execution block, to cover the edge case where any previous slots have
+        // been missed by the proposers immediately before us.
+        let block_timestamp = self.genesis_time + (target_slot * self.slot_time);
+
         let ctx = Context {
             base_fee,
             blob_gas_used,
@@ -177,7 +161,7 @@ impl FallbackPayloadBuilder {
             fee_recipient: self.fee_recipient,
             transactions_root: proofs::calculate_transaction_root(transactions),
             withdrawals_root: proofs::calculate_withdrawals_root(&withdrawals),
-            slot_time_in_seconds: self.slot_time_in_seconds,
+            block_timestamp,
         };
 
         let body = BlockBody {
@@ -242,6 +226,43 @@ impl FallbackPayloadBuilder {
 
             i += 1;
         }
+    }
+
+    /// Fetch the previous RANDAO value from the beacon chain.
+    ///
+    /// NOTE: for some reason, using the ApiResult from `beacon_api_client` doesn't work, so
+    /// we are making a direct request to the beacon client endpoint.
+    async fn get_prev_randao(&self) -> Result<B256, BuilderError> {
+        let url = self
+            .beacon_api_client
+            .endpoint
+            .join("/eth/v1/beacon/states/head/randao")
+            .map_err(|e| BuilderError::Custom(format!("Failed to join URL: {e:?}")))?;
+
+        reqwest::Client::new()
+            .get(url)
+            .send()
+            .await?
+            .json::<Value>()
+            .await?
+            .pointer("/data/randao")
+            .and_then(|value| value.as_str())
+            .map(|value| B256::from_hex(value).map_err(BuilderError::Hex))
+            .ok_or_else(|| BuilderError::Custom("Failed to fetch prev_randao".to_string()))?
+    }
+
+    /// Fetch the expected withdrawals for the given slot from the beacon chain.
+    async fn get_withdrawals_for_slot(
+        &self,
+        slot: u64,
+    ) -> Result<Vec<reth_primitives::Withdrawal>, BuilderError> {
+        Ok(self
+            .beacon_api_client
+            .get_expected_withdrawals(StateId::Head, Some(slot))
+            .await?
+            .into_iter()
+            .map(to_reth_withdrawal)
+            .collect::<Vec<_>>())
     }
 }
 
@@ -370,7 +391,7 @@ fn build_header_with_hints_and_context(
         number: latest_block.header.number.unwrap_or_default() + 1,
         gas_limit: latest_block.header.gas_limit as u64,
         gas_used,
-        timestamp: latest_block.header.timestamp + context.slot_time_in_seconds,
+        timestamp: context.block_timestamp,
         mix_hash: context.prev_randao,
         nonce: BEACON_NONCE,
         base_fee_per_gas: Some(context.base_fee),
@@ -388,19 +409,21 @@ impl fmt::Debug for FallbackPayloadBuilder {
             .field("extra_data", &self.extra_data)
             .field("fee_recipient", &self.fee_recipient)
             .field("engine_hinter", &self.engine_hinter)
-            .field("slot_time_in_seconds", &self.slot_time_in_seconds)
             .finish()
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::time::{SystemTime, UNIX_EPOCH};
+
     use alloy::{
         eips::eip2718::Encodable2718,
         network::{EthereumWallet, TransactionBuilder},
         primitives::{hex, Address},
         signers::{k256::ecdsa::SigningKey, local::PrivateKeySigner},
     };
+    use beacon_api_client::mainnet::Client as BeaconClient;
     use reth_primitives::TransactionSigned;
     use tracing::warn;
 
@@ -420,7 +443,9 @@ mod tests {
 
         let raw_sk = std::env::var("PRIVATE_KEY")?;
 
-        let builder = FallbackPayloadBuilder::new(&cfg);
+        let beacon_client = BeaconClient::new(cfg.beacon_api_url.clone());
+        let genesis_time = beacon_client.get_genesis_details().await?.genesis_time;
+        let builder = FallbackPayloadBuilder::new(&cfg, beacon_client, genesis_time);
 
         let sk = SigningKey::from_slice(hex::decode(raw_sk)?.as_slice())?;
         let signer = PrivateKeySigner::from_signing_key(sk.clone());
@@ -432,7 +457,11 @@ mod tests {
         let raw_encoded = tx_signed.encoded_2718();
         let tx_signed_reth = TransactionSigned::decode_enveloped(&mut raw_encoded.as_slice())?;
 
-        let block = builder.build_fallback_payload(&[tx_signed_reth]).await?;
+        let slot = genesis_time +
+            (SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() / cfg.chain.slot_time()) +
+            1;
+
+        let block = builder.build_fallback_payload(slot, &[tx_signed_reth]).await?;
         assert_eq!(block.body.len(), 1);
 
         Ok(())
