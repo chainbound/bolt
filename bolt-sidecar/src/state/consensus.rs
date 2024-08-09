@@ -135,6 +135,10 @@ impl ConsensusState {
             self.epoch.start_slot = epoch * SLOTS_PER_EPOCH;
 
             self.fetch_proposer_duties(epoch).await?;
+        } else if self.epoch.proposer_duties.is_empty() {
+            debug!(epoch, "No proposer duties found for current epoch, fetching...");
+            // If the proposer duties are empty, fetch them
+            self.fetch_proposer_duties(epoch).await?;
         }
 
         Ok(())
