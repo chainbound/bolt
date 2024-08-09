@@ -1,4 +1,5 @@
 use alloy::primitives::U256;
+use beacon_api_client::mainnet::Client as BeaconClient;
 use blst::min_pk::SecretKey;
 use ethereum_consensus::{
     crypto::{KzgCommitment, PublicKey},
@@ -37,7 +38,7 @@ pub mod payload_builder;
 #[allow(missing_docs)]
 pub enum BuilderError {
     #[error("Failed to parse from integer: {0}")]
-    Parse(#[from] std::num::ParseIntError),
+    ParseInt(#[from] std::num::ParseIntError),
     #[error("Failed to de/serialize JSON: {0}")]
     Json(#[from] serde_json::Error),
     #[error("Failed to decode hex: {0}")]
@@ -77,10 +78,10 @@ pub struct LocalBuilder {
 
 impl LocalBuilder {
     /// Create a new local builder with the given secret key.
-    pub fn new(config: &Config) -> Self {
+    pub fn new(config: &Config, beacon_api_client: BeaconClient, genesis_time: u64) -> Self {
         Self {
             payload_and_bid: None,
-            fallback_builder: FallbackPayloadBuilder::new(config),
+            fallback_builder: FallbackPayloadBuilder::new(config, beacon_api_client, genesis_time),
             secret_key: config.builder_private_key.clone(),
             chain: config.chain.clone(),
         }
@@ -90,6 +91,7 @@ impl LocalBuilder {
     /// cache the payload in the local builder instance, and make it available
     pub async fn build_new_local_payload(
         &mut self,
+        slot: u64,
         template: &BlockTemplate,
     ) -> Result<(), BuilderError> {
         let transactions = template.as_signed_transactions();
@@ -98,7 +100,7 @@ impl LocalBuilder {
 
         // 1. build a fallback payload with the given transactions, on top of
         // the current head of the chain
-        let sealed_block = self.fallback_builder.build_fallback_payload(&transactions).await?;
+        let block = self.fallback_builder.build_fallback_payload(slot, &transactions).await?;
 
         // NOTE: we use a big value for the bid to ensure it gets chosen by mev-boost.
         // the client has no way to actually verify this, and we don't need to trust
@@ -108,11 +110,11 @@ impl LocalBuilder {
         // to ALWAYS prefer PBS blocks. This is a safety measure that doesn't hurt to keep.
         let value = U256::from(100_000_000_000_000_000_000u128);
 
-        let eth_payload = compat::to_consensus_execution_payload(&sealed_block);
+        let eth_payload = compat::to_consensus_execution_payload(&block);
         let payload_and_blobs = PayloadAndBlobs { execution_payload: eth_payload, blobs_bundle };
 
         // 2. create a signed builder bid with the sealed block header we just created
-        let eth_header = compat::to_execution_payload_header(&sealed_block, transactions);
+        let eth_header = compat::to_execution_payload_header(&block, transactions);
 
         // 3. sign the bid with the local builder's BLS key
         let signed_bid = self.create_signed_builder_bid(value, eth_header, kzg_commitments)?;
