@@ -11,7 +11,7 @@ use regex::Regex;
 use reqwest::Url;
 use reth_primitives::{
     constants::BEACON_NONCE, proofs, BlockBody, Bloom, Header, SealedBlock, TransactionSigned,
-    Withdrawals, EMPTY_OMMER_ROOT_HASH,
+    Withdrawal, Withdrawals, EMPTY_OMMER_ROOT_HASH,
 };
 use reth_rpc_layer::{secret_to_bearer_header, JwtSecret};
 use serde_json::Value;
@@ -252,9 +252,7 @@ impl FallbackPayloadBuilder {
     }
 
     /// Fetch the expected withdrawals for the given slot from the beacon chain.
-    async fn get_expected_withdrawals_at_head(
-        &self,
-    ) -> Result<Vec<reth_primitives::Withdrawal>, BuilderError> {
+    async fn get_expected_withdrawals_at_head(&self) -> Result<Vec<Withdrawal>, BuilderError> {
         Ok(self
             .beacon_api_client
             .get_expected_withdrawals(StateId::Head, None)
