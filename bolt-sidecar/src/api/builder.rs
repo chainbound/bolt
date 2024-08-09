@@ -89,14 +89,8 @@ where
         State(server): State<Arc<BuilderProxyServer<T, P>>>,
         Json(registrations): Json<Vec<SignedValidatorRegistration>>,
     ) -> Result<StatusCode, BuilderApiError> {
-        let start = std::time::Instant::now();
         debug!("Received register validators request");
-
         let response = server.proxy_target.register_validators(registrations).await;
-
-        let elapsed = start.elapsed();
-        debug!(?elapsed, "Returning response: {:?}", response);
-
         response.map(|_| StatusCode::OK)
     }
 

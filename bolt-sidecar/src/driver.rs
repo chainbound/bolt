@@ -161,7 +161,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
                     self.handle_new_head_event(head_event).await;
                 }
                 Some(slot) = self.consensus.commitment_deadline.wait() => {
-                    self.handle_commitment_deadline(slot);
+                    self.handle_commitment_deadline(slot).await;
                 }
                 Some(payload_request) = self.payload_requests_rx.recv() => {
                     self.handle_fetch_payload_request(payload_request);
@@ -242,7 +242,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
     }
 
     /// Handle a commitment deadline event, submitting constraints to the MEV-Boost service.
-    fn handle_commitment_deadline(&mut self, slot: u64) {
+    async fn handle_commitment_deadline(&mut self, slot: u64) {
         debug!(slot, "Commitment deadline reached, building local block");
 
         let Some(template) = self.execution.get_block_template(slot) else {
@@ -266,6 +266,10 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
                 }
             }
         });
+
+        if let Err(e) = self.local_builder.build_new_local_payload(template).await {
+            tracing::error!(err = ?e, "CRITICAL: Error while building local payload at slot deadline for {slot}");
+        };
     }
 
     /// Handle a fetch payload request, responding with the local payload if available.
