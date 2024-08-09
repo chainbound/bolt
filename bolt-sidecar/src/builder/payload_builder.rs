@@ -114,8 +114,8 @@ impl FallbackPayloadBuilder {
         let latest_block = self.execution_rpc_client.get_block(None, true).await?;
         debug!(num = ?latest_block.header.number, "got latest block");
 
-        let withdrawals = self.get_withdrawals_for_slot(target_slot).await?;
-        debug!(amount = ?withdrawals.len(), "got withdrawals");
+        let withdrawals = self.get_expected_withdrawals_at_head().await?;
+        debug!(amount = ?withdrawals.len(), "got expected withdrawals");
 
         let prev_randao = self.get_prev_randao().await?;
         debug!(randao = ?prev_randao, "got prev_randao");
@@ -252,13 +252,12 @@ impl FallbackPayloadBuilder {
     }
 
     /// Fetch the expected withdrawals for the given slot from the beacon chain.
-    async fn get_withdrawals_for_slot(
+    async fn get_expected_withdrawals_at_head(
         &self,
-        slot: u64,
     ) -> Result<Vec<reth_primitives::Withdrawal>, BuilderError> {
         Ok(self
             .beacon_api_client
-            .get_expected_withdrawals(StateId::Head, Some(slot))
+            .get_expected_withdrawals(StateId::Head, None)
             .await?
             .into_iter()
             .map(to_reth_withdrawal)
