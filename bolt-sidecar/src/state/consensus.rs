@@ -102,8 +102,8 @@ impl ConsensusState {
         }
 
         // If the request is for the next slot, check if it's within the commitment deadline
-        if req.slot == self.latest_slot + 1
-            && self.latest_slot_timestamp + self.commitment_deadline_duration < Instant::now()
+        if req.slot == self.latest_slot + 1 &&
+            self.latest_slot_timestamp + self.commitment_deadline_duration < Instant::now()
         {
             return Err(ConsensusError::DeadlineExceeded);
         }
