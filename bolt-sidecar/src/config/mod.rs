@@ -6,6 +6,7 @@ use clap::Parser;
 use eyre::{bail, eyre, Report, Result};
 use reqwest::Url;
 use std::num::NonZero;
+use telemetry::TelemetryOpts;
 use tracing::info;
 
 use crate::crypto::bls::random_bls_secret;
@@ -18,6 +19,8 @@ pub use chain::ChainConfig;
 
 pub mod signing;
 pub use signing::SigningOpts;
+
+pub mod telemetry;
 
 /// Default port for the JSON-RPC server exposed by the sidecar.
 pub const DEFAULT_RPC_PORT: u16 = 8000;
@@ -78,6 +81,9 @@ pub struct Opts {
     /// Commitment signing options.
     #[clap(flatten)]
     pub(super) signing: SigningOpts,
+    /// Telemetry options
+    #[clap(flatten)]
+    pub(super) telemetry: TelemetryOpts,
 }
 
 /// Configuration options for the sidecar. These are parsed from
