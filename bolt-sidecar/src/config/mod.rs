@@ -120,6 +120,8 @@ pub struct Config {
     pub builder_private_key: SecretKey,
     /// The chain on which the sidecar is running
     pub chain: ChainConfig,
+    /// Metrics port
+    pub metrics_port: u16,
 }
 
 impl Default for Config {
@@ -139,6 +141,7 @@ impl Default for Config {
             limits: Limits::default(),
             validator_indexes: ValidatorIndexes::default(),
             chain: ChainConfig::default(),
+            metrics_port: 0,
         }
     }
 }
@@ -234,6 +237,7 @@ impl TryFrom<Opts> for Config {
         config.validator_indexes = opts.validator_indexes;
 
         config.chain = opts.chain;
+        config.metrics_port = opts.telemetry.metrics_port;
 
         Ok(config)
     }
