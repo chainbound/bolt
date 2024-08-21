@@ -1,9 +1,7 @@
 //! This module contains the `RpcClient` struct, which is a wrapper around the `alloy_rpc_client`.
 //! It provides a simple interface to interact with the Execution layer JSON-RPC API.
 
-use futures::future::join_all;
 use std::{
-    collections::HashSet,
     ops::{Deref, DerefMut},
 };
 
@@ -11,13 +9,9 @@ use alloy::{
     eips::BlockNumberOrTag,
     primitives::{Address, Bytes, B256, U256, U64},
     rpc::{
-        client::{self as alloyClient, ClientBuilder, Waiter},
+        client::{self as alloyClient, ClientBuilder},
         types::{
-            trace::{
-                geth::{GethDebugTracingCallOptions, GethTrace},
-                parity::{TraceResults, TraceType},
-            },
-            Block, EIP1186AccountProofResponse, FeeHistory, TransactionRequest,
+            Block, FeeHistory,
         },
     },
     transports::{http::Http, TransportErrorKind, TransportResult},

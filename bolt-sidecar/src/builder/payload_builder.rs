@@ -15,7 +15,7 @@ use reth_primitives::{
 };
 use reth_rpc_layer::{secret_to_bearer_header, JwtSecret};
 use serde_json::Value;
-use tracing::{debug, info, trace, warn};
+use tracing::{trace};
 
 use super::{
     compat::{to_alloy_execution_payload, to_reth_withdrawal},
