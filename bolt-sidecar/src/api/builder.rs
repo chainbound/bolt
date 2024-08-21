@@ -187,7 +187,7 @@ where
         if let Some(local_payload) = server.local_payload.lock().take() {
             check_locally_built_payload_integrity(&signed_blinded_block, &local_payload)?;
 
-            debug!("Valid local block found, returning: {local_payload:?}");
+            info!("Valid local block found, returning: {local_payload:?}");
             return Ok(Json(local_payload));
         }
 
@@ -204,7 +204,7 @@ where
                 e
             })?;
 
-        debug!(elapsed = ?start.elapsed(), "Returning payload");
+        info!(elapsed = ?start.elapsed(), "Returning payload from mev-boost");
 
         Ok(payload)
     }
