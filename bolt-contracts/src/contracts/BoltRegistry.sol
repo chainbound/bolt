@@ -25,11 +25,7 @@ contract BoltRegistry is IBoltRegistry {
     }
 
     /// @notice Allows a based proposer to opt-in to the protocol
-    function register(
-        uint64[] calldata validatorIndexes,
-        string calldata rpc,
-        bytes calldata extra
-    ) external payable {
+    function register(uint64[] calldata validatorIndexes, string calldata rpc, bytes calldata extra) external payable {
         if (msg.value < MINIMUM_COLLATERAL) {
             revert InsufficientCollateral();
         }
@@ -40,15 +36,8 @@ contract BoltRegistry is IBoltRegistry {
 
         MetaData memory metadata = MetaData(rpc, extra);
 
-        registrants[msg.sender] = Registrant(
-            msg.sender,
-            validatorIndexes,
-            block.timestamp,
-            0,
-            msg.value,
-            Status.ACTIVE,
-            metadata
-        );
+        registrants[msg.sender] =
+            Registrant(msg.sender, validatorIndexes, block.timestamp, 0, msg.value, Status.ACTIVE, metadata);
 
         operators.push(msg.sender);
 
@@ -105,7 +94,7 @@ contract BoltRegistry is IBoltRegistry {
                 break;
             }
         }
-        
+
         delete registrants[msg.sender];
 
         for (uint256 i = 0; i < registrant.validatorIndexes.length; i++) {
@@ -127,16 +116,12 @@ contract BoltRegistry is IBoltRegistry {
     /// @notice Get the status of a based proposer
     /// @param _operator The address of the operator
     /// @return The status of the based proposer
-    function getOperatorStatus(
-        address _operator
-    ) external view returns (Status) {
+    function getOperatorStatus(address _operator) external view returns (Status) {
         // Will return INACTIVE if the operator is not registered
         return registrants[_operator].status;
     }
 
-    function getOperatorForValidator(
-        uint64 _validatorIndex
-    ) external view returns (Registrant memory) {
+    function getOperatorForValidator(uint64 _validatorIndex) external view returns (Registrant memory) {
         if (delegations[_validatorIndex] != address(0)) {
             return registrants[delegations[_validatorIndex]];
         }
