@@ -10,7 +10,7 @@ library BeaconChainUtils {
     uint256 internal constant SLOT_TIME = 12;
 
     /// @notice The timestamp of the genesis of the eth2 chain
-    uint256 internal constant ETH2_GENESIS_TIMESTAMP = 1606824023;
+    uint256 internal constant ETH2_GENESIS_TIMESTAMP = 1_606_824_023;
 
     /// @notice Error emitted when a beacon block root is not found
     error BeaconRootNotFound();

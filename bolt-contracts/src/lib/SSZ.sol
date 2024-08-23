@@ -15,11 +15,12 @@ library SSZ {
     /// @notice Modified version of `verify` from `MerkleProofLib` to support generalized indices and sha256 precompile.
     /// @dev Returns whether `leaf` exists in the Merkle tree with `root`, given `proof`.
     /// @dev from https://github.com/madlabman/eip-4788-proof/blob/master/src/SSZ.sol
-    function _verifyProof(bytes32[] calldata proof, bytes32 root, bytes32 leaf, uint256 index)
-        internal
-        view
-        returns (bool isValid)
-    {
+    function _verifyProof(
+        bytes32[] calldata proof,
+        bytes32 root,
+        bytes32 leaf,
+        uint256 index
+    ) internal view returns (bool isValid) {
         /// @solidity memory-safe-assembly
         assembly {
             if proof.length {
