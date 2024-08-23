@@ -2,6 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {BLS12381} from "../lib/BLS12381.sol";
+import {BeaconChainUtils} from "../lib/BeaconChainUtils.sol";
 
 /// @title Commitment Registry prototype
 /// @dev R&D and specs available at <https://github.com/chainbound/bolt/discussions/95>
@@ -18,19 +19,19 @@ contract CommitmentRegistry {
     /// given time for any Validator.
     mapping(address => CollateralProvider) public COLLATERAL_PROVIDERS;
 
-    /// @notice Counter of the number of validators associated with a Collateral Provider
-    /// @dev This is mainly for efficiency purposes, to avoid iterating over all validators
-    /// when calculating the collateral at stake at any given time.
-    mapping(address => uint64) public collateralProviderValidatorsCount;
-
     /// @notice Live collateral at stake for each Collateral Provider
     /// @dev Mapping from Collateral Provider EOA to asset address to amount at stake
     mapping(address => mapping(address => uint256)) public collateralProviderLiveCollateralAmounts;
 
+    /// @notice Collateral Deposit history for each Collateral Provider
+    mapping(address => CollateralDeposit[]) public collateralProviderDepositHistory;
+
+    /// @notice Collateral Withdrawal history for each Collateral Provider
+    mapping(address => CollateralWithdrawal[]) public collateralProviderWithdrawalHistory;
+
     /// @notice Collateral Provider
     struct CollateralProvider {
-        CollateralDeposit[] depositHistory;
-        CollateralWithdrawal[] withdrawalHistory;
+        uint64 validatorsCount;
         bool exists;
     }
 
@@ -101,8 +102,19 @@ contract CommitmentRegistry {
     function registerCollateralProvider() public {
         require(!COLLATERAL_PROVIDERS[msg.sender].exists, "Collateral Provider already exists");
 
-        COLLATERAL_PROVIDERS[msg.sender] =
-            CollateralProvider(new CollateralDeposit[](0), new CollateralWithdrawal[](0), true);
+        COLLATERAL_PROVIDERS[msg.sender] = CollateralProvider(0, true);
+    }
+
+    /// @notice Register an Operator
+    /// @dev This function allows anyone to register an Operator EOA in the registry,
+    /// which is responsible for making credible commitments on behalf of any Validators
+    /// that authorize it to do so.
+    /// @param rpcEndpoint URL of the RPC endpoint where the Operator can be reached
+    /// @param extraData Additional data that the Operator may want to provide
+    function registerOperator(string calldata rpcEndpoint, string calldata extraData) public {
+        require(!OPERATORS[msg.sender].exists, "Operator already exists");
+
+        OPERATORS[msg.sender] = Operator(rpcEndpoint, extraData, true);
     }
 
     /// @notice Deposit collateral for all Validators under the Collateral Provider
@@ -118,7 +130,7 @@ contract CommitmentRegistry {
         collateralProviderLiveCollateralAmounts[msg.sender][asset] += amount;
 
         // Add the deposit to the history
-        provider.depositHistory.push(CollateralDeposit(Collateral(asset, amount), block.timestamp));
+        collateralProviderDepositHistory[msg.sender].push(CollateralDeposit(Collateral(asset, amount), block.timestamp));
     }
 
     /// @notice Register a batch of Validators and authorize a Collateral Provider and Operator for them
@@ -141,27 +153,33 @@ contract CommitmentRegistry {
         uint256 validatorsCount = pubkeys.length;
         uint64[] memory expectedValidatorSequenceNumbers = new uint64[](validatorsCount);
         for (uint256 i = 0; i < validatorsCount; i++) {
-            expectedValidatorSequenceNumbers[i] = nextValidatorSequenceNumber + i;
+            expectedValidatorSequenceNumbers[i] = nextValidatorSequenceNumber + uint64(i);
         }
 
         // Reconstruct the unique message for which we expect an aggregated signature.
         // NOTE: we need the msg.sender to prevent a front-running attack by an EOA that may
         // try to register the same validators with a different Collateral Provider / Operator
-        bytes memory message = abi.encodePacked(block.chainId, msg.sender, expectedValidatorSequenceNumbers);
+        bytes memory message = abi.encodePacked(block.chainid, msg.sender, expectedValidatorSequenceNumbers);
 
         // Verify the aggregated signature once for all pubkeys
         require(_verifyAggregatedBLSSignature(pubkeys, signature, message), "Invalid signature");
 
         // Register the validators and authorize the Collateral Provider and Operator for them
         for (uint256 i = 0; i < validatorsCount; i++) {
+            // TODO: Verify the existence of each validator in the Beacon Chain (through EIP-4788)
+            // bytes32 beaconBlockRoot = BeaconChainUtils._getLatestBeaconBlockRoot();
+            // require(
+            //     ValidatorVerifier._proveValidator(validatorProof, validatorSSZ, validatorIndex, beaconBlockRoot),
+            //     "Validator does not exist on the Beacon Chain"
+            // );
+
             bytes32 pubKeyHash = _pubkeyHash(pubkeys[i]);
             require(!VALIDATORS[pubKeyHash].exists, "Validator already exists");
-
             VALIDATORS[pubKeyHash] = Validator(nextValidatorSequenceNumber, collateralProvider, operator, true);
         }
 
         nextValidatorSequenceNumber += uint64(validatorsCount);
-        collateralProviderValidatorsCount[collateralProvider] += uint64(validatorsCount);
+        COLLATERAL_PROVIDERS[collateralProvider].validatorsCount += uint64(validatorsCount);
     }
 
     /// @notice Get the collateral at stake for a Validator for a specific asset
@@ -169,7 +187,7 @@ contract CommitmentRegistry {
     /// @param asset Address of the asset to check the collateral for
     /// @return The amount of collateral at stake for the Validator
     function getValidatorStakeAmount(BLS12381.G1Point calldata pubkey, address asset) public view returns (uint256) {
-        Validator memory validator = VALIDATORS[_pubkeyHash(pubkey)].collateralProvider;
+        Validator memory validator = VALIDATORS[_pubkeyHash(pubkey)];
         require(validator.exists, "Validator does not exist");
 
         // Invariant: the Validator must have a Collateral Provider assigned
