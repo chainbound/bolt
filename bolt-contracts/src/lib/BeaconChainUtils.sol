@@ -43,4 +43,11 @@ library BeaconChainUtils {
 
         return abi.decode(data, (bytes32));
     }
+
+    /// @notice Get the latest beacon block root
+    /// @return The beacon block root
+    function _getLatestBeaconBlockRoot() internal view returns (bytes32) {
+        uint256 latestSlot = _getSlotFromTimestamp(block.timestamp);
+        return _getBeaconBlockRoot(latestSlot);
+    }
 }
