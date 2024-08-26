@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {BLS12381} from "../lib/BLS12381.sol";
+// TODO: switch back to the real library when the precompile is testable
+import {BLS12381} from "../lib/BLS12381_Mocked.sol";
 import {BeaconChainUtils} from "../lib/BeaconChainUtils.sol";
 
 /// @title Commitment Registry prototype
@@ -95,6 +96,10 @@ contract CommitmentRegistry {
         bool exists;
     }
 
+    /// @notice Constructor
+    /// @dev Initializes the Commitment Registry contract
+    constructor() {}
+
     /// @notice Register a Collateral Provider
     /// @dev This function allows anyone to register a Collateral Provider EOA
     /// in the registry, which is responsible for depositing collateral for any Validators
@@ -117,6 +122,16 @@ contract CommitmentRegistry {
         OPERATORS[msg.sender] = Operator(rpcEndpoint, extraData, true);
     }
 
+    /// @notice Update the data for an Operator
+    /// @dev This function allows an Operator to update its RPC endpoint and extra data.
+    /// @param rpcEndpoint URL of the RPC endpoint where the Operator can be reached
+    /// @param extraData Additional data that the Operator may want to provide
+    function updateOperatorData(string calldata rpcEndpoint, string calldata extraData) public {
+        require(OPERATORS[msg.sender].exists, "Operator not found");
+
+        OPERATORS[msg.sender] = Operator(rpcEndpoint, extraData, true);
+    }
+
     /// @notice Deposit collateral for all Validators under the Collateral Provider
     /// @dev This function allows an existing CollateralProvider EOA to deposit collateral
     /// for all the Validators that are under its responsibility.
@@ -132,6 +147,8 @@ contract CommitmentRegistry {
         // Add the deposit to the history
         collateralProviderDepositHistory[msg.sender].push(CollateralDeposit(Collateral(asset, amount), block.timestamp));
     }
+
+    // TODO: add a mechanism to withdraw collateral safely
 
     /// @notice Register a batch of Validators and authorize a Collateral Provider and Operator for them
     /// @dev This function allows anyone to register a list of Validators, authorize a Collateral Provider
@@ -167,6 +184,7 @@ contract CommitmentRegistry {
         // Register the validators and authorize the Collateral Provider and Operator for them
         for (uint256 i = 0; i < validatorsCount; i++) {
             // TODO: Verify the existence of each validator in the Beacon Chain (through EIP-4788)
+            // TODO: calculate the calldata size and cost for each of these calls
             // bytes32 beaconBlockRoot = BeaconChainUtils._getLatestBeaconBlockRoot();
             // require(
             //     ValidatorVerifier._proveValidator(validatorProof, validatorSSZ, validatorIndex, beaconBlockRoot),
