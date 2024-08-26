@@ -1,0 +1,39 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.13;
+
+import {BLS12381} from "../lib/BLS12381.sol";
+import {ValidatorProver} from "../lib/ValidatorProver.sol";
+
+interface IBoltValidators {
+    /// @notice Validator
+    struct Validator {
+        // the incremental sequence number assigned to the validator
+        uint64 sequenceNumber;
+        // the entity authorized to deposit collateral for the validator
+        // to add credibility to its commitments
+        address authorizedCollateralProvider;
+        // the entity authorized to make commitments on behalf of the validator
+        address authorizedOperator;
+        // the EOA that registered the validator and can update its configuration
+        address controller;
+        // whether the validator exists in the registry
+        bool exists;
+    }
+
+    error InvalidBLSSignature();
+    error InvalidAuthorizedCollateralProvider();
+    error InvalidAuthorizedOperator();
+    error InvalidProofTimestamp();
+    error ValidatorAlreadyExists();
+
+    function getValidator(BLS12381.G1Point calldata pubkey) external view returns (Validator memory);
+
+    function batchRegisterValidators(
+        BLS12381.G1Point[] calldata pubkeys,
+        BLS12381.G2Point calldata signature,
+        address authorizedCollateralProvider,
+        address authorizedOperator,
+        ValidatorProver.ValidatorProof[] calldata validatorProofs,
+        uint64 proofTimestamp
+    ) external;
+}

@@ -1,4 +1,4 @@
-// Mocked BLS12381 library for testing purposes - does not actually 
+// Mocked BLS12381 library for testing purposes - does not actually
 // call the precompile functions
 
 // SPDX-License-Identifier: UNLICENSED
