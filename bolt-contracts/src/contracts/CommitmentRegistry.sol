@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-// TODO: switch back to the real library when the precompile is testable
-import {BLS12381} from "../lib/BLS12381_Mocked.sol";
-import {BeaconChainUtils} from "../lib/BeaconChainUtils.sol";
+import {BLS12381} from "../lib/BLS12381.sol";
+import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 
 /// @title Commitment Registry prototype
 /// @dev R&D and specs available at <https://github.com/chainbound/bolt/discussions/95>
@@ -54,27 +53,6 @@ contract CommitmentRegistry {
         uint256 timestamp;
     }
 
-    /// @notice Validators (aka Blockspace providers)
-    /// @dev For our purpose, validators are blockspace providers for commitments.
-    /// They are identified by their BLS pubkey hash.
-    ///
-    /// Validators can be separate from their Collateral Provider, such as in the
-    /// case of non-custodial staking pools. Validators can also delegate commitment
-    /// power to an Operator to make commitments on their behalf.
-    mapping(bytes32 => Validator) public VALIDATORS;
-
-    /// @notice counter of the next index to be assigned to a validator.
-    /// @dev This incremental index is only used to identify validators in the registry.
-    uint64 internal nextValidatorSequenceNumber;
-
-    /// @notice Validator
-    struct Validator {
-        uint64 sequenceNumber;
-        address collateralProvider;
-        address operator;
-        bool exists;
-    }
-
     /// @notice Operators (aka Committment creators)
     /// @dev Operators are entities that have been authorized to make credible
     /// commitments on some Validator's behalf. To become an Operator, it is
@@ -96,9 +74,15 @@ contract CommitmentRegistry {
         bool exists;
     }
 
+    /// @notice Bolt Validators contract
+    IBoltValidators public boltValidators;
+
     /// @notice Constructor
     /// @dev Initializes the Commitment Registry contract
-    constructor() {}
+    /// @param _boltValidators Address of the Bolt Validators contract
+    constructor(address _boltValidators) {
+        boltValidators = IBoltValidators(_boltValidators);
+    }
 
     /// @notice Register a Collateral Provider
     /// @dev This function allows anyone to register a Collateral Provider EOA
@@ -106,7 +90,6 @@ contract CommitmentRegistry {
     /// that authorize it to do so.
     function registerCollateralProvider() public {
         require(!COLLATERAL_PROVIDERS[msg.sender].exists, "Collateral Provider already exists");
-
         COLLATERAL_PROVIDERS[msg.sender] = CollateralProvider(0, true);
     }
 
@@ -118,7 +101,6 @@ contract CommitmentRegistry {
     /// @param extraData Additional data that the Operator may want to provide
     function registerOperator(string calldata rpcEndpoint, string calldata extraData) public {
         require(!OPERATORS[msg.sender].exists, "Operator already exists");
-
         OPERATORS[msg.sender] = Operator(rpcEndpoint, extraData, true);
     }
 
@@ -128,7 +110,6 @@ contract CommitmentRegistry {
     /// @param extraData Additional data that the Operator may want to provide
     function updateOperatorData(string calldata rpcEndpoint, string calldata extraData) public {
         require(OPERATORS[msg.sender].exists, "Operator not found");
-
         OPERATORS[msg.sender] = Operator(rpcEndpoint, extraData, true);
     }
 
@@ -150,86 +131,15 @@ contract CommitmentRegistry {
 
     // TODO: add a mechanism to withdraw collateral safely
 
-    /// @notice Register a batch of Validators and authorize a Collateral Provider and Operator for them
-    /// @dev This function allows anyone to register a list of Validators, authorize a Collateral Provider
-    /// to later deposit collateral for them, and authorize an Operator to start making credible commitments.
-    /// The Collateral Provider and Operator addresses must exist in the registry before calling this function.
-    /// @param pubkeys List of BLS public keys for the Validators to be registered
-    /// @param signature BLS aggregated signature of the registration message for this batch of Validators
-    /// @param collateralProvider EOA of the Collateral Provider that will be authorized
-    /// @param operator EOA of the Operator that will be authorized
-    function batchRegisterValidators(
-        BLS12381.G1Point[] calldata pubkeys,
-        BLS12381.G2Point calldata signature,
-        address collateralProvider,
-        address operator
-    ) public {
-        require(COLLATERAL_PROVIDERS[collateralProvider].exists, "Collateral Provider does not exist");
-        require(OPERATORS[operator].exists, "Operator does not exist");
-
-        uint256 validatorsCount = pubkeys.length;
-        uint64[] memory expectedValidatorSequenceNumbers = new uint64[](validatorsCount);
-        for (uint256 i = 0; i < validatorsCount; i++) {
-            expectedValidatorSequenceNumbers[i] = nextValidatorSequenceNumber + uint64(i);
-        }
-
-        // Reconstruct the unique message for which we expect an aggregated signature.
-        // NOTE: we need the msg.sender to prevent a front-running attack by an EOA that may
-        // try to register the same validators with a different Collateral Provider / Operator
-        bytes memory message = abi.encodePacked(block.chainid, msg.sender, expectedValidatorSequenceNumbers);
-
-        // Verify the aggregated signature once for all pubkeys
-        require(_verifyAggregatedBLSSignature(pubkeys, signature, message), "Invalid signature");
-
-        // Register the validators and authorize the Collateral Provider and Operator for them
-        for (uint256 i = 0; i < validatorsCount; i++) {
-            // TODO: Verify the existence of each validator in the Beacon Chain (through EIP-4788)
-            // TODO: calculate the calldata size and cost for each of these calls
-            // bytes32 beaconBlockRoot = BeaconChainUtils._getLatestBeaconBlockRoot();
-            // require(
-            //     ValidatorVerifier._proveValidator(validatorProof, validatorSSZ, validatorIndex, beaconBlockRoot),
-            //     "Validator does not exist on the Beacon Chain"
-            // );
-
-            bytes32 pubKeyHash = _pubkeyHash(pubkeys[i]);
-            require(!VALIDATORS[pubKeyHash].exists, "Validator already exists");
-            VALIDATORS[pubKeyHash] = Validator(nextValidatorSequenceNumber, collateralProvider, operator, true);
-        }
-
-        nextValidatorSequenceNumber += uint64(validatorsCount);
-        COLLATERAL_PROVIDERS[collateralProvider].validatorsCount += uint64(validatorsCount);
-    }
-
     /// @notice Get the collateral at stake for a Validator for a specific asset
     /// @param pubkey BLS public key of the Validator
     /// @param asset Address of the asset to check the collateral for
     /// @return The amount of collateral at stake for the Validator
     function getValidatorStakeAmount(BLS12381.G1Point calldata pubkey, address asset) public view returns (uint256) {
-        Validator memory validator = VALIDATORS[_pubkeyHash(pubkey)];
+        IBoltValidators.Validator memory validator = boltValidators.getValidator(pubkey);
         require(validator.exists, "Validator does not exist");
 
         // Invariant: the Validator must have a Collateral Provider assigned
-        return collateralProviderLiveCollateralAmounts[validator.collateralProvider][asset];
-    }
-
-    /// @notice Verify a BLS aggregated signature
-    /// @param pubkeys List of BLS public keys that were used to create the aggregated signature
-    /// @param signature Aggregated BLS signature
-    /// @param message Message that was signed
-    /// @return True if the signature is valid, false otherwise
-    function _verifyAggregatedBLSSignature(
-        BLS12381.G1Point[] calldata pubkeys,
-        BLS12381.G2Point calldata signature,
-        bytes memory message
-    ) internal pure returns (bool) {
-        // TODO: verify the aggregated signature using the precompile lib
-    }
-
-    /// @notice Compute the hash of a BLS public key
-    /// @param pubkey BLS public key
-    /// @return Hash of the public key in compressed form
-    function _pubkeyHash(BLS12381.G1Point memory pubkey) internal pure returns (bytes32) {
-        uint256[2] memory compressedPubKey = pubkey.compress();
-        return keccak256(abi.encodePacked(compressedPubKey));
+        return collateralProviderLiveCollateralAmounts[validator.authorizedCollateralProvider][asset];
     }
 }

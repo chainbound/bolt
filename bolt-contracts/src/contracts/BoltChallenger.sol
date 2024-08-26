@@ -143,7 +143,7 @@ contract BoltChallenger is IBoltChallenger {
 
         // Get the beacon block root for the target slot. We store it in the Challenge so that
         // it can be used even after 8192 slots have passed (the limit of the BEACON_ROOTS contract)
-        bytes32 beaconBlockRoot = BeaconChainUtils._getBeaconBlockRoot(_signedCommitment.slot);
+        bytes32 beaconBlockRoot = BeaconChainUtils._getBeaconBlockRootAtSlot(_signedCommitment.slot);
 
         // ==== Create a new challenge ====
 
