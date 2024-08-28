@@ -8,7 +8,11 @@ use std::{
 };
 
 use alloy::primitives::Address;
-use axum::{middleware, routing::post, Router};
+use axum::{
+    middleware,
+    routing::{get, post},
+    Router,
+};
 use tokio::{
     net::TcpListener,
     sync::{mpsc, oneshot},
@@ -153,6 +157,7 @@ impl CommitmentsApiServer {
 fn make_router(state: Arc<CommitmentsApiInner>) -> Router {
     Router::new()
         .route("/", post(handlers::rpc_entrypoint))
+        .route("/status", get(handlers::status))
         .fallback(handlers::not_found)
         .layer(TimeoutLayer::new(spec::MAX_REQUEST_TIMEOUT))
         .route_layer(middleware::from_fn(track_server_metrics))
