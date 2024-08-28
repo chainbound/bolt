@@ -1,36 +1,9 @@
-use std::{
-    collections::HashSet,
-    fmt,
-    future::Future,
-    net::{SocketAddr, ToSocketAddrs},
-    pin::Pin,
-    str::FromStr,
-    sync::Arc,
-};
+use std::str::FromStr;
 
 use alloy::primitives::{Address, Signature};
-use axum::{extract::State, http::HeaderMap, routing::post, Json, Router};
-use axum_extra::extract::WithRejection;
-use serde_json::Value;
-use tokio::{
-    net::TcpListener,
-    sync::{mpsc, oneshot},
-};
-use tracing::{debug, error, info, instrument};
+use axum::http::HeaderMap;
 
-use crate::{
-    commitments::handlers,
-    common::CARGO_PKG_VERSION,
-    primitives::{
-        commitment::{InclusionCommitment, SignedCommitment},
-        CommitmentRequest, InclusionRequest,
-    },
-};
-
-use super::{
-    jsonrpc::{JsonPayload, JsonResponse},
-    spec::{Error, SIGNATURE_HEADER},
-};
+use super::spec::{Error, SIGNATURE_HEADER};
 
 /// Extracts the signature ([SIGNATURE_HEADER]) from the HTTP headers.
 #[inline]

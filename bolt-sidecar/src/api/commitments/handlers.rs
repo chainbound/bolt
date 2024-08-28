@@ -1,39 +1,19 @@
-use std::{
-    collections::HashSet,
-    fmt,
-    future::Future,
-    net::{SocketAddr, ToSocketAddrs},
-    pin::Pin,
-    str::FromStr,
-    sync::Arc,
-};
+use std::sync::Arc;
 
-use alloy::primitives::{Address, Signature};
-use axum::{extract::State, http::HeaderMap, routing::post, Json, Router};
+use axum::{extract::State, http::HeaderMap, Json};
 use axum_extra::extract::WithRejection;
 use serde_json::Value;
-use tokio::{
-    net::TcpListener,
-    sync::{mpsc, oneshot},
-};
 use tracing::{debug, error, info, instrument};
 
 use crate::{
-    commitments::headers::auth_from_headers,
-    common::CARGO_PKG_VERSION,
-    primitives::{
-        commitment::{InclusionCommitment, SignedCommitment},
-        CommitmentRequest, InclusionRequest,
-    },
+    commitments::headers::auth_from_headers, common::CARGO_PKG_VERSION,
+    primitives::InclusionRequest,
 };
 
 use super::{
     jsonrpc::{JsonPayload, JsonResponse},
     server::CommitmentsApiInner,
-    spec::{
-        CommitmentsApi, Error, RejectionError, GET_VERSION_METHOD, REQUEST_INCLUSION_METHOD,
-        SIGNATURE_HEADER,
-    },
+    spec::{CommitmentsApi, Error, RejectionError, GET_VERSION_METHOD, REQUEST_INCLUSION_METHOD},
 };
 
 /// Handler function for the root JSON-RPC path.

@@ -11,7 +11,6 @@ use ethereum_consensus::{
     phase0::mainnet::SLOTS_PER_EPOCH,
 };
 use futures::StreamExt;
-use metrics::counter;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
@@ -27,7 +26,6 @@ use crate::{
     },
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
-    telemetry::BoltMetrics,
     BuilderProxyConfig, Config, ConstraintsApi, LocalBuilder, MevBoostClient,
 };
 

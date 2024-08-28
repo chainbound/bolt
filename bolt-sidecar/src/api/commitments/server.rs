@@ -4,36 +4,26 @@ use std::{
     future::Future,
     net::{SocketAddr, ToSocketAddrs},
     pin::Pin,
-    str::FromStr,
     sync::Arc,
 };
 
-use alloy::primitives::{Address, Signature};
-use axum::{extract::State, http::HeaderMap, routing::post, Json, Router};
-use axum_extra::extract::WithRejection;
-use serde_json::Value;
+use alloy::primitives::Address;
+use axum::{routing::post, Router};
 use tokio::{
     net::TcpListener,
     sync::{mpsc, oneshot},
 };
-use tracing::{debug, error, info, instrument};
+use tracing::{error, info};
 
 use crate::{
     commitments::handlers,
-    common::CARGO_PKG_VERSION,
     primitives::{
         commitment::{InclusionCommitment, SignedCommitment},
         CommitmentRequest, InclusionRequest,
     },
 };
 
-use super::{
-    jsonrpc::{JsonPayload, JsonResponse},
-    spec::{
-        CommitmentsApi, Error, RejectionError, GET_VERSION_METHOD, REQUEST_INCLUSION_METHOD,
-        SIGNATURE_HEADER,
-    },
-};
+use super::spec::{CommitmentsApi, Error};
 
 /// Event type emitted by the commitments API.
 #[derive(Debug)]
@@ -155,10 +145,9 @@ impl CommitmentsApiServer {
 
 #[cfg(test)]
 mod test {
-    use alloy::{
-        primitives::TxHash,
-        signers::{k256::SecretKey, local::PrivateKeySigner, Signer},
-    };
+    use crate::commitments::jsonrpc::JsonResponse;
+    use crate::commitments::spec::SIGNATURE_HEADER;
+    use alloy::signers::{k256::SecretKey, local::PrivateKeySigner};
     use serde_json::json;
 
     use crate::{
