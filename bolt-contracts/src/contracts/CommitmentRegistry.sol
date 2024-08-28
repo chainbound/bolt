@@ -1,3 +1,8 @@
+//
+// WARNING: DEPRECATED
+// Keeping around for reference but will be removed soon.
+//
+
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
@@ -136,7 +141,7 @@ contract CommitmentRegistry {
     /// @param asset Address of the asset to check the collateral for
     /// @return The amount of collateral at stake for the Validator
     function getValidatorStakeAmount(BLS12381.G1Point calldata pubkey, address asset) public view returns (uint256) {
-        IBoltValidators.Validator memory validator = boltValidators.getValidator(pubkey);
+        IBoltValidators.Validator memory validator = boltValidators.getValidatorByPubkey(pubkey);
         require(validator.exists, "Validator does not exist");
 
         // Invariant: the Validator must have a Collateral Provider assigned
