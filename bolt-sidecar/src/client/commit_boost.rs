@@ -1,22 +1,22 @@
 use std::sync::Arc;
 
-use alloy::rpc::types::beacon::{BlsPublicKey, BlsSignature};
-use cb_common::pbs::{COMMIT_BOOST_API, PUBKEYS_PATH, SIGN_REQUEST_PATH};
-use cb_crypto::types::SignRequest;
+use alloy::rpc::types::beacon::BlsSignature;
+use cb_common::commit::{
+    client::{GetPubkeysResponse, SignerClient},
+    request::SignRequest,
+};
 use ethereum_consensus::ssz::prelude::ssz_rs;
+use eyre::ErrReport;
 use parking_lot::RwLock;
 use thiserror::Error;
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 use crate::crypto::bls::SignerBLSAsync;
 
-const SIGN_REQUEST_ID: &str = "bolt";
-
 #[derive(Debug, Clone)]
 pub struct CommitBoostClient {
-    base_url: String,
-    client: reqwest::Client,
-    pubkeys: Arc<RwLock<Vec<BlsPublicKey>>>,
+    signer_client: SignerClient,
+    pubkeys: Arc<RwLock<GetPubkeysResponse>>,
 }
 
 #[derive(Debug, Error)]
@@ -29,65 +29,35 @@ pub enum CommitBoostError {
     HashTreeRoot(#[from] ssz_rs::MerkleizationError),
     #[error("failed to sign constraint: {0}")]
     NoSignature(String),
+    #[error("failed to create signer client: {0}")]
+    SignerClientError(#[from] ErrReport),
 }
 
 #[allow(unused)]
 impl CommitBoostClient {
     /// Create a new [CommitBoostClient] instance
     pub async fn new(base_url: impl Into<String>) -> Result<Self, CommitBoostError> {
+        let signer_client = SignerClient::new(base_url.into(), &"".to_string())?;
+
         let client = Self {
-            base_url: base_url.into(),
-            client: reqwest::Client::new(),
-            pubkeys: Arc::new(RwLock::new(Vec::new())),
+            signer_client,
+            pubkeys: Arc::new(RwLock::new(GetPubkeysResponse { consensus: vec![], proxy: vec![] })),
         };
 
         let mut this = client.clone();
         tokio::spawn(async move {
-            this.load_pubkeys().await.expect("failed to load pubkeys");
+            match this.signer_client.get_pubkeys().await {
+                Ok(pubkeys) => {
+                    let mut pubkeys_lock = this.pubkeys.write();
+                    *pubkeys_lock = pubkeys;
+                }
+                Err(e) => {
+                    eprintln!("Failed to load pubkeys: {}", e);
+                }
+            }
         });
 
         Ok(client)
-    }
-
-    /// Load public keys from the remote commit-boost client and store them locally
-    async fn load_pubkeys(&mut self) -> Result<(), CommitBoostError> {
-        loop {
-            let url = self.url_from_path(PUBKEYS_PATH);
-
-            info!(url, "Loading public keys from commit-boost");
-
-            let response = match self.client.get(url).send().await {
-                Ok(res) => res,
-                Err(e) => {
-                    error!(err = ?e, "failed to get public keys from commit-boost, retrying...");
-                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                    continue;
-                }
-            };
-
-            let status = response.status();
-            let response_bytes = response.bytes().await?;
-
-            if !status.is_success() {
-                let err = String::from_utf8_lossy(&response_bytes).into_owned();
-                error!(err, ?status, "failed to get public keys, retrying...");
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                continue;
-            }
-
-            let pubkeys: Vec<BlsPublicKey> = serde_json::from_slice(&response_bytes)?;
-
-            {
-                let mut pk = self.pubkeys.write();
-                *pk = pubkeys;
-                return Ok(());
-            } // drop write lock
-        }
-    }
-
-    #[inline]
-    fn url_from_path(&self, path: &str) -> String {
-        format!("{}{COMMIT_BOOST_API}{path}", self.base_url)
     }
 }
 
@@ -105,28 +75,12 @@ impl SignerBLSAsync for CommitBoostClient {
             )))
         }?;
 
-        let request = SignRequest::builder(
-            SIGN_REQUEST_ID,
-            *self.pubkeys.read().first().expect("pubkeys loaded"),
-        )
-        .with_root(root);
+        let request =
+            SignRequest::builder(*self.pubkeys.read().consensus.first().expect("pubkeys loaded"))
+                .with_root(root);
 
-        let url = self.url_from_path(SIGN_REQUEST_PATH);
+        debug!(?request, "Requesting signature from commit_boost");
 
-        debug!(url, ?request, "Requesting signature from commit_boost");
-
-        let response = reqwest::Client::new().post(url).json(&request).send().await?;
-
-        let status = response.status();
-        let response_bytes = response.bytes().await?;
-
-        if !status.is_success() {
-            let err = String::from_utf8_lossy(&response_bytes).into_owned();
-            error!(err, "failed to get signature");
-            return Err(eyre::eyre!(CommitBoostError::NoSignature(err)));
-        }
-
-        let sig = serde_json::from_slice(&response_bytes)?;
-        Ok(sig)
+        Ok(self.signer_client.request_signature(&request).await?)
     }
 }
