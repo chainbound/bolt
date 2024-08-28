@@ -1,6 +1,12 @@
 use std::sync::Arc;
 
-use axum::{extract::State, http::HeaderMap, Json};
+use axum::{
+    body::Body,
+    extract::State,
+    http::{HeaderMap, Request},
+    response::Html,
+    Json,
+};
 use axum_extra::extract::WithRejection;
 use serde_json::Value;
 use tracing::{debug, error, info, instrument};
@@ -17,7 +23,7 @@ use super::{
 };
 
 /// Handler function for the root JSON-RPC path.
-#[instrument(skip_all, name = "RPC", fields(method = %payload.method))]
+#[instrument(skip_all, name = "POST /rpc", fields(method = %payload.method))]
 pub async fn rpc_entrypoint(
     headers: HeaderMap,
     State(api): State<Arc<CommitmentsApiInner>>,
@@ -84,4 +90,13 @@ pub async fn rpc_entrypoint(
             Err(Error::UnknownMethod)
         }
     }
+}
+
+/// Not found fallback handler for all non-matched routes.
+///
+/// This handler returns a simple 404 page.
+#[instrument(skip_all, name = "not_found")]
+pub async fn not_found(req: Request<Body>) -> Html<&'static str> {
+    error!(uri = ?req.uri(), "Route not found");
+    Html("404 - Not Found")
 }

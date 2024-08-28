@@ -8,11 +8,12 @@ use std::{
 };
 
 use alloy::primitives::Address;
-use axum::{routing::post, Router};
+use axum::{middleware, routing::post, Router};
 use tokio::{
     net::TcpListener,
     sync::{mpsc, oneshot},
 };
+use tower_http::timeout::TimeoutLayer;
 use tracing::{error, info};
 
 use crate::{
@@ -24,6 +25,7 @@ use crate::{
 };
 
 use super::spec::{CommitmentsApi, Error};
+use super::{middleware::track_server_metrics, spec};
 
 /// Event type emitted by the commitments API.
 #[derive(Debug)]
@@ -113,7 +115,7 @@ impl CommitmentsApiServer {
     pub async fn run(&mut self, events_tx: mpsc::Sender<Event>) {
         let api = Arc::new(CommitmentsApiInner::new(events_tx));
 
-        let router = Router::new().route("/", post(handlers::rpc_entrypoint)).with_state(api);
+        let router = make_router(api);
 
         let listener = match TcpListener::bind(self.addr).await {
             Ok(listener) => listener,
@@ -141,6 +143,20 @@ impl CommitmentsApiServer {
     pub fn local_addr(&self) -> SocketAddr {
         self.addr
     }
+}
+
+/// Creates a new [Router]
+///
+/// NOTE: Keeping the router separate from the server start method allows
+/// for easier integration testing through the [`tower::Service`] interface.
+#[inline]
+fn make_router(state: Arc<CommitmentsApiInner>) -> Router {
+    Router::new()
+        .route("/", post(handlers::rpc_entrypoint))
+        .fallback(handlers::not_found)
+        .layer(TimeoutLayer::new(spec::MAX_REQUEST_TIMEOUT))
+        .route_layer(middleware::from_fn(track_server_metrics))
+        .with_state(state)
 }
 
 #[cfg(test)]
