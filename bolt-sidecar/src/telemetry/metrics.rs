@@ -30,7 +30,7 @@ impl BoltMetrics {
         match self {
             BoltMetrics::LocalBlocksProposed => "local_blocks_proposed",
             BoltMetrics::RemoteBlocksProposed => "remote_blocks_proposed",
-            BoltMetrics::InclusionCommitmentsReceived => "inclusion_commitments",
+            BoltMetrics::InclusionCommitmentsReceived => "inclusion_commitments_received",
             BoltMetrics::InclusionCommitmentsAccepted => "inclusion_commitments_accepted",
             BoltMetrics::HttpRequestsTotal => "http_requests_total",
             BoltMetrics::LatestHead => "latest_head",

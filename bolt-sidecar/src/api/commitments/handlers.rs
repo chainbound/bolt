@@ -100,3 +100,9 @@ pub async fn not_found(req: Request<Body>) -> Html<&'static str> {
     error!(uri = ?req.uri(), "Route not found");
     Html("404 - Not Found")
 }
+
+/// Status handler
+#[instrument(skip_all, name = "GET /status")]
+pub async fn status() -> Html<&'static str> {
+    Html("OK")
+}

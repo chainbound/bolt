@@ -11,6 +11,7 @@ use ethereum_consensus::{
     phase0::mainnet::SLOTS_PER_EPOCH,
 };
 use futures::StreamExt;
+use metrics::counter;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
@@ -26,6 +27,7 @@ use crate::{
     },
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
+    telemetry::BoltMetrics,
     BuilderProxyConfig, Config, ConstraintsApi, LocalBuilder, MevBoostClient,
 };
 
@@ -169,6 +171,8 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
     async fn handle_incoming_api_event(&mut self, event: CommitmentEvent) {
         let CommitmentEvent { mut request, response } = event;
         info!("Received new commitment request: {:?}", request);
+        counter!(BoltMetrics::InclusionCommitmentsReceived.name()).increment(1);
+
         let start = Instant::now();
 
         let validator_index = match self.consensus.validate_request(&request) {
@@ -195,6 +199,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
             elapsed = ?start.elapsed(),
             "Validation against execution state passed"
         );
+        counter!(BoltMetrics::InclusionCommitmentsAccepted.name()).increment(1);
 
         // parse the request into constraints and sign them
         let slot = inclusion_request.slot;
