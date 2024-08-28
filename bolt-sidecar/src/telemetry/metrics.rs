@@ -6,6 +6,14 @@ pub enum BoltMetrics {
     //  Counters ----------------------------------------------------------------
     /// Counter for the total number of HTTP requests received.
     HttpRequestsTotal,
+    /// Counter for the number of local blocks proposed.
+    LocalBlocksProposed,
+    /// Counter for the number of remote blocks proposed.
+    RemoteBlocksProposed,
+    /// Counter for the number of inclusion commitments received.
+    InclusionCommitmentsReceived,
+    /// Counter for the number of inclusion commitments accepted.
+    InclusionCommitmentsAccepted,
 
     //  Gauges ------------------------------------------------------------------
     /// Gauge for the latest slot number
@@ -18,8 +26,12 @@ pub enum BoltMetrics {
 
 impl BoltMetrics {
     /// Returns the name of the metric.
-    pub fn name(&self) -> &str {
+    pub const fn name(&self) -> &'static str {
         match self {
+            BoltMetrics::LocalBlocksProposed => "local_blocks_proposed",
+            BoltMetrics::RemoteBlocksProposed => "remote_blocks_proposed",
+            BoltMetrics::InclusionCommitmentsReceived => "inclusion_commitments",
+            BoltMetrics::InclusionCommitmentsAccepted => "inclusion_commitments_accepted",
             BoltMetrics::HttpRequestsTotal => "http_requests_total",
             BoltMetrics::LatestHead => "latest_head",
             BoltMetrics::HttpRequestsDurationSeconds => "http_requests_duration_seconds",
@@ -32,6 +44,16 @@ impl BoltMetrics {
         describe_counter!(
             BoltMetrics::HttpRequestsTotal.name(),
             "Total number of HTTP requests received"
+        );
+        describe_counter!(BoltMetrics::LocalBlocksProposed.name(), "Local blocks proposed");
+        describe_counter!(BoltMetrics::RemoteBlocksProposed.name(), "Remote blocks proposed");
+        describe_counter!(
+            BoltMetrics::InclusionCommitmentsReceived.name(),
+            "Inclusion commitments"
+        );
+        describe_counter!(
+            BoltMetrics::InclusionCommitmentsAccepted.name(),
+            "Inclusion commitments accepted"
         );
 
         // Gauges

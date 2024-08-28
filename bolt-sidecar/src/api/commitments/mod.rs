@@ -1,3 +1,7 @@
+/// The commitments-API request handlers.
+mod handlers;
+/// The commitments-API headers and constants.
+mod headers;
 /// JSON-RPC helper types and functions.
 mod jsonrpc;
 /// The commitments-API JSON-RPC server implementation.
