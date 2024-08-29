@@ -185,7 +185,7 @@ impl TryFrom<Opts> for Config {
 
         if let Some(commit_boost_url) = &opts.signing.commit_boost_url {
             if let Ok(url) = Url::parse(commit_boost_url) {
-                if let Some(socket_addrs) = url.socket_addrs(|| None).ok() {
+                if let Ok(socket_addrs) = url.socket_addrs(|| None) {
                     config.commit_boost_address = Some(socket_addrs[0].to_string());
                 }
             }
@@ -238,5 +238,19 @@ impl TryFrom<Opts> for Config {
         config.chain = opts.chain;
 
         Ok(config)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_url() {
+        let url = "http://0.0.0.0:3030";
+        let parsed = url.parse::<Url>().unwrap();
+        let socket_addr = parsed.socket_addrs(|| None).unwrap()[0];
+        let localhost_socket = "0.0.0.0:3030".parse().unwrap();
+        assert_eq!(socket_addr, localhost_socket);
     }
 }

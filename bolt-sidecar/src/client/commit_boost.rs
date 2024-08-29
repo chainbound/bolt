@@ -28,7 +28,7 @@ pub enum CommitBoostError {
 impl CommitBoostClient {
     /// Create a new [CommitBoostClient] instance
     pub async fn new(signer_server_address: String, jwt: &str) -> Result<Self, CommitBoostError> {
-        let signer_client = SignerClient::new(signer_server_address.into(), jwt)?;
+        let signer_client = SignerClient::new(signer_server_address, jwt)?;
 
         let client = Self { signer_client, pubkeys: Arc::new(RwLock::new(Vec::new())) };
 
