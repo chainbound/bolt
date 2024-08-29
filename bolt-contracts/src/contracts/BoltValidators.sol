@@ -87,13 +87,16 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier {
 
         bytes32 pubKeyHash = _pubkeyHash(pubkey);
 
-        VALIDATORS[pubKeyHash] = Validator({
+        Validator memory newValidator = Validator({
             sequenceNumber: nextValidatorSequenceNumber,
             authorizedCollateralProvider: authorizedCollateralProvider,
             authorizedOperator: authorizedOperator,
             controller: msg.sender,
             exists: true
         });
+
+        VALIDATORS[pubKeyHash] = newValidator;
+        emit ValidatorRegistered(pubKeyHash, newValidator);
 
         sequenceNumberToPubkeyHash[nextValidatorSequenceNumber] = pubKeyHash;
         nextValidatorSequenceNumber += 1;
@@ -138,14 +141,17 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier {
             revert ValidatorAlreadyExists();
         }
 
-        // register the validator
-        VALIDATORS[pubKeyHash] = Validator({
+        Validator memory newValidator = Validator({
             sequenceNumber: nextValidatorSequenceNumber,
             authorizedCollateralProvider: authorizedCollateralProvider,
             authorizedOperator: authorizedOperator,
             controller: msg.sender,
             exists: true
         });
+
+        // register the validator
+        VALIDATORS[pubKeyHash] = newValidator;
+        emit ValidatorRegistered(pubKeyHash, newValidator);
 
         sequenceNumberToPubkeyHash[nextValidatorSequenceNumber] = pubKeyHash;
         nextValidatorSequenceNumber += 1;
@@ -209,14 +215,17 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier {
                 revert ValidatorAlreadyExists();
             }
 
-            // register the validator
-            VALIDATORS[pubKeyHash] = Validator({
+            Validator memory newValidator = Validator({
                 sequenceNumber: expectedValidatorSequenceNumbers[i],
                 authorizedCollateralProvider: authorizedCollateralProvider,
                 authorizedOperator: authorizedOperator,
                 controller: msg.sender,
                 exists: true
             });
+
+            // register the validator
+            VALIDATORS[pubKeyHash] = newValidator;
+            emit ValidatorRegistered(pubKeyHash, newValidator);
 
             sequenceNumberToPubkeyHash[expectedValidatorSequenceNumbers[i]] = pubKeyHash;
         }
