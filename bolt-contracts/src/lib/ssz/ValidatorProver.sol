@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {SSZ} from "./SSZ.sol";
 import {SSZContainers} from "./SSZContainers.sol";
-import {BeaconChainUtils} from "./BeaconChainUtils.sol";
+import {BeaconChainUtils} from "../BeaconChainUtils.sol";
 
 /// @title ValidatorProver
 /// @notice Proves a validator's inclusion in the Beacon Chain.

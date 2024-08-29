@@ -5,7 +5,6 @@ out = "out"
 libs = ["lib"]
 fs_permissions = [{ access = "read-write", path = "./"}]
 gas_reports = ["*"]
-ignored_warnings_from = ["src/lib/BLS12381_Mocked.sol"]
 
 [rpc_endpoints]
 mainnet = "${ETH_RPC_URL}"

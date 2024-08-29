@@ -12,8 +12,8 @@ import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {IBoltRegistry} from "../interfaces/IBoltRegistry.sol";
 import {IBoltChallenger} from "../interfaces/IBoltChallenger.sol";
 
-import {SSZ} from "../lib/SSZ.sol";
-import {SSZContainers} from "../lib/SSZContainers.sol";
+import {SSZ} from "../lib/ssz/SSZ.sol";
+import {SSZContainers} from "../lib/ssz/SSZContainers.sol";
 import {BeaconChainUtils} from "../lib/BeaconChainUtils.sol";
 
 contract BoltChallenger is IBoltChallenger {
