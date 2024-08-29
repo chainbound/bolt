@@ -297,8 +297,6 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::SlotTooLow(self.slot));
         }
 
-        let mut tx_type_to_amount: HashMap<u8, u64> = HashMap::new();
-
         // Validate each transaction in the request against the account state,
         // keeping track of the nonce and balance diffs, including:
         // - any existing state in the account trie
