@@ -69,9 +69,7 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
         // The default state client simply uses the execution API URL to fetch state updates.
         let state_client = StateClient::new(cfg.execution_api_url.clone());
 
-        // let constraint_signer = BlsSigner::new(cfg.private_key.clone().unwrap());
-
-        // Constraints are signed with a BLS private key or CommitBoost
+        // Constraints are signed with a BLS private key or Commit-Boost
         let constraint_signer = if let Some(private_key) = cfg.private_key.clone() {
             BlsSignerType::PrivateKey(BlsSigner::new(private_key))
         } else {
