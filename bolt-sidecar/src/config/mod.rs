@@ -6,7 +6,6 @@ use clap::Parser;
 use eyre::{bail, eyre, Report, Result};
 use reqwest::Url;
 use std::num::NonZero;
-use telemetry::TelemetryOpts;
 use tracing::info;
 
 use crate::crypto::bls::random_bls_secret;
@@ -21,6 +20,7 @@ pub mod signing;
 pub use signing::SigningOpts;
 
 pub mod telemetry;
+use telemetry::TelemetryOpts;
 
 /// Default port for the JSON-RPC server exposed by the sidecar.
 pub const DEFAULT_RPC_PORT: u16 = 8000;
@@ -123,7 +123,7 @@ pub struct Config {
     /// Metrics port
     pub metrics_port: u16,
     /// Toggle for metrics
-    pub use_metrics: bool,
+    pub metrics: bool,
 }
 
 impl Default for Config {
@@ -144,7 +144,7 @@ impl Default for Config {
             validator_indexes: ValidatorIndexes::default(),
             chain: ChainConfig::default(),
             metrics_port: 0,
-            use_metrics: true,
+            metrics: true,
         }
     }
 }
@@ -241,7 +241,7 @@ impl TryFrom<Opts> for Config {
 
         config.chain = opts.chain;
         config.metrics_port = opts.telemetry.metrics_port;
-        config.use_metrics = opts.telemetry.use_metrics;
+        config.metrics = opts.telemetry.metrics;
 
         Ok(config)
     }

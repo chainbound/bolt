@@ -10,10 +10,9 @@ async fn main() -> Result<()> {
         Err(err) => bail!("Failed to parse CLI arguments: {:?}", err),
     };
 
-    if config.use_metrics {
-        if let Err(err) = init_telemetry_stack(config.metrics_port) {
-            bail!("Failed to initialize telemetry stack: {:?}", err)
-        }
+    let metrics_port = if config.metrics { Some(config.metrics_port) } else { None };
+    if let Err(err) = init_telemetry_stack(metrics_port) {
+        bail!("Failed to initialize telemetry stack: {:?}", err)
     }
 
     info!(chain = config.chain.name(), "Starting Bolt sidecar");

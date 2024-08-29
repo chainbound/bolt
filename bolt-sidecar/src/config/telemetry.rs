@@ -6,5 +6,5 @@ pub struct TelemetryOpts {
     #[clap(short, long, env = "METRICS_PORT", default_value_t = 3300)]
     pub metrics_port: u16,
     #[clap(short, long, env = "USE_METRICS", default_value_t = true)]
-    pub use_metrics: bool,
+    pub metrics: bool,
 }
