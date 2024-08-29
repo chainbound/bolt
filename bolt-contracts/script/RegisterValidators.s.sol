@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {BoltRegistry} from "../src/contracts/BoltRegistry.sol";
+import {IBoltRegistry} from "../src/interfaces/IBoltRegistry.sol";
 
 contract RegisterValidators is Script {
     uint256 public signerKey;
@@ -22,7 +22,7 @@ contract RegisterValidators is Script {
         }
 
         console.log("Bolt registry address:", registryAddress);
-        BoltRegistry registry = BoltRegistry(registryAddress);
+        IBoltRegistry registry = IBoltRegistry(registryAddress);
 
         console.log("Bolt registry minimum collateral:", registry.MINIMUM_COLLATERAL());
 

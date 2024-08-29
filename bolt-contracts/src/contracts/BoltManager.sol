@@ -34,6 +34,7 @@ contract BoltManager {
 
     error InvalidQuery();
     error AlreadyRegistered();
+    error NotRegistered();
 
     constructor(address _validators) {
         validators = IBoltValidators(_validators);
@@ -69,11 +70,22 @@ contract BoltManager {
         symbioticOperators.enable(operator);
     }
 
+    /// @notice Allow an operator to signal indefinite opt-out from Bolt Protocol.
+    function pauseSymbioticOperator() public {
+        if (!symbioticOperators.contains(msg.sender)) {
+            revert NotRegistered();
+        }
+
+        symbioticOperators.disable(msg.sender);
+    }
+
     /// @notice Allow a vault to signal opt-in to Bolt Protocol.
     function registerSymbioticVault(address vault) public {
         if (symbioticVaults.contains(vault)) {
             revert AlreadyRegistered();
         }
+
+        // TODO: check collateral asset against whitelist?
 
         // TODO: check if the vault exists in the canonical symbiotic registry
         // and if it's opted in the Symbiotic Bolt network.
@@ -84,6 +96,8 @@ contract BoltManager {
     }
 
     /// @notice Check if an operator is currently enabled to work in Bolt Protocol.
+    /// @param operator The operator address to check the enabled status for.
+    /// @return True if the operator is enabled, false otherwise.
     function isSymbioticOperatorEnabled(address operator) public view returns (bool) {
         (uint48 enabledTime, uint48 disabledTime) = symbioticOperators.getTimes(operator);
         return enabledTime != 0 && disabledTime == 0;
@@ -92,6 +106,9 @@ contract BoltManager {
     /// @notice Check if an operator address is authorized to work for a validator,
     /// given the validator's pubkey hash. This function performs a lookup in the
     /// validators registry to check if they explicitly authorized the operator.
+    /// @param operator The operator address to check the authorization for.
+    /// @param pubkeyHash The pubkey hash of the validator to check the authorization for.
+    /// @return True if the operator is authorized, false otherwise.
     function isSymbioticOperatorAuthorizedForValidator(
         address operator,
         bytes32 pubkeyHash
@@ -104,7 +121,16 @@ contract BoltManager {
     }
 
     /// @notice Get the stake of an operator in Symbiotic protocol at a given timestamp.
-    function getSymbioticOperatorStakeAt(address operator, uint48 timestamp) public view returns (uint256) {
+    /// @dev If the collateral is not a Symbiotic vault, the stake is 0.
+    /// @param operator The operator address to check the stake for.
+    /// @param collateral The collateral address to check the stake for.
+    /// @param timestamp The timestamp to check the stake at.
+    /// @return The stake of the operator at the given timestamp, in collateral token.
+    function getSymbioticOperatorStakeAt(
+        address operator,
+        address collateral,
+        uint48 timestamp
+    ) public view returns (uint256) {
         if (timestamp > Time.timestamp() || timestamp < START_TIMESTAMP) {
             revert InvalidQuery();
         }
@@ -114,10 +140,16 @@ contract BoltManager {
         for (uint256 i = 0; i < symbioticVaults.length(); ++i) {
             (address vault, uint48 enabledTime, uint48 disabledTime) = symbioticVaults.atWithTimes(i);
 
-            if (!_wasActiveAt(enabledTime, disabledTime, epochStartTs)) {
+            if (collateral != IVault(vault).collateral()) {
                 continue;
             }
 
+            if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
+                continue;
+            }
+
+            // in order to have stake in a network, the operator needs to be opted in to that vault.
+            // this authorization is fully handled in the Vault, we just need to read the stake.
             return IBaseDelegator(IVault(vault).delegator()).stakeAt(
                 // The stake for each subnetwork is stored in the vault's delegator contract.
                 // stakeAt returns the stake of "operator" at "timestamp" for "network" (or subnetwork)
@@ -133,7 +165,11 @@ contract BoltManager {
     }
 
     /// @notice Check if a map entry was active at a given timestamp.
-    function _wasActiveAt(uint48 enabledTime, uint48 disabledTime, uint48 timestamp) private pure returns (bool) {
+    /// @param enabledTime The enabled time of the map entry.
+    /// @param disabledTime The disabled time of the map entry.
+    /// @param timestamp The timestamp to check the map entry status at.
+    /// @return True if the map entry was active at the given timestamp, false otherwise.
+    function _wasEnabledAt(uint48 enabledTime, uint48 disabledTime, uint48 timestamp) private pure returns (bool) {
         return enabledTime != 0 && enabledTime <= timestamp && (disabledTime == 0 || disabledTime >= timestamp);
     }
 }

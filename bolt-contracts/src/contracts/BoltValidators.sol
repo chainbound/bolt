@@ -1,9 +1,10 @@
 // SPDX-Licnese-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {BLS12381} from "../lib/BLS12381.sol";
+import {BLS12381} from "../lib/bls/BLS12381.sol";
+import {BLSSignatureVerifier} from "../lib/bls/BLSSignatureVerifier.sol";
+import {ValidatorProver} from "../lib/ssz/ValidatorProver.sol";
 import {BeaconChainUtils} from "../lib/BeaconChainUtils.sol";
-import {ValidatorProver} from "../lib/ValidatorProver.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 
 /// @title Bolt Validators
@@ -21,8 +22,7 @@ contract BoltValidators is IBoltValidators {
     mapping(bytes32 => Validator) public VALIDATORS;
 
     /// @notice Mapping from validator sequence number to validator pubkey hash
-    /// @dev This is used internally to easily query the pubkey hash of a validator
-    /// given its sequence number.
+    /// @dev This is used internally to easily query the pubkey hash of a validator.
     mapping(uint64 => bytes32) private sequenceNumberToPubkeyHash;
 
     /// @notice counter of the next index to be assigned to a validator.
@@ -30,6 +30,12 @@ contract BoltValidators is IBoltValidators {
     /// It is not related to the `validatorIndex` assigned by the Beacon Chain.
     uint64 internal nextValidatorSequenceNumber;
 
+    /// @notice Emitted when a validator is registered
+    /// @param pubkeyHash BLS public key hash of the validator
+    /// @param validator Validator struct
+    event ValidatorRegistered(bytes32 indexed pubkeyHash, Validator validator);
+
+    /// @notice Constructor
     constructor() {}
 
     /// @notice Get a validator by its BLS public key
@@ -37,7 +43,7 @@ contract BoltValidators is IBoltValidators {
         return getValidatorByPubkeyHash(_pubkeyHash(pubkey));
     }
 
-    /// @notice Get a validator by its BLS public    key hash
+    /// @notice Get a validator by its BLS public key hash
     /// @param pubkeyHash BLS public key hash of the validator
     /// @return Validator memory Validator struct
     function getValidatorByPubkeyHash(bytes32 pubkeyHash) public view returns (Validator memory) {
@@ -53,7 +59,37 @@ contract BoltValidators is IBoltValidators {
     }
 
     /// @notice Register a single Validator and authorize a Collateral Provider and Operator for it
-    /// @dev This function allows anyone to register a single Validator.
+    /// @dev This function allows anyone to register a single Validator. We do not perform any checks.
+    function registerValidatorUnsafe(
+        BLS12381.G1Point calldata pubkey,
+        address authorizedCollateralProvider,
+        address authorizedOperator
+    ) public {
+        if (authorizedCollateralProvider == address(0)) {
+            revert InvalidAuthorizedCollateralProvider();
+        }
+        if (authorizedOperator == address(0)) {
+            revert InvalidAuthorizedOperator();
+        }
+
+        bytes32 pubKeyHash = _pubkeyHash(pubkey);
+
+        VALIDATORS[pubKeyHash] = Validator({
+            sequenceNumber: nextValidatorSequenceNumber,
+            authorizedCollateralProvider: authorizedCollateralProvider,
+            authorizedOperator: authorizedOperator,
+            controller: msg.sender,
+            exists: true
+        });
+
+        sequenceNumberToPubkeyHash[nextValidatorSequenceNumber] = pubKeyHash;
+        nextValidatorSequenceNumber += 1;
+    }
+
+    /// @notice Register a single Validator and authorize a Collateral Provider and Operator for it
+    /// @dev This function allows anyone to register a single Validator. We perform two important checks:
+    /// 1. The owner of the Validator (controller) must have signed the message with its BLS private key
+    /// 2. The Validator must exist on the beacon chain, which we prove with an SSZ proof.
     /// @param pubkey BLS public key for the Validator to be registered
     /// @param signature BLS signature of the registration message for the Validator
     /// @param authorizedCollateralProvider The address of the authorized collateral provider
@@ -76,7 +112,7 @@ contract BoltValidators is IBoltValidators {
         }
 
         bytes memory message = abi.encodePacked(block.chainid, msg.sender, nextValidatorSequenceNumber);
-        if (!_verifyBLSSignature(pubkey, signature, message)) {
+        if (!BLSSignatureVerifier.verifySignature(message, signature, pubkey)) {
             revert InvalidBLSSignature();
         }
 
@@ -136,8 +172,10 @@ contract BoltValidators is IBoltValidators {
         // try to register the same validators
         bytes memory message = abi.encodePacked(block.chainid, msg.sender, expectedValidatorSequenceNumbers);
 
-        // Verify the aggregated signature once for all pubkeys
-        if (!_verifyAggregatedBLSSignature(pubkeys, signature, message)) {
+        // Aggregate the pubkeys into a single pubkey to verify the aggregated signature once
+        BLS12381.G1Point memory aggPubkey = BLSSignatureVerifier.aggregatePubkeys(pubkeys);
+
+        if (!BLSSignatureVerifier.verifySignature(message, signature, aggPubkey)) {
             revert InvalidBLSSignature();
         }
 
@@ -171,53 +209,6 @@ contract BoltValidators is IBoltValidators {
         }
 
         nextValidatorSequenceNumber += uint64(validatorsCount);
-    }
-
-    function _batchProveValidators(
-        BLS12381.G1Point[] calldata pubkeys,
-        uint64[] calldata validatorIndexes,
-        uint64 blockNumber
-    ) internal {}
-
-    /// @notice Verify a BLS aggregated signature
-    /// @param pubkeys List of BLS public keys that were used to create the aggregated signature
-    /// @param signature Aggregated BLS signature
-    /// @param message Message that was signed
-    /// @return True if the signature is valid, false otherwise
-    function _verifyAggregatedBLSSignature(
-        BLS12381.G1Point[] calldata pubkeys,
-        BLS12381.G2Point calldata signature,
-        bytes memory message
-    ) internal pure returns (bool) {
-        // TODO: verify the aggregated signature using the precompile lib
-        // This can be tested only after Pectra, for now just return true
-
-        // silence warnings
-        pubkeys;
-        signature;
-        message;
-
-        return true;
-    }
-
-    /// @notice Verify a BLS signature
-    /// @param pubkey BLS public key that was used to create the signature
-    /// @param signature BLS signature
-    /// @param message Message that was signed
-    /// @return True if the signature is valid, false otherwise
-    function _verifyBLSSignature(
-        BLS12381.G1Point calldata pubkey,
-        BLS12381.G2Point calldata signature,
-        bytes memory message
-    ) internal pure returns (bool) {
-        // TODO: verify the signature using the precompile lib
-
-        // silence warnings
-        pubkey;
-        signature;
-        message;
-
-        return true;
     }
 
     /// @notice Compute the hash of a BLS public key

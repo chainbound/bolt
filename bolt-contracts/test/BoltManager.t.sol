@@ -2,12 +2,12 @@
 pragma solidity ^0.8.13;
 
 import {Test, console} from "forge-std/Test.sol";
-import {CommitmentRegistry} from "../src/contracts/CommitmentRegistry.sol";
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
+import {BoltManager} from "../src/contracts/BoltManager.sol";
 
-contract CommitmentRegistryTest is Test {
+contract BoltManagerTest is Test {
     BoltValidators public validators;
-    CommitmentRegistry public registry;
+    BoltManager public manager;
 
     uint64[] public validatorIndexes;
 
@@ -17,7 +17,7 @@ contract CommitmentRegistryTest is Test {
 
     function setUp() public {
         validators = new BoltValidators();
-        registry = new CommitmentRegistry(address(validators));
+        manager = new BoltManager(address(validators));
 
         // Give some ether to the accounts for gas
         vm.deal(provider, 20 ether);
