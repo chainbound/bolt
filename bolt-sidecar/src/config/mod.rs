@@ -183,11 +183,13 @@ impl TryFrom<Opts> for Config {
             config.limits.max_committed_gas_per_slot = max_committed_gas;
         }
 
-        config.commit_boost_address = opts
-            .signing
-            .commit_boost_url
-            .as_ref()
-            .map(|url| url.strip_prefix("http://").unwrap_or(url).to_string());
+        if let Some(commit_boost_url) = &opts.signing.commit_boost_url {
+            if let Ok(url) = Url::parse(commit_boost_url) {
+                if let Some(socket_addrs) = url.socket_addrs(|| None).ok() {
+                    config.commit_boost_address = Some(socket_addrs[0].to_string());
+                }
+            }
+        }
 
         config.private_key = if let Some(sk) = opts.signing.private_key {
             let hex_sk = sk.strip_prefix("0x").unwrap_or(&sk);
