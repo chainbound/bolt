@@ -26,6 +26,8 @@ interface IBoltValidators {
     error InvalidProofTimestamp();
     error ValidatorAlreadyExists();
 
+    function getAllValidators() external view returns (Validator[] memory);
+
     function getValidatorByPubkey(BLS12381.G1Point calldata pubkey) external view returns (Validator memory);
 
     function getValidatorByPubkeyHash(bytes32 pubkeyHash) external view returns (Validator memory);

@@ -25,7 +25,7 @@ contract BLSSignatureVerifier {
      * @param sig The BLS signature
      * @param pubkey The BLS public key of the expected signer
      */
-    function verifySignature(
+    function _verifySignature(
         bytes memory message,
         BLS12381.G2Point memory sig,
         BLS12381.G1Point memory pubkey
@@ -42,20 +42,20 @@ contract BLSSignatureVerifier {
      * @param pubkeys The list of BLS public keys to aggregate
      * @return The aggregated BLS public key
      */
-    function aggregatePubkeys(BLS12381.G1Point[] calldata pubkeys) internal pure returns (BLS12381.G1Point memory) {
+    function _aggregatePubkeys(BLS12381.G1Point[] calldata pubkeys) internal pure returns (BLS12381.G1Point memory) {
         // TODO: implement + test.
 
         // Simply adding pubkeys will result in a rogue key vulnerability.
-        // 
+        //
         // https://xn--2-umb.com/22/bls-signatures/#rogue-key-attack
         // https://github.com/chronicleprotocol/scribe/blob/main/docs/Schnorr.md#key-aggregation-for-multisignatures
 
         uint256[2] memory aggPubkeyZero = [uint256(0), uint256(0)];
         BLS12381.G1Point memory aggPubkey = BLS12381.G1Point(aggPubkeyZero, aggPubkeyZero);
 
-        for (uint256 i = 0; i < pubkeys.length; i++) {
-            aggPubkey = aggPubkey.add(pubkeys[i]);
-        }
+        // unimplemented!()
+        // silence compiler warnings
+        pubkeys;
 
         return aggPubkey;
     }

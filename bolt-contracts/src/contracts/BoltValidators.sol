@@ -9,7 +9,7 @@ import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 
 /// @title Bolt Validators
 /// @notice This contract is responsible for registering validators and managing their configuration
-contract BoltValidators is IBoltValidators {
+contract BoltValidators is IBoltValidators, BLSSignatureVerifier {
     using BLS12381 for BLS12381.G1Point;
 
     /// @notice Validators (aka Blockspace providers)
@@ -37,6 +37,19 @@ contract BoltValidators is IBoltValidators {
 
     /// @notice Constructor
     constructor() {}
+
+    /// @notice Get all validators
+    /// @dev This function should be used with caution as it can return a large amount of data.
+    /// @return Validator[] memory Array of validator structs
+    function getAllValidators() public view returns (Validator[] memory) {
+        uint256 validatorCount = nextValidatorSequenceNumber;
+        Validator[] memory validators = new Validator[](validatorCount);
+        for (uint256 i = 0; i < validatorCount; i++) {
+            bytes32 pubkeyHash = sequenceNumberToPubkeyHash[uint64(i)];
+            validators[i] = VALIDATORS[pubkeyHash];
+        }
+        return validators;
+    }
 
     /// @notice Get a validator by its BLS public key
     function getValidatorByPubkey(BLS12381.G1Point calldata pubkey) public view returns (Validator memory) {
@@ -112,7 +125,7 @@ contract BoltValidators is IBoltValidators {
         }
 
         bytes memory message = abi.encodePacked(block.chainid, msg.sender, nextValidatorSequenceNumber);
-        if (!BLSSignatureVerifier.verifySignature(message, signature, pubkey)) {
+        if (!_verifySignature(message, signature, pubkey)) {
             revert InvalidBLSSignature();
         }
 
@@ -173,9 +186,9 @@ contract BoltValidators is IBoltValidators {
         bytes memory message = abi.encodePacked(block.chainid, msg.sender, expectedValidatorSequenceNumbers);
 
         // Aggregate the pubkeys into a single pubkey to verify the aggregated signature once
-        BLS12381.G1Point memory aggPubkey = BLSSignatureVerifier.aggregatePubkeys(pubkeys);
+        BLS12381.G1Point memory aggPubkey = _aggregatePubkeys(pubkeys);
 
-        if (!BLSSignatureVerifier.verifySignature(message, signature, aggPubkey)) {
+        if (!_verifySignature(message, signature, aggPubkey)) {
             revert InvalidBLSSignature();
         }
 
