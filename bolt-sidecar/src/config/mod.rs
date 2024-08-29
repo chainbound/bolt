@@ -97,7 +97,9 @@ pub struct Config {
     /// The engine API url
     pub engine_api_url: Url,
     /// URL for the commit-boost sidecar
-    pub commit_boost_url: Option<Url>,
+    pub commit_boost_address: Option<String>,
+    /// The JWT secret token to authenticate calls to the commit-boost
+    pub commit_boost_jwt_hex: Option<String>,
     /// Private key to use for signing preconfirmation requests
     pub private_key: Option<SecretKey>,
     /// The jwt.hex secret to authenticate calls to the engine API
@@ -121,7 +123,8 @@ impl Default for Config {
         Self {
             rpc_port: DEFAULT_RPC_PORT,
             mevboost_proxy_port: DEFAULT_MEV_BOOST_PROXY_PORT,
-            commit_boost_url: None,
+            commit_boost_address: None,
+            commit_boost_jwt_hex: None,
             mevboost_url: "http://localhost:3030".parse().expect("Valid URL"),
             beacon_api_url: "http://localhost:5052".parse().expect("Valid URL"),
             execution_api_url: "http://localhost:8545".parse().expect("Valid URL"),
@@ -180,8 +183,11 @@ impl TryFrom<Opts> for Config {
             config.limits.max_committed_gas_per_slot = max_committed_gas;
         }
 
-        config.commit_boost_url =
-            opts.signing.commit_boost_url.as_ref().map(|url| Url::parse(url)).transpose()?;
+        config.commit_boost_address = opts
+            .signing
+            .commit_boost_url
+            .as_ref()
+            .map(|url| url.strip_prefix("http://").unwrap_or(url).to_string());
 
         config.private_key = if let Some(sk) = opts.signing.private_key {
             let hex_sk = sk.strip_prefix("0x").unwrap_or(&sk);

@@ -1,32 +1,23 @@
 use std::sync::Arc;
 
-use alloy::rpc::types::beacon::BlsSignature;
-use cb_common::commit::{
-    client::{GetPubkeysResponse, SignerClient},
-    request::SignRequest,
-};
-use ethereum_consensus::ssz::prelude::ssz_rs;
+use alloy::rpc::types::beacon::{BlsPublicKey, BlsSignature};
+use cb_common::commit::{client::SignerClient, request::SignRequest};
 use eyre::ErrReport;
 use parking_lot::RwLock;
 use thiserror::Error;
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use crate::crypto::bls::SignerBLSAsync;
 
+/// A client for interacting with CommitBoost.
 #[derive(Debug, Clone)]
 pub struct CommitBoostClient {
     signer_client: SignerClient,
-    pubkeys: Arc<RwLock<GetPubkeysResponse>>,
+    pubkeys: Arc<RwLock<Vec<BlsPublicKey>>>,
 }
 
 #[derive(Debug, Error)]
 pub enum CommitBoostError {
-    #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
-    #[error(transparent)]
-    Deserialize(#[from] serde_json::Error),
-    #[error("failed to compute hash tree root for constraint {0:?}")]
-    HashTreeRoot(#[from] ssz_rs::MerkleizationError),
     #[error("failed to sign constraint: {0}")]
     NoSignature(String),
     #[error("failed to create signer client: {0}")]
@@ -36,23 +27,25 @@ pub enum CommitBoostError {
 #[allow(unused)]
 impl CommitBoostClient {
     /// Create a new [CommitBoostClient] instance
-    pub async fn new(base_url: impl Into<String>) -> Result<Self, CommitBoostError> {
-        let signer_client = SignerClient::new(base_url.into(), &"".to_string())?;
+    pub async fn new(signer_server_address: String, jwt: &str) -> Result<Self, CommitBoostError> {
+        let signer_client = SignerClient::new(signer_server_address.into(), jwt)?;
 
-        let client = Self {
-            signer_client,
-            pubkeys: Arc::new(RwLock::new(GetPubkeysResponse { consensus: vec![], proxy: vec![] })),
-        };
+        let client = Self { signer_client, pubkeys: Arc::new(RwLock::new(Vec::new())) };
 
         let mut this = client.clone();
         tokio::spawn(async move {
             match this.signer_client.get_pubkeys().await {
                 Ok(pubkeys) => {
+                    info!(
+                        consensus = pubkeys.consensus.len(),
+                        proxy = pubkeys.proxy.len(),
+                        "Received pubkeys"
+                    );
                     let mut pubkeys_lock = this.pubkeys.write();
-                    *pubkeys_lock = pubkeys;
+                    *pubkeys_lock = pubkeys.consensus;
                 }
                 Err(e) => {
-                    eprintln!("Failed to load pubkeys: {}", e);
+                    error!(?e, "Failed to fetch pubkeys");
                 }
             }
         });
@@ -75,9 +68,8 @@ impl SignerBLSAsync for CommitBoostClient {
             )))
         }?;
 
-        let request =
-            SignRequest::builder(*self.pubkeys.read().consensus.first().expect("pubkeys loaded"))
-                .with_root(root);
+        let request = SignRequest::builder(*self.pubkeys.read().first().expect("pubkeys loaded"))
+            .with_root(root);
 
         debug!(?request, "Requesting signature from commit_boost");
 

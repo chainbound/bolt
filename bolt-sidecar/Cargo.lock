@@ -1551,7 +1551,7 @@ dependencies = [
 [[package]]
 name = "cb-common"
 version = "0.0.1"
-source = "git+https://github.com/Commit-Boost/commit-boost-client#0c12f37ffbb59fbfeadb8e7009ba7d1d30d699b5"
+source = "git+https://github.com/Commit-Boost/commit-boost-client?rev=0c12f37#0c12f37ffbb59fbfeadb8e7009ba7d1d30d699b5"
 dependencies = [
  "alloy",
  "axum",

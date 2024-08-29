@@ -5,6 +5,8 @@ use rand::RngCore;
 pub use blst::min_pk::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
 pub use ethereum_consensus::deneb::BlsSignature;
 
+use crate::CommitBoostClient;
+
 /// The BLS Domain Separator used in Ethereum 2.0.
 pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
 
@@ -36,7 +38,6 @@ pub trait SignableBLS {
 }
 
 /// A generic signing trait to generate BLS signatures.
-#[allow(dead_code)]
 pub trait SignerBLS {
     /// Sign the given data and return the signature.
     fn sign(&self, data: &[u8]) -> eyre::Result<BLSSig>;
@@ -47,6 +48,25 @@ pub trait SignerBLS {
 pub trait SignerBLSAsync: Send + Sync {
     /// Sign the given data and return the signature.
     async fn sign(&self, data: &[u8]) -> eyre::Result<BLSSig>;
+}
+
+/// Enum to represent the two possible signer types.
+#[derive(Debug)]
+pub enum BlsSignerType {
+    /// A BLS signer that uses private key to sign.
+    PrivateKey(Signer),
+    /// A BLS signer that request signature from commit-boost.
+    CommitBoost(CommitBoostClient),
+}
+
+#[async_trait::async_trait]
+impl SignerBLSAsync for BlsSignerType {
+    async fn sign(&self, data: &[u8]) -> eyre::Result<BLSSig> {
+        match self {
+            BlsSignerType::PrivateKey(signer) => SignerBLSAsync::sign(signer, data).await,
+            BlsSignerType::CommitBoost(client) => client.sign(data).await,
+        }
+    }
 }
 
 /// A BLS signer that can sign any type that implements the `Signable` trait.

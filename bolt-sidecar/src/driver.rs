@@ -19,22 +19,25 @@ use crate::{
         server::{CommitmentsApiServer, Event as CommitmentEvent},
         spec::Error as CommitmentError,
     },
-    crypto::{bls::Signer as BlsSigner, SignableBLS, SignerBLS},
+    crypto::{
+        bls::{BlsSignerType, Signer as BlsSigner},
+        SignableBLS, SignerBLSAsync,
+    },
     primitives::{
         CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
         SignedConstraints,
     },
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
-    BuilderProxyConfig, Config, ConstraintsApi, LocalBuilder, MevBoostClient,
+    BuilderProxyConfig, CommitBoostClient, Config, ConstraintsApi, LocalBuilder, MevBoostClient,
 };
 
 /// The driver for the sidecar, responsible for managing the main event loop.
-pub struct SidecarDriver<C, BLS, ECDSA> {
+pub struct SidecarDriver<C, ECDSA> {
     head_tracker: HeadTracker,
     execution: ExecutionState<C>,
     consensus: ConsensusState,
-    constraint_signer: BLS,
+    constraint_signer: BlsSignerType,
     commitment_signer: ECDSA,
     local_builder: LocalBuilder,
     mevboost_client: MevBoostClient,
@@ -44,7 +47,7 @@ pub struct SidecarDriver<C, BLS, ECDSA> {
     slot_stream: SlotStream<SystemTimeProvider>,
 }
 
-impl fmt::Debug for SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
+impl fmt::Debug for SidecarDriver<StateClient, PrivateKeySigner> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SidecarDriver")
             .field("head_tracker", &self.head_tracker)
@@ -60,15 +63,25 @@ impl fmt::Debug for SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
     }
 }
 
-impl SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
+impl SidecarDriver<StateClient, PrivateKeySigner> {
     /// Create a new sidecar driver with the given [Config] and default components.
     pub async fn new(cfg: Config) -> eyre::Result<Self> {
         // The default state client simply uses the execution API URL to fetch state updates.
         let state_client = StateClient::new(cfg.execution_api_url.clone());
 
-        // Constraints are signed with a BLS private key, for now this is provided
-        // via CLI argument but this is expected to change soon.
-        let constraint_signer = BlsSigner::new(cfg.private_key.clone().unwrap());
+        // let constraint_signer = BlsSigner::new(cfg.private_key.clone().unwrap());
+
+        // Constraints are signed with a BLS private key or CommitBoost
+        let constraint_signer = if let Some(private_key) = cfg.private_key.clone() {
+            BlsSignerType::PrivateKey(BlsSigner::new(private_key))
+        } else {
+            let commit_boost_client = CommitBoostClient::new(
+                cfg.commit_boost_address.clone().expect("CommitBoost URL must be provided"),
+                &cfg.commit_boost_jwt_hex.clone().expect("CommitBoost JWT must be provided"),
+            )
+            .await?;
+            BlsSignerType::CommitBoost(commit_boost_client)
+        };
 
         // Commitment responses are signed with a regular Ethereum wallet private key.
         // This is now generated randomly because slashing is not yet implemented.
@@ -78,11 +91,11 @@ impl SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
     }
 }
 
-impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, ECDSA> {
+impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
     /// Create a new sidecar driver with the given components
     pub async fn from_components(
         cfg: Config,
-        constraint_signer: BLS,
+        constraint_signer: BlsSignerType,
         commitment_signer: ECDSA,
         fetcher: C,
     ) -> eyre::Result<Self> {
@@ -199,7 +212,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         // parse the request into constraints and sign them
         let slot = inclusion_request.slot;
         let message = ConstraintsMessage::build(validator_index, inclusion_request);
-        let signed_constraints = match self.constraint_signer.sign(&message.digest()) {
+        let signed_constraints = match self.constraint_signer.sign(&message.digest()).await {
             Ok(signature) => SignedConstraints { message, signature },
             Err(err) => {
                 error!(?err, "Failed to sign constraints");
