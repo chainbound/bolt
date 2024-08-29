@@ -8,8 +8,9 @@ import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
 import {IVault} from "@symbiotic/interfaces/vault/IVault.sol";
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
+import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
-contract BoltManager {
+contract BoltManager is IBoltManager {
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
     using Subnetwork for address;
@@ -31,10 +32,6 @@ contract BoltManager {
     uint48 public constant SLASHING_WINDOW = 7 days;
 
     uint48 public immutable START_TIMESTAMP;
-
-    error InvalidQuery();
-    error AlreadyRegistered();
-    error NotRegistered();
 
     constructor(address _validators) {
         validators = IBoltValidators(_validators);
@@ -93,6 +90,15 @@ contract BoltManager {
 
         symbioticVaults.add(vault);
         symbioticVaults.enable(vault);
+    }
+
+    /// @notice Allow a vault to signal indefinite opt-out from Bolt Protocol.
+    function pauseSymbioticVault() public {
+        if (!symbioticVaults.contains(msg.sender)) {
+            revert NotRegistered();
+        }
+
+        symbioticVaults.disable(msg.sender);
     }
 
     /// @notice Check if an operator is currently enabled to work in Bolt Protocol.
