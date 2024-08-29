@@ -1,5 +1,5 @@
 // SPDX-Licnese-Identifier: MIT
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.25;
 
 import {BLS12381} from "../lib/bls/BLS12381.sol";
 import {BLSSignatureVerifier} from "../lib/bls/BLSSignatureVerifier.sol";
