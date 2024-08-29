@@ -22,8 +22,8 @@ use crate::{
     },
     crypto::{bls::Signer as BlsSigner, SignableBLS, SignerBLS},
     primitives::{
-        CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
-        SignedConstraints,
+        tx_type_str, CommitmentRequest, ConstraintsMessage, FetchPayloadRequest,
+        LocalPayloadFetcher, SignedConstraints, TransactionExt,
     },
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
@@ -186,6 +186,8 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
 
         if let Err(err) = self.execution.validate_request(&mut request).await {
             error!(?err, "Execution: failed to commit request");
+            counter!(BoltMetrics::ValidationErrors.name(), &[("type", err.to_tag_str())])
+                .increment(1);
             let _ = response.send(Err(CommitmentError::Validation(err)));
             return;
         }
@@ -199,7 +201,6 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
             elapsed = ?start.elapsed(),
             "Validation against execution state passed"
         );
-        counter!(BoltMetrics::InclusionCommitmentsAccepted.name()).increment(1);
 
         // parse the request into constraints and sign them
         let slot = inclusion_request.slot;
@@ -213,6 +214,14 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
             }
         };
 
+        // Track the number of transactions preconfirmed considering their type
+        signed_constraints.message.constraints.iter().map(|c| &c.transaction).for_each(|full_tx| {
+            counter!(
+                BoltMetrics::TransactionsPreconfirmed.name(),
+                &[("type", tx_type_str(full_tx.tx.tx_type()))]
+            )
+            .increment(1);
+        });
         self.execution.add_constraint(slot, signed_constraints);
 
         // Create a commitment by signing the request
@@ -223,6 +232,8 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
                 response.send(Err(CommitmentError::Internal)).ok()
             }
         };
+
+        counter!(BoltMetrics::InclusionCommitmentsAccepted.name()).increment(1);
     }
 
     /// Handle a new head event, updating the execution state.

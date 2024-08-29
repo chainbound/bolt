@@ -14,6 +14,10 @@ pub enum BoltMetrics {
     InclusionCommitmentsReceived,
     /// Counter for the number of inclusion commitments accepted.
     InclusionCommitmentsAccepted,
+    /// Counter for the number of transactions preconfirmed
+    TransactionsPreconfirmed,
+    /// Counter for the number of validation errors, to spot most the most common ones
+    ValidationErrors,
 
     //  Gauges ------------------------------------------------------------------
     /// Gauge for the latest slot number
@@ -28,13 +32,21 @@ impl BoltMetrics {
     /// Returns the name of the metric.
     pub const fn name(&self) -> &'static str {
         match self {
-            BoltMetrics::LocalBlocksProposed => "local_blocks_proposed",
-            BoltMetrics::RemoteBlocksProposed => "remote_blocks_proposed",
-            BoltMetrics::InclusionCommitmentsReceived => "inclusion_commitments_received",
-            BoltMetrics::InclusionCommitmentsAccepted => "inclusion_commitments_accepted",
-            BoltMetrics::HttpRequestsTotal => "http_requests_total",
-            BoltMetrics::LatestHead => "latest_head",
-            BoltMetrics::HttpRequestsDurationSeconds => "http_requests_duration_seconds",
+            BoltMetrics::LocalBlocksProposed => "bolt_sidecar_local_blocks_proposed",
+            BoltMetrics::RemoteBlocksProposed => "bolt_sidecar_remote_blocks_proposed",
+            BoltMetrics::InclusionCommitmentsReceived => {
+                "bolt_sidecar_inclusion_commitments_received"
+            }
+            BoltMetrics::InclusionCommitmentsAccepted => {
+                "bolt_sidecar_inclusion_commitments_accepted"
+            }
+            BoltMetrics::HttpRequestsTotal => "bolt_sidecar_http_requests_total",
+            BoltMetrics::LatestHead => "bolt_sidecar_latest_head",
+            BoltMetrics::HttpRequestsDurationSeconds => {
+                "bolt_sidecar_http_requests_duration_seconds"
+            }
+            BoltMetrics::TransactionsPreconfirmed => "bolt_sidecar_transactions_preconfirmed",
+            BoltMetrics::ValidationErrors => "bolt_sidecar_validation_errors",
         }
     }
 
@@ -55,6 +67,11 @@ impl BoltMetrics {
             BoltMetrics::InclusionCommitmentsAccepted.name(),
             "Inclusion commitments accepted"
         );
+        describe_counter!(
+            BoltMetrics::TransactionsPreconfirmed.name(),
+            "Transactions preconfirmed"
+        );
+        describe_counter!(BoltMetrics::ValidationErrors.name(), "Validation errors");
 
         // Gauges
         describe_gauge!(BoltMetrics::LatestHead.name(), "Latest slot number");

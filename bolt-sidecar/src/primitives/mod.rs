@@ -333,10 +333,20 @@ impl TransactionExt for PooledTransactionsElement {
     }
 }
 
+pub const fn tx_type_str(tx_type: TxType) -> &'static str {
+    match tx_type {
+        TxType::Legacy => "legacy",
+        TxType::Eip2930 => "eip2930",
+        TxType::Eip1559 => "eip1559",
+        TxType::Eip4844 => "eip4844",
+        TxType::Eip7702 => "eip7702",
+    }
+}
+
 /// A wrapper type for a full, complete transaction (i.e. with blob sidecars attached).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FullTransaction {
-    tx: PooledTransactionsElement,
+    pub tx: PooledTransactionsElement,
     sender: Option<Address>,
 }
 
