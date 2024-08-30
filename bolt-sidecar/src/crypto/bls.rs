@@ -1,11 +1,11 @@
+use std::fmt::Debug;
+
 use alloy::primitives::FixedBytes;
 use blst::{min_pk::Signature, BLST_ERROR};
 use rand::RngCore;
 
 pub use blst::min_pk::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
 pub use ethereum_consensus::deneb::BlsSignature;
-
-use crate::CommitBoostClient;
 
 /// The BLS Domain Separator used in Ethereum 2.0.
 pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
@@ -18,7 +18,7 @@ pub type BLSSig = FixedBytes<96>;
 pub trait SignableBLS {
     /// Create a digest of the object that can be signed.
     /// This API doesn't enforce a specific hash or encoding method.
-    fn digest(&self) -> Vec<u8>;
+    fn digest(&self) -> [u8; 32];
 
     /// Sign the object with the given key. Returns the signature.
     ///
@@ -40,33 +40,14 @@ pub trait SignableBLS {
 /// A generic signing trait to generate BLS signatures.
 pub trait SignerBLS {
     /// Sign the given data and return the signature.
-    fn sign(&self, data: &[u8]) -> eyre::Result<BLSSig>;
+    fn sign(&self, data: &[u8; 32]) -> eyre::Result<BLSSig>;
 }
 
 /// A generic signing trait to generate BLS signatures asynchronously.
 #[async_trait::async_trait]
-pub trait SignerBLSAsync: Send + Sync {
+pub trait SignerBLSAsync: Send + Sync + Debug {
     /// Sign the given data and return the signature.
-    async fn sign(&self, data: &[u8]) -> eyre::Result<BLSSig>;
-}
-
-/// Enum to represent the two possible signer types.
-#[derive(Debug)]
-pub enum BlsSignerType {
-    /// A BLS signer that uses private key to sign.
-    PrivateKey(Signer),
-    /// A BLS signer that request signature from commit-boost.
-    CommitBoost(CommitBoostClient),
-}
-
-#[async_trait::async_trait]
-impl SignerBLSAsync for BlsSignerType {
-    async fn sign(&self, data: &[u8]) -> eyre::Result<BLSSig> {
-        match self {
-            BlsSignerType::PrivateKey(signer) => SignerBLSAsync::sign(signer, data).await,
-            BlsSignerType::CommitBoost(client) => client.sign(data).await,
-        }
-    }
+    async fn sign(&self, data: &[u8; 32]) -> eyre::Result<BLSSig>;
 }
 
 /// A BLS signer that can sign any type that implements the `Signable` trait.
@@ -99,7 +80,7 @@ impl Signer {
 }
 
 impl SignerBLS for Signer {
-    fn sign(&self, data: &[u8]) -> eyre::Result<BLSSig> {
+    fn sign(&self, data: &[u8; 32]) -> eyre::Result<BLSSig> {
         let sig = sign_with_prefix(&self.key, data);
         Ok(BLSSig::from(sig.to_bytes()))
     }
@@ -107,7 +88,7 @@ impl SignerBLS for Signer {
 
 #[async_trait::async_trait]
 impl SignerBLSAsync for Signer {
-    async fn sign(&self, data: &[u8]) -> eyre::Result<BLSSig> {
+    async fn sign(&self, data: &[u8; 32]) -> eyre::Result<BLSSig> {
         let sig = sign_with_prefix(&self.key, data);
         Ok(BLSSig::from(sig.to_bytes()))
     }
@@ -139,13 +120,19 @@ mod tests {
         test_util::{test_bls_secret_key, TestSignableData},
     };
 
+    use rand::Rng;
+
     #[test]
     fn test_bls_signer() {
         let key = test_bls_secret_key();
         let pubkey = key.sk_to_pk();
         let signer = Signer::new(key);
 
-        let msg = TestSignableData { data: vec![1, 2, 3, 4] };
+        // Generate random data for the test
+        let mut rng = rand::thread_rng();
+        let mut data = [0u8; 32];
+        rng.fill(&mut data);
+        let msg = TestSignableData { data };
 
         let signature = SignerBLS::sign(&signer, &msg.digest()).unwrap();
         let sig = blst::min_pk::Signature::from_bytes(signature.as_ref()).unwrap();

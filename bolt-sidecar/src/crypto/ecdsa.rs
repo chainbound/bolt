@@ -56,6 +56,7 @@ mod tests {
     use crate::test_util::TestSignableData;
 
     use super::ECDSASigner;
+    use rand::Rng;
     use secp256k1::{PublicKey, SecretKey};
 
     #[test]
@@ -63,7 +64,11 @@ mod tests {
         let secp256k1_key = SecretKey::from_slice(&[1; 32]).unwrap();
         let signer = ECDSASigner::new(secp256k1_key);
 
-        let message = TestSignableData { data: vec![1, 2, 3, 4] };
+        // Generate random data for the test
+        let mut rng = rand::thread_rng();
+        let mut data = [0u8; 32];
+        rng.fill(&mut data);
+        let message = TestSignableData { data };
 
         let signature = signer.sign_ecdsa(&message);
         let pubkey = PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &secp256k1_key);

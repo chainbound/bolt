@@ -63,7 +63,7 @@ impl ConstraintsMessage {
 }
 
 impl SignableBLS for ConstraintsMessage {
-    fn digest(&self) -> Vec<u8> {
+    fn digest(&self) -> [u8; 32] {
         let mut data = Vec::new();
         data.extend_from_slice(&self.validator_index.to_le_bytes());
         data.extend_from_slice(&self.slot.to_le_bytes());
@@ -74,7 +74,8 @@ impl SignableBLS for ConstraintsMessage {
         }
         data.extend_from_slice(&constraint_bytes);
 
-        keccak256(data).0.to_vec()
+        // Compute the Keccak-256 hash and return the 32-byte array directly
+        keccak256(data).0
     }
 }
 

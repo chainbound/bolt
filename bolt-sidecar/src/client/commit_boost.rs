@@ -56,7 +56,7 @@ impl CommitBoostClient {
 
 #[async_trait::async_trait]
 impl SignerBLSAsync for CommitBoostClient {
-    async fn sign(&self, data: &[u8]) -> eyre::Result<BlsSignature> {
+    async fn sign(&self, data: &[u8; 32]) -> eyre::Result<BlsSignature> {
         let root = if data.len() == 32 {
             let mut root = [0u8; 32];
             root.copy_from_slice(data);

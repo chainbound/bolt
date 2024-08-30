@@ -19,10 +19,7 @@ use crate::{
         server::{CommitmentsApiServer, Event as CommitmentEvent},
         spec::Error as CommitmentError,
     },
-    crypto::{
-        bls::{BlsSignerType, Signer as BlsSigner},
-        SignableBLS, SignerBLSAsync,
-    },
+    crypto::{bls::Signer as BlsSigner, SignableBLS, SignerBLSAsync},
     primitives::{
         CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
         SignedConstraints,
@@ -33,11 +30,11 @@ use crate::{
 };
 
 /// The driver for the sidecar, responsible for managing the main event loop.
-pub struct SidecarDriver<C, ECDSA> {
+pub struct SidecarDriver<C, BLS, ECDSA> {
     head_tracker: HeadTracker,
     execution: ExecutionState<C>,
     consensus: ConsensusState,
-    constraint_signer: BlsSignerType,
+    constraint_signer: BLS,
     commitment_signer: ECDSA,
     local_builder: LocalBuilder,
     mevboost_client: MevBoostClient,
@@ -47,7 +44,7 @@ pub struct SidecarDriver<C, ECDSA> {
     slot_stream: SlotStream<SystemTimeProvider>,
 }
 
-impl fmt::Debug for SidecarDriver<StateClient, PrivateKeySigner> {
+impl fmt::Debug for SidecarDriver<StateClient, Box<dyn SignerBLSAsync>, PrivateKeySigner> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SidecarDriver")
             .field("head_tracker", &self.head_tracker)
@@ -63,23 +60,14 @@ impl fmt::Debug for SidecarDriver<StateClient, PrivateKeySigner> {
     }
 }
 
-impl SidecarDriver<StateClient, PrivateKeySigner> {
-    /// Create a new sidecar driver with the given [Config] and default components.
+impl SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
+    /// Create a new sidecar driver with the give [Config] and components.
     pub async fn new(cfg: Config) -> eyre::Result<Self> {
         // The default state client simply uses the execution API URL to fetch state updates.
         let state_client = StateClient::new(cfg.execution_api_url.clone());
 
-        // Constraints are signed with a BLS private key or Commit-Boost
-        let constraint_signer = if let Some(private_key) = cfg.private_key.clone() {
-            BlsSignerType::PrivateKey(BlsSigner::new(private_key))
-        } else {
-            let commit_boost_client = CommitBoostClient::new(
-                cfg.commit_boost_address.clone().expect("CommitBoost URL must be provided"),
-                &cfg.commit_boost_jwt_hex.clone().expect("CommitBoost JWT must be provided"),
-            )
-            .await?;
-            BlsSignerType::CommitBoost(commit_boost_client)
-        };
+        // Constraints are signed with a BLS private key
+        let constraint_signer = BlsSigner::new(cfg.builder_private_key.clone());
 
         // Commitment responses are signed with a regular Ethereum wallet private key.
         // This is now generated randomly because slashing is not yet implemented.
@@ -89,11 +77,32 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
     }
 }
 
-impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
+impl SidecarDriver<StateClient, CommitBoostClient, PrivateKeySigner> {
+    /// Create a new sidecar driver with the give [Config] and components.
+    pub async fn new(cfg: Config) -> eyre::Result<Self> {
+        // The default state client simply uses the execution API URL to fetch state updates.
+        let state_client = StateClient::new(cfg.execution_api_url.clone());
+
+        // Constraints are signed with a BLS private key
+        let constraint_signer = CommitBoostClient::new(
+            cfg.commit_boost_address.clone().expect("CommitBoost URL must be provided"),
+            &cfg.commit_boost_jwt_hex.clone().expect("CommitBoost JWT must be provided"),
+        )
+        .await?;
+
+        // Commitment responses are signed with a regular Ethereum wallet private key.
+        // This is now generated randomly because slashing is not yet implemented.
+        let commitment_signer = PrivateKeySigner::random();
+
+        Self::from_components(cfg, constraint_signer, commitment_signer, state_client).await
+    }
+}
+
+impl<C: StateFetcher, BLS: SignerBLSAsync, ECDSA: SignerECDSA> SidecarDriver<C, BLS, ECDSA> {
     /// Create a new sidecar driver with the given components
     pub async fn from_components(
         cfg: Config,
-        constraint_signer: BlsSignerType,
+        constraint_signer: BLS,
         commitment_signer: ECDSA,
         fetcher: C,
     ) -> eyre::Result<Self> {
