@@ -44,7 +44,7 @@ pub struct SidecarDriver<C, BLS, ECDSA> {
     slot_stream: SlotStream<SystemTimeProvider>,
 }
 
-impl fmt::Debug for SidecarDriver<StateClient, Box<dyn SignerBLSAsync>, PrivateKeySigner> {
+impl<B: SignerBLSAsync> fmt::Debug for SidecarDriver<StateClient, B, PrivateKeySigner> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SidecarDriver")
             .field("head_tracker", &self.head_tracker)
