@@ -129,15 +129,15 @@ impl SignableBLS for TestSignableData {
 
 impl SignableECDSA for TestSignableData {
     fn digest(&self) -> Message {
-        // Ensure the data is exactly 32 bytes
-        let mut as_32 = [0u8; 32];
+        // pad the data to 32 bytes
+        let as_32 = if self.data.len() < 32 {
+            let mut padded = [0u8; 32];
+            padded[..self.data.len()].copy_from_slice(&self.data);
+            padded
+        } else {
+            self.data.clone()
+        };
 
-        // Copy the original data to the beginning of the 32-byte array, or up to the length of the
-        // data
-        let len = self.data.len().min(32);
-        as_32[..len].copy_from_slice(&self.data[..len]);
-
-        // Create a Message from the 32-byte array
         Message::from_digest_slice(&as_32).expect("valid message")
     }
 }
