@@ -61,13 +61,13 @@ impl fmt::Debug for SidecarDriver<StateClient, Box<dyn SignerBLSAsync>, PrivateK
 }
 
 impl SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
-    /// Create a new sidecar driver with the give [Config] and components.
-    pub async fn new(cfg: Config) -> eyre::Result<Self> {
+    /// Create a new sidecar driver with the given [Config] and private key signer.
+    pub async fn with_local_signer(cfg: Config) -> eyre::Result<Self> {
         // The default state client simply uses the execution API URL to fetch state updates.
         let state_client = StateClient::new(cfg.execution_api_url.clone());
 
         // Constraints are signed with a BLS private key
-        let constraint_signer = BlsSigner::new(cfg.builder_private_key.clone());
+        let constraint_signer = BlsSigner::new(cfg.private_key.clone().unwrap());
 
         // Commitment responses are signed with a regular Ethereum wallet private key.
         // This is now generated randomly because slashing is not yet implemented.
@@ -78,12 +78,12 @@ impl SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
 }
 
 impl SidecarDriver<StateClient, CommitBoostClient, PrivateKeySigner> {
-    /// Create a new sidecar driver with the give [Config] and components.
-    pub async fn new(cfg: Config) -> eyre::Result<Self> {
+    /// Create a new sidecar driver with the given [Config] and commit-boost signer.
+    pub async fn with_commit_boost_signer(cfg: Config) -> eyre::Result<Self> {
         // The default state client simply uses the execution API URL to fetch state updates.
         let state_client = StateClient::new(cfg.execution_api_url.clone());
 
-        // Constraints are signed with a BLS private key
+        // Constraints are signed with a commit-boost signer
         let constraint_signer = CommitBoostClient::new(
             cfg.commit_boost_address.clone().expect("CommitBoost URL must be provided"),
             &cfg.commit_boost_jwt_hex.clone().expect("CommitBoost JWT must be provided"),

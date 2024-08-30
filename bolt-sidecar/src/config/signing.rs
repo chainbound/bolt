@@ -4,7 +4,7 @@ use clap::{ArgGroup, Args};
 #[derive(Debug, Clone, Args)]
 #[clap(
     group = ArgGroup::new("signing-opts").required(true)
-        .args(&["private_key", "commit_boost_url"])
+        .args(&["private_key", "commit_boost_url", "commit_boost_jwt_hex"])
 )]
 pub struct SigningOpts {
     /// Private key to use for signing preconfirmation requests
