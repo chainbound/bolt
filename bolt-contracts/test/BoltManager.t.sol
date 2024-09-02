@@ -11,13 +11,15 @@ contract BoltManagerTest is Test {
 
     uint64[] public validatorIndexes;
 
-    address provider = address(0x1);
-    address operator = address(0x2);
-    address validator = address(0x3);
+    address admin = address(0x1);
+    address provider = address(0x2);
+    address operator = address(0x3);
+    address validator = address(0x4);
+    address symbioticNetwork = address(0x5);
 
     function setUp() public {
-        validators = new BoltValidators();
-        manager = new BoltManager(address(validators));
+        validators = new BoltValidators(admin);
+        manager = new BoltManager(address(validators), symbioticNetwork);
 
         // Give some ether to the accounts for gas
         vm.deal(provider, 20 ether);

@@ -33,9 +33,10 @@ contract BoltManager is IBoltManager {
 
     uint48 public immutable START_TIMESTAMP;
 
-    constructor(address _validators) {
+    constructor(address _validators, address _symbioticNetwork) {
         validators = IBoltValidators(_validators);
         START_TIMESTAMP = Time.timestamp();
+        BOLT_SYMBIOTIC_NETWORK = _symbioticNetwork;
     }
 
     /// @notice Get the start timestamp of an epoch.
