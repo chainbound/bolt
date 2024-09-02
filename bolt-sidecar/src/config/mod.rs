@@ -19,6 +19,9 @@ pub use chain::ChainConfig;
 pub mod signing;
 pub use signing::SigningOpts;
 
+pub mod telemetry;
+use telemetry::TelemetryOpts;
+
 /// Default port for the JSON-RPC server exposed by the sidecar.
 pub const DEFAULT_RPC_PORT: u16 = 8000;
 
@@ -78,6 +81,9 @@ pub struct Opts {
     /// Commitment signing options.
     #[clap(flatten)]
     pub(super) signing: SigningOpts,
+    /// Telemetry options
+    #[clap(flatten)]
+    pub(super) telemetry: TelemetryOpts,
 }
 
 /// Configuration options for the sidecar. These are parsed from
@@ -114,6 +120,10 @@ pub struct Config {
     pub builder_private_key: SecretKey,
     /// The chain on which the sidecar is running
     pub chain: ChainConfig,
+    /// Metrics port
+    pub metrics_port: u16,
+    /// Toggle for metrics
+    pub disable_metrics: bool,
 }
 
 impl Default for Config {
@@ -133,6 +143,8 @@ impl Default for Config {
             limits: Limits::default(),
             validator_indexes: ValidatorIndexes::default(),
             chain: ChainConfig::default(),
+            metrics_port: 0,
+            disable_metrics: false,
         }
     }
 }
@@ -228,6 +240,8 @@ impl TryFrom<Opts> for Config {
         config.validator_indexes = opts.validator_indexes;
 
         config.chain = opts.chain;
+        config.metrics_port = opts.telemetry.metrics_port;
+        config.disable_metrics = opts.telemetry.disable_metrics;
 
         Ok(config)
     }
