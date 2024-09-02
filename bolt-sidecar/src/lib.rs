@@ -13,7 +13,7 @@ pub use api::{
 
 mod client;
 pub use client::{
-    commit_boost::CommitBoostClient, mevboost::MevBoostClient, rpc::RpcClient, BeaconClient,
+    commit_boost::CommitBoostSigner, mevboost::MevBoostClient, rpc::RpcClient, BeaconClient,
 };
 
 /// Common types and compatibility utilities

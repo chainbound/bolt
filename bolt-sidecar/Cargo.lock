@@ -1551,19 +1551,20 @@ dependencies = [
 [[package]]
 name = "cb-common"
 version = "0.0.1"
-source = "git+https://github.com/Commit-Boost/commit-boost-client?rev=0c12f37#0c12f37ffbb59fbfeadb8e7009ba7d1d30d699b5"
+source = "git+https://github.com/Commit-Boost/commit-boost-client?rev=f1e6ff1#f1e6ff199f9f71b45cc3c138976716e1b9b17f7c"
 dependencies = [
  "alloy",
  "axum",
  "bimap",
  "blst",
- "derive_more 0.99.18",
+ "derive_more 1.0.0",
  "eth2_keystore",
  "ethereum-types",
  "ethereum_serde_utils",
  "ethereum_ssz",
  "ethereum_ssz_derive",
  "eyre",
+ "k256 0.13.3",
  "rand 0.8.5",
  "reqwest 0.12.7",
  "serde",
@@ -3340,6 +3341,7 @@ dependencies = [
  "elliptic-curve 0.13.8",
  "once_cell",
  "sha2 0.10.8",
+ "signature 2.2.0",
 ]
 
 [[package]]

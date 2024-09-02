@@ -1,19 +1,26 @@
 use std::sync::Arc;
 
-use alloy::rpc::types::beacon::{BlsPublicKey, BlsSignature};
-use cb_common::commit::{client::SignerClient, request::SignRequest};
+use alloy::{rpc::types::beacon::BlsSignature, signers::Signature};
+use cb_common::{
+    commit::{
+        client::SignerClient,
+        request::{SignConsensusRequest, SignProxyRequest},
+    },
+    signer::{BlsPublicKey as CBBlsPublicKey, EcdsaPublicKey},
+};
 use eyre::ErrReport;
 use parking_lot::RwLock;
 use thiserror::Error;
 use tracing::{debug, error, info};
 
-use crate::crypto::bls::SignerBLSAsync;
+use crate::crypto::{bls::SignerBLSAsync, ecdsa::SignerECDSAAsync};
 
 /// A client for interacting with CommitBoost.
 #[derive(Debug, Clone)]
-pub struct CommitBoostClient {
+pub struct CommitBoostSigner {
     signer_client: SignerClient,
-    pubkeys: Arc<RwLock<Vec<BlsPublicKey>>>,
+    pubkeys: Arc<RwLock<Vec<CBBlsPublicKey>>>,
+    proxy_ecdsa: Arc<RwLock<Vec<EcdsaPublicKey>>>,
 }
 
 #[derive(Debug, Error)]
@@ -25,12 +32,16 @@ pub enum CommitBoostError {
 }
 
 #[allow(unused)]
-impl CommitBoostClient {
-    /// Create a new [CommitBoostClient] instance
+impl CommitBoostSigner {
+    /// Create a new [CommitBoostSigner] instance
     pub async fn new(signer_server_address: String, jwt: &str) -> Result<Self, CommitBoostError> {
         let signer_client = SignerClient::new(signer_server_address, jwt)?;
 
-        let client = Self { signer_client, pubkeys: Arc::new(RwLock::new(Vec::new())) };
+        let client = Self {
+            signer_client,
+            pubkeys: Arc::new(RwLock::new(Vec::new())),
+            proxy_ecdsa: Arc::new(RwLock::new(Vec::new())),
+        };
 
         let mut this = client.clone();
         tokio::spawn(async move {
@@ -38,11 +49,14 @@ impl CommitBoostClient {
                 Ok(pubkeys) => {
                     info!(
                         consensus = pubkeys.consensus.len(),
-                        proxy = pubkeys.proxy.len(),
+                        bls_proxy = pubkeys.proxy_bls.len(),
+                        ecdsa_proxy = pubkeys.proxy_ecdsa.len(),
                         "Received pubkeys"
                     );
                     let mut pubkeys_lock = this.pubkeys.write();
+                    let mut proxy_ecdsa_lock = this.proxy_ecdsa.write();
                     *pubkeys_lock = pubkeys.consensus;
+                    *proxy_ecdsa_lock = pubkeys.proxy_ecdsa;
                 }
                 Err(e) => {
                     error!(?e, "Failed to fetch pubkeys");
@@ -55,24 +69,34 @@ impl CommitBoostClient {
 }
 
 #[async_trait::async_trait]
-impl SignerBLSAsync for CommitBoostClient {
+impl SignerBLSAsync for CommitBoostSigner {
     async fn sign(&self, data: &[u8; 32]) -> eyre::Result<BlsSignature> {
-        let root = if data.len() == 32 {
-            let mut root = [0u8; 32];
-            root.copy_from_slice(data);
-            Ok(root)
-        } else {
-            Err(CommitBoostError::NoSignature(format!(
-                "invalid data length. Expected 32 bytes, found {} bytes",
-                data.len()
-            )))
-        }?;
-
-        let request = SignRequest::builder(*self.pubkeys.read().first().expect("pubkeys loaded"))
-            .with_root(root);
+        let request = SignConsensusRequest::builder(
+            *self.pubkeys.read().first().expect("consensus pubkey loaded"),
+        )
+        .with_msg(data);
 
         debug!(?request, "Requesting signature from commit_boost");
 
-        Ok(self.signer_client.request_signature(&request).await?)
+        Ok(self.signer_client.request_consensus_signature(request).await?)
+    }
+}
+
+#[async_trait::async_trait]
+impl SignerECDSAAsync for CommitBoostSigner {
+    async fn sign_hash(&self, hash: &[u8; 32]) -> eyre::Result<Signature> {
+        let request = SignProxyRequest::builder(
+            *self.proxy_ecdsa.read().first().expect("proxy ecdsa key loaded"),
+        )
+        .with_msg(hash);
+
+        debug!(?request, "Requesting signature from commit_boost");
+
+        let sig = self.signer_client.request_proxy_signature_ecdsa(request).await?;
+
+        // Create an alloy signature from the raw bytes
+        let alloy_sig = Signature::try_from(sig.as_ref())?;
+
+        Ok(alloy_sig)
     }
 }

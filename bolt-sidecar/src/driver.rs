@@ -1,10 +1,7 @@
 use core::fmt;
 use std::time::{Duration, Instant};
 
-use alloy::{
-    rpc::types::beacon::events::HeadEvent,
-    signers::{local::PrivateKeySigner, Signer as SignerECDSA},
-};
+use alloy::{rpc::types::beacon::events::HeadEvent, signers::local::PrivateKeySigner};
 use beacon_api_client::mainnet::Client as BeaconClient;
 use ethereum_consensus::{
     clock::{self, SlotStream, SystemTimeProvider},
@@ -19,14 +16,14 @@ use crate::{
         server::{CommitmentsApiServer, Event as CommitmentEvent},
         spec::Error as CommitmentError,
     },
-    crypto::{bls::Signer as BlsSigner, SignableBLS, SignerBLSAsync},
+    crypto::{bls::Signer as BlsSigner, SignableBLS, SignerBLSAsync, SignerECDSAAsync},
     primitives::{
         CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
         SignedConstraints,
     },
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
-    BuilderProxyConfig, CommitBoostClient, Config, ConstraintsApi, LocalBuilder, MevBoostClient,
+    BuilderProxyConfig, CommitBoostSigner, Config, ConstraintsApi, LocalBuilder, MevBoostClient,
 };
 
 /// The driver for the sidecar, responsible for managing the main event loop.
@@ -77,28 +74,29 @@ impl SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
     }
 }
 
-impl SidecarDriver<StateClient, CommitBoostClient, PrivateKeySigner> {
+impl SidecarDriver<StateClient, CommitBoostSigner, CommitBoostSigner> {
     /// Create a new sidecar driver with the given [Config] and commit-boost signer.
     pub async fn with_commit_boost_signer(cfg: Config) -> eyre::Result<Self> {
         // The default state client simply uses the execution API URL to fetch state updates.
         let state_client = StateClient::new(cfg.execution_api_url.clone());
 
-        // Constraints are signed with a commit-boost signer
-        let constraint_signer = CommitBoostClient::new(
+        let commit_boost_signer = CommitBoostSigner::new(
             cfg.commit_boost_address.clone().expect("CommitBoost URL must be provided"),
             &cfg.commit_boost_jwt_hex.clone().expect("CommitBoost JWT must be provided"),
         )
         .await?;
 
-        // Commitment responses are signed with a regular Ethereum wallet private key.
-        // This is now generated randomly because slashing is not yet implemented.
-        let commitment_signer = PrivateKeySigner::random();
+        // Constraints are signed with commit-boost signer
+        let constraint_signer = commit_boost_signer.clone();
+
+        // Commitment responses are signed with commit-boost signer
+        let commitment_signer = commit_boost_signer.clone();
 
         Self::from_components(cfg, constraint_signer, commitment_signer, state_client).await
     }
 }
 
-impl<C: StateFetcher, BLS: SignerBLSAsync, ECDSA: SignerECDSA> SidecarDriver<C, BLS, ECDSA> {
+impl<C: StateFetcher, BLS: SignerBLSAsync, ECDSA: SignerECDSAAsync> SidecarDriver<C, BLS, ECDSA> {
     /// Create a new sidecar driver with the given components
     pub async fn from_components(
         cfg: Config,
