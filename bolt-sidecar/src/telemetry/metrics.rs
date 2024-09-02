@@ -70,7 +70,7 @@ impl ApiMetrics {
 
 /// Prometheus metrics for the Bolt Sidecar.
 #[derive(Debug, Clone, Copy)]
-pub enum ApiMetricType {
+enum ApiMetricType {
     //  Counters ----------------------------------------------------------------
     /// Counter for the total number of HTTP requests received.
     HttpRequestsTotal,
