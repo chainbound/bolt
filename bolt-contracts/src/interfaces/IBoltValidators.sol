@@ -25,6 +25,7 @@ interface IBoltValidators {
     error InvalidAuthorizedOperator();
     error InvalidProofTimestamp();
     error ValidatorAlreadyExists();
+    error ValidatorDoesNotExist();
 
     function getAllValidators() external view returns (Validator[] memory);
 
@@ -34,12 +35,23 @@ interface IBoltValidators {
 
     function getValidatorBySequenceNumber(uint64 sequenceNumber) external view returns (Validator memory);
 
+    function registerValidatorUnsafe(
+        BLS12381.G1Point calldata pubkey,
+        address authorizedCollateralProvider,
+        address authorizedOperator
+    ) external;
+
+    function registerValidator(
+        BLS12381.G1Point calldata pubkey,
+        BLS12381.G2Point calldata signature,
+        address authorizedCollateralProvider,
+        address authorizedOperator
+    ) external;
+
     function batchRegisterValidators(
         BLS12381.G1Point[] calldata pubkeys,
         BLS12381.G2Point calldata signature,
         address authorizedCollateralProvider,
-        address authorizedOperator,
-        ValidatorProver.ValidatorProof[] calldata validatorProofs,
-        uint64 proofTimestamp
+        address authorizedOperator
     ) external;
 }

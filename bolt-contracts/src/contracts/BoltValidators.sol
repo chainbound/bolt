@@ -1,15 +1,14 @@
 // SPDX-Licnese-Identifier: MIT
 pragma solidity 0.8.25;
 
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {BLS12381} from "../lib/bls/BLS12381.sol";
 import {BLSSignatureVerifier} from "../lib/bls/BLSSignatureVerifier.sol";
-import {ValidatorProver} from "../lib/ssz/ValidatorProver.sol";
-import {BeaconChainUtils} from "../lib/BeaconChainUtils.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 
 /// @title Bolt Validators
 /// @notice This contract is responsible for registering validators and managing their configuration
-contract BoltValidators is IBoltValidators, BLSSignatureVerifier {
+contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     using BLS12381 for BLS12381.G1Point;
 
     /// @notice Validators (aka Blockspace providers)
@@ -20,6 +19,8 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier {
     /// case of non-custodial staking pools. Validators can also delegate commitment
     /// power to an Operator to make commitments on their behalf.
     mapping(bytes32 => Validator) public VALIDATORS;
+
+    bool public IS_BLS_PRECOMPILE_ENABLED = false;
 
     /// @notice Mapping from validator sequence number to validator pubkey hash
     /// @dev This is used internally to easily query the pubkey hash of a validator.
@@ -36,7 +37,14 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier {
     event ValidatorRegistered(bytes32 indexed pubkeyHash, Validator validator);
 
     /// @notice Constructor
-    constructor() {}
+    /// @param _owner Address of the owner of the contract
+    constructor(address _owner) Ownable(_owner) {}
+
+    /// @notice Enable or disable the use of the BLS precompile
+    /// @param isEnabled Whether the BLS precompile should be enabled
+    function setIsBLSPrecompileEnabled(bool isEnabled) public onlyOwner {
+        IS_BLS_PRECOMPILE_ENABLED = isEnabled;
+    }
 
     /// @notice Get all validators
     /// @dev This function should be used with caution as it can return a large amount of data.
@@ -60,7 +68,11 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier {
     /// @param pubkeyHash BLS public key hash of the validator
     /// @return Validator memory Validator struct
     function getValidatorByPubkeyHash(bytes32 pubkeyHash) public view returns (Validator memory) {
-        return VALIDATORS[pubkeyHash];
+        Validator memory validator = VALIDATORS[pubkeyHash];
+        if (!validator.exists) {
+            revert ValidatorDoesNotExist();
+        }
+        return validator;
     }
 
     /// @notice Get a validator by its sequence number
@@ -78,83 +90,28 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier {
         address authorizedCollateralProvider,
         address authorizedOperator
     ) public {
-        if (authorizedCollateralProvider == address(0)) {
-            revert InvalidAuthorizedCollateralProvider();
-        }
-        if (authorizedOperator == address(0)) {
-            revert InvalidAuthorizedOperator();
-        }
-
-        bytes32 pubKeyHash = _pubkeyHash(pubkey);
-
-        Validator memory newValidator = Validator({
-            sequenceNumber: nextValidatorSequenceNumber,
-            authorizedCollateralProvider: authorizedCollateralProvider,
-            authorizedOperator: authorizedOperator,
-            controller: msg.sender,
-            exists: true
-        });
-
-        VALIDATORS[pubKeyHash] = newValidator;
-        emit ValidatorRegistered(pubKeyHash, newValidator);
-
-        sequenceNumberToPubkeyHash[nextValidatorSequenceNumber] = pubKeyHash;
-        nextValidatorSequenceNumber += 1;
+        _registerValidator(pubkey, nextValidatorSequenceNumber, authorizedCollateralProvider, authorizedOperator);
     }
 
     /// @notice Register a single Validator and authorize a Collateral Provider and Operator for it
-    /// @dev This function allows anyone to register a single Validator. We perform two important checks:
-    /// 1. The owner of the Validator (controller) must have signed the message with its BLS private key
-    /// 2. The Validator must exist on the beacon chain, which we prove with an SSZ proof.
+    /// @dev This function allows anyone to register a single Validator. We perform an important check:
+    /// The owner of the Validator (controller) must have signed the message with its BLS private key.
     /// @param pubkey BLS public key for the Validator to be registered
     /// @param signature BLS signature of the registration message for the Validator
     /// @param authorizedCollateralProvider The address of the authorized collateral provider
     /// @param authorizedOperator The address of the authorized operator
-    /// @param validatorProof Proof of inclusion for the Validator
-    /// @param proofTimestamp The timestamp at which the proof is valid
     function registerValidator(
         BLS12381.G1Point calldata pubkey,
         BLS12381.G2Point calldata signature,
         address authorizedCollateralProvider,
-        address authorizedOperator,
-        ValidatorProver.ValidatorProof calldata validatorProof,
-        uint64 proofTimestamp
+        address authorizedOperator
     ) public {
-        if (authorizedCollateralProvider == address(0)) {
-            revert InvalidAuthorizedCollateralProvider();
-        }
-        if (authorizedOperator == address(0)) {
-            revert InvalidAuthorizedOperator();
-        }
-
         bytes memory message = abi.encodePacked(block.chainid, msg.sender, nextValidatorSequenceNumber);
         if (!_verifySignature(message, signature, pubkey)) {
             revert InvalidBLSSignature();
         }
 
-        // prove the existence of the validator on the beacon chain
-        ValidatorProver._proveValidator(validatorProof, proofTimestamp);
-
-        // check if the validator already exists
-        bytes32 pubKeyHash = _pubkeyHash(pubkey);
-        if (VALIDATORS[pubKeyHash].exists) {
-            revert ValidatorAlreadyExists();
-        }
-
-        Validator memory newValidator = Validator({
-            sequenceNumber: nextValidatorSequenceNumber,
-            authorizedCollateralProvider: authorizedCollateralProvider,
-            authorizedOperator: authorizedOperator,
-            controller: msg.sender,
-            exists: true
-        });
-
-        // register the validator
-        VALIDATORS[pubKeyHash] = newValidator;
-        emit ValidatorRegistered(pubKeyHash, newValidator);
-
-        sequenceNumberToPubkeyHash[nextValidatorSequenceNumber] = pubKeyHash;
-        nextValidatorSequenceNumber += 1;
+        _registerValidator(pubkey, nextValidatorSequenceNumber, authorizedCollateralProvider, authorizedOperator);
     }
 
     /// @notice Register a batch of Validators and authorize a Collateral Provider and Operator for them
@@ -163,23 +120,12 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier {
     /// @param signature BLS aggregated signature of the registration message for this batch of Validators
     /// @param authorizedCollateralProvider The address of the authorized collateral provider
     /// @param authorizedOperator The address of the authorized operator
-    /// @param validatorProofs List of proofs of inclusion for the Validators
-    /// @param proofTimestamp The timestamp at which all the proofs are valid
     function batchRegisterValidators(
         BLS12381.G1Point[] calldata pubkeys,
         BLS12381.G2Point calldata signature,
         address authorizedCollateralProvider,
-        address authorizedOperator,
-        ValidatorProver.ValidatorProof[] calldata validatorProofs,
-        uint64 proofTimestamp
+        address authorizedOperator
     ) public {
-        if (authorizedCollateralProvider == address(0)) {
-            revert InvalidAuthorizedCollateralProvider();
-        }
-        if (authorizedOperator == address(0)) {
-            revert InvalidAuthorizedOperator();
-        }
-
         uint256 validatorsCount = pubkeys.length;
         uint64[] memory expectedValidatorSequenceNumbers = new uint64[](validatorsCount);
         for (uint256 i = 0; i < validatorsCount; i++) {
@@ -198,39 +144,48 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier {
             revert InvalidBLSSignature();
         }
 
-        // make sure that the timestamp is inside the EIP-4788 time window of 8191 slots
-        if (!BeaconChainUtils._isWithinEIP4788Window(proofTimestamp)) {
-            revert InvalidProofTimestamp();
-        }
-
         // Register the validators and authorize the Collateral Provider and Operator for them
         for (uint256 i = 0; i < validatorsCount; i++) {
-            // prove the existence of each validator on the beacon chain
-            ValidatorProver._proveValidator(validatorProofs[i], proofTimestamp);
+            _registerValidator(
+                pubkeys[i], expectedValidatorSequenceNumbers[i], authorizedCollateralProvider, authorizedOperator
+            );
+        }
+    }
 
-            // check if the validator already exists
-
-            bytes32 pubKeyHash = _pubkeyHash(pubkeys[i]);
-            if (VALIDATORS[pubKeyHash].exists) {
-                revert ValidatorAlreadyExists();
-            }
-
-            Validator memory newValidator = Validator({
-                sequenceNumber: expectedValidatorSequenceNumbers[i],
-                authorizedCollateralProvider: authorizedCollateralProvider,
-                authorizedOperator: authorizedOperator,
-                controller: msg.sender,
-                exists: true
-            });
-
-            // register the validator
-            VALIDATORS[pubKeyHash] = newValidator;
-            emit ValidatorRegistered(pubKeyHash, newValidator);
-
-            sequenceNumberToPubkeyHash[expectedValidatorSequenceNumbers[i]] = pubKeyHash;
+    function _registerValidator(
+        BLS12381.G1Point calldata pubkey,
+        uint64 sequenceNumber,
+        address authorizedCollateralProvider,
+        address authorizedOperator
+    ) internal {
+        if (authorizedCollateralProvider == address(0)) {
+            revert InvalidAuthorizedCollateralProvider();
+        }
+        if (authorizedOperator == address(0)) {
+            revert InvalidAuthorizedOperator();
         }
 
-        nextValidatorSequenceNumber += uint64(validatorsCount);
+        bytes32 pubKeyHash = _pubkeyHash(pubkey);
+
+        // check if the validator already exists
+        if (VALIDATORS[pubKeyHash].exists) {
+            revert ValidatorAlreadyExists();
+        }
+
+        Validator memory newValidator = Validator({
+            sequenceNumber: sequenceNumber,
+            authorizedCollateralProvider: authorizedCollateralProvider,
+            authorizedOperator: authorizedOperator,
+            controller: msg.sender,
+            exists: true
+        });
+
+        // register the validator
+        VALIDATORS[pubKeyHash] = newValidator;
+        emit ValidatorRegistered(pubKeyHash, newValidator);
+
+        sequenceNumberToPubkeyHash[sequenceNumber] = pubKeyHash;
+        nextValidatorSequenceNumber += 1;
     }
 
     /// @notice Compute the hash of a BLS public key

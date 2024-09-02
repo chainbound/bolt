@@ -8,6 +8,7 @@ gas_reports = ["*"]
 
 [rpc_endpoints]
 mainnet = "${ETH_RPC_URL}"
+holesky = "${ETH_RPC_URL_HOLESKY}"
 
 [fmt]
 bracket_spacing = false

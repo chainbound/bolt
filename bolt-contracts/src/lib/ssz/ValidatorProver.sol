@@ -26,7 +26,7 @@ library ValidatorProver {
     /// @notice Prove a validator's inclusion in a beacon chain.
     /// @param proof The proof of inclusion for the validator
     /// @param ts The timestamp at which the proof is valid
-    function _proveValidator(ValidatorProof calldata proof, uint64 ts) public view {
+    function _proveValidator(ValidatorProof calldata proof, uint64 ts) internal view {
         if (proof.validatorIndex >= VALIDATOR_REGISTRY_LIMIT) {
             revert IndexOutOfRange();
         }
