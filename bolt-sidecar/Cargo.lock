@@ -4,9 +4,9 @@ version = 3
 
 [[package]]
 name = "addr2line"
-version = "0.22.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e4503c46a5c0c7844e948c9a4d6acd9f50cccb4de1c48eb9e291ea17470c678"
+checksum = "8a30b2e23b9e17a9f90641c7ab1549cd9b44f296d3ccbf309d2863cfe398a0cb"
 dependencies = [
  "gimli",
 ]
@@ -1248,6 +1248,7 @@ dependencies = [
  "axum-core",
  "bytes",
  "futures-util",
+ "headers 0.4.0",
  "http 1.1.0",
  "http-body 1.0.1",
  "http-body-util",
@@ -1274,9 +1275,9 @@ dependencies = [
 
 [[package]]
 name = "backtrace"
-version = "0.3.73"
+version = "0.3.71"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cc23269a4f8976d0a4d2e7109211a419fe30e8d88d677cd60b6bc79c5732e0a"
+checksum = "26b05800d2e817c8b3b4b54abd461726265fa9789ae34330622f2db9ee696f9d"
 dependencies = [
  "addr2line",
  "cc",
@@ -1469,6 +1470,7 @@ dependencies = [
  "bytes",
  "cb-common",
  "clap",
+ "commit-boost",
  "dotenvy",
  "ethereum-consensus",
  "ethereum_ssz",
@@ -1552,9 +1554,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "cb-cli"
+version = "0.0.1"
+source = "git+https://github.com/Commit-Boost/commit-boost-client#f1e6ff199f9f71b45cc3c138976716e1b9b17f7c"
+dependencies = [
+ "cb-common",
+ "clap",
+ "docker-compose-types",
+ "dotenvy",
+ "eyre",
+ "indexmap 2.4.0",
+ "serde",
+ "serde_json",
+ "serde_yaml 0.9.33",
+]
+
+[[package]]
 name = "cb-common"
 version = "0.0.1"
-source = "git+https://github.com/mempirate/commit-boost-client?branch=feat/exports#137933456a1f46428f30ff5ac65c8c5a0bf29c64"
+source = "git+https://github.com/Commit-Boost/commit-boost-client#f1e6ff199f9f71b45cc3c138976716e1b9b17f7c"
 dependencies = [
  "alloy",
  "axum",
@@ -1582,6 +1600,69 @@ dependencies = [
  "tree_hash 0.5.2",
  "tree_hash_derive",
  "url",
+]
+
+[[package]]
+name = "cb-metrics"
+version = "0.0.1"
+source = "git+https://github.com/Commit-Boost/commit-boost-client#f1e6ff199f9f71b45cc3c138976716e1b9b17f7c"
+dependencies = [
+ "axum",
+ "cb-common",
+ "eyre",
+ "prometheus",
+ "thiserror",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "cb-pbs"
+version = "0.0.1"
+source = "git+https://github.com/Commit-Boost/commit-boost-client#f1e6ff199f9f71b45cc3c138976716e1b9b17f7c"
+dependencies = [
+ "alloy",
+ "async-trait",
+ "axum",
+ "blst",
+ "cb-common",
+ "cb-metrics",
+ "dashmap",
+ "eyre",
+ "futures",
+ "lazy_static",
+ "prometheus",
+ "reqwest 0.12.7",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "url",
+ "uuid 1.10.0",
+]
+
+[[package]]
+name = "cb-signer"
+version = "0.0.1"
+source = "git+https://github.com/Commit-Boost/commit-boost-client#f1e6ff199f9f71b45cc3c138976716e1b9b17f7c"
+dependencies = [
+ "alloy",
+ "axum",
+ "axum-extra",
+ "bimap",
+ "blst",
+ "cb-common",
+ "derive_more 1.0.0",
+ "eyre",
+ "headers 0.4.0",
+ "k256 0.13.3",
+ "lazy_static",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tree_hash 0.5.2",
+ "tree_hash_derive",
+ "uuid 1.10.0",
 ]
 
 [[package]]
@@ -1670,6 +1751,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1462739cb27611015575c0c11df5df7601141071f07518d56fcc1be504cbec97"
 
 [[package]]
+name = "color-eyre"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55146f5e46f237f7423d74111267d4597b59b0dad0ffaf7303bce9945d843ad5"
+dependencies = [
+ "backtrace",
+ "color-spantrace",
+ "eyre",
+ "indenter",
+ "once_cell",
+ "owo-colors",
+ "tracing-error",
+]
+
+[[package]]
+name = "color-spantrace"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd6be1b2a7e382e2b98b43b2adcca6bb0e465af0bdd38123873ae61eb17a72c2"
+dependencies = [
+ "once_cell",
+ "owo-colors",
+ "tracing-core",
+ "tracing-error",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1683,6 +1791,24 @@ checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
 dependencies = [
  "bytes",
  "memchr",
+]
+
+[[package]]
+name = "commit-boost"
+version = "0.0.1"
+source = "git+https://github.com/Commit-Boost/commit-boost-client#f1e6ff199f9f71b45cc3c138976716e1b9b17f7c"
+dependencies = [
+ "cb-cli",
+ "cb-common",
+ "cb-metrics",
+ "cb-pbs",
+ "cb-signer",
+ "clap",
+ "color-eyre",
+ "eyre",
+ "tokio",
+ "tree_hash 0.5.2",
+ "tree_hash_derive",
 ]
 
 [[package]]
@@ -2012,6 +2138,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_builder"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd33f37ee6a119146a1781d3356a7c26028f83d779b2e04ecd45fdc75c76877b"
+dependencies = [
+ "derive_builder_macro",
+]
+
+[[package]]
+name = "derive_builder_core"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7431fa049613920234f22c47fdc33e6cf3ee83067091ea4277a3f8c4587aae38"
+dependencies = [
+ "darling 0.20.10",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.76",
+]
+
+[[package]]
+name = "derive_builder_macro"
+version = "0.20.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4abae7035bf79b9877b779505d8cf3749285b80c43941eda66604841889451dc"
+dependencies = [
+ "derive_builder_core",
+ "syn 2.0.76",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2065,6 +2222,18 @@ dependencies = [
  "const-oid",
  "crypto-common",
  "subtle",
+]
+
+[[package]]
+name = "docker-compose-types"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9213a368b9c0767c81ef9ced0f712cfd99d27d7de2a22a60e7ac9b1342c8a395"
+dependencies = [
+ "derive_builder",
+ "indexmap 2.4.0",
+ "serde",
+ "serde_yaml 0.9.33",
 ]
 
 [[package]]
@@ -2247,7 +2416,7 @@ dependencies = [
  "serde_repr",
  "sha2 0.9.9",
  "unicode-normalization",
- "uuid",
+ "uuid 0.8.2",
  "zeroize",
 ]
 
@@ -2668,9 +2837,9 @@ dependencies = [
 
 [[package]]
 name = "gimli"
-version = "0.29.0"
+version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40ecd4077b5ae9fd2e9e169b102c6c330d0605168eb0e8bf79952b256dbefffd"
+checksum = "4271d37baee1b8c7e4b708028c57d816cf9d2434acb33a549475f78c181f6253"
 
 [[package]]
 name = "glob"
@@ -2763,8 +2932,23 @@ checksum = "06683b93020a07e3dbcf5f8c0f6d40080d725bea7936fc01ad345c01b97dc270"
 dependencies = [
  "base64 0.21.7",
  "bytes",
- "headers-core",
+ "headers-core 0.2.0",
  "http 0.2.12",
+ "httpdate",
+ "mime",
+ "sha1",
+]
+
+[[package]]
+name = "headers"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "322106e6bd0cba2d5ead589ddb8150a13d7c4217cf80d7c4f682ca994ccc6aa9"
+dependencies = [
+ "base64 0.21.7",
+ "bytes",
+ "headers-core 0.3.0",
+ "http 1.1.0",
  "httpdate",
  "mime",
  "sha1",
@@ -2777,6 +2961,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e7f66481bfee273957b1f20485a4ff3362987f85b2c236580d81b4eb7a326429"
 dependencies = [
  "http 0.2.12",
+]
+
+[[package]]
+name = "headers-core"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54b4a22553d4242c49fddb9ba998a99962b5cc6f22cb5a3482bec22522403ce4"
+dependencies = [
+ "http 1.1.0",
 ]
 
 [[package]]
@@ -3378,7 +3571,7 @@ dependencies = [
  "once_cell",
  "serde",
  "serde_derive",
- "serde_yaml 0.9.34+deprecated",
+ "serde_yaml 0.9.33",
 ]
 
 [[package]]
@@ -3737,9 +3930,9 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.36.3"
+version = "0.32.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27b64972346851a39438c60b341ebc01bba47464ae329e55cf343eb93964efd9"
+checksum = "a6a622008b6e321afc04970976f62ee297fdbaa6f95318ca343e3eebb9648441"
 dependencies = [
  "memchr",
 ]
@@ -3830,6 +4023,12 @@ name = "overload"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
+
+[[package]]
+name = "owo-colors"
+version = "3.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1b04fb49957986fdce4d6ee7a65027d55d4b6d2265e5848bbb507b58ccfdb6f"
 
 [[package]]
 name = "pairing"
@@ -4103,6 +4302,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "prometheus"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d33c28a30771f7f96db69893f78b857f7450d7e0237e9c8fc6427a81bae7ed1"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "memchr",
+ "parking_lot",
+ "protobuf",
+ "thiserror",
+]
+
+[[package]]
 name = "proptest"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4121,6 +4335,12 @@ dependencies = [
  "tempfile",
  "unarray",
 ]
+
+[[package]]
+name = "protobuf"
+version = "2.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
 name = "quick-error"
@@ -5133,9 +5353,9 @@ dependencies = [
 
 [[package]]
 name = "serde_yaml"
-version = "0.9.34+deprecated"
+version = "0.9.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
+checksum = "a0623d197252096520c6f2a5e1171ee436e5af99a5d7caa2891e55e61950e6d9"
 dependencies = [
  "indexmap 2.4.0",
  "itoa",
@@ -5878,6 +6098,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-error"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d686ec1c0f384b1277f097b2f279a2ecc11afe8c133c1aabf036a27cb4cd206e"
+dependencies = [
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tracing-log"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6128,6 +6358,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "uuid"
+version = "1.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81dfa00651efa65069b0b6b651f4aaa31ba9e3c3ce0137aaad053604ee7e0314"
+dependencies = [
+ "getrandom 0.2.15",
+ "rand 0.8.5",
+ "serde",
+]
+
+[[package]]
 name = "valuable"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6188,7 +6429,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
- "headers",
+ "headers 0.3.9",
  "http 0.2.12",
  "hyper 0.14.30",
  "log",
