@@ -23,9 +23,9 @@ interface IBoltValidators {
     error InvalidBLSSignature();
     error InvalidAuthorizedCollateralProvider();
     error InvalidAuthorizedOperator();
-    error InvalidProofTimestamp();
     error ValidatorAlreadyExists();
     error ValidatorDoesNotExist();
+    error UnsafeRegistrationNotAllowed();
 
     function getAllValidators() external view returns (Validator[] memory);
 
