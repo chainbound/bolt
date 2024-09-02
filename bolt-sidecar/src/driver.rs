@@ -19,10 +19,11 @@ use crate::{
     crypto::{bls::Signer as BlsSigner, SignableBLS, SignerBLSAsync, SignerECDSAAsync},
     primitives::{
         CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
-        SignedConstraints,
+        SignedConstraints, TransactionExt,
     },
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
+    telemetry::ApiMetrics,
     BuilderProxyConfig, CommitBoostSigner, Config, ConstraintsApi, LocalBuilder, MevBoostClient,
 };
 
@@ -187,6 +188,8 @@ impl<C: StateFetcher, BLS: SignerBLSAsync, ECDSA: SignerECDSAAsync> SidecarDrive
     async fn handle_incoming_api_event(&mut self, event: CommitmentEvent) {
         let CommitmentEvent { mut request, response } = event;
         info!("Received new commitment request: {:?}", request);
+        ApiMetrics::increment_inclusion_commitments_received();
+
         let start = Instant::now();
 
         let validator_index = match self.consensus.validate_request(&request) {
@@ -200,6 +203,7 @@ impl<C: StateFetcher, BLS: SignerBLSAsync, ECDSA: SignerECDSAAsync> SidecarDrive
 
         if let Err(err) = self.execution.validate_request(&mut request).await {
             error!(?err, "Execution: failed to commit request");
+            ApiMetrics::increment_validation_errors(err.to_tag_str().to_owned());
             let _ = response.send(Err(CommitmentError::Validation(err)));
             return;
         }
@@ -226,6 +230,10 @@ impl<C: StateFetcher, BLS: SignerBLSAsync, ECDSA: SignerECDSAAsync> SidecarDrive
             }
         };
 
+        // Track the number of transactions preconfirmed considering their type
+        signed_constraints.message.constraints.iter().map(|c| &c.transaction).for_each(|full_tx| {
+            ApiMetrics::increment_transactions_preconfirmed(full_tx.tx_type());
+        });
         self.execution.add_constraint(slot, signed_constraints);
 
         // Create a commitment by signing the request
@@ -236,6 +244,8 @@ impl<C: StateFetcher, BLS: SignerBLSAsync, ECDSA: SignerECDSAAsync> SidecarDrive
                 response.send(Err(CommitmentError::Internal)).ok()
             }
         };
+
+        ApiMetrics::increment_inclusion_commitments_accepted();
     }
 
     /// Handle a new head event, updating the execution state.

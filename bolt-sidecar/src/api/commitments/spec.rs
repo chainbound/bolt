@@ -15,6 +15,8 @@ pub(super) const GET_VERSION_METHOD: &str = "bolt_getVersion";
 
 pub(super) const REQUEST_INCLUSION_METHOD: &str = "bolt_requestInclusion";
 
+pub(super) const MAX_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(6);
+
 /// Error type for the commitments API.
 #[derive(Debug, Error)]
 pub enum Error {

@@ -101,6 +101,15 @@ dora:
     xdg-open "$url"; \
   fi
 
+# show the grafana dashboard in the browser. NOTE: works only for Linux and MacOS at the moment
+grafana:
+  @url=$(just inspect | grep 'grafana\s*http' | awk -F'-> ' '{print $2}' | awk '{print $1}') && \
+  if [ "$(uname)" = "Darwin" ]; then \
+    open "$url"; \
+  else \
+    xdg-open "$url"; \
+  fi
+
 # manually send a preconfirmation to the bolt devnet
 send-preconf count='1':
 	cd bolt-kurtosis-client && RUST_LOG=info cargo run -- \
