@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 
 use eyre::{bail, Result};
+use metrics::ApiMetrics;
 use metrics_exporter_prometheus::PrometheusBuilder;
 use tracing::info;
 use tracing_subscriber::{
@@ -9,7 +10,7 @@ use tracing_subscriber::{
 };
 
 mod metrics;
-pub use metrics::BoltMetrics;
+pub use metrics::ApiMetricType;
 
 /// Initialize the tracing stack and Prometheus metrics recorder.
 ///
@@ -39,7 +40,7 @@ pub fn init_telemetry_stack(metrics_port: Option<u16>) -> Result<()> {
             );
         }
 
-        BoltMetrics::describe_all();
+        ApiMetrics::start();
     };
 
     Ok(())

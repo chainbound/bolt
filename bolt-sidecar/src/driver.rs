@@ -27,7 +27,7 @@ use crate::{
     },
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
-    telemetry::BoltMetrics,
+    telemetry::ApiMetricType,
     BuilderProxyConfig, Config, ConstraintsApi, LocalBuilder, MevBoostClient,
 };
 
@@ -171,7 +171,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
     async fn handle_incoming_api_event(&mut self, event: CommitmentEvent) {
         let CommitmentEvent { mut request, response } = event;
         info!("Received new commitment request: {:?}", request);
-        counter!(BoltMetrics::InclusionCommitmentsReceived.name()).increment(1);
+        counter!(ApiMetricType::InclusionCommitmentsReceived.name()).increment(1);
 
         let start = Instant::now();
 
@@ -186,7 +186,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
 
         if let Err(err) = self.execution.validate_request(&mut request).await {
             error!(?err, "Execution: failed to commit request");
-            counter!(BoltMetrics::ValidationErrors.name(), &[("type", err.to_tag_str())])
+            counter!(ApiMetricType::ValidationErrors.name(), &[("type", err.to_tag_str())])
                 .increment(1);
             let _ = response.send(Err(CommitmentError::Validation(err)));
             return;
@@ -217,7 +217,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         // Track the number of transactions preconfirmed considering their type
         signed_constraints.message.constraints.iter().map(|c| &c.transaction).for_each(|full_tx| {
             counter!(
-                BoltMetrics::TransactionsPreconfirmed.name(),
+                ApiMetricType::TransactionsPreconfirmed.name(),
                 &[("type", tx_type_str(full_tx.tx.tx_type()))]
             )
             .increment(1);
@@ -233,7 +233,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
             }
         };
 
-        counter!(BoltMetrics::InclusionCommitmentsAccepted.name()).increment(1);
+        counter!(ApiMetricType::InclusionCommitmentsAccepted.name()).increment(1);
     }
 
     /// Handle a new head event, updating the execution state.

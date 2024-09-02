@@ -12,7 +12,7 @@ use super::CommitmentDeadline;
 use crate::{
     config::ValidatorIndexes,
     primitives::{CommitmentRequest, Slot},
-    telemetry::BoltMetrics,
+    telemetry::ApiMetricType,
     BeaconClient,
 };
 
@@ -119,7 +119,7 @@ impl ConsensusState {
     /// Update the latest head and fetch the relevant data from the beacon chain.
     pub async fn update_slot(&mut self, slot: u64) -> Result<(), ConsensusError> {
         debug!("Updating slot to {slot}");
-        gauge!(BoltMetrics::LatestHead.name()).set(slot as u32);
+        gauge!(ApiMetricType::LatestHead.name()).set(slot as u32);
 
         // Reset the commitment deadline to start counting for the next slot.
         self.commitment_deadline =

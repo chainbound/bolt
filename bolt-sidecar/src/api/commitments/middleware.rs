@@ -1,4 +1,4 @@
-use crate::telemetry::BoltMetrics;
+use crate::telemetry::ApiMetricType;
 use axum::{extract::Request, middleware::Next, response::IntoResponse};
 use metrics::{counter, histogram};
 use std::time::Instant;
@@ -15,8 +15,8 @@ pub async fn track_server_metrics(req: Request, next: Next) -> impl IntoResponse
 
     let labels = [("method", method), ("path", path), ("status", status)];
 
-    counter!(BoltMetrics::HttpRequestsTotal.name(), &labels).increment(1);
-    histogram!(BoltMetrics::HttpRequestsDurationSeconds.name(), &labels).record(latency);
+    counter!(ApiMetricType::HttpRequestsTotal.name(), &labels).increment(1);
+    histogram!(ApiMetricType::HttpRequestsDurationSeconds.name(), &labels).record(latency);
 
     response
 }
