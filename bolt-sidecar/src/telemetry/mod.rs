@@ -39,7 +39,7 @@ pub fn init_telemetry_stack(metrics_port: Option<u16>) -> Result<()> {
             );
         }
 
-        ApiMetrics::start();
+        ApiMetrics::describe_all();
     };
 
     Ok(())
