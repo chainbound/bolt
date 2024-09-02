@@ -26,10 +26,12 @@ contract BoltValidatorsTest is Test {
         vm.prank(validator);
         validators.registerValidatorUnsafe(pubkey, provider, operator);
 
-        BoltValidators.Validator memory registered = validators.getValidatorByPubkey(pubkey);
+        BoltValidators.Validator memory registered = validators
+            .getValidatorByPubkey(pubkey);
         assertEq(registered.exists, true);
         assertEq(registered.authorizedCollateralProvider, provider);
         assertEq(registered.authorizedOperator, operator);
         assertEq(registered.controller, validator);
     }
 }
+

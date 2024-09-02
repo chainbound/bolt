@@ -80,7 +80,9 @@ contract BoltManager is IBoltManager, Ownable {
     }
 
     /// @notice Get the start timestamp of an epoch.
-    function getEpochStartTs(uint48 epoch) public view returns (uint48 timestamp) {
+    function getEpochStartTs(
+        uint48 epoch
+    ) public view returns (uint48 timestamp) {
         return START_TIMESTAMP + epoch * EPOCH_DURATION;
     }
 
@@ -108,14 +110,20 @@ contract BoltManager is IBoltManager, Ownable {
 
     /// @notice Get the list of collateral addresses that are whitelisted.
     /// @return collaterals The list of collateral addresses that are whitelisted.
-    function getWhitelistedCollaterals() public view returns (address[] memory collaterals) {
+    function getWhitelistedCollaterals()
+        public
+        view
+        returns (address[] memory collaterals)
+    {
         return whitelistedCollaterals.values();
     }
 
     /// @notice Check if a collateral address is whitelisted.
     /// @param collateral The collateral address to check the whitelist status for.
     /// @return True if the collateral address is whitelisted, false otherwise.
-    function isCollateralWhitelisted(address collateral) public view returns (bool) {
+    function isCollateralWhitelisted(
+        address collateral
+    ) public view returns (bool) {
         return whitelistedCollaterals.contains(collateral);
     }
 
@@ -130,7 +138,12 @@ contract BoltManager is IBoltManager, Ownable {
             revert NotOperator();
         }
 
-        if (!IOptInService(SYMBIOTIC_OPERATOR_NET_OPTIN).isOptedIn(operator, BOLT_SYMBIOTIC_NETWORK)) {
+        if (
+            !IOptInService(SYMBIOTIC_OPERATOR_NET_OPTIN).isOptedIn(
+                operator,
+                BOLT_SYMBIOTIC_NETWORK
+            )
+        ) {
             revert OperatorNotOptedIn();
         }
 
@@ -201,22 +214,30 @@ contract BoltManager is IBoltManager, Ownable {
     /// @param vault The vault address to check the enabled status for.
     /// @return True if the vault is enabled, false otherwise.
     function isSymbioticVaultEnabled(address vault) public view returns (bool) {
-        (uint48 enabledTime, uint48 disabledTime) = symbioticVaults.getTimes(vault);
+        (uint48 enabledTime, uint48 disabledTime) = symbioticVaults.getTimes(
+            vault
+        );
         return enabledTime != 0 && disabledTime == 0;
     }
 
     /// @notice Check if an operator is currently enabled to work in Bolt Protocol.
     /// @param operator The operator address to check the enabled status for.
     /// @return True if the operator is enabled, false otherwise.
-    function isSymbioticOperatorEnabled(address operator) public view returns (bool) {
-        (uint48 enabledTime, uint48 disabledTime) = symbioticOperators.getTimes(operator);
+    function isSymbioticOperatorEnabled(
+        address operator
+    ) public view returns (bool) {
+        (uint48 enabledTime, uint48 disabledTime) = symbioticOperators.getTimes(
+            operator
+        );
         return enabledTime != 0 && disabledTime == 0;
     }
 
     /// @notice Get the status of multiple proposers, given their pubkey hashes.
     /// @param pubkeyHashes The pubkey hashes of the proposers to get the status for.
     /// @return statuses The statuses of the proposers, including their operator and active stake.
-    function getProposersStatus(bytes32[] memory pubkeyHashes) public view returns (ProposerStatus[] memory statuses) {
+    function getProposersStatus(
+        bytes32[] memory pubkeyHashes
+    ) public view returns (ProposerStatus[] memory statuses) {
         statuses = new ProposerStatus[](pubkeyHashes.length);
         for (uint256 i = 0; i < pubkeyHashes.length; ++i) {
             statuses[i] = getProposerStatus(pubkeyHashes[i]);
@@ -226,20 +247,25 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Get the status of a proposer, given their pubkey hash.
     /// @param pubkeyHash The pubkey hash of the proposer to get the status for.
     /// @return status The status of the proposer, including their operator and active stake.
-    function getProposerStatus(bytes32 pubkeyHash) public view returns (ProposerStatus memory status) {
+    function getProposerStatus(
+        bytes32 pubkeyHash
+    ) public view returns (ProposerStatus memory status) {
         if (pubkeyHash == bytes32(0)) {
             revert InvalidQuery();
         }
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
-        IBoltValidators.Validator memory validator = validators.getValidatorByPubkeyHash(pubkeyHash);
+        IBoltValidators.Validator memory validator = validators
+            .getValidatorByPubkeyHash(pubkeyHash);
         address operator = validator.authorizedOperator;
 
         status.pubkeyHash = pubkeyHash;
         status.active = validator.exists;
         status.operator = operator;
 
-        (uint48 enabledTime, uint48 disabledTime) = symbioticOperators.getTimes(operator);
+        (uint48 enabledTime, uint48 disabledTime) = symbioticOperators.getTimes(
+            operator
+        );
         if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
             return status;
         }
@@ -248,15 +274,29 @@ contract BoltManager is IBoltManager, Ownable {
         status.amounts = new uint256[](symbioticVaults.length());
 
         for (uint256 i = 0; i < symbioticVaults.length(); ++i) {
-            (address vault, uint48 enabledVaultTime, uint48 disabledVaultTime) = symbioticVaults.atWithTimes(i);
+            (
+                address vault,
+                uint48 enabledVaultTime,
+                uint48 disabledVaultTime
+            ) = symbioticVaults.atWithTimes(i);
 
             address collateral = IVault(vault).collateral();
             status.collaterals[i] = collateral;
-            if (!_wasEnabledAt(enabledVaultTime, disabledVaultTime, epochStartTs)) {
+            if (
+                !_wasEnabledAt(
+                    enabledVaultTime,
+                    disabledVaultTime,
+                    epochStartTs
+                )
+            ) {
                 continue;
             }
 
-            status.amounts[i] = getSymbioticOperatorStakeAt(operator, collateral, epochStartTs);
+            status.amounts[i] = getSymbioticOperatorStakeAt(
+                operator,
+                collateral,
+                epochStartTs
+            );
         }
     }
 
@@ -274,14 +314,20 @@ contract BoltManager is IBoltManager, Ownable {
             revert InvalidQuery();
         }
 
-        return validators.getValidatorByPubkeyHash(pubkeyHash).authorizedOperator == operator;
+        return
+            validators
+                .getValidatorByPubkeyHash(pubkeyHash)
+                .authorizedOperator == operator;
     }
 
     /// @notice Get the stake of an operator in Symbiotic protocol at the current timestamp.
     /// @param operator The operator address to check the stake for.
     /// @param collateral The collateral address to check the stake for.
     /// @return amount The stake of the operator at the current timestamp, in collateral token.
-    function getSymbioticOperatorStake(address operator, address collateral) public view returns (uint256 amount) {
+    function getSymbioticOperatorStake(
+        address operator,
+        address collateral
+    ) public view returns (uint256 amount) {
         uint48 timestamp = Time.timestamp();
         return getSymbioticOperatorStakeAt(operator, collateral, timestamp);
     }
@@ -303,7 +349,11 @@ contract BoltManager is IBoltManager, Ownable {
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(timestamp));
 
         for (uint256 i = 0; i < symbioticVaults.length(); ++i) {
-            (address vault, uint48 enabledTime, uint48 disabledTime) = symbioticVaults.atWithTimes(i);
+            (
+                address vault,
+                uint48 enabledTime,
+                uint48 disabledTime
+            ) = symbioticVaults.atWithTimes(i);
 
             if (collateral != IVault(vault).collateral()) {
                 continue;
@@ -333,26 +383,38 @@ contract BoltManager is IBoltManager, Ownable {
     /// @param epoch The epoch to check the total stake for.
     /// @param collateral The collateral address to check the total stake for.
     /// @return totalStake The total stake of all operators at the given epoch, in collateral token.
-    function getSymbioticTotalStake(uint48 epoch, address collateral) public view returns (uint256 totalStake) {
+    function getSymbioticTotalStake(
+        uint48 epoch,
+        address collateral
+    ) public view returns (uint256 totalStake) {
         uint48 epochStartTs = getEpochStartTs(epoch);
 
         // for epoch older than SLASHING_WINDOW total stake can be invalidated
         if (
-            epochStartTs < SLASHING_WINDOW || epochStartTs < Time.timestamp() - SLASHING_WINDOW
-                || epochStartTs > Time.timestamp()
+            epochStartTs < SLASHING_WINDOW ||
+            epochStartTs < Time.timestamp() - SLASHING_WINDOW ||
+            epochStartTs > Time.timestamp()
         ) {
             revert InvalidQuery();
         }
 
         for (uint256 i; i < symbioticOperators.length(); ++i) {
-            (address operator, uint48 enabledTime, uint48 disabledTime) = symbioticOperators.atWithTimes(i);
+            (
+                address operator,
+                uint48 enabledTime,
+                uint48 disabledTime
+            ) = symbioticOperators.atWithTimes(i);
 
             // just skip operator if it was added after the target epoch or paused
             if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
                 continue;
             }
 
-            totalStake += getSymbioticOperatorStakeAt(operator, collateral, epochStartTs);
+            totalStake += getSymbioticOperatorStakeAt(
+                operator,
+                collateral,
+                epochStartTs
+            );
         }
     }
 
@@ -361,7 +423,14 @@ contract BoltManager is IBoltManager, Ownable {
     /// @param disabledTime The disabled time of the map entry.
     /// @param timestamp The timestamp to check the map entry status at.
     /// @return True if the map entry was active at the given timestamp, false otherwise.
-    function _wasEnabledAt(uint48 enabledTime, uint48 disabledTime, uint48 timestamp) private pure returns (bool) {
-        return enabledTime != 0 && enabledTime <= timestamp && (disabledTime == 0 || disabledTime >= timestamp);
+    function _wasEnabledAt(
+        uint48 enabledTime,
+        uint48 disabledTime,
+        uint48 timestamp
+    ) private pure returns (bool) {
+        return
+            enabledTime != 0 &&
+            enabledTime <= timestamp &&
+            (disabledTime == 0 || disabledTime >= timestamp);
     }
 }

@@ -45,7 +45,9 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
 
     /// @notice Enable or disable the use of the BLS precompile
     /// @param allowUnsafeRegistration Whether to allow unsafe registration of validators
-    function setAllowUnsafeRegistration(bool allowUnsafeRegistration) public onlyOwner {
+    function setAllowUnsafeRegistration(
+        bool allowUnsafeRegistration
+    ) public onlyOwner {
         ALLOW_UNSAFE_REGISTRATION = allowUnsafeRegistration;
     }
 
@@ -63,14 +65,18 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     }
 
     /// @notice Get a validator by its BLS public key
-    function getValidatorByPubkey(BLS12381.G1Point calldata pubkey) public view returns (Validator memory) {
+    function getValidatorByPubkey(
+        BLS12381.G1Point calldata pubkey
+    ) public view returns (Validator memory) {
         return getValidatorByPubkeyHash(_pubkeyHash(pubkey));
     }
 
     /// @notice Get a validator by its BLS public key hash
     /// @param pubkeyHash BLS public key hash of the validator
     /// @return Validator memory Validator struct
-    function getValidatorByPubkeyHash(bytes32 pubkeyHash) public view returns (Validator memory) {
+    function getValidatorByPubkeyHash(
+        bytes32 pubkeyHash
+    ) public view returns (Validator memory) {
         Validator memory validator = VALIDATORS[pubkeyHash];
         if (!validator.exists) {
             revert ValidatorDoesNotExist();
@@ -81,7 +87,9 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     /// @notice Get a validator by its sequence number
     /// @param sequenceNumber Sequence number of the validator
     /// @return Validator memory Validator struct
-    function getValidatorBySequenceNumber(uint64 sequenceNumber) public view returns (Validator memory) {
+    function getValidatorBySequenceNumber(
+        uint64 sequenceNumber
+    ) public view returns (Validator memory) {
         bytes32 pubkeyHash = sequenceNumberToPubkeyHash[sequenceNumber];
         return VALIDATORS[pubkeyHash];
     }
@@ -97,7 +105,12 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
             revert UnsafeRegistrationNotAllowed();
         }
 
-        _registerValidator(pubkey, nextValidatorSequenceNumber, authorizedCollateralProvider, authorizedOperator);
+        _registerValidator(
+            pubkey,
+            nextValidatorSequenceNumber,
+            authorizedCollateralProvider,
+            authorizedOperator
+        );
     }
 
     /// @notice Register a single Validator and authorize a Collateral Provider and Operator for it
@@ -113,12 +126,21 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
         address authorizedCollateralProvider,
         address authorizedOperator
     ) public {
-        bytes memory message = abi.encodePacked(block.chainid, msg.sender, nextValidatorSequenceNumber);
+        bytes memory message = abi.encodePacked(
+            block.chainid,
+            msg.sender,
+            nextValidatorSequenceNumber
+        );
         if (!_verifySignature(message, signature, pubkey)) {
             revert InvalidAuthorizedCollateralProvider();
         }
 
-        _registerValidator(pubkey, nextValidatorSequenceNumber, authorizedCollateralProvider, authorizedOperator);
+        _registerValidator(
+            pubkey,
+            nextValidatorSequenceNumber,
+            authorizedCollateralProvider,
+            authorizedOperator
+        );
     }
 
     /// @notice Register a batch of Validators and authorize a Collateral Provider and Operator for them
@@ -134,15 +156,23 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
         address authorizedOperator
     ) public {
         uint256 validatorsCount = pubkeys.length;
-        uint64[] memory expectedValidatorSequenceNumbers = new uint64[](validatorsCount);
+        uint64[] memory expectedValidatorSequenceNumbers = new uint64[](
+            validatorsCount
+        );
         for (uint256 i = 0; i < validatorsCount; i++) {
-            expectedValidatorSequenceNumbers[i] = nextValidatorSequenceNumber + uint64(i);
+            expectedValidatorSequenceNumbers[i] =
+                nextValidatorSequenceNumber +
+                uint64(i);
         }
 
         // Reconstruct the unique message for which we expect an aggregated signature.
         // We need the msg.sender to prevent a front-running attack by an EOA that may
         // try to register the same validators
-        bytes memory message = abi.encodePacked(block.chainid, msg.sender, expectedValidatorSequenceNumbers);
+        bytes memory message = abi.encodePacked(
+            block.chainid,
+            msg.sender,
+            expectedValidatorSequenceNumbers
+        );
 
         // Aggregate the pubkeys into a single pubkey to verify the aggregated signature once
         BLS12381.G1Point memory aggPubkey = _aggregatePubkeys(pubkeys);
@@ -154,7 +184,10 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
         // Register the validators and authorize the Collateral Provider and Operator for them
         for (uint256 i = 0; i < validatorsCount; i++) {
             _registerValidator(
-                pubkeys[i], expectedValidatorSequenceNumbers[i], authorizedCollateralProvider, authorizedOperator
+                pubkeys[i],
+                expectedValidatorSequenceNumbers[i],
+                authorizedCollateralProvider,
+                authorizedOperator
             );
         }
     }
@@ -203,7 +236,9 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     /// @notice Compute the hash of a BLS public key
     /// @param pubkey BLS public key
     /// @return Hash of the public key in compressed form
-    function _pubkeyHash(BLS12381.G1Point memory pubkey) internal pure returns (bytes32) {
+    function _pubkeyHash(
+        BLS12381.G1Point memory pubkey
+    ) internal pure returns (bytes32) {
         uint256[2] memory compressedPubKey = pubkey.compress();
         return keccak256(abi.encodePacked(compressedPubKey));
     }

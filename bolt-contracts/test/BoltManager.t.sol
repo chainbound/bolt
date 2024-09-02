@@ -91,51 +91,58 @@ contract BoltManagerTest is Test {
         address[] memory adminRoleHolders = new address[](1);
         adminRoleHolders[0] = vaultAdmin;
 
-        IVaultConfigurator.InitParams memory vaultConfiguratorInitParams = IVaultConfigurator.InitParams({
-            version: IMigratablesFactory(vaultConfigurator.VAULT_FACTORY()).lastVersion(),
-            owner: vaultAdmin,
-            vaultParams: IVault.InitParams({
-                collateral: address(collateral),
-                delegator: address(0),
-                slasher: address(0),
-                burner: address(0xdead),
-                epochDuration: EPOCH_DURATION,
-                depositWhitelist: false,
-                isDepositLimit: false,
-                depositLimit: 0,
-                defaultAdminRoleHolder: vaultAdmin,
-                depositWhitelistSetRoleHolder: vaultAdmin,
-                depositorWhitelistRoleHolder: vaultAdmin,
-                isDepositLimitSetRoleHolder: vaultAdmin,
-                depositLimitSetRoleHolder: vaultAdmin
-            }),
-            delegatorIndex: 0, // Use NetworkRestakeDelegator
-            delegatorParams: abi.encode(
-                INetworkRestakeDelegator.InitParams({
-                    baseParams: IBaseDelegator.BaseParams({
-                        defaultAdminRoleHolder: vaultAdmin,
-                        hook: address(0), // we don't need a hook
-                        hookSetRoleHolder: vaultAdmin
-                    }),
-                    networkLimitSetRoleHolders: adminRoleHolders,
-                    operatorNetworkSharesSetRoleHolders: adminRoleHolders
-                })
-            ),
-            withSlasher: true,
-            slasherIndex: 1, // Use VetoSlasher
-            slasherParams: abi.encode(
-                IVetoSlasher.InitParams({
-                    // veto duration must be smaller than epoch duration
-                    vetoDuration: uint48(12 hours),
-                    resolverSetEpochsDelay: 3
-                })
-            )
-        });
+        IVaultConfigurator.InitParams memory vaultConfiguratorInitParams = IVaultConfigurator
+            .InitParams({
+                version: IMigratablesFactory(vaultConfigurator.VAULT_FACTORY())
+                    .lastVersion(),
+                owner: vaultAdmin,
+                vaultParams: IVault.InitParams({
+                    collateral: address(collateral),
+                    delegator: address(0),
+                    slasher: address(0),
+                    burner: address(0xdead),
+                    epochDuration: EPOCH_DURATION,
+                    depositWhitelist: false,
+                    isDepositLimit: false,
+                    depositLimit: 0,
+                    defaultAdminRoleHolder: vaultAdmin,
+                    depositWhitelistSetRoleHolder: vaultAdmin,
+                    depositorWhitelistRoleHolder: vaultAdmin,
+                    isDepositLimitSetRoleHolder: vaultAdmin,
+                    depositLimitSetRoleHolder: vaultAdmin
+                }),
+                delegatorIndex: 0, // Use NetworkRestakeDelegator
+                delegatorParams: abi.encode(
+                    INetworkRestakeDelegator.InitParams({
+                        baseParams: IBaseDelegator.BaseParams({
+                            defaultAdminRoleHolder: vaultAdmin,
+                            hook: address(0), // we don't need a hook
+                            hookSetRoleHolder: vaultAdmin
+                        }),
+                        networkLimitSetRoleHolders: adminRoleHolders,
+                        operatorNetworkSharesSetRoleHolders: adminRoleHolders
+                    })
+                ),
+                withSlasher: true,
+                slasherIndex: 1, // Use VetoSlasher
+                slasherParams: abi.encode(
+                    IVetoSlasher.InitParams({
+                        // veto duration must be smaller than epoch duration
+                        vetoDuration: uint48(12 hours),
+                        resolverSetEpochsDelay: 3
+                    })
+                )
+            });
 
-        (address vault_, address networkRestakeDelegator_, address vetoSlasher_) =
-            vaultConfigurator.create(vaultConfiguratorInitParams);
+        (
+            address vault_,
+            address networkRestakeDelegator_,
+            address vetoSlasher_
+        ) = vaultConfigurator.create(vaultConfiguratorInitParams);
         vault = IVault(vault_);
-        networkRestakeDelegator = INetworkRestakeDelegator(networkRestakeDelegator_);
+        networkRestakeDelegator = INetworkRestakeDelegator(
+            networkRestakeDelegator_
+        );
         vetoSlasher = IVetoSlasher(vetoSlasher_);
 
         assertEq(address(networkRestakeDelegator), address(vault.delegator()));
@@ -179,8 +186,16 @@ contract BoltManagerTest is Test {
         vm.prank(validator);
         validators.registerValidatorUnsafe(pubkey, provider, operator);
         assertEq(validators.getValidatorByPubkey(pubkey).exists, true);
-        assertEq(validators.getValidatorByPubkey(pubkey).authorizedOperator, operator);
-        assertEq(validators.getValidatorByPubkey(pubkey).authorizedCollateralProvider, provider);
+        assertEq(
+            validators.getValidatorByPubkey(pubkey).authorizedOperator,
+            operator
+        );
+        assertEq(
+            validators
+                .getValidatorByPubkey(pubkey)
+                .authorizedCollateralProvider,
+            provider
+        );
 
         // --- Register Operator in Symbiotic, opt-in network and vault ---
 
@@ -190,11 +205,17 @@ contract BoltManagerTest is Test {
 
         vm.prank(operator);
         operatorNetworkOptInService.optIn(networkAdmin);
-        assertEq(operatorNetworkOptInService.isOptedIn(operator, networkAdmin), true);
+        assertEq(
+            operatorNetworkOptInService.isOptedIn(operator, networkAdmin),
+            true
+        );
 
         vm.prank(operator);
         operatorVaultOptInService.optIn(address(vault));
-        assertEq(operatorVaultOptInService.isOptedIn(operator, address(vault)), true);
+        assertEq(
+            operatorVaultOptInService.isOptedIn(operator, address(vault)),
+            true
+        );
 
         // --- Register Vault and Operator in BoltManager (middleware) ---
 
@@ -222,16 +243,24 @@ contract BoltManagerTest is Test {
 
         // deposit collateral from "provider" on behalf of "operator"
         vm.prank(provider);
-        (uint256 depositedAmount, uint256 mintedShares) = vault.deposit(operator, 1 ether);
+        (uint256 depositedAmount, uint256 mintedShares) = vault.deposit(
+            operator,
+            1 ether
+        );
 
         assertEq(depositedAmount, 1 ether);
         assertEq(mintedShares, 1 ether);
         assertEq(vault.balanceOf(operator), 1 ether);
-        assertEq(SimpleCollateral(collateral).balanceOf(address(vault)), 1 ether);
+        assertEq(
+            SimpleCollateral(collateral).balanceOf(address(vault)),
+            1 ether
+        );
     }
 
     /// @notice Compute the hash of a BLS public key
-    function _pubkeyHash(BLS12381.G1Point memory pubkey) internal pure returns (bytes32) {
+    function _pubkeyHash(
+        BLS12381.G1Point memory pubkey
+    ) internal pure returns (bytes32) {
         uint256[2] memory compressedPubKey = pubkey.compress();
         return keccak256(abi.encodePacked(compressedPubKey));
     }
@@ -242,9 +271,17 @@ contract BoltManagerTest is Test {
         // --- Read the operator stake ---
 
         // initial state
-        uint256 shares = networkRestakeDelegator.totalOperatorNetworkShares(subnetwork);
-        uint256 stakeFromDelegator = networkRestakeDelegator.stake(subnetwork, operator);
-        uint256 stakeFromManager = manager.getSymbioticOperatorStake(operator, address(collateral));
+        uint256 shares = networkRestakeDelegator.totalOperatorNetworkShares(
+            subnetwork
+        );
+        uint256 stakeFromDelegator = networkRestakeDelegator.stake(
+            subnetwork,
+            operator
+        );
+        uint256 stakeFromManager = manager.getSymbioticOperatorStake(
+            operator,
+            address(collateral)
+        );
         assertEq(shares, 0);
         assertEq(stakeFromManager, stakeFromDelegator);
         assertEq(stakeFromManager, 0);
@@ -260,15 +297,31 @@ contract BoltManagerTest is Test {
         assertEq(vault.activeSharesAt(uint48(block.timestamp), ""), 1 ether);
 
         // there still aren't any shares minted on the delegator
-        assertEq(networkRestakeDelegator.totalOperatorNetworkShares(subnetwork), 0);
-        assertEq(networkRestakeDelegator.operatorNetworkShares(subnetwork, operator), 0);
+        assertEq(
+            networkRestakeDelegator.totalOperatorNetworkShares(subnetwork),
+            0
+        );
+        assertEq(
+            networkRestakeDelegator.operatorNetworkShares(subnetwork, operator),
+            0
+        );
 
         // we need to mint shares from the vault admin to activate stake
         // for the operator in the subnetwork.
         vm.prank(vaultAdmin);
-        networkRestakeDelegator.setOperatorNetworkShares(subnetwork, operator, 100);
-        assertEq(networkRestakeDelegator.totalOperatorNetworkShares(subnetwork), 100);
-        assertEq(networkRestakeDelegator.operatorNetworkShares(subnetwork, operator), 100);
+        networkRestakeDelegator.setOperatorNetworkShares(
+            subnetwork,
+            operator,
+            100
+        );
+        assertEq(
+            networkRestakeDelegator.totalOperatorNetworkShares(subnetwork),
+            100
+        );
+        assertEq(
+            networkRestakeDelegator.operatorNetworkShares(subnetwork, operator),
+            100
+        );
 
         // assertEq(manager.getSymbioticTotalStake(0, address(collateral)), 0);
         // assertEq(manager.getSymbioticTotalStake(1, address(collateral)), 1 ether);
@@ -286,7 +339,9 @@ contract BoltManagerTest is Test {
         BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
         bytes32 pubkeyHash = _pubkeyHash(pubkey);
 
-        BoltManager.ProposerStatus memory status = manager.getProposerStatus(pubkeyHash);
+        BoltManager.ProposerStatus memory status = manager.getProposerStatus(
+            pubkeyHash
+        );
         assertEq(status.pubkeyHash, pubkeyHash);
         assertEq(status.operator, operator);
         assertEq(status.active, true);
@@ -297,6 +352,26 @@ contract BoltManagerTest is Test {
         // TODO: this should be 1 ether, but reading from delegator doesn't work
         // see testReadOperatorStake above for details.
         assertEq(status.amounts[0], 0);
+    }
+
+    function testProposersLookaheadStatus() public {
+        _symbioticOptInRoutine();
+
+        bytes32[] memory pubkeyHashes = new bytes32[](10);
+
+        // register 10 proposers with random pubkeys
+        for (uint256 i = 0; i < 10; i++) {
+            BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
+            pubkey.x[0] = pubkey.x[0] + i + 2;
+            pubkey.y[0] = pubkey.y[0] + i + 2;
+
+            pubkeyHashes[i] = _pubkeyHash(pubkey);
+            validators.registerValidatorUnsafe(pubkey, provider, operator);
+        }
+
+        BoltManager.ProposerStatus[] memory statuses = manager
+            .getProposersStatus(pubkeyHashes);
+        assertEq(statuses.length, 10);
     }
 
     function testGetNonExistentProposerStatus() public {
@@ -323,3 +398,4 @@ contract BoltManagerTest is Test {
         manager.registerSymbioticVault(address(vault));
     }
 }
+
