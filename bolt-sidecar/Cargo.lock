@@ -1471,6 +1471,8 @@ dependencies = [
  "clap",
  "dotenvy",
  "ethereum-consensus",
+ "ethereum_ssz",
+ "ethereum_ssz_derive",
  "eyre",
  "futures",
  "hex",
@@ -1485,6 +1487,7 @@ dependencies = [
  "secp256k1",
  "serde",
  "serde_json",
+ "ssz_rs 0.9.0 (git+https://github.com/ralexstokes/ssz-rs)",
  "thiserror",
  "tokio",
  "tracing",
@@ -1551,19 +1554,20 @@ dependencies = [
 [[package]]
 name = "cb-common"
 version = "0.0.1"
-source = "git+https://github.com/Commit-Boost/commit-boost-client?rev=0c12f37#0c12f37ffbb59fbfeadb8e7009ba7d1d30d699b5"
+source = "git+https://github.com/mempirate/commit-boost-client?branch=feat/exports#137933456a1f46428f30ff5ac65c8c5a0bf29c64"
 dependencies = [
  "alloy",
  "axum",
  "bimap",
  "blst",
- "derive_more 0.99.18",
+ "derive_more 1.0.0",
  "eth2_keystore",
  "ethereum-types",
  "ethereum_serde_utils",
  "ethereum_ssz",
  "ethereum_ssz_derive",
  "eyre",
+ "k256 0.13.3",
  "rand 0.8.5",
  "reqwest 0.12.7",
  "serde",
@@ -2297,7 +2301,7 @@ dependencies = [
  "serde_json",
  "serde_yaml 0.8.26",
  "sha2 0.10.8",
- "ssz_rs",
+ "ssz_rs 0.9.0 (git+https://github.com/ralexstokes/ssz-rs?rev=84ef2b71aa004f6767420badb42c902ad56b8b72)",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -3340,6 +3344,7 @@ dependencies = [
  "elliptic-curve 0.13.8",
  "once_cell",
  "sha2 0.10.8",
+ "signature 2.2.0",
 ]
 
 [[package]]
@@ -5319,13 +5324,35 @@ dependencies = [
  "bitvec",
  "serde",
  "sha2 0.9.9",
- "ssz_rs_derive",
+ "ssz_rs_derive 0.9.0 (git+https://github.com/ralexstokes/ssz-rs?rev=84ef2b71aa004f6767420badb42c902ad56b8b72)",
+]
+
+[[package]]
+name = "ssz_rs"
+version = "0.9.0"
+source = "git+https://github.com/ralexstokes/ssz-rs#84ef2b71aa004f6767420badb42c902ad56b8b72"
+dependencies = [
+ "alloy-primitives",
+ "bitvec",
+ "serde",
+ "sha2 0.9.9",
+ "ssz_rs_derive 0.9.0 (git+https://github.com/ralexstokes/ssz-rs)",
 ]
 
 [[package]]
 name = "ssz_rs_derive"
 version = "0.9.0"
 source = "git+https://github.com/ralexstokes/ssz-rs?rev=84ef2b71aa004f6767420badb42c902ad56b8b72#84ef2b71aa004f6767420badb42c902ad56b8b72"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "ssz_rs_derive"
+version = "0.9.0"
+source = "git+https://github.com/ralexstokes/ssz-rs#84ef2b71aa004f6767420badb42c902ad56b8b72"
 dependencies = [
  "proc-macro2",
  "quote",

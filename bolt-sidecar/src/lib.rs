@@ -43,6 +43,9 @@ pub mod primitives;
 /// State management and fetching for EVM simulation
 pub mod state;
 
+/// Bolt-boost (i.e. commit-boost) implementation with constraints-api
+pub mod bolt_boost;
+
 /// Utilities for testing
 #[cfg(test)]
 mod test_util;

@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
-use alloy::rpc::types::beacon::{BlsPublicKey, BlsSignature};
-use cb_common::commit::{client::SignerClient, request::SignRequest};
+use alloy::rpc::types::beacon::BlsSignature;
+use cb_common::{
+    commit::{client::SignerClient, request::SignConsensusRequest},
+    signer::BlsPublicKey,
+};
 use eyre::ErrReport;
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -36,11 +39,7 @@ impl CommitBoostClient {
         tokio::spawn(async move {
             match this.signer_client.get_pubkeys().await {
                 Ok(pubkeys) => {
-                    info!(
-                        consensus = pubkeys.consensus.len(),
-                        proxy = pubkeys.proxy.len(),
-                        "Received pubkeys"
-                    );
+                    info!(consensus = pubkeys.consensus.len(), "Received pubkeys");
                     let mut pubkeys_lock = this.pubkeys.write();
                     *pubkeys_lock = pubkeys.consensus;
                 }
@@ -68,11 +67,12 @@ impl SignerBLSAsync for CommitBoostClient {
             )))
         }?;
 
-        let request = SignRequest::builder(*self.pubkeys.read().first().expect("pubkeys loaded"))
-            .with_root(root);
+        let request =
+            SignConsensusRequest::builder(*self.pubkeys.read().first().expect("pubkeys loaded"))
+                .with_root(root);
 
         debug!(?request, "Requesting signature from commit_boost");
 
-        Ok(self.signer_client.request_signature(&request).await?)
+        Ok(self.signer_client.request_consensus_signature(request).await?)
     }
 }
