@@ -93,6 +93,10 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
         address authorizedCollateralProvider,
         address authorizedOperator
     ) public {
+        if (!ALLOW_UNSAFE_REGISTRATION) {
+            revert UnsafeRegistrationNotAllowed();
+        }
+
         _registerValidator(pubkey, nextValidatorSequenceNumber, authorizedCollateralProvider, authorizedOperator);
     }
 
@@ -111,7 +115,7 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     ) public {
         bytes memory message = abi.encodePacked(block.chainid, msg.sender, nextValidatorSequenceNumber);
         if (!_verifySignature(message, signature, pubkey)) {
-            revert InvalidBLSSignature();
+            revert InvalidAuthorizedCollateralProvider();
         }
 
         _registerValidator(pubkey, nextValidatorSequenceNumber, authorizedCollateralProvider, authorizedOperator);
