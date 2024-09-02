@@ -20,7 +20,10 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     /// power to an Operator to make commitments on their behalf.
     mapping(bytes32 => Validator) public VALIDATORS;
 
-    bool public IS_BLS_PRECOMPILE_ENABLED = false;
+    /// @notice Whether to allow unsafe registration of validators
+    /// @dev Until the BLS12_381 precompile is live, we need to allow unsafe registration
+    /// which means we don't check the BLS signature of the validator pubkey.
+    bool public ALLOW_UNSAFE_REGISTRATION = true;
 
     /// @notice Mapping from validator sequence number to validator pubkey hash
     /// @dev This is used internally to easily query the pubkey hash of a validator.
@@ -41,9 +44,9 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     constructor(address _owner) Ownable(_owner) {}
 
     /// @notice Enable or disable the use of the BLS precompile
-    /// @param isEnabled Whether the BLS precompile should be enabled
-    function setIsBLSPrecompileEnabled(bool isEnabled) public onlyOwner {
-        IS_BLS_PRECOMPILE_ENABLED = isEnabled;
+    /// @param allowUnsafeRegistration Whether to allow unsafe registration of validators
+    function setAllowUnsafeRegistration(bool allowUnsafeRegistration) public onlyOwner {
+        ALLOW_UNSAFE_REGISTRATION = allowUnsafeRegistration;
     }
 
     /// @notice Get all validators
@@ -152,6 +155,11 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
         }
     }
 
+    /// @notice Internal helper to add a validator to the registry
+    /// @param pubkey BLS public key of the validator
+    /// @param sequenceNumber Sequence number of the validator
+    /// @param authorizedCollateralProvider Address of the authorized collateral provider
+    /// @param authorizedOperator Address of the authorized operator
     function _registerValidator(
         BLS12381.G1Point calldata pubkey,
         uint64 sequenceNumber,
