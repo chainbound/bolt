@@ -18,6 +18,7 @@ use crate::crypto::{bls::SignerBLSAsync, ecdsa::SignerECDSAAsync};
 /// A client for interacting with CommitBoost.
 #[derive(Debug, Clone)]
 pub struct CommitBoostSigner {
+    /// A client for interacting with CommitBoost and handling signing operations.
     signer_client: SignerClient,
     pubkeys: Arc<RwLock<Vec<CBBlsPublicKey>>>,
     proxy_ecdsa: Arc<RwLock<Vec<EcdsaPublicKey>>>,
