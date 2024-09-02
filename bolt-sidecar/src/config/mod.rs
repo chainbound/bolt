@@ -123,7 +123,7 @@ pub struct Config {
     /// Metrics port
     pub metrics_port: u16,
     /// Toggle for metrics
-    pub metrics: bool,
+    pub disable_metrics: bool,
 }
 
 impl Default for Config {
@@ -144,7 +144,7 @@ impl Default for Config {
             validator_indexes: ValidatorIndexes::default(),
             chain: ChainConfig::default(),
             metrics_port: 0,
-            metrics: true,
+            disable_metrics: false,
         }
     }
 }
@@ -241,7 +241,7 @@ impl TryFrom<Opts> for Config {
 
         config.chain = opts.chain;
         config.metrics_port = opts.telemetry.metrics_port;
-        config.metrics = opts.telemetry.metrics;
+        config.disable_metrics = opts.telemetry.disable_metrics;
 
         Ok(config)
     }
