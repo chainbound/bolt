@@ -13,7 +13,6 @@ use ethereum_consensus::{
     primitives::{BlsPublicKey, Hash32},
     Fork,
 };
-use metrics::counter;
 use parking_lot::Mutex;
 use reqwest::Url;
 use serde::Deserialize;
@@ -29,7 +28,7 @@ use super::spec::{
 use crate::{
     client::mevboost::MevBoostClient,
     primitives::{GetPayloadResponse, PayloadFetcher, SignedBuilderBid},
-    telemetry::ApiMetricType,
+    telemetry::ApiMetrics,
 };
 
 const MAX_BLINDED_BLOCK_LENGTH: usize = 1024 * 1024;
@@ -190,7 +189,7 @@ where
             check_locally_built_payload_integrity(&signed_blinded_block, &local_payload)?;
 
             info!("Valid local block found, returning: {local_payload:?}");
-            counter!(ApiMetricType::LocalBlocksProposed.name()).increment(1);
+            ApiMetrics::increment_local_blocks_proposed();
 
             return Ok(Json(local_payload));
         }
@@ -209,7 +208,7 @@ where
             })?;
 
         info!(elapsed = ?start.elapsed(), "Returning payload from mev-boost");
-        counter!(ApiMetricType::RemoteBlocksProposed.name()).increment(1);
+        ApiMetrics::increment_remote_blocks_proposed();
 
         Ok(payload)
     }

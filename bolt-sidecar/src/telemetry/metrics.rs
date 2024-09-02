@@ -1,11 +1,70 @@
-use metrics::{describe_counter, describe_gauge, describe_histogram};
+use std::time::Duration;
 
+use metrics::{counter, describe_counter, describe_gauge, describe_histogram, gauge, histogram};
+use reth_primitives::TxType;
+
+use crate::primitives::tx_type_str;
+
+/// Metrics for the commitments API.
 #[derive(Debug, Clone, Copy)]
 pub struct ApiMetrics;
 
+#[allow(missing_docs)]
 impl ApiMetrics {
     pub fn start() {
         ApiMetricType::describe_all();
+    }
+
+    /// Counters ----------------------------------------------------------------
+
+    pub fn increment_total_http_requests(method: String, path: String, status: String) {
+        counter!(
+            ApiMetricType::HttpRequestsTotal.name(),
+            &[("method", method), ("path", path), ("status", status)]
+        )
+        .increment(1);
+    }
+
+    pub fn increment_local_blocks_proposed() {
+        counter!(ApiMetricType::LocalBlocksProposed.name()).increment(1);
+    }
+
+    pub fn increment_remote_blocks_proposed() {
+        counter!(ApiMetricType::RemoteBlocksProposed.name()).increment(1);
+    }
+
+    pub fn increment_inclusion_commitments_received() {
+        counter!(ApiMetricType::InclusionCommitmentsReceived.name()).increment(1);
+    }
+
+    pub fn increment_inclusion_commitments_accepted() {
+        counter!(ApiMetricType::InclusionCommitmentsAccepted.name()).increment(1);
+    }
+
+    pub fn increment_transactions_preconfirmed(tx_type: TxType) {
+        counter!(ApiMetricType::TransactionsPreconfirmed.name(), &[("type", tx_type_str(tx_type))])
+            .increment(1);
+    }
+
+    pub fn increment_validation_errors(err_type: String) {
+        counter!(ApiMetricType::ValidationErrors.name(), &[("type", err_type)]).increment(1);
+    }
+
+    /// Gauges ----------------------------------------------------------------
+
+    pub fn set_latest_head(slot: u32) {
+        gauge!(ApiMetricType::LatestHead.name()).set(slot);
+    }
+
+    /// Mixed ----------------------------------------------------------------
+
+    /// Observes the duration of an HTTP request by storing it in a histogram,
+    /// and incrementing the total number of HTTP requests received.
+    pub fn observe_http_request(duration: Duration, method: String, path: String, status: String) {
+        let labels = [("method", method), ("path", path), ("status", status)];
+        counter!(ApiMetricType::HttpRequestsTotal.name(), &labels).increment(1);
+        histogram!(ApiMetricType::HttpRequestsDurationSeconds.name(), &labels,)
+            .record(duration.as_secs_f64());
     }
 }
 
@@ -39,7 +98,7 @@ pub enum ApiMetricType {
 
 impl ApiMetricType {
     /// Returns the name of the metric.
-    pub const fn name(&self) -> &'static str {
+    const fn name(&self) -> &'static str {
         match self {
             ApiMetricType::LocalBlocksProposed => "bolt_sidecar_local_blocks_proposed",
             ApiMetricType::RemoteBlocksProposed => "bolt_sidecar_remote_blocks_proposed",

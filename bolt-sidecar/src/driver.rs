@@ -11,7 +11,6 @@ use ethereum_consensus::{
     phase0::mainnet::SLOTS_PER_EPOCH,
 };
 use futures::StreamExt;
-use metrics::counter;
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
@@ -22,12 +21,12 @@ use crate::{
     },
     crypto::{bls::Signer as BlsSigner, SignableBLS, SignerBLS},
     primitives::{
-        tx_type_str, CommitmentRequest, ConstraintsMessage, FetchPayloadRequest,
-        LocalPayloadFetcher, SignedConstraints, TransactionExt,
+        CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
+        SignedConstraints, TransactionExt,
     },
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
-    telemetry::ApiMetricType,
+    telemetry::ApiMetrics,
     BuilderProxyConfig, Config, ConstraintsApi, LocalBuilder, MevBoostClient,
 };
 
@@ -171,7 +170,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
     async fn handle_incoming_api_event(&mut self, event: CommitmentEvent) {
         let CommitmentEvent { mut request, response } = event;
         info!("Received new commitment request: {:?}", request);
-        counter!(ApiMetricType::InclusionCommitmentsReceived.name()).increment(1);
+        ApiMetrics::increment_inclusion_commitments_received();
 
         let start = Instant::now();
 
@@ -186,8 +185,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
 
         if let Err(err) = self.execution.validate_request(&mut request).await {
             error!(?err, "Execution: failed to commit request");
-            counter!(ApiMetricType::ValidationErrors.name(), &[("type", err.to_tag_str())])
-                .increment(1);
+            ApiMetrics::increment_validation_errors(err.to_tag_str().to_owned());
             let _ = response.send(Err(CommitmentError::Validation(err)));
             return;
         }
@@ -216,11 +214,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
 
         // Track the number of transactions preconfirmed considering their type
         signed_constraints.message.constraints.iter().map(|c| &c.transaction).for_each(|full_tx| {
-            counter!(
-                ApiMetricType::TransactionsPreconfirmed.name(),
-                &[("type", tx_type_str(full_tx.tx.tx_type()))]
-            )
-            .increment(1);
+            ApiMetrics::increment_transactions_preconfirmed(full_tx.tx_type());
         });
         self.execution.add_constraint(slot, signed_constraints);
 
@@ -233,7 +227,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
             }
         };
 
-        counter!(ApiMetricType::InclusionCommitmentsAccepted.name()).increment(1);
+        ApiMetrics::increment_inclusion_commitments_accepted();
     }
 
     /// Handle a new head event, updating the execution state.

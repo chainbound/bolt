@@ -5,14 +5,13 @@ use std::{
 
 use beacon_api_client::{mainnet::Client, ProposerDuty};
 use ethereum_consensus::phase0::mainnet::SLOTS_PER_EPOCH;
-use metrics::gauge;
 use tracing::debug;
 
 use super::CommitmentDeadline;
 use crate::{
     config::ValidatorIndexes,
     primitives::{CommitmentRequest, Slot},
-    telemetry::ApiMetricType,
+    telemetry::ApiMetrics,
     BeaconClient,
 };
 
@@ -119,7 +118,7 @@ impl ConsensusState {
     /// Update the latest head and fetch the relevant data from the beacon chain.
     pub async fn update_slot(&mut self, slot: u64) -> Result<(), ConsensusError> {
         debug!("Updating slot to {slot}");
-        gauge!(ApiMetricType::LatestHead.name()).set(slot as u32);
+        ApiMetrics::set_latest_head(slot as u32);
 
         // Reset the commitment deadline to start counting for the next slot.
         self.commitment_deadline =

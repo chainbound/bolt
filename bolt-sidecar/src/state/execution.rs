@@ -20,6 +20,9 @@ use crate::{
 use super::fetcher::StateFetcher;
 
 /// Possible commitment validation errors.
+///
+/// NOTE: unfortuntately it cannot implement `Clone` due to `BlobTransactionValidationError`
+/// not implementing it
 #[derive(Debug, Error)]
 pub enum ValidationError {
     /// The transaction fee is too low to cover the maximum base fee.
