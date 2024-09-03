@@ -22,6 +22,9 @@ The registration process includes the following steps:
    3. The address of the authorized collateral provider
    4. The address of the authorized operator
 
+Until the Pectra hard-fork will be activated, the contract will also expose a `registerValidatorUnsafe` function
+that will not check the BLS signature. This is gated by a feature flag that will be turned off post-Pectra.
+
 ## Symbiotic Operator and Vault Registration: `BoltManager`
 
 TODO
