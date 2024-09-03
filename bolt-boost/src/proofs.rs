@@ -86,10 +86,12 @@ mod tests {
 
     #[test]
     fn test_single_multiproof() {
-        let test_block = read_test_block();
-
         let (root, transactions) = read_test_transactions();
-        println!("Transactions root: {:?}", root);
+        println!(
+            "Transactions root: {:?}, num transactions: {}",
+            root,
+            transactions.len()
+        );
 
         let transactions_list = transactions_to_ssz_list(transactions.clone());
 
@@ -123,6 +125,51 @@ mod tests {
         let start_verify = std::time::Instant::now();
         assert!(multi_proof.verify(witness).is_ok());
         println!("Verified multiproof in {:?}", start_verify.elapsed());
+
+        // assert!(verify_multiproofs(&[c1_with_data], proofs, root).is_ok());
+    }
+
+    #[test]
+    fn test_single_proof() {
+        let (root, transactions) = read_test_transactions();
+        println!(
+            "Transactions root: {:?}, num transactions: {}",
+            root,
+            transactions.len()
+        );
+
+        let transactions_list = transactions_to_ssz_list(transactions.clone());
+
+        let index = rand::random::<usize>() % transactions.len();
+
+        println!("Index to prove: {index}");
+
+        let c1 = ConstraintsMessage {
+            validator_index: 0,
+            slot: 1,
+            top: false,
+            transactions: vec![transactions[index].clone()],
+        };
+
+        let c1_with_data = ConstraintsWithProofData::try_from(c1).unwrap();
+
+        let root_node = transactions_list.hash_tree_root().unwrap();
+
+        assert_eq!(root_node, root);
+
+        // Generate the path from the transaction indexes
+        let path = path_from_indeces(&[index]);
+
+        let start_proof = std::time::Instant::now();
+        let (proof, witness) = transactions_list.prove(&path).unwrap();
+        println!("Generated proof in {:?}", start_proof.elapsed());
+
+        // Root and witness must be the same
+        assert_eq!(root, witness);
+
+        let start_verify = std::time::Instant::now();
+        assert!(proof.verify(witness).is_ok());
+        println!("Verified proof in {:?}", start_verify.elapsed());
 
         // assert!(verify_multiproofs(&[c1_with_data], proofs, root).is_ok());
     }
