@@ -108,7 +108,9 @@ mod tests {
 
         // Generate the path from the transaction indexes
         let path = path_from_indeces(&[index]);
-        let (multi_proof, witness) = root_node.multi_prove(&[&[0.into()]]).unwrap();
+
+        // TODO: this panics if the path is not empty?
+        let (multi_proof, witness) = root_node.multi_prove(&[&path]).unwrap();
 
         // Root and witness must be the same
         assert_eq!(root, witness);
