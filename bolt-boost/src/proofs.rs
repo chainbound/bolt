@@ -76,7 +76,9 @@ pub fn verify_multiproofs(
 
 #[cfg(test)]
 mod tests {
-    use ssz_rs::{Node, Path, PathElement, Prove};
+    use alloy::primitives::Bytes;
+    use ssz_rs::{HashTreeRoot, List, Node, Path, PathElement, Prove};
+    use types::MainnetEthSpec;
 
     use super::*;
 
@@ -85,9 +87,11 @@ mod tests {
     #[test]
     fn test_single_multiproof() {
         let test_block = read_test_block();
-        println!("State root: {:?}", test_block.message.state_root);
 
         let (root, transactions) = read_test_transactions();
+        println!("Transactions root: {:?}", root);
+
+        let transactions_list = transactions_to_ssz_list(transactions.clone());
 
         let index = rand::random::<usize>() % transactions.len();
 
@@ -102,20 +106,23 @@ mod tests {
 
         let c1_with_data = ConstraintsWithProofData::try_from(c1).unwrap();
 
-        println!("Constraints: {c1_with_data:?}");
+        let root_node = transactions_list.hash_tree_root().unwrap();
 
-        let root_node = root as Node;
+        assert_eq!(root_node, root);
 
         // Generate the path from the transaction indexes
         let path = path_from_indeces(&[index]);
 
-        // TODO: this panics if the path is not empty?
-        let (multi_proof, witness) = root_node.multi_prove(&[&path]).unwrap();
+        let start_proof = std::time::Instant::now();
+        let (multi_proof, witness) = transactions_list.multi_prove(&[&path]).unwrap();
+        println!("Generated multiproof in {:?}", start_proof.elapsed());
 
         // Root and witness must be the same
         assert_eq!(root, witness);
 
-        println!("Witness: {witness:?}");
+        let start_verify = std::time::Instant::now();
+        assert!(multi_proof.verify(witness).is_ok());
+        println!("Verified multiproof in {:?}", start_verify.elapsed());
 
         // assert!(verify_multiproofs(&[c1_with_data], proofs, root).is_ok());
     }
@@ -123,12 +130,21 @@ mod tests {
     fn path_from_indeces(indeces: &[usize]) -> Vec<PathElement> {
         indeces
             .iter()
-            .map(|i| PathElement::from(tx_index_to_generalized_index(*i)))
+            .map(|i| PathElement::from(*i))
             .collect::<Vec<_>>()
     }
 
     /// Converts a transaction index to a generalized index.
-    fn tx_index_to_generalized_index(index: usize) -> usize {
-        2usize * 2usize.pow(21u32) + index
+    // fn tx_index_to_generalized_index(index: usize) -> usize {
+    //     2usize * 2usize.pow(21u32) + index
+    // }
+
+    fn transactions_to_ssz_list(txs: Vec<Bytes>) -> List<List<u8, 1073741824>, 1048576> {
+        let inner: Vec<List<u8, 1073741824>> = txs
+            .into_iter()
+            .map(|tx| List::try_from(tx.to_vec()).unwrap())
+            .collect();
+
+        List::try_from(inner).unwrap()
     }
 }
