@@ -7,6 +7,9 @@ mod proofs;
 mod server;
 mod types;
 
+#[cfg(test)]
+mod testutil;
+
 use server::{BuilderState, ConstraintsApi};
 use types::ExtraConfig;
 

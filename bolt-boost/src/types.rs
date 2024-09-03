@@ -1,4 +1,6 @@
 use alloy::{
+    consensus::TxEnvelope,
+    eips::eip2718::{Decodable2718, Eip2718Error},
     primitives::{Bytes, TxHash, B256},
     rpc::types::beacon::{BlsPublicKey, BlsSignature},
 };
@@ -109,6 +111,40 @@ impl TreeHash for ConstraintsMessage {
     }
 }
 
+#[derive(Debug)]
+pub struct ConstraintsWithProofData {
+    pub message: ConstraintsMessage,
+    /// List of transaction hashes and corresponding hash tree roots. Same order
+    /// as the transactions in the `message`.
+    pub proof_data: Vec<(TxHash, HashTreeRoot)>,
+}
+
+impl TryFrom<ConstraintsMessage> for ConstraintsWithProofData {
+    type Error = Eip2718Error;
+
+    fn try_from(value: ConstraintsMessage) -> Result<Self, Self::Error> {
+        let transactions = value
+            .transactions
+            .iter()
+            .map(|tx| {
+                let tx_hash = *TxEnvelope::decode_2718(&mut tx.as_ref())?.tx_hash();
+
+                let tx_root =
+                    tree_hash::TreeHash::tree_hash_root(&Transaction::<
+                        <DenebSpec as EthSpec>::MaxBytesPerTransaction,
+                    >::from(tx.to_vec()));
+
+                Ok((tx_hash, tx_root))
+            })
+            .collect::<Result<Vec<_>, Eip2718Error>>()?;
+
+        Ok(Self {
+            message: value,
+            proof_data: transactions,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct SignedDelegation {
     pub message: DelegationMessage,
@@ -154,10 +190,6 @@ pub struct InclusionProofs {
 }
 
 impl InclusionProofs {
-    pub fn sanity_check(&self) -> bool {
-        self.transaction_hashes.len() == self.generalized_indeces.len()
-    }
-
     /// Returns the total number of leaves in the tree.
     pub fn total_leaves(&self) -> usize {
         self.transaction_hashes.len()

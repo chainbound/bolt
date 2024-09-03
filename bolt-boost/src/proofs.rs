@@ -1,6 +1,6 @@
 use alloy::primitives::{TxHash, B256};
 
-use super::{constraints::ConstraintsWithProofData, types::InclusionProofs};
+use super::types::{ConstraintsWithProofData, InclusionProofs};
 
 #[derive(Debug, thiserror::Error)]
 pub enum ProofError {
@@ -16,10 +16,11 @@ pub enum ProofError {
 
 /// Returns the length of the leaves that need to be proven (i.e. all transactions).
 fn total_leaves(constraints: &[ConstraintsWithProofData]) -> usize {
-    constraints.iter().map(|c| c.transactions.len()).sum()
+    constraints.iter().map(|c| c.proof_data.len()).sum()
 }
 
 /// Verifies the provided multiproofs against the constraints & transactions root.
+/// TODO: support bundle proof verification a.k.a. relative ordering!
 pub fn verify_multiproofs(
     constraints: &[ConstraintsWithProofData],
     proofs: &InclusionProofs,
@@ -43,7 +44,7 @@ pub fn verify_multiproofs(
     for hash in &proofs.transaction_hashes {
         let mut found = false;
         for constraint in constraints {
-            for (saved_hash, leaf) in &constraint.transactions {
+            for (saved_hash, leaf) in &constraint.proof_data {
                 if saved_hash == hash {
                     found = true;
                     leaves.push(B256::from(leaf.0));
@@ -71,4 +72,61 @@ pub fn verify_multiproofs(
     .map_err(|_| ProofError::VerificationFailed)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use ssz_rs::{Node, Path, PathElement, Prove};
+
+    use super::*;
+
+    use crate::{testutil::*, types::ConstraintsMessage};
+
+    #[test]
+    fn test_single_multiproof() {
+        let test_block = read_test_block();
+        println!("State root: {:?}", test_block.message.state_root);
+
+        let (root, transactions) = read_test_transactions();
+
+        let index = rand::random::<usize>() % transactions.len();
+
+        println!("Index to prove: {index}");
+
+        let c1 = ConstraintsMessage {
+            validator_index: 0,
+            slot: 1,
+            top: false,
+            transactions: vec![transactions[index].clone()],
+        };
+
+        let c1_with_data = ConstraintsWithProofData::try_from(c1).unwrap();
+
+        println!("Constraints: {c1_with_data:?}");
+
+        let root_node = root as Node;
+
+        // Generate the path from the transaction indexes
+        let path = path_from_indeces(&[index]);
+        let (multi_proof, witness) = root_node.multi_prove(&[&[0.into()]]).unwrap();
+
+        // Root and witness must be the same
+        assert_eq!(root, witness);
+
+        println!("Witness: {witness:?}");
+
+        // assert!(verify_multiproofs(&[c1_with_data], proofs, root).is_ok());
+    }
+
+    fn path_from_indeces(indeces: &[usize]) -> Vec<PathElement> {
+        indeces
+            .iter()
+            .map(|i| PathElement::from(tx_index_to_generalized_index(*i)))
+            .collect::<Vec<_>>()
+    }
+
+    /// Converts a transaction index to a generalized index.
+    fn tx_index_to_generalized_index(index: usize) -> usize {
+        2usize * 2usize.pow(21u32) + index
+    }
 }

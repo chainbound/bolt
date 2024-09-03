@@ -2,21 +2,9 @@ use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
 };
+use tracing::error;
 
-use alloy::{consensus::TxEnvelope, eips::eip2718::Decodable2718, primitives::TxHash};
-use cb_common::pbs::{DenebSpec, EthSpec, Transaction};
-use commit_boost::prelude::tree_hash;
-use tracing::trace;
-
-use super::types::{ConstraintsMessage, HashTreeRoot};
-
-#[derive(Debug)]
-pub struct ConstraintsWithProofData {
-    pub message: ConstraintsMessage,
-    /// List of transaction hashes and corresponding hash tree roots. Same order
-    /// as the transactions in the `message`.
-    pub transactions: Vec<(TxHash, HashTreeRoot)>,
-}
+use super::types::{ConstraintsMessage, ConstraintsWithProofData, HashTreeRoot};
 
 /// A concurrent cache of constraints.
 #[derive(Clone, Default, Debug)]
@@ -63,40 +51,25 @@ impl ConstraintsCache {
     /// Inserts the constraints for the given slot. Also decodes the raw transactions to save their
     /// transaction hashes and hash tree roots for later use. Will first check for conflicts, and return
     /// false if there are any.
+    ///
+    /// TODO: return Result instead of bool
     pub fn insert(&self, slot: u64, constraints: ConstraintsMessage) -> bool {
         if self.conflicts_with(&slot, &constraints) {
             return false;
         }
 
-        let mut transactions = Vec::with_capacity(constraints.transactions.len());
-
-        for tx in &constraints.transactions {
-            let tx_hash = *TxEnvelope::decode_2718(&mut tx.as_ref())
-                .expect("Valid transaction encoding")
-                .tx_hash();
-
-            let tx_root = tree_hash::TreeHash::tree_hash_root(&Transaction::<
-                <DenebSpec as EthSpec>::MaxBytesPerTransaction,
-            >::from(tx.to_vec()));
-
-            trace!(?tx_hash, ?tx_root, "Decoded constraint tx");
-
-            transactions.push((tx_hash, tx_root));
-        }
-
-        // Wrap the constraints message with the transaction info
-        let message_with_txs = ConstraintsWithProofData {
-            message: constraints,
-            transactions,
+        let Ok(message_with_data) = ConstraintsWithProofData::try_from(constraints) else {
+            error!("Failed decoding constraints, not inserting");
+            return false;
         };
 
         if let Some(cs) = self.cache.write().unwrap().get_mut(&slot) {
-            cs.push(message_with_txs);
+            cs.push(message_with_data);
         } else {
             self.cache
                 .write()
                 .unwrap()
-                .insert(slot, vec![message_with_txs]);
+                .insert(slot, vec![message_with_data]);
         }
 
         true
