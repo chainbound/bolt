@@ -37,15 +37,9 @@ pub trait SignableBLS {
     }
 }
 
-/// A generic signing trait to generate BLS signatures.
-pub trait SignerBLS {
-    /// Sign the given data and return the signature.
-    fn sign(&self, data: &[u8; 32]) -> eyre::Result<BLSSig>;
-}
-
 /// A generic signing trait to generate BLS signatures asynchronously.
 #[async_trait::async_trait]
-pub trait SignerBLSAsync: Send + Sync + Debug {
+pub trait SignerBLS: Send + Debug {
     /// Sign the given data and return the signature.
     async fn sign(&self, data: &[u8; 32]) -> eyre::Result<BLSSig>;
 }
@@ -79,15 +73,8 @@ impl Signer {
     }
 }
 
-impl SignerBLS for Signer {
-    fn sign(&self, data: &[u8; 32]) -> eyre::Result<BLSSig> {
-        let sig = sign_with_prefix(&self.key, data);
-        Ok(BLSSig::from(sig.to_bytes()))
-    }
-}
-
 #[async_trait::async_trait]
-impl SignerBLSAsync for Signer {
+impl SignerBLS for Signer {
     async fn sign(&self, data: &[u8; 32]) -> eyre::Result<BLSSig> {
         let sig = sign_with_prefix(&self.key, data);
         Ok(BLSSig::from(sig.to_bytes()))
@@ -122,8 +109,8 @@ mod tests {
 
     use rand::Rng;
 
-    #[test]
-    fn test_bls_signer() {
+    #[tokio::test]
+    async fn test_bls_signer() {
         let key = test_bls_secret_key();
         let pubkey = key.sk_to_pk();
         let signer = Signer::new(key);
@@ -134,7 +121,7 @@ mod tests {
         rng.fill(&mut data);
         let msg = TestSignableData { data };
 
-        let signature = SignerBLS::sign(&signer, &msg.digest()).unwrap();
+        let signature = SignerBLS::sign(&signer, &msg.digest()).await.unwrap();
         let sig = blst::min_pk::Signature::from_bytes(signature.as_ref()).unwrap();
         assert!(signer.verify(&msg, &sig, &pubkey));
     }

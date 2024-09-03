@@ -13,7 +13,7 @@ use parking_lot::RwLock;
 use thiserror::Error;
 use tracing::{debug, error, info};
 
-use crate::crypto::{bls::SignerBLSAsync, ecdsa::SignerECDSAAsync};
+use crate::crypto::{bls::SignerBLS, ecdsa::SignerECDSA};
 
 /// A client for interacting with CommitBoost.
 #[derive(Debug, Clone)]
@@ -70,7 +70,7 @@ impl CommitBoostSigner {
 }
 
 #[async_trait::async_trait]
-impl SignerBLSAsync for CommitBoostSigner {
+impl SignerBLS for CommitBoostSigner {
     async fn sign(&self, data: &[u8; 32]) -> eyre::Result<BlsSignature> {
         let request = SignConsensusRequest::builder(
             *self.pubkeys.read().first().expect("consensus pubkey loaded"),
@@ -84,7 +84,7 @@ impl SignerBLSAsync for CommitBoostSigner {
 }
 
 #[async_trait::async_trait]
-impl SignerECDSAAsync for CommitBoostSigner {
+impl SignerECDSA for CommitBoostSigner {
     async fn sign_hash(&self, hash: &[u8; 32]) -> eyre::Result<Signature> {
         let request = SignProxyRequest::builder(
             *self.proxy_ecdsa.read().first().expect("proxy ecdsa key loaded"),

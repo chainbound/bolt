@@ -11,9 +11,19 @@ pub struct SigningOpts {
     #[clap(long, env = "BOLT_SIDECAR_PRIVATE_KEY", conflicts_with("commit_boost_url"))]
     pub(super) private_key: Option<String>,
     /// URL for the commit-boost sidecar
-    #[clap(long, env = "BOLT_SIDECAR_COMMIT_BOOST_URL", conflicts_with("private_key"))]
+    #[clap(
+        long,
+        env = "BOLT_SIDECAR_CB_SIGNER_URL",
+        conflicts_with("private_key"),
+        requires("commit_boost_jwt_hex")
+    )]
     pub(super) commit_boost_url: Option<String>,
     /// JWT in hexadecimal format for authenticating with the commit-boost service
-    #[clap(long, env = "BOLT_SIDECAR_COMMIT_BOOST_JWT_HEX", conflicts_with("private_key"))]
+    #[clap(
+        long,
+        env = "BOLT_SIDECAR_COMMIT_BOOST_JWT_HEX",
+        conflicts_with("private_key"),
+        requires("commit_boost_url")
+    )]
     pub(super) commit_boost_jwt_hex: Option<String>,
 }

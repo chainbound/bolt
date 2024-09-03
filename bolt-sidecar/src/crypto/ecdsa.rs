@@ -56,13 +56,13 @@ impl ECDSASigner {
 
 /// A generic signing trait to generate ECDSA signatures.
 #[async_trait::async_trait]
-pub trait SignerECDSAAsync: Send + Sync + Debug {
+pub trait SignerECDSA: Send + Debug {
     /// Sign the given hash and return the signature.
     async fn sign_hash(&self, hash: &[u8; 32]) -> eyre::Result<AlloySignature>;
 }
 
 #[async_trait::async_trait]
-impl SignerECDSAAsync for PrivateKeySigner {
+impl SignerECDSA for PrivateKeySigner {
     async fn sign_hash(&self, hash: &[u8; 32]) -> eyre::Result<AlloySignature> {
         Ok(alloy::signers::Signer::sign_hash(self, hash.into()).await?)
     }
