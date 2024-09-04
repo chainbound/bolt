@@ -3,9 +3,13 @@ pragma solidity 0.8.25;
 
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {EnumerableMap} from "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
+
 import {IBaseDelegator} from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
 import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
 import {IVault} from "@symbiotic/interfaces/vault/IVault.sol";
+import {IRegistry} from "@symbiotic/interfaces/common/IRegistry.sol";
+import {IOptInService} from "@symbiotic/interfaces/service/IOptInService.sol";
+
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltManager} from "../interfaces/IBoltManager.sol";
@@ -28,15 +32,40 @@ contract BoltManager is IBoltManager {
     /// @notice Address of the Bolt network in Symbiotic Protocol.
     address public immutable BOLT_SYMBIOTIC_NETWORK;
 
+    /// @notice Address of the Symbiotic Operator Registry contract.
+    address public immutable SYMBIOTIC_OPERATOR_REGISTRY;
+
+    /// @notice Address of the Symbiotic Vault Registry contract.
+    address public immutable SYMBIOTIC_VAULT_REGISTRY;
+
+    /// @notice Address of the Symbiotic Operator Network Opt-In contract.
+    address public immutable SYMBIOTIC_OPERATOR_NET_OPTIN;
+
     uint48 public constant EPOCH_DURATION = 1 days;
     uint48 public constant SLASHING_WINDOW = 7 days;
 
     uint48 public immutable START_TIMESTAMP;
 
-    constructor(address _validators, address _symbioticNetwork) {
+    /// @notice Constructor for the BoltManager contract.
+    /// @param _validators The address of the validators registry.
+    /// @param _symbioticNetwork The address of the Symbiotic network.
+    /// @param _symbioticOperatorRegistry The address of the Symbiotic operator registry.
+    /// @param _symbioticOperatorNetOptIn The address of the Symbiotic operator network opt-in contract.
+    /// @param _symbioticVaultRegistry The address of the Symbiotic vault registry.
+    constructor(
+        address _validators,
+        address _symbioticNetwork,
+        address _symbioticOperatorRegistry,
+        address _symbioticOperatorNetOptIn,
+        address _symbioticVaultRegistry
+    ) {
         validators = IBoltValidators(_validators);
         START_TIMESTAMP = Time.timestamp();
+
         BOLT_SYMBIOTIC_NETWORK = _symbioticNetwork;
+        SYMBIOTIC_OPERATOR_REGISTRY = _symbioticOperatorRegistry;
+        SYMBIOTIC_OPERATOR_NET_OPTIN = _symbioticOperatorNetOptIn;
+        SYMBIOTIC_VAULT_REGISTRY = _symbioticVaultRegistry;
     }
 
     /// @notice Get the start timestamp of an epoch.
@@ -60,15 +89,21 @@ contract BoltManager is IBoltManager {
             revert AlreadyRegistered();
         }
 
-        // TODO: check if the operator exists in the canonical symbiotic registry
-        // and if it's opted in the Symbiotic Bolt network.
-        // refer to SimpleMiddleware.sol L124
+        if (!IRegistry(SYMBIOTIC_OPERATOR_REGISTRY).isEntity(operator)) {
+            revert NotOperator();
+        }
+
+        if (!IOptInService(SYMBIOTIC_OPERATOR_NET_OPTIN).isOptedIn(operator, BOLT_SYMBIOTIC_NETWORK)) {
+            revert OperatorNotOptedIn();
+        }
 
         symbioticOperators.add(operator);
         symbioticOperators.enable(operator);
     }
 
     /// @notice Allow an operator to signal indefinite opt-out from Bolt Protocol.
+    /// @dev Pausing activity does not prevent the operator from being slashable for
+    /// the current network epoch until the end of the slashing window.
     function pauseSymbioticOperator() public {
         if (!symbioticOperators.contains(msg.sender)) {
             revert NotRegistered();
@@ -83,11 +118,13 @@ contract BoltManager is IBoltManager {
             revert AlreadyRegistered();
         }
 
+        if (!IRegistry(SYMBIOTIC_VAULT_REGISTRY).isEntity(vault)) {
+            revert NotVault();
+        }
+
         // TODO: check collateral asset against whitelist?
 
-        // TODO: check if the vault exists in the canonical symbiotic registry
-        // and if it's opted in the Symbiotic Bolt network.
-        // refer to SimpleMiddleware.sol L175
+        // TODO: check slashing conditions and veto duration
 
         symbioticVaults.add(vault);
         symbioticVaults.enable(vault);

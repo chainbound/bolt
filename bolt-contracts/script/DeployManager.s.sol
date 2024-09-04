@@ -8,7 +8,12 @@ import {BoltManager} from "../src/contracts/BoltManager.sol";
 
 /// @notice Script to deploy the BoltManager and BoltValidators contracts.
 contract DeployBoltManager is Script {
-    function run() public {
+    function run(
+        address symbioticNetwork,
+        address symbioticOperatorRegistry,
+        address symbioticOperatorNetOptIn,
+        address symbioticVaultRegistry
+    ) public {
         vm.startBroadcast();
 
         address sender = msg.sender;
@@ -16,9 +21,13 @@ contract DeployBoltManager is Script {
         BoltValidators validators = new BoltValidators(sender);
         console.log("BoltValidators deployed at", address(validators));
 
-        address symbioticNetwork = address(0x1);
-
-        BoltManager manager = new BoltManager(address(validators), symbioticNetwork);
+        BoltManager manager = new BoltManager(
+            address(validators),
+            symbioticNetwork,
+            symbioticOperatorRegistry,
+            symbioticOperatorNetOptIn,
+            symbioticVaultRegistry
+        );
         console.log("BoltManager deployed at", address(manager));
 
         vm.stopBroadcast();
