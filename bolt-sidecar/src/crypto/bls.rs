@@ -37,7 +37,7 @@ pub trait SignableBLS {
     }
 }
 
-/// A generic signing trait to generate BLS signatures asynchronously.
+/// A generic signing trait to generate BLS signatures.
 #[async_trait::async_trait]
 pub trait SignerBLS: Send + Debug {
     /// Sign the given data and return the signature.

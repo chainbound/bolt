@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use alloy::{rpc::types::beacon::BlsSignature, signers::Signature};
 use cb_common::{
@@ -13,7 +13,13 @@ use parking_lot::RwLock;
 use thiserror::Error;
 use tracing::{debug, error, info};
 
-use crate::crypto::{bls::SignerBLS, ecdsa::SignerECDSA};
+use crate::{
+    crypto::{
+        bls::{SignerBLS, BLS_DST_PREFIX},
+        ecdsa::SignerECDSA,
+    },
+    primitives::commitment::ECDSASignatureExt,
+};
 
 /// A client for interacting with CommitBoost.
 #[derive(Debug, Clone)]
@@ -67,6 +73,40 @@ impl CommitBoostSigner {
 
         Ok(client)
     }
+
+    /// Get the consensus public key from the Commit-Boost signer.
+    pub fn get_consensus_pubkey(&self) -> CBBlsPublicKey {
+        *self.pubkeys.read().first().expect("consensus pubkey loaded")
+    }
+
+    /// Get the proxy ECDSA public key from the Commit-Boost signer.
+    pub fn get_proxy_ecdsa_pubkey(&self) -> EcdsaPublicKey {
+        *self.proxy_ecdsa.read().first().expect("proxy ecdsa key loaded")
+    }
+
+    /// Verify the BLS signature of the object with the given public key.
+    ///
+    /// Note: The default implementation should be used where possible.
+    pub fn verify_bls(
+        &self,
+        data: &[u8; 32],
+        sig: &blst::min_pk::Signature,
+        pubkey: &blst::min_pk::PublicKey,
+    ) -> bool {
+        sig.verify(false, data, BLS_DST_PREFIX, &[], pubkey, true) == blst::BLST_ERROR::BLST_SUCCESS
+    }
+
+    /// Verify the ECDSA signature of the object with the given public key.
+    ///
+    /// Note: The default implementation should be used where possible.
+    pub fn verify_ecdsa(&self, data: &[u8; 32], sig: &Signature, pubkey: &EcdsaPublicKey) -> bool {
+        let sig = secp256k1::ecdsa::Signature::from_str(&sig.to_hex()).expect("signature is valid");
+        let pubkey =
+            secp256k1::PublicKey::from_slice(pubkey.as_ref()).expect("public key is valid");
+        secp256k1::Secp256k1::new()
+            .verify_ecdsa(&secp256k1::Message::from_digest(*data), &sig, &pubkey)
+            .is_ok()
+    }
 }
 
 #[async_trait::async_trait]
@@ -99,5 +139,43 @@ impl SignerECDSA for CommitBoostSigner {
         let alloy_sig = Signature::try_from(sig.as_ref())?;
 
         Ok(alloy_sig)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use rand::Rng;
+
+    #[tokio::test]
+    async fn test_bls_commit_boost_signer() {
+        let signer =
+            CommitBoostSigner::new("http://localhost:19551".to_string(), "jwt_hex").await.unwrap();
+
+        // Generate random data for the test
+        let mut rng = rand::thread_rng();
+        let mut data = [0u8; 32];
+        rng.fill(&mut data);
+
+        let signature = signer.sign(&data).await.unwrap();
+        let sig = blst::min_pk::Signature::from_bytes(signature.as_ref()).unwrap();
+        let pubkey = signer.get_consensus_pubkey();
+        let bls_pubkey = blst::min_pk::PublicKey::from_bytes(pubkey.as_ref()).unwrap();
+        assert!(signer.verify_bls(&data, &sig, &bls_pubkey));
+    }
+
+    #[tokio::test]
+    async fn test_ecdsa_commit_boost_signer() {
+        let signer =
+            CommitBoostSigner::new("http://localhost:19551".to_string(), "jwt_hex").await.unwrap();
+        let pubkey = signer.get_proxy_ecdsa_pubkey();
+
+        // Generate random data for the test
+        let mut rng = rand::thread_rng();
+        let mut data = [0u8; 32];
+        rng.fill(&mut data);
+
+        let signature = signer.sign_hash(&data).await.unwrap();
+        assert!(signer.verify_ecdsa(&data, &signature, &pubkey));
     }
 }

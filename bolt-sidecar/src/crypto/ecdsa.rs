@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use alloy::signers::{local::PrivateKeySigner, Signature as AlloySignature};
+use alloy::signers::{local::PrivateKeySigner, Signature as AlloySignature, Signer};
 use secp256k1::{ecdsa::Signature, Message, PublicKey, SecretKey};
 
 /// Trait for any types that can be signed and verified with ECDSA.
@@ -64,7 +64,7 @@ pub trait SignerECDSA: Send + Debug {
 #[async_trait::async_trait]
 impl SignerECDSA for PrivateKeySigner {
     async fn sign_hash(&self, hash: &[u8; 32]) -> eyre::Result<AlloySignature> {
-        Ok(alloy::signers::Signer::sign_hash(self, hash.into()).await?)
+        Ok(Signer::sign_hash(self, hash.into()).await?)
     }
 }
 
