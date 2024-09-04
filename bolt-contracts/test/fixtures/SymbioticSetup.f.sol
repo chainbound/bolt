@@ -36,11 +36,7 @@ contract SymbioticSetupFixture is Test {
             address networkMiddlewareService,
             address operatorVaultOptInService,
             address operatorNetworkOptInService,
-            address slasherImpl,
-            address vetoSlasherImpl,
-            address vaultConfigurator,
-            address networkRestakeDelegatorImpl,
-            address fullRestakeDelegatorImpl
+            address vaultConfigurator
         )
     {
         vm.startPrank(deployer);
@@ -56,51 +52,6 @@ contract SymbioticSetupFixture is Test {
         OptInService operatorVaultOptInService_ = new OptInService(address(operatorRegistry), address(vaultFactory));
         OptInService operatorNetworkOptInService_ =
             new OptInService(address(operatorRegistry), address(networkRegistry));
-
-        address networkRestakeDelegatorImpl_ = address(
-            new NetworkRestakeDelegator(
-                address(networkRegistry_),
-                address(vaultFactory_),
-                address(operatorVaultOptInService_),
-                address(operatorNetworkOptInService_),
-                address(delegatorFactory_),
-                delegatorFactory_.totalTypes()
-            )
-        );
-        delegatorFactory_.whitelist(networkRestakeDelegatorImpl_);
-
-        address fullRestakeDelegatorImpl_ = address(
-            new FullRestakeDelegator(
-                address(networkRegistry_),
-                address(vaultFactory_),
-                address(operatorVaultOptInService_),
-                address(operatorNetworkOptInService_),
-                address(delegatorFactory_),
-                delegatorFactory_.totalTypes()
-            )
-        );
-        delegatorFactory_.whitelist(fullRestakeDelegatorImpl_);
-
-        address slasherImpl_ = address(
-            new Slasher(
-                address(vaultFactory_),
-                address(networkMiddlewareService_),
-                address(slasherFactory_),
-                slasherFactory_.totalTypes()
-            )
-        );
-        slasherFactory_.whitelist(slasherImpl_);
-
-        address vetoSlasherImpl_ = address(
-            new VetoSlasher(
-                address(vaultFactory_),
-                address(networkMiddlewareService_),
-                address(networkRegistry_),
-                address(slasherFactory_),
-                slasherFactory_.totalTypes()
-            )
-        );
-        slasherFactory_.whitelist(vetoSlasherImpl_);
 
         VaultConfigurator vaultConfigurator_ =
             new VaultConfigurator(address(vaultFactory_), address(delegatorFactory_), address(slasherFactory_));
@@ -122,11 +73,7 @@ contract SymbioticSetupFixture is Test {
             address(networkMiddlewareService_),
             address(operatorVaultOptInService_),
             address(operatorNetworkOptInService_),
-            address(slasherImpl_),
-            address(vetoSlasherImpl_),
-            address(vaultConfigurator_),
-            address(networkRestakeDelegatorImpl_),
-            address(fullRestakeDelegatorImpl_)
+            address(vaultConfigurator_)
         );
     }
 }

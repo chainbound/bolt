@@ -11,10 +11,16 @@ import {IOptInService} from "@symbiotic/interfaces/service/IOptInService.sol";
 import {IVaultConfigurator} from "@symbiotic/interfaces/IVaultConfigurator.sol";
 import {IBaseDelegator} from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
 import {INetworkRestakeDelegator} from "@symbiotic/interfaces/delegator/INetworkRestakeDelegator.sol";
+import {ISlasherFactory} from "@symbiotic/interfaces/ISlasherFactory.sol";
+import {IVetoSlasher} from "@symbiotic/interfaces/slasher/IVetoSlasher.sol";
+import {IDelegatorFactory} from "@symbiotic/interfaces/IDelegatorFactory.sol";
 
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
 import {BLS12381} from "../src/lib/bls/BLS12381.sol";
+
+import {Token} from "./mocks/Token.sol";
+import {SimpleCollateral} from "./mocks/SimpleCollateral.sol";
 
 import {SymbioticSetupFixture} from "./fixtures/SymbioticSetup.f.sol";
 
@@ -26,11 +32,15 @@ contract BoltManagerTest is Test {
     BoltValidators public validators;
     BoltManager public manager;
 
+    SimpleCollateral public collateral;
+
     uint64[] public validatorIndexes;
 
+    address public vaultFactory;
+    address public delegatorFactory;
+    address public slasherFactory;
     address public networkRegistry;
     address public operatorRegistry;
-    address public vaultFactory;
     address public operatorMetadataService;
     address public networkMetadataService;
     address public networkMiddlewareService;
@@ -50,24 +60,12 @@ contract BoltManagerTest is Test {
     address networkAdmin = makeAddr("networkAdmin");
     address vaultAdmin = makeAddr("vaultAdmin");
 
-    // TODO: Deploy a real Symbiotic collateral contract
-    address collateral = makeAddr("collateral");
-
     function setUp() public {
-        // Give some ether to the accounts for gas
-        vm.deal(deployer, 200 ether);
-        vm.deal(admin, 20 ether);
-        vm.deal(provider, 20 ether);
-        vm.deal(operator, 20 ether);
-        vm.deal(validator, 20 ether);
-        vm.deal(networkAdmin, 20 ether);
-        vm.deal(vaultAdmin, 20 ether);
-
         // Deploy Symbiotic core contracts
         (
             vaultFactory,
-            , // delegatorFactory
-            , // slasherFactory
+            delegatorFactory,
+            slasherFactory,
             networkRegistry,
             operatorRegistry,
             operatorMetadataService,
@@ -75,20 +73,22 @@ contract BoltManagerTest is Test {
             networkMiddlewareService,
             operatorVaultOptInService,
             operatorNetworkOptInService,
-            slasherImpl,
-            vetoSlasherImpl,
-            vaultConfigurator,
-            networkRestakeDelegatorImpl,
-            // fullRestakeDelegatorImpl
+            vaultConfigurator
         ) = new SymbioticSetupFixture().setUp(deployer, admin);
+
+        // Deploy collateral token
+        vm.startPrank(deployer);
+        Token token = new Token("Token");
+        collateral = new SimpleCollateral(address(token));
+        collateral.mint(token.totalSupply());
 
         address[] memory adminRoleHolders = new address[](1);
         adminRoleHolders[0] = vaultAdmin;
 
         IVault.InitParams memory vaultInitParams = IVault.InitParams({
-            collateral: collateral,
-            delegator: networkRestakeDelegatorImpl,
-            slasher: slasherImpl,
+            collateral: address(collateral),
+            delegator: address(0),
+            slasher: address(0),
             burner: address(0xdead),
             epochDuration: EPOCH_DURATION,
             depositWhitelist: false,
@@ -111,18 +111,23 @@ contract BoltManagerTest is Test {
             operatorNetworkSharesSetRoleHolders: adminRoleHolders
         });
 
+        IVetoSlasher.InitParams memory vetoSlasherInitParams =
+            IVetoSlasher.InitParams({vetoDuration: uint48(1 days), resolverSetEpochsDelay: 3});
+
         IVaultConfigurator.InitParams memory vaultConfiguratorInitParams = IVaultConfigurator.InitParams({
             version: 1,
             owner: vaultAdmin,
             vaultParams: vaultInitParams,
             delegatorIndex: 0,
             delegatorParams: abi.encode(delegatorInitParams),
-            withSlasher: false, // TODO: activate slasher and add params
-            slasherIndex: 0,
-            slasherParams: bytes("")
+            withSlasher: true,
+            slasherIndex: 1,
+            slasherParams: abi.encode(vetoSlasherInitParams)
         });
 
-        (vaultImpl, , ) = IVaultConfigurator(vaultConfigurator).create(vaultConfiguratorInitParams);
+        (vaultImpl, networkRestakeDelegatorImpl, slasherImpl) =
+            IVaultConfigurator(vaultConfigurator).create(vaultConfiguratorInitParams);
+        vm.stopPrank();
 
         assertEq(networkRestakeDelegatorImpl, address(IVault(vaultImpl).delegator()));
         assertEq(slasherImpl, address(IVault(vaultImpl).slasher()));
@@ -134,6 +139,14 @@ contract BoltManagerTest is Test {
         // Whitelist the vault in Symbiotic
         vm.prank(admin);
         IVaultFactory(vaultFactory).whitelist(vaultImpl);
+
+        // Whitelist the slasher in Symbiotic
+        vm.prank(admin);
+        ISlasherFactory(slasherFactory).whitelist(slasherImpl);
+
+        // Whitelist the delegator in Symbiotic
+        vm.prank(admin);
+        IDelegatorFactory(delegatorFactory).whitelist(networkRestakeDelegatorImpl);
 
         // Deploy Bolt contracts
         validators = new BoltValidators(admin);
