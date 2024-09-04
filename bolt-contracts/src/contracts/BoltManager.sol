@@ -456,11 +456,12 @@ contract BoltManager is IBoltManager, Ownable {
 
     function checkIfEigenLayerOperatorRegisteredToAVS(
         address operator
-    ) public returns (bool registered) {
+    ) public view returns (bool registered) {
         return
-            EIGENLAYER_AVS_DIRECTORY.avsOperatorStatus[address(this)][
+            EIGENLAYER_AVS_DIRECTORY.avsOperatorStatus(
+                address(this),
                 operator
-            ] == AVSDirectoryStorage.OperatorAVSRegistrationStatus.REGISTERED;
+            ) == IAVSDirectory.OperatorAVSRegistrationStatus.REGISTERED;
     }
 
     /// @notice Deregister an EigenLayer layer operator from working in Bolt Protocol.
