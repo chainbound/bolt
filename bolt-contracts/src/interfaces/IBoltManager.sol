@@ -8,6 +8,9 @@ interface IBoltManager {
     error InvalidQuery();
     error AlreadyRegistered();
     error NotRegistered();
+    error OperatorNotOptedIn();
+    error NotOperator();
+    error NotVault();
 
     function registerSymbioticOperator(address operator) external;
 

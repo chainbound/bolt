@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import {Script, console2} from "forge-std/Script.sol";
+import {Script} from "forge-std/Script.sol";
 
 import {VaultFactory} from "@symbiotic/contracts/VaultFactory.sol";
 import {DelegatorFactory} from "@symbiotic/contracts/DelegatorFactory.sol";
@@ -113,18 +113,6 @@ contract SymbioticSetupFixture is Script {
         vaultFactory.transferOwnership(owner);
         delegatorFactory.transferOwnership(owner);
         slasherFactory.transferOwnership(owner);
-
-        console2.log("VaultFactory: ", address(vaultFactory));
-        console2.log("DelegatorFactory: ", address(delegatorFactory));
-        console2.log("SlasherFactory: ", address(slasherFactory));
-        console2.log("NetworkRegistry: ", address(networkRegistry));
-        console2.log("OperatorRegistry: ", address(operatorRegistry));
-        console2.log("OperatorMetadataService: ", address(operatorMetadataService));
-        console2.log("NetworkMetadataService: ", address(networkMetadataService));
-        console2.log("NetworkMiddlewareService: ", address(networkMiddlewareService));
-        console2.log("OperatorVaultOptInService: ", address(operatorVaultOptInService));
-        console2.log("OperatorNetworkOptInService: ", address(operatorNetworkOptInService));
-        console2.log("VaultConfigurator: ", address(vaultConfigurator));
 
         vm.stopPrank();
 

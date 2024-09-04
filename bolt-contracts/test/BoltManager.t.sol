@@ -5,6 +5,10 @@ import {Test, console} from "forge-std/Test.sol";
 
 import {INetworkRegistry} from "@symbiotic/interfaces/INetworkRegistry.sol";
 import {IOperatorRegistry} from "@symbiotic/interfaces/IOperatorRegistry.sol";
+import {IVaultFactory} from "@symbiotic/interfaces/IVaultFactory.sol";
+import {IVault} from "@symbiotic/interfaces/vault/IVault.sol";
+import {IOptInService} from "@symbiotic/interfaces/service/IOptInService.sol";
+import {IBaseDelegator} from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
 
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
@@ -22,6 +26,7 @@ contract BoltManagerTest is Test {
 
     address public networkRegistry;
     address public operatorRegistry;
+    address public vaultFactory;
     address public operatorMetadataService;
     address public networkMetadataService;
     address public networkMiddlewareService;
@@ -49,9 +54,9 @@ contract BoltManagerTest is Test {
 
         // Deploy Symbiotic contracts
         (
-            ,
-            ,
-            ,
+            vaultFactory,
+            , // delegatorFactory
+            , // slasherFactory
             networkRegistry,
             operatorRegistry,
             operatorMetadataService,
@@ -59,11 +64,12 @@ contract BoltManagerTest is Test {
             networkMiddlewareService,
             operatorVaultOptInService,
             operatorNetworkOptInService,
-            ,
+            , // slasherImpl
             vetoSlasherImpl,
-            ,
+            , // vaultConfigurator
             vaultImpl,
             networkRestakeDelegatorImpl,
+            // fullRestakeDelegatorImpl
         ) = new SymbioticSetupFixture().setup(deployer, admin);
 
         // Register the network in Symbiotic
@@ -72,7 +78,9 @@ contract BoltManagerTest is Test {
 
         // Deploy Bolt contracts
         validators = new BoltValidators(admin);
-        manager = new BoltManager(address(validators), networkAdmin);
+        manager = new BoltManager(
+            address(validators), networkAdmin, operatorRegistry, operatorNetworkOptInService, vaultFactory
+        );
     }
 
     function testFullSymbioticOptIn() public {
@@ -91,5 +99,23 @@ contract BoltManagerTest is Test {
 
         vm.prank(operator);
         IOperatorRegistry(operatorRegistry).registerOperator();
+        assertEq(IOperatorRegistry(operatorRegistry).isEntity(operator), true);
+
+        vm.prank(operator);
+        IOptInService(operatorNetworkOptInService).optIn(networkAdmin);
+        assertEq(IOptInService(operatorNetworkOptInService).isOptedIn(operator, networkAdmin), true);
+
+        // --- 3. register Operator in BoltManager ---
+
+        manager.registerSymbioticOperator(operator);
+        assertEq(manager.isSymbioticOperatorEnabled(operator), true);
+
+        // --- 4. set the stake limit for the Vault ---
+
+        vm.prank(admin);
+        INetworkRestakeDelegator(networkRestakeDelegatorImpl).setNetworkLimit(0, 1 ether);
+
+        vm.prank(admin);
+        IBaseDelegator(IVault(vaultImpl).delegator()).setMaxNetworkLimit(0, 1 ether);
     }
 }
