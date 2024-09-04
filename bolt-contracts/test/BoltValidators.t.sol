@@ -10,12 +10,10 @@ contract BoltValidatorsTest is Test {
 
     BoltValidators public validators;
 
-    uint64[] public validatorIndexes;
-
-    address admin = address(0x1);
-    address provider = address(0x2);
-    address operator = address(0x3);
-    address validator = address(0x4);
+    address admin = makeAddr("admin");
+    address provider = makeAddr("provider");
+    address operator = makeAddr("operator");
+    address validator = makeAddr("validator");
 
     function setUp() public {
         validators = new BoltValidators(admin);

@@ -131,6 +131,10 @@ contract BoltManagerTest is Test {
         vm.prank(networkAdmin);
         INetworkRegistry(networkRegistry).registerNetwork();
 
+        // Whitelist the vault in Symbiotic
+        vm.prank(admin);
+        IVaultFactory(vaultFactory).whitelist(vaultImpl);
+
         // Deploy Bolt contracts
         validators = new BoltValidators(admin);
         manager = new BoltManager(
