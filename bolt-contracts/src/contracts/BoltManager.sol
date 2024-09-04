@@ -3,8 +3,8 @@ pragma solidity 0.8.25;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
-import {EnumerableMap} from "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {IBaseDelegator} from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
 import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
@@ -16,9 +16,16 @@ import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
+import {IStrategyManager} from "@eigenlayer/interfaces/IStrategyManager.sol";
+import {IAVSDirectory} from "@eigenlayer/interfaces/IAVSDirectory.sol";
+import {IDelegationManager} from "@eigenlayer/interfaces/IDelegationManager.sol";
+import {ISignatureUtils} from "@eigenlayer/interfaces/ISignatureUtils.sol";
+import {IStrategy} from "@eigenlayer/interfaces/IStrategy.sol";
+import {AVSDirectoryStorage} from "@eigenlayer/core/AVSDirectoryStorage.sol";
+import {DelegationManagerStorage} from "@eigenlayer/core/DelegationManagerStorage.sol";
+
 contract BoltManager is IBoltManager, Ownable {
     using EnumerableSet for EnumerableSet.AddressSet;
-    using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
     using Subnetwork for address;
 
@@ -43,6 +50,12 @@ contract BoltManager is IBoltManager, Ownable {
 
     /// @notice Address of the Symbiotic Operator Network Opt-In contract.
     address public immutable SYMBIOTIC_OPERATOR_NET_OPTIN;
+
+    /// @notice Address of the EigenLayer AVS Directory contract.
+    AVSDirectoryStorage public immutable EIGENLAYER_AVS_DIRECTORY;
+
+    /// @notice Address of the EigenLayer Delegation Manager contract.
+    DelegationManagerStorage public immutable EIGENLAYER_DELEGATION_MANAGER;
 
     /// @notice Duration of an epoch in seconds.
     uint48 public constant EPOCH_DURATION = 1 days;
@@ -69,7 +82,11 @@ contract BoltManager is IBoltManager, Ownable {
         address _symbioticOperatorRegistry,
         address _symbioticOperatorNetOptIn,
         address _symbioticVaultRegistry
+        AVSDirectoryStorage _eigenlayerAVSDirectory,
+        DelegationManagerStorage _eigenlayerDelegationManager
     ) Ownable(_owner) {
+        address _symbioticVaultRegistry,
+    ) {
         validators = IBoltValidators(_validators);
         START_TIMESTAMP = Time.timestamp();
 
@@ -77,6 +94,8 @@ contract BoltManager is IBoltManager, Ownable {
         SYMBIOTIC_OPERATOR_REGISTRY = _symbioticOperatorRegistry;
         SYMBIOTIC_OPERATOR_NET_OPTIN = _symbioticOperatorNetOptIn;
         SYMBIOTIC_VAULT_REGISTRY = _symbioticVaultRegistry;
+        EIGENLAYER_AVS_DIRECTORY = _eigenlayerAVSDirectory;
+        EIGENLAYER_DELEGATION_MANAGER = _eigenlayerDelegationManager;
     }
 
     /// @notice Get the start timestamp of an epoch.
@@ -95,6 +114,8 @@ contract BoltManager is IBoltManager, Ownable {
     function getCurrentEpoch() public view returns (uint48 epoch) {
         return getEpochAtTs(Time.timestamp());
     }
+
+    ///////////////////////////////////// Symbiotic functions ///////////////////////////////////////////////
 
     /// @notice Add a collateral address to the whitelist.
     /// @param collateral The collateral address to add to the whitelist.
@@ -417,6 +438,56 @@ contract BoltManager is IBoltManager, Ownable {
             );
         }
     }
+
+    ///////////////////////////////////// EigenLayer functions ///////////////////////////////////////////////
+
+    /// @notice Register an EigenLayer layer operator to work in Bolt Protocol.
+    /// @dev This requires calling the EigenLayer AVS Directory contract to register the operator.
+    /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator
+    function registerEigenLayerOperatorToAVS(
+        address operator,
+        ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature
+    ) public {
+        EIGENLAYER_AVS_DIRECTORY.registerOperatorToAVS(
+            operator,
+            operatorSignature
+        );
+    }
+
+    function checkIfEigenLayerOperatorRegisteredToAVS(
+        address operator
+    ) public returns (bool registered) {
+        return
+            EIGENLAYER_AVS_DIRECTORY.avsOperatorStatus[address(this)][
+                operator
+            ] == AVSDirectoryStorage.OperatorAVSRegistrationStatus.REGISTERED;
+    }
+
+    /// @notice Deregister an EigenLayer layer operator from working in Bolt Protocol.
+    /// @dev This requires calling the EigenLayer AVS Directory contract to deregister the operator.
+    /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator.
+    function deregisterEigenLayerOperatorFromAVS() public {
+        EIGENLAYER_AVS_DIRECTORY.deregisterOperatorFromAVS(msg.sender);
+    }
+
+    /// @notice Get the amount of tokens delegated to an operator across the specified strategies
+    function getEigenLayerOperatorStake(
+        address operator,
+        IStrategy[] calldata strategies
+    ) public view {
+        // NOTE: order is preserved i.e., shares[i] corresponds to strategies[i]
+        uint256[] memory shares = EIGENLAYER_DELEGATION_MANAGER
+            .getOperatorShares(operator, strategies);
+
+        uint256[] memory tokens = new uint256[](strategies.length);
+        for (uint256 i = 0; i < strategies.length; i++) {
+            tokens[i] = strategies[i].sharesToUnderlyingView(shares[i]);
+        }
+
+        return tokens;
+    }
+
+    ///////////////////////////////////// Private functions ///////////////////////////////////////////////
 
     /// @notice Check if a map entry was active at a given timestamp.
     /// @param enabledTime The enabled time of the map entry.
