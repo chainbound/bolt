@@ -14,6 +14,7 @@ import {INetworkRestakeDelegator} from "@symbiotic/interfaces/delegator/INetwork
 import {ISlasherFactory} from "@symbiotic/interfaces/ISlasherFactory.sol";
 import {IVetoSlasher} from "@symbiotic/interfaces/slasher/IVetoSlasher.sol";
 import {IDelegatorFactory} from "@symbiotic/interfaces/IDelegatorFactory.sol";
+import {IMigratablesFactory} from "@symbiotic/interfaces/common/IMigratablesFactory.sol";
 
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
@@ -115,13 +116,13 @@ contract BoltManagerTest is Test {
             IVetoSlasher.InitParams({vetoDuration: uint48(1 days), resolverSetEpochsDelay: 3});
 
         IVaultConfigurator.InitParams memory vaultConfiguratorInitParams = IVaultConfigurator.InitParams({
-            version: 1,
+            version: IMigratablesFactory(IVaultConfigurator(vaultConfigurator).VAULT_FACTORY()).lastVersion(),
             owner: vaultAdmin,
             vaultParams: vaultInitParams,
-            delegatorIndex: 0,
+            delegatorIndex: 0, // Use NetworkRestakeDelegator
             delegatorParams: abi.encode(delegatorInitParams),
             withSlasher: true,
-            slasherIndex: 1,
+            slasherIndex: 1, // Use VetoSlasher
             slasherParams: abi.encode(vetoSlasherInitParams)
         });
 
