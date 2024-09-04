@@ -146,11 +146,23 @@ impl SignerECDSA for CommitBoostSigner {
 mod test {
     use super::*;
     use rand::Rng;
+    use tracing::warn;
 
     #[tokio::test]
-    async fn test_bls_commit_boost_signer() {
-        let signer =
-            CommitBoostSigner::new("http://localhost:19551".to_string(), "jwt_hex").await.unwrap();
+    async fn test_bls_commit_boost_signer() -> eyre::Result<()> {
+        let _ = dotenvy::dotenv();
+
+        let (signer_server_address, jwt_hex) = match (
+            std::env::var("BOLT_SIDECAR_CB_SIGNER_URL").ok(),
+            std::env::var("BOLT_SIDECAR_CB_JWT_HEX"),
+        ) {
+            (Some(address), Ok(hex)) => (address, hex),
+            _ => {
+                warn!("skipping test: commit-boost inputs are not set");
+                return Ok(());
+            }
+        };
+        let signer = CommitBoostSigner::new(signer_server_address, &jwt_hex).await.unwrap();
 
         // Generate random data for the test
         let mut rng = rand::thread_rng();
@@ -162,12 +174,25 @@ mod test {
         let pubkey = signer.get_consensus_pubkey();
         let bls_pubkey = blst::min_pk::PublicKey::from_bytes(pubkey.as_ref()).unwrap();
         assert!(signer.verify_bls(&data, &sig, &bls_pubkey));
+
+        Ok(())
     }
 
     #[tokio::test]
-    async fn test_ecdsa_commit_boost_signer() {
-        let signer =
-            CommitBoostSigner::new("http://localhost:19551".to_string(), "jwt_hex").await.unwrap();
+    async fn test_ecdsa_commit_boost_signer() -> eyre::Result<()> {
+        let _ = dotenvy::dotenv();
+
+        let (signer_server_address, jwt_hex) = match (
+            std::env::var("BOLT_SIDECAR_CB_SIGNER_URL").ok(),
+            std::env::var("BOLT_SIDECAR_CB_JWT_HEX"),
+        ) {
+            (Some(address), Ok(hex)) => (address, hex),
+            _ => {
+                warn!("skipping test: commit-boost inputs are not set");
+                return Ok(());
+            }
+        };
+        let signer = CommitBoostSigner::new(signer_server_address, &jwt_hex).await.unwrap();
         let pubkey = signer.get_proxy_ecdsa_pubkey();
 
         // Generate random data for the test
@@ -177,5 +202,7 @@ mod test {
 
         let signature = signer.sign_hash(&data).await.unwrap();
         assert!(signer.verify_ecdsa(&data, &signature, &pubkey));
+
+        Ok(())
     }
 }

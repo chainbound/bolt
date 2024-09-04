@@ -21,7 +21,7 @@ pub struct SigningOpts {
     /// JWT in hexadecimal format for authenticating with the commit-boost service
     #[clap(
         long,
-        env = "BOLT_SIDECAR_COMMIT_BOOST_JWT_HEX",
+        env = "BOLT_SIDECAR_CB_JWT_HEX",
         conflicts_with("private_key"),
         requires("commit_boost_url")
     )]
