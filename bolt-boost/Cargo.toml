@@ -15,7 +15,9 @@ thiserror = "1.0.63"
 reqwest = "0.12.7"
 
 # crypto
-ssz_rs = { git = "https://github.com/ralexstokes/ssz-rs" }
+ssz_rs = { git = "https://github.com/mempirate/ssz-rs", branch = "feat/hashtree", features = [
+    "hashtree",
+] }
 
 # tracing
 tracing = "0.1.40"
@@ -43,5 +45,5 @@ cb-common = { git = "https://github.com/mempirate/commit-boost-client", branch =
 types = { git = "https://github.com/sigp/lighthouse" }
 rand = "0.8.5"
 
-[patch.'https://github.com/ralexstokes/ssz-rs']
-ssz_rs = { git = "https://github.com/noahfigueras/ssz-rs", branch = "multi-proof-generation" }
+# [patch.'https://github.com/ralexstokes/ssz-rs']
+# ssz_rs = { git = "https://github.com/mempirate/ssz-rs", branch = "feat/sha2-asm" }

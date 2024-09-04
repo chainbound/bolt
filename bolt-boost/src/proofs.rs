@@ -93,9 +93,12 @@ mod tests {
             transactions.len()
         );
 
-        let transactions_list = transactions_to_ssz_list(transactions.clone());
+        // Shoudl be 1073741824, 1048576
+        let transactions_list =
+            transactions_to_ssz_list::<1073741824, 1048576>(transactions.clone());
 
-        let index = rand::random::<usize>() % transactions.len();
+        // let index = rand::random::<usize>() % transactions.len();
+        let index = 51;
 
         println!("Index to prove: {index}");
 
@@ -138,9 +141,12 @@ mod tests {
             transactions.len()
         );
 
-        let transactions_list = transactions_to_ssz_list(transactions.clone());
+        // Shoudl be 1073741824, 1048576
+        let transactions_list =
+            transactions_to_ssz_list::<1073741824, 1048576>(transactions.clone());
 
-        let index = rand::random::<usize>() % transactions.len();
+        // let index = rand::random::<usize>() % transactions.len();
+        let index = 26;
 
         println!("Index to prove: {index}");
 
@@ -186,8 +192,11 @@ mod tests {
     //     2usize * 2usize.pow(21u32) + index
     // }
 
-    fn transactions_to_ssz_list(txs: Vec<Bytes>) -> List<List<u8, 1073741824>, 1048576> {
-        let inner: Vec<List<u8, 1073741824>> = txs
+    fn transactions_to_ssz_list<const B: usize, const N: usize>(
+        txs: Vec<Bytes>,
+    ) -> List<List<u8, B>, N> {
+        // fn transactions_to_ssz_list(txs: Vec<Bytes>) -> List<List<u8, 1073741824>, 1048576> {
+        let inner: Vec<List<u8, B>> = txs
             .into_iter()
             .map(|tx| List::try_from(tx.to_vec()).unwrap())
             .collect();
