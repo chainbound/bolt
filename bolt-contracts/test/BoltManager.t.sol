@@ -61,8 +61,7 @@ contract BoltManagerTest is Test {
         vm.deal(operator, 20 ether);
         vm.deal(validator, 20 ether);
         vm.deal(networkAdmin, 20 ether);
-
-        SymbioticSetupFixture fixture = new SymbioticSetupFixture();
+        vm.deal(vaultAdmin, 20 ether);
 
         // Deploy Symbiotic core contracts
         (
@@ -81,7 +80,7 @@ contract BoltManagerTest is Test {
             vaultConfigurator,
             networkRestakeDelegatorImpl,
             // fullRestakeDelegatorImpl
-        ) = fixture.setUp(deployer, admin);
+        ) = new SymbioticSetupFixture().setUp(deployer, admin);
 
         address[] memory adminRoleHolders = new address[](1);
         adminRoleHolders[0] = vaultAdmin;
@@ -118,12 +117,15 @@ contract BoltManagerTest is Test {
             vaultParams: vaultInitParams,
             delegatorIndex: 0,
             delegatorParams: abi.encode(delegatorInitParams),
-            withSlasher: false,
+            withSlasher: false, // TODO: activate slasher and add params
             slasherIndex: 0,
             slasherParams: bytes("")
         });
 
-        vaultImpl = fixture.configureVault(vaultConfigurator, vaultConfiguratorInitParams);
+        (vaultImpl, , ) = IVaultConfigurator(vaultConfigurator).create(vaultConfiguratorInitParams);
+
+        assertEq(networkRestakeDelegatorImpl, address(IVault(vaultImpl).delegator()));
+        assertEq(slasherImpl, address(IVault(vaultImpl).slasher()));
 
         // Register the network in Symbiotic
         vm.prank(networkAdmin);
