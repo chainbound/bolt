@@ -8,7 +8,9 @@ import {IOperatorRegistry} from "@symbiotic/interfaces/IOperatorRegistry.sol";
 import {IVaultFactory} from "@symbiotic/interfaces/IVaultFactory.sol";
 import {IVault} from "@symbiotic/interfaces/vault/IVault.sol";
 import {IOptInService} from "@symbiotic/interfaces/service/IOptInService.sol";
+import {IVaultConfigurator} from "@symbiotic/interfaces/IVaultConfigurator.sol";
 import {IBaseDelegator} from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
+import {INetworkRestakeDelegator} from "@symbiotic/interfaces/delegator/INetworkRestakeDelegator.sol";
 
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
@@ -18,6 +20,8 @@ import {SymbioticSetupFixture} from "./fixtures/SymbioticSetup.f.sol";
 
 contract BoltManagerTest is Test {
     using BLS12381 for BLS12381.G1Point;
+
+    uint48 public constant EPOCH_DURATION = 1 days;
 
     BoltValidators public validators;
     BoltManager public manager;
@@ -32,16 +36,22 @@ contract BoltManagerTest is Test {
     address public networkMiddlewareService;
     address public operatorVaultOptInService;
     address public operatorNetworkOptInService;
+    address public slasherImpl;
     address public vetoSlasherImpl;
+    address public vaultConfigurator;
     address public vaultImpl;
     address public networkRestakeDelegatorImpl;
 
-    address deployer = address(0x1);
-    address admin = address(0x2);
-    address provider = address(0x3);
-    address operator = address(0x4);
-    address validator = address(0x5);
-    address networkAdmin = address(0x6);
+    address deployer = makeAddr("deployer");
+    address admin = makeAddr("admin");
+    address provider = makeAddr("provider");
+    address operator = makeAddr("operator");
+    address validator = makeAddr("validator");
+    address networkAdmin = makeAddr("networkAdmin");
+    address vaultAdmin = makeAddr("vaultAdmin");
+
+    // TODO: Deploy a real Symbiotic collateral contract
+    address collateral = makeAddr("collateral");
 
     function setUp() public {
         // Give some ether to the accounts for gas
@@ -52,7 +62,9 @@ contract BoltManagerTest is Test {
         vm.deal(validator, 20 ether);
         vm.deal(networkAdmin, 20 ether);
 
-        // Deploy Symbiotic contracts
+        SymbioticSetupFixture fixture = new SymbioticSetupFixture();
+
+        // Deploy Symbiotic core contracts
         (
             vaultFactory,
             , // delegatorFactory
@@ -64,13 +76,54 @@ contract BoltManagerTest is Test {
             networkMiddlewareService,
             operatorVaultOptInService,
             operatorNetworkOptInService,
-            , // slasherImpl
+            slasherImpl,
             vetoSlasherImpl,
-            , // vaultConfigurator
-            vaultImpl,
+            vaultConfigurator,
             networkRestakeDelegatorImpl,
             // fullRestakeDelegatorImpl
-        ) = new SymbioticSetupFixture().setup(deployer, admin);
+        ) = fixture.setUp(deployer, admin);
+
+        address[] memory adminRoleHolders = new address[](1);
+        adminRoleHolders[0] = vaultAdmin;
+
+        IVault.InitParams memory vaultInitParams = IVault.InitParams({
+            collateral: collateral,
+            delegator: networkRestakeDelegatorImpl,
+            slasher: slasherImpl,
+            burner: address(0xdead),
+            epochDuration: EPOCH_DURATION,
+            depositWhitelist: false,
+            isDepositLimit: false,
+            depositLimit: 0,
+            defaultAdminRoleHolder: vaultAdmin,
+            depositWhitelistSetRoleHolder: vaultAdmin,
+            depositorWhitelistRoleHolder: vaultAdmin,
+            isDepositLimitSetRoleHolder: vaultAdmin,
+            depositLimitSetRoleHolder: vaultAdmin
+        });
+
+        INetworkRestakeDelegator.InitParams memory delegatorInitParams = INetworkRestakeDelegator.InitParams({
+            baseParams: IBaseDelegator.BaseParams({
+                defaultAdminRoleHolder: vaultAdmin,
+                hook: address(0), // we don't need a hook
+                hookSetRoleHolder: vaultAdmin
+            }),
+            networkLimitSetRoleHolders: adminRoleHolders,
+            operatorNetworkSharesSetRoleHolders: adminRoleHolders
+        });
+
+        IVaultConfigurator.InitParams memory vaultConfiguratorInitParams = IVaultConfigurator.InitParams({
+            version: 1,
+            owner: vaultAdmin,
+            vaultParams: vaultInitParams,
+            delegatorIndex: 0,
+            delegatorParams: abi.encode(delegatorInitParams),
+            withSlasher: false,
+            slasherIndex: 0,
+            slasherParams: bytes("")
+        });
+
+        vaultImpl = fixture.configureVault(vaultConfigurator, vaultConfiguratorInitParams);
 
         // Register the network in Symbiotic
         vm.prank(networkAdmin);

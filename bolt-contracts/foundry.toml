@@ -6,6 +6,11 @@ libs = ["lib"]
 fs_permissions = [{ access = "read-write", path = "./"}]
 gas_reports = ["*"]
 
+# silence some warnings during compilation
+# https://book.getfoundry.sh/reference/config/solidity-compiler#ignored_error_codes
+ignored_error_codes = [3628, 1878, 5574]
+ignored_warnings_from = ["lib/openzeppelin-contracts/contracts", "lib/core"]
+
 [rpc_endpoints]
 mainnet = "${ETH_RPC_URL}"
 holesky = "${ETH_RPC_URL_HOLESKY}"
