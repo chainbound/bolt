@@ -474,17 +474,17 @@ contract BoltManager is IBoltManager, Ownable {
     function getEigenLayerOperatorStake(
         address operator,
         IStrategy[] calldata strategies
-    ) public view {
+    ) public view returns (uint256[] memory) {
         // NOTE: order is preserved i.e., shares[i] corresponds to strategies[i]
         uint256[] memory shares = EIGENLAYER_DELEGATION_MANAGER
             .getOperatorShares(operator, strategies);
 
-        uint256[] memory tokens = new uint256[](strategies.length);
+        uint256[] memory _tokenAmounts = new uint256[](strategies.length);
         for (uint256 i = 0; i < strategies.length; i++) {
-            tokens[i] = strategies[i].sharesToUnderlyingView(shares[i]);
+            _tokenAmounts[i] = strategies[i].sharesToUnderlyingView(shares[i]);
         }
 
-        return tokens;
+        return _tokenAmounts;
     }
 
     ///////////////////////////////////// Private functions ///////////////////////////////////////////////
