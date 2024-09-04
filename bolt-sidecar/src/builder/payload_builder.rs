@@ -15,7 +15,7 @@ use reth_primitives::{
 };
 use reth_rpc_layer::{secret_to_bearer_header, JwtSecret};
 use serde_json::Value;
-use tracing::{trace};
+use tracing::trace;
 
 use super::{
     compat::{to_alloy_execution_payload, to_reth_withdrawal},
@@ -454,9 +454,9 @@ mod tests {
         let raw_encoded = tx_signed.encoded_2718();
         let tx_signed_reth = TransactionSigned::decode_enveloped(&mut raw_encoded.as_slice())?;
 
-        let slot = genesis_time
-            + (SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() / cfg.chain.slot_time())
-            + 1;
+        let slot = genesis_time +
+            (SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() / cfg.chain.slot_time()) +
+            1;
 
         let block = builder.build_fallback_payload(slot, &[tx_signed_reth]).await?;
         assert_eq!(block.body.len(), 1);

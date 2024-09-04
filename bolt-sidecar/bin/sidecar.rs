@@ -1,5 +1,4 @@
-use bolt_sidecar::telemetry::init_telemetry_stack;
-use bolt_sidecar::{Config, SidecarDriver};
+use bolt_sidecar::{telemetry::init_telemetry_stack, Config, SidecarDriver};
 use eyre::{bail, Result};
 use tracing::info;
 

@@ -28,8 +28,11 @@ use crate::{
     },
 };
 
-use super::spec::{CommitmentsApi, Error};
-use super::{middleware::track_server_metrics, spec};
+use super::{
+    middleware::track_server_metrics,
+    spec,
+    spec::{CommitmentsApi, Error},
+};
 
 /// Event type emitted by the commitments API.
 #[derive(Debug)]
@@ -166,8 +169,7 @@ fn make_router(state: Arc<CommitmentsApiInner>) -> Router {
 
 #[cfg(test)]
 mod test {
-    use crate::commitments::jsonrpc::JsonResponse;
-    use crate::commitments::spec::SIGNATURE_HEADER;
+    use crate::commitments::{jsonrpc::JsonResponse, spec::SIGNATURE_HEADER};
     use alloy::signers::{k256::SecretKey, local::PrivateKeySigner};
     use serde_json::json;
 
