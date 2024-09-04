@@ -1,3 +1,4 @@
 @openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
 @relic/=lib/relic-sdk/packages/contracts/
 @symbiotic/=lib/core/src/
+@eigenlayer/=lib/eigenlayer-contracts/src/contracts/
