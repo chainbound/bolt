@@ -218,7 +218,7 @@ async fn get_header_with_proofs(
     let mut hash_to_proofs = HashMap::new();
 
     // Get and remove the constraints for this slot
-    let constraints = state.data.constraints.remove(params.slot);
+    let maybe_constraints = state.data.constraints.remove(params.slot);
 
     for (i, res) in results.into_iter().enumerate() {
         let relay_id = relays[i].id.as_ref();
@@ -229,17 +229,20 @@ async fn get_header_with_proofs(
 
                 let start = Instant::now();
 
-                // Verify the multiproofs
-                if let Err(e) =
-                    verify_multiproofs(constraints.as_ref().unwrap(), &res.data.proofs, root)
-                {
-                    error!(?e, relay_id, "Failed to verify multiproof, skipping bid");
-                    continue;
-                }
-                tracing::debug!("Verified multiproof in {:?}", start.elapsed());
+                // If we have constraints to verify, do that here in order to validate the bid
+                if let Some(ref constraints) = maybe_constraints {
+                    // Verify the multiproofs and continue if not valid
+                    if let Err(e) = verify_multiproofs(constraints, &res.data.proofs, root) {
+                        error!(?e, relay_id, "Failed to verify multiproof, skipping bid");
+                        continue;
+                    }
 
-                // Save the proofs per block hash
-                hash_to_proofs.insert(res.data.header.message.header.block_hash, res.data.proofs);
+                    tracing::debug!("Verified multiproof in {:?}", start.elapsed());
+
+                    // Save the proofs per block hash
+                    hash_to_proofs
+                        .insert(res.data.header.message.header.block_hash, res.data.proofs);
+                }
 
                 let vanilla_response = GetHeaderResponse {
                     version: res.version,
@@ -254,20 +257,20 @@ async fn get_header_with_proofs(
         }
     }
 
-    let header = state.add_bids(params.slot, relay_bids);
+    if let Some(winning_bid) = state.add_bids(params.slot, relay_bids) {
+        let header_with_proofs = GetHeaderWithProofsResponse {
+            data: SignedExecutionPayloadHeaderWithProofs {
+                // If there are no proofs, default to empty. This should never happen unless there
+                // were no constraints to verify.
+                proofs: hash_to_proofs
+                    .get(&winning_bid.data.message.header.block_hash)
+                    .cloned()
+                    .unwrap_or_default(),
+                header: winning_bid.data,
+            },
+            version: winning_bid.version,
+        };
 
-    let header_with_proofs = header.map(|h| GetHeaderWithProofsResponse {
-        data: SignedExecutionPayloadHeaderWithProofs {
-            proofs: hash_to_proofs
-                .get(&h.data.message.header.block_hash)
-                .expect("Saved proofs")
-                .clone(),
-            header: h.data,
-        },
-        version: h.version,
-    });
-
-    if let Some(header_with_proofs) = header_with_proofs {
         Ok((StatusCode::OK, axum::Json(header_with_proofs)).into_response())
     } else {
         Ok(StatusCode::NO_CONTENT.into_response())
