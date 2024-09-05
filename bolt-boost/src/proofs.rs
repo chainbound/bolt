@@ -77,7 +77,7 @@ pub fn verify_multiproofs(
 #[cfg(test)]
 mod tests {
     use alloy::{
-        hex::{self, FromHex},
+        hex::FromHex,
         primitives::{Bytes, B256},
     };
     use ssz_rs::{HashTreeRoot, List, PathElement, Prove};

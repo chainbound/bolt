@@ -12,12 +12,13 @@ use axum::{
 };
 use cb_common::{
     config::PbsConfig,
+    constants::APPLICATION_BUILDER_DOMAIN,
     pbs::{
         error::{PbsError, ValidationError},
         GetHeaderResponse, RelayClient, SignedExecutionPayloadHeader, EMPTY_TX_ROOT_HASH,
         HEADER_SLOT_UUID_KEY, HEADER_START_TIME_UNIX_MS,
     },
-    signature::verify_signed_builder_message,
+    signature::verify_signed_message,
     types::Chain,
     utils::{get_user_agent_with_version, ms_into_slot},
 };
@@ -37,9 +38,8 @@ use super::{
     error::PbsClientError,
     proofs::verify_multiproofs,
     types::{
-        ExtraConfig, GetHeaderParams, GetHeaderWithProofsResponse, RequestConfig,
-        SignedConstraints, SignedDelegation, SignedExecutionPayloadHeaderWithProofs,
-        SignedRevocation,
+        Config, GetHeaderParams, GetHeaderWithProofsResponse, RequestConfig, SignedConstraints,
+        SignedDelegation, SignedExecutionPayloadHeaderWithProofs, SignedRevocation,
     },
 };
 
@@ -59,14 +59,17 @@ const TIMEOUT_ERROR_CODE: u16 = 555;
 // Extra state available at runtime
 #[derive(Clone)]
 pub struct BuilderState {
+    #[allow(unused)]
+    config: Config,
     constraints: ConstraintsCache,
 }
 
 impl BuilderApiState for BuilderState {}
 
 impl BuilderState {
-    pub fn from_config(extra: ExtraConfig) -> Self {
+    pub fn from_config(config: Config) -> Self {
         Self {
+            config,
             constraints: ConstraintsCache::new(),
         }
     }
@@ -119,6 +122,8 @@ async fn submit_constraints(
     info!("Submitting {} constraints to relays", constraints.len());
     // Save constraints for the slot to verify proofs against later.
     for signed_constraints in &constraints {
+        // If signature verification is turned off, don't verify the constraints.
+
         // TODO: check for ToB conflicts!
         state.data.constraints.insert(
             signed_constraints.message.slot,
@@ -515,11 +520,13 @@ fn validate_header(
     }
 
     if !skip_sig_verify {
-        verify_signed_builder_message(
+        // Verify the signature against the builder domain.
+        verify_signed_message(
             chain,
             &received_relay_pubkey,
             &signed_header.message,
             &signed_header.signature,
+            APPLICATION_BUILDER_DOMAIN,
         )
         .map_err(ValidationError::Sigverify)?;
     }

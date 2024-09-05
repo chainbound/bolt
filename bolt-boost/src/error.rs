@@ -4,6 +4,7 @@ use axum::{http::StatusCode, response::IntoResponse};
 /// Errors that the PbsService returns to client
 pub enum PbsClientError {
     NoResponse,
+    #[allow(unused)]
     NoPayload,
     BadRequest,
 }
