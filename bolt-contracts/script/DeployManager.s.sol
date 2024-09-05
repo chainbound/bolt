@@ -28,7 +28,9 @@ contract DeployBoltManager is Script {
             symbioticNetwork,
             symbioticOperatorRegistry,
             symbioticOperatorNetOptIn,
-            symbioticVaultRegistry
+            symbioticVaultRegistry,
+            address(0),
+            address(0)
         );
 =======
     function run() public {

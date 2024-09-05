@@ -16,14 +16,13 @@ import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
-import {IStrategyManager} from "@eigenlayer/interfaces/IStrategyManager.sol";
-import {IAVSDirectory} from "@eigenlayer/interfaces/IAVSDirectory.sol";
-import {IDelegationManager} from "@eigenlayer/interfaces/IDelegationManager.sol";
-import {ISignatureUtils} from "@eigenlayer/interfaces/ISignatureUtils.sol";
-import {IStrategy} from "@eigenlayer/interfaces/IStrategy.sol";
-
-import {AVSDirectoryStorage} from "@eigenlayer/core/AVSDirectoryStorage.sol";
-import {DelegationManagerStorage} from "@eigenlayer/core/DelegationManagerStorage.sol";
+import {IStrategyManager} from "@eigenlayer/src/contracts/interfaces/IStrategyManager.sol";
+import {IAVSDirectory} from "@eigenlayer/src/contracts/interfaces/IAVSDirectory.sol";
+import {IDelegationManager} from "@eigenlayer/src/contracts/interfaces/IDelegationManager.sol";
+import {ISignatureUtils} from "@eigenlayer/src/contracts/interfaces/ISignatureUtils.sol";
+import {IStrategy} from "@eigenlayer/src/contracts/interfaces/IStrategy.sol";
+import {AVSDirectoryStorage} from "@eigenlayer/src/contracts/core/AVSDirectoryStorage.sol";
+import {DelegationManagerStorage} from "@eigenlayer/src/contracts/core/DelegationManagerStorage.sol";
 
 contract BoltManager is IBoltManager, Ownable {
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -82,12 +81,10 @@ contract BoltManager is IBoltManager, Ownable {
         address _symbioticNetwork,
         address _symbioticOperatorRegistry,
         address _symbioticOperatorNetOptIn,
-        address _symbioticVaultRegistry
+        address _symbioticVaultRegistry,
         AVSDirectoryStorage _eigenlayerAVSDirectory,
         DelegationManagerStorage _eigenlayerDelegationManager
     ) Ownable(_owner) {
-        address _symbioticVaultRegistry,
-    ) {
         validators = IBoltValidators(_validators);
         START_TIMESTAMP = Time.timestamp();
 
@@ -95,8 +92,10 @@ contract BoltManager is IBoltManager, Ownable {
         SYMBIOTIC_OPERATOR_REGISTRY = _symbioticOperatorRegistry;
         SYMBIOTIC_OPERATOR_NET_OPTIN = _symbioticOperatorNetOptIn;
         SYMBIOTIC_VAULT_REGISTRY = _symbioticVaultRegistry;
-        EIGENLAYER_AVS_DIRECTORY = _eigenlayerAVSDirectory;
-        EIGENLAYER_DELEGATION_MANAGER = _eigenlayerDelegationManager;
+        EIGENLAYER_AVS_DIRECTORY = AVSDirectoryStorage(_eigenlayerAVSDirectory);
+        EIGENLAYER_DELEGATION_MANAGER = DelegationManagerStorage(
+            _eigenlayerDelegationManager
+        );
     }
 
     /// @notice Get the start timestamp of an epoch.

@@ -6,8 +6,8 @@ import {Test, console} from "forge-std/Test.sol";
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
 
-import {AVSDirectoryStorage} from "@eigenlayer/core/AVSDirectoryStorage.sol";
-import {DelegationManagerStorage} from "@eigenlayer/core/DelegationManagerStorage.sol";
+import {AVSDirectoryStorage} from "@eigenlayer/src/contracts/core/AVSDirectoryStorage.sol";
+import {DelegationManagerStorage} from "@eigenlayer/src/contracts/core/DelegationManagerStorage.sol";
 
 contract BoltManagerEigenLayerTest is Test {
     uint48 public constant EPOCH_DURATION = 1 days;
@@ -37,8 +37,8 @@ contract BoltManagerEigenLayerTest is Test {
             address(0),
             address(0),
             address(0),
-            AVSDirectoryStorage(address(0)),
-            DelegationManagerStorage(address(0))
+            address(0),
+            address(0)
         );
     }
 }

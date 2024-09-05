@@ -154,12 +154,7 @@ contract BoltManagerTest is Test {
 
         validators = new BoltValidators(admin);
         manager = new BoltManager(
-            admin,
-            address(validators),
-            networkAdmin,
-            address(operatorRegistry),
-            address(operatorNetworkOptInService),
-            address(vaultFactory)
+            address(validators), networkAdmin, operatorRegistry, operatorNetworkOptInService, vaultFactory, address(0), address(0)
         );
 
         // --- Whitelist collateral in BoltManager ---
