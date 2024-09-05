@@ -122,10 +122,13 @@ async fn submit_constraints(
     info!("Submitting {} constraints to relays", constraints.len());
     // Save constraints for the slot to verify proofs against later.
     for signed_constraints in &constraints {
-        state.data.constraints.insert(
+        if let Err(e) = state.data.constraints.insert(
             signed_constraints.message.slot,
             signed_constraints.message.clone(),
-        );
+        ) {
+            error!(slot = signed_constraints.message.slot, error = %e, "Failed to save constraints");
+            return Err(PbsClientError::BadRequest);
+        }
     }
 
     post_request(state, SUBMIT_CONSTRAINTS_PATH, &constraints).await?;
