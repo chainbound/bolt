@@ -14,21 +14,25 @@ use crate::{
     api::{
         builder::GetHeaderParams,
         spec::{
-            BuilderApi, BuilderApiError, ConstraintsApi, ErrorResponse, CONSTRAINTS_PATH,
-            GET_PAYLOAD_PATH, REGISTER_VALIDATORS_PATH, STATUS_PATH,
+            BuilderApi, BuilderApiError, ConstraintsApi, ErrorResponse, DELEGATE_PATH,
+            GET_PAYLOAD_PATH, REGISTER_VALIDATORS_PATH, REVOKE_PATH, STATUS_PATH,
+            SUBMIT_CONSTRAINTS_PATH,
         },
     },
-    primitives::{BatchedSignedConstraints, GetPayloadResponse, SignedBuilderBid},
+    primitives::{
+        BatchedSignedConstraints, GetPayloadResponse, SignedBuilderBid, SignedDelegation,
+        SignedRevocation,
+    },
 };
 
 /// A client for interacting with the MEV-Boost API.
 #[derive(Debug, Clone)]
-pub struct MevBoostClient {
+pub struct ConstraintClient {
     url: Url,
     client: reqwest::Client,
 }
 
-impl MevBoostClient {
+impl ConstraintClient {
     /// Creates a new MEV-Boost client with the given URL.
     pub fn new<U: Into<Url>>(url: U) -> Self {
         Self {
@@ -46,7 +50,7 @@ impl MevBoostClient {
 }
 
 #[async_trait::async_trait]
-impl BuilderApi for MevBoostClient {
+impl BuilderApi for ConstraintClient {
     /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/status>
     async fn status(&self) -> Result<StatusCode, BuilderApiError> {
         Ok(self
@@ -132,14 +136,14 @@ impl BuilderApi for MevBoostClient {
 }
 
 #[async_trait::async_trait]
-impl ConstraintsApi for MevBoostClient {
+impl ConstraintsApi for ConstraintClient {
     async fn submit_constraints(
         &self,
         constraints: &BatchedSignedConstraints,
     ) -> Result<(), BuilderApiError> {
         let response = self
             .client
-            .post(self.endpoint(CONSTRAINTS_PATH))
+            .post(self.endpoint(SUBMIT_CONSTRAINTS_PATH))
             .header("content-type", "application/json")
             .body(serde_json::to_vec(&constraints)?)
             .send()
@@ -185,17 +189,51 @@ impl ConstraintsApi for MevBoostClient {
 
         Ok(header)
     }
+
+    async fn delegate(&self, signed_data: SignedDelegation) -> Result<(), BuilderApiError> {
+        let response = self
+            .client
+            .post(self.endpoint(DELEGATE_PATH))
+            .header("content-type", "application/json")
+            .body(serde_json::to_string(&signed_data)?)
+            .send()
+            .await?;
+
+        if response.status() != StatusCode::OK {
+            let error = response.json::<ErrorResponse>().await?;
+            return Err(BuilderApiError::FailedDelegating(error));
+        }
+
+        Ok(())
+    }
+
+    async fn revoke(&self, signed_data: SignedRevocation) -> Result<(), BuilderApiError> {
+        let response = self
+            .client
+            .post(self.endpoint(REVOKE_PATH))
+            .header("content-type", "application/json")
+            .body(serde_json::to_string(&signed_data)?)
+            .send()
+            .await?;
+
+        if response.status() != StatusCode::OK {
+            let error = response.json::<ErrorResponse>().await?;
+            return Err(BuilderApiError::FailedRevoking(error));
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use reqwest::Url;
 
-    use crate::MevBoostClient;
+    use crate::ConstraintClient;
 
     #[test]
     fn test_join_endpoints() {
-        let client = MevBoostClient::new(Url::parse("http://localhost:8080/").unwrap());
+        let client = ConstraintClient::new(Url::parse("http://localhost:8080/").unwrap());
         assert_eq!(
             client.endpoint("/eth/v1/builder/header/1/0x123/0x456"),
             Url::parse("http://localhost:8080/eth/v1/builder/header/1/0x123/0x456").unwrap()

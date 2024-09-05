@@ -18,7 +18,7 @@ use ethereum_consensus::{
     Fork,
 };
 use reth_primitives::{BlobTransactionSidecar, Bytes, PooledTransactionsElement, TxKind, TxType};
-use serde::de;
+use serde::{de, Serialize};
 use tokio::sync::{mpsc, oneshot};
 
 pub use ethereum_consensus::crypto::{PublicKey as BlsPublicKey, Signature as BlsSignature};
@@ -392,3 +392,27 @@ impl<'de> serde::Deserialize<'de> for FullTransaction {
 #[derive(Debug, thiserror::Error)]
 #[error("Invalid signature")]
 pub struct SignatureError;
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SignedDelegation {
+    pub message: DelegationMessage,
+    pub signature: BlsSignature,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DelegationMessage {
+    pub validator_index: u64,
+    pub pubkey: BlsPublicKey,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SignedRevocation {
+    pub message: RevocationMessage,
+    pub signature: BlsSignature,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RevocationMessage {
+    pub validator_index: u64,
+    pub pubkey: BlsPublicKey,
+}

@@ -15,7 +15,10 @@ use tokio::sync::watch;
 
 use crate::{
     api::{builder::GetHeaderParams, spec::BuilderApiError},
-    primitives::{BatchedSignedConstraints, GetPayloadResponse, PayloadAndBlobs, SignedBuilderBid},
+    primitives::{
+        BatchedSignedConstraints, GetPayloadResponse, PayloadAndBlobs, SignedBuilderBid,
+        SignedDelegation, SignedRevocation,
+    },
     BuilderApi, ConstraintsApi,
 };
 
@@ -91,6 +94,14 @@ impl ConstraintsApi for MockMevBoost {
         let response = self.response_rx.borrow().clone();
         let bid = serde_json::from_value(response)?;
         Ok(bid)
+    }
+
+    async fn delegate(&self, signed_data: SignedDelegation) -> Result<(), BuilderApiError> {
+        unimplemented!()
+    }
+
+    async fn revoke(&self, signed_data: SignedRevocation) -> Result<(), BuilderApiError> {
+        unimplemented!()
     }
 }
 

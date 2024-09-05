@@ -48,6 +48,9 @@ pub struct ConstraintsMessage {
     pub validator_index: u64,
     /// The consensus slot at which the constraints are valid
     pub slot: u64,
+    /// Indicates whether these constraints are only valid on the top of the block.
+    /// NOTE: Per slot, only 1 top-of-block bundle is valid.
+    pub top: bool,
     /// The constraints that need to be signed.
     pub constraints: Vec<Constraint>,
 }
@@ -58,7 +61,7 @@ impl ConstraintsMessage {
         let constraints =
             request.txs.into_iter().map(|tx| Constraint::from_transaction(tx, None)).collect();
 
-        Self { validator_index, slot: request.slot, constraints }
+        Self { validator_index, slot: request.slot, top: false, constraints }
     }
 }
 

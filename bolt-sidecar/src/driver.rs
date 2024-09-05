@@ -29,7 +29,7 @@ use crate::{
     },
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
-    BuilderProxyConfig, CommitBoostClient, Config, ConstraintsApi, LocalBuilder, MevBoostClient,
+    BuilderProxyConfig, CommitBoostClient, Config, ConstraintClient, ConstraintsApi, LocalBuilder,
 };
 
 /// The driver for the sidecar, responsible for managing the main event loop.
@@ -40,7 +40,7 @@ pub struct SidecarDriver<C, ECDSA> {
     constraint_signer: BlsSignerType,
     commitment_signer: ECDSA,
     local_builder: LocalBuilder,
-    mevboost_client: MevBoostClient,
+    mevboost_client: ConstraintClient,
     api_events_rx: mpsc::Receiver<CommitmentEvent>,
     payload_requests_rx: mpsc::Receiver<FetchPayloadRequest>,
     /// Stream of slots made from the consensus clock
@@ -97,7 +97,7 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
         commitment_signer: ECDSA,
         fetcher: C,
     ) -> eyre::Result<Self> {
-        let mevboost_client = MevBoostClient::new(cfg.mevboost_url.clone());
+        let mevboost_client = ConstraintClient::new(cfg.mevboost_url.clone());
         let beacon_client = BeaconClient::new(cfg.beacon_api_url.clone());
         let execution = ExecutionState::new(fetcher, cfg.limits).await?;
 

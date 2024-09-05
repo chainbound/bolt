@@ -26,7 +26,7 @@ use super::spec::{
     STATUS_PATH,
 };
 use crate::{
-    client::mevboost::MevBoostClient,
+    client::mevboost::ConstraintClient,
     primitives::{GetPayloadResponse, PayloadFetcher, SignedBuilderBid},
 };
 
@@ -233,7 +233,7 @@ where
         "Starting builder proxy..."
     );
 
-    let mev_boost = MevBoostClient::new(config.mevboost_url);
+    let mev_boost = ConstraintClient::new(config.mevboost_url);
     let server = Arc::new(BuilderProxyServer::new(mev_boost, payload_fetcher));
 
     let router = Router::new()
