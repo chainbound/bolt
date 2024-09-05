@@ -26,7 +26,7 @@ use super::spec::{
     STATUS_PATH,
 };
 use crate::{
-    client::mevboost::ConstraintClient,
+    client::constraint_client::ConstraintClient,
     primitives::{GetPayloadResponse, PayloadFetcher, SignedBuilderBid},
 };
 
