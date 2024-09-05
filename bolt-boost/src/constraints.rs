@@ -74,7 +74,6 @@ impl ConstraintsCache {
 
         let message_with_data = ConstraintsWithProofData::try_from(constraints)?;
 
-
         if let Some(cs) = self.cache.write().get_mut(&slot) {
             if cs.len() >= MAX_CONSTRAINTS_PER_SLOT {
                 error!("Max constraints per slot reached for slot {}", slot);
