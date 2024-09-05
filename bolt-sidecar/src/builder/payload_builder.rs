@@ -15,7 +15,7 @@ use reth_primitives::{
 };
 use reth_rpc_layer::{secret_to_bearer_header, JwtSecret};
 use serde_json::Value;
-use tracing::{debug, info, trace, warn};
+use tracing::trace;
 
 use super::{
     compat::{to_alloy_execution_payload, to_reth_withdrawal},
@@ -112,24 +112,24 @@ impl FallbackPayloadBuilder {
         // For the timestamp, we must use the one expected by the beacon chain instead, to
         // prevent edge cases where the proposer before us has missed their slot.
         let latest_block = self.execution_rpc_client.get_block(None, true).await?;
-        debug!(num = ?latest_block.header.number, "got latest block");
+        trace!(num = ?latest_block.header.number, "got latest block");
 
         let withdrawals = self.get_expected_withdrawals_at_head().await?;
-        debug!(amount = ?withdrawals.len(), "got expected withdrawals");
+        trace!(amount = ?withdrawals.len(), "got expected withdrawals");
 
         let prev_randao = self.get_prev_randao().await?;
-        debug!(randao = ?prev_randao, "got prev_randao");
+        trace!(randao = ?prev_randao, "got prev_randao");
 
         let parent_beacon_block_root =
             self.beacon_api_client.get_beacon_block_root(BlockId::Head).await?;
-        debug!(parent = ?parent_beacon_block_root, "got parent_beacon_block_root");
+        trace!(parent = ?parent_beacon_block_root, "got parent_beacon_block_root");
 
         let versioned_hashes = transactions
             .iter()
             .flat_map(|tx| tx.blob_versioned_hashes())
             .flatten()
             .collect::<Vec<_>>();
-        info!(amount = ?versioned_hashes.len(), "got versioned_hashes");
+        trace!(amount = ?versioned_hashes.len(), "got versioned_hashes");
 
         let base_fee = calc_next_block_base_fee(
             latest_block.header.gas_used,
@@ -189,11 +189,11 @@ impl FallbackPayloadBuilder {
                 .fetch_next_payload_hint(&exec_payload, &versioned_hashes, parent_beacon_block_root)
                 .await?;
 
-            debug!("engine_hint: {:?}", engine_hint);
+            trace!("engine_hint: {:?}", engine_hint);
 
             match engine_hint {
                 EngineApiHint::BlockHash(hash) => {
-                    warn!("Should not receive block hash hint {:?}", hash);
+                    trace!("Should not receive block hash hint {:?}", hash);
                     hints.block_hash = Some(hash)
                 }
 

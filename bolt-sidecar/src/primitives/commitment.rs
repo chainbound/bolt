@@ -1,10 +1,9 @@
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::str::FromStr;
 
-use alloy::{
-    primitives::{keccak256, Address, Signature, B256},
-    signers::{Error, Signer},
-};
+use alloy::primitives::{keccak256, Address, Signature, B256};
+
+use crate::crypto::SignerECDSA;
 
 use super::{FullTransaction, SignatureError, TransactionExt};
 
@@ -52,7 +51,10 @@ impl CommitmentRequest {
     }
 
     /// Commits and signs the request with the provided signer. Returns a [SignedCommitment].
-    pub async fn commit_and_sign<S: Signer>(self, signer: &S) -> Result<SignedCommitment, Error> {
+    pub async fn commit_and_sign<S: SignerECDSA>(
+        self,
+        signer: &S,
+    ) -> eyre::Result<SignedCommitment> {
         match self {
             CommitmentRequest::Inclusion(req) => {
                 let digest = req.digest();

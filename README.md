@@ -23,12 +23,14 @@
 
 <!-- vim-markdown-toc Marked -->
 
-- [How it works](#how-it-works)
-- [Scope of this repository](#scope-of-this-repository)
-- [Devnet and demo app](#devnet-and-demo-app)
-  - [Requirements and setup](#requirements-and-setup)
-  - [Running the devnet and demo](#running-the-devnet-and-demo)
-  - [Stopping the devnet and demo](#stopping-the-devnet-and-demo)
+* [How it works](#how-it-works)
+* [Scope of this repository](#scope-of-this-repository)
+* [Devnet and demo app](#devnet-and-demo-app)
+  * [Requirements and setup](#requirements-and-setup)
+  * [Running the devnet and demo](#running-the-devnet-and-demo)
+  * [Stopping the devnet and demo](#stopping-the-devnet-and-demo)
+* [Telemetry & Metrics](#telemetry-&-metrics)
+* [License](#license)
 
 <!-- vim-markdown-toc -->
 
@@ -184,5 +186,13 @@ just clean
 [fb-builder]: https://github.com/flashbots/builder
 [kurtosis]: https://www.kurtosis.com/
 
+## Telemetry & Metrics
+
+The Bolt sidecar offers an optional set of metrics that can be scraped by a Prometheus server, and shown in Grafana dashboards.
+They show various informations such as the number of constraints received, the number of blocks proposed, etc.
+
+These metrics are enabled by default but can be disabled by setting running the sidecar with the `--metrics` flag set to `false`.
+
 ## License
+
 MIT. Forked repositories have their own licenses.

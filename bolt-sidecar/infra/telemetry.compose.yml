@@ -1,0 +1,26 @@
+services:
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    user: root
+    volumes:
+      - "/prometheus_data"
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command: [
+        "--config.file=/etc/prometheus/prometheus.yml",
+        # the flag that specifies where Prometheus stores its database
+        "--storage.tsdb.path=/prometheus_data",
+      ]
+
+  grafana:
+    container_name: grafana
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - "/var/lib/grafana"
+      - "./grafana/provisioning:/etc/grafana/provisioning"
+    environment:
+      - GF_SECURITY_ADMIN_USER=bolt
+      - GF_SECURITY_ADMIN_PASSWORD=bolt

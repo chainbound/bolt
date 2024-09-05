@@ -9,6 +9,7 @@ default-run = "bolt-sidecar"
 clap = { version = "4.5.4", features = ["derive", "env"] }
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.7", features = ["macros"] }
+tower-http = { version = "0.5.2", features = ["timeout"] }
 axum-extra = "0.9.3"
 warp = "0.3.7"
 futures = "0.3"
@@ -59,7 +60,13 @@ regex = "1.10.5"
 
 # tracing
 tracing = "0.1.40"
-tracing-subscriber = "0.3.18"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter", "fmt"] }
+
+# telemetry
+metrics = "0.23"
+metrics-exporter-prometheus = { version = "0.15.3", features = [
+    "http-listener",
+] }
 
 # commit-boost
 commit-boost = { git = "https://github.com/Commit-Boost/commit-boost-client" }

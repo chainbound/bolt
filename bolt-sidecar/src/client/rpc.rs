@@ -1,24 +1,14 @@
 //! This module contains the `RpcClient` struct, which is a wrapper around the `alloy_rpc_client`.
 //! It provides a simple interface to interact with the Execution layer JSON-RPC API.
 
-use futures::future::join_all;
-use std::{
-    collections::HashSet,
-    ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 
 use alloy::{
     eips::BlockNumberOrTag,
     primitives::{Address, Bytes, B256, U256, U64},
     rpc::{
-        client::{self as alloyClient, ClientBuilder, Waiter},
-        types::{
-            trace::{
-                geth::{GethDebugTracingCallOptions, GethTrace},
-                parity::{TraceResults, TraceType},
-            },
-            Block, EIP1186AccountProofResponse, FeeHistory, TransactionRequest,
-        },
+        client::{self as alloyClient, ClientBuilder},
+        types::{Block, FeeHistory},
     },
     transports::{http::Http, TransportErrorKind, TransportResult},
 };
@@ -119,67 +109,6 @@ impl RpcClient {
         let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
 
         self.0.request("eth_getBlockByNumber", (tag, full)).await
-    }
-
-    /// Returns the account and storage values of the specified account including the Merkle-proof.
-    /// If the block number is `None`, the latest block is used.
-    pub async fn get_proof(
-        &self,
-        address: Address,
-        storage_keys: Vec<B256>,
-        block_number: Option<u64>,
-    ) -> TransportResult<EIP1186AccountProofResponse> {
-        let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
-        let params = (address, storage_keys, tag);
-
-        self.0.request("eth_getProof", params).await
-    }
-
-    /// Perform multiple `eth_getProof` calls in a single batch.
-    pub async fn get_proof_batched(
-        &self,
-        opts: Vec<(Address, Vec<B256>, BlockNumberOrTag)>,
-    ) -> TransportResult<Vec<EIP1186AccountProofResponse>> {
-        let mut batch = self.0.new_batch();
-
-        let mut proofs: Vec<Waiter<EIP1186AccountProofResponse>> = Vec::new();
-
-        for params in opts {
-            proofs.push(batch.add_call("eth_getProof", &params).expect("Correct parameters"));
-        }
-
-        batch.send().await?;
-
-        // Important: join_all will preserve the order of the proofs
-        join_all(proofs).await.into_iter().collect::<Result<Vec<_>, _>>()
-    }
-
-    /// Performs multiple call traces on top of the same block. i.e. transaction n will be executed
-    /// on top of a pending block with all n-1 transactions applied (traced) first.
-    ///
-    /// Note: Allows tracing dependent transactions, hence all transactions are traced in sequence
-    pub async fn trace_call_many(
-        &self,
-        calls: Vec<(TransactionRequest, HashSet<TraceType>)>,
-        block_number: Option<u64>,
-    ) -> TransportResult<Vec<TraceResults>> {
-        let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
-        let params = (calls, tag);
-
-        self.0.request("trace_callMany", params).await
-    }
-
-    /// Performs the `debug_traceCall` JSON-RPC method.
-    pub async fn debug_trace_call(
-        &self,
-        tx: TransactionRequest,
-        block_number: Option<u64>,
-        opts: Option<GethDebugTracingCallOptions>,
-    ) -> TransportResult<GethTrace> {
-        let tag = block_number.map_or(BlockNumberOrTag::Latest, BlockNumberOrTag::Number);
-        let params = (tx, tag, opts);
-
-        self.0.request("debug_traceCall", params).await
     }
 
     /// Send a raw transaction to the network.
