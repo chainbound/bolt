@@ -1,4 +1,5 @@
 use alloy::{
+    eips::merge::EPOCH_SLOTS,
     primitives::{utils::format_ether, B256, U256},
     rpc::types::beacon::{relay::ValidatorRegistration, BlsPublicKey},
 };
@@ -116,14 +117,20 @@ async fn submit_constraints(
     Json(constraints): Json<Vec<SignedConstraints>>,
 ) -> Result<impl IntoResponse, PbsClientError> {
     info!("Submitting {} constraints to relays", constraints.len());
+    let (current_slot, _) = state.get_slot_and_uuid();
+
     // Save constraints for the slot to verify proofs against later.
     for signed_constraints in &constraints {
-        if let Err(e) = state
-            .data
-            .constraints
-            .insert(signed_constraints.message.slot, signed_constraints.message.clone())
-        {
-            error!(slot = signed_constraints.message.slot, error = %e, "Failed to save constraints");
+        let slot = signed_constraints.message.slot;
+
+        // Only accept constraints for the current or next epoch.
+        if slot > current_slot + EPOCH_SLOTS * 2 {
+            warn!(slot, current_slot, "Constraints are too far in the future");
+            return Err(PbsClientError::BadRequest);
+        }
+
+        if let Err(e) = state.data.constraints.insert(slot, signed_constraints.message.clone()) {
+            error!(slot, error = %e, "Failed to save constraints");
             return Err(PbsClientError::BadRequest);
         }
     }

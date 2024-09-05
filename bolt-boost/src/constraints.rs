@@ -7,6 +7,8 @@ use crate::metrics;
 
 use super::types::{ConstraintsMessage, ConstraintsWithProofData};
 
+pub(crate) const MAX_CONSTRAINTS_PER_SLOT: usize = 128;
+
 /// A concurrent cache of constraints.
 #[derive(Clone, Default, Debug)]
 pub struct ConstraintsCache {
@@ -27,6 +29,8 @@ pub enum Error {
     Conflict(#[from] Conflict),
     #[error(transparent)]
     Decode(#[from] Eip2718Error),
+    #[error("Max constraints per slot reached for slot {0}")]
+    LimitReached(u64),
 }
 
 impl ConstraintsCache {
@@ -70,7 +74,13 @@ impl ConstraintsCache {
 
         let message_with_data = ConstraintsWithProofData::try_from(constraints)?;
 
+
         if let Some(cs) = self.cache.write().get_mut(&slot) {
+            if cs.len() >= MAX_CONSTRAINTS_PER_SLOT {
+                error!("Max constraints per slot reached for slot {}", slot);
+                return Err(Error::LimitReached(slot));
+            }
+
             cs.push(message_with_data);
         } else {
             self.cache.write().insert(slot, vec![message_with_data]);
