@@ -17,12 +17,6 @@ contract BoltValidatorsTest is Test {
 
     function setUp() public {
         validators = new BoltValidators(admin);
-
-        // Give some ether to the accounts for gas
-        vm.deal(admin, 20 ether);
-        vm.deal(provider, 20 ether);
-        vm.deal(operator, 20 ether);
-        vm.deal(validator, 20 ether);
     }
 
     function testUnsafeRegistration() public {
