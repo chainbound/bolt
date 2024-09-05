@@ -122,9 +122,6 @@ async fn submit_constraints(
     info!("Submitting {} constraints to relays", constraints.len());
     // Save constraints for the slot to verify proofs against later.
     for signed_constraints in &constraints {
-        // If signature verification is turned off, don't verify the constraints.
-
-        // TODO: check for ToB conflicts!
         state.data.constraints.insert(
             signed_constraints.message.slot,
             signed_constraints.message.clone(),
@@ -228,7 +225,8 @@ async fn get_header_with_proofs(
                 let root = res.data.header.message.header.transactions_root;
 
                 let start = Instant::now();
-                // TODO: verify in order to add to relay_bids!
+
+                // Verify the multiproofs
                 if let Err(e) =
                     verify_multiproofs(constraints.as_ref().unwrap(), &res.data.proofs, root)
                 {
