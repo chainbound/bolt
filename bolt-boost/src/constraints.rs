@@ -3,6 +3,8 @@ use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
 use tracing::error;
 
+use crate::metrics;
+
 use super::types::{ConstraintsMessage, ConstraintsWithProofData};
 
 /// A concurrent cache of constraints.
@@ -81,16 +83,25 @@ impl ConstraintsCache {
             self.cache.write().insert(slot, vec![message_with_data]);
         }
 
+        metrics::CONSTRAINTS_CACHE_SIZE.inc();
+
         Ok(())
     }
 
     /// Removes all constraints before the given slot.
     pub fn remove_before(&self, slot: u64) {
         self.cache.write().retain(|k, _| *k >= slot);
+        metrics::CONSTRAINTS_CACHE_SIZE.set(self.total_constraints() as i64);
     }
 
     /// Gets and removes the constraints for the given slot.
     pub fn remove(&self, slot: u64) -> Option<Vec<ConstraintsWithProofData>> {
-        self.cache.write().remove(&slot)
+        self.cache.write().remove(&slot).inspect(|c| {
+            metrics::CONSTRAINTS_CACHE_SIZE.sub(c.len() as i64);
+        })
+    }
+
+    fn total_constraints(&self) -> usize {
+        self.cache.read().values().map(|v| v.len()).sum()
     }
 }

@@ -33,6 +33,10 @@ use std::{
 use tokio::time::sleep;
 use tracing::{debug, error, info, warn, Instrument};
 
+use crate::metrics::{
+    GET_HEADER_WP_TAG, RELAY_INVALID_BIDS, RELAY_LATENCY, RELAY_STATUS_CODE, TIMEOUT_ERROR_CODE_STR,
+};
+
 use super::{
     constraints::ConstraintsCache,
     error::PbsClientError,
@@ -50,11 +54,6 @@ const GET_HEADER_WITH_PROOFS_PATH: &str =
     "/eth/v1/builder/header_with_proofs/:slot/:parent_hash/:pubkey";
 
 const TIMEOUT_ERROR_CODE: u16 = 555;
-
-// lazy_static! {
-//     pub static ref CHECK_RECEIVED_COUNTER: IntCounter =
-//         IntCounter::new("checks", "successful /check requests received").unwrap();
-// }
 
 // Extra state available at runtime
 #[derive(Clone)]
@@ -234,6 +233,7 @@ async fn get_header_with_proofs(
                     // Verify the multiproofs and continue if not valid
                     if let Err(e) = verify_multiproofs(constraints, &res.data.proofs, root) {
                         error!(?e, relay_id, "Failed to verify multiproof, skipping bid");
+                        RELAY_INVALID_BIDS.with_label_values(&[relay_id]).inc();
                         continue;
                     }
 
@@ -426,21 +426,22 @@ async fn send_one_get_header(
     {
         Ok(res) => res,
         Err(err) => {
-            // TODO: metrics
-            // RELAY_STATUS_CODE
-            //     .with_label_values(&[TIMEOUT_ERROR_CODE_STR, GET_HEADER_ENDPOINT_TAG, &relay.id])
-            //     .inc();
+            RELAY_STATUS_CODE
+                .with_label_values(&[TIMEOUT_ERROR_CODE_STR, GET_HEADER_WP_TAG, &relay.id])
+                .inc();
             return Err(err.into());
         }
     };
 
     let request_latency = start_request.elapsed();
-    // RELAY_LATENCY
-    //     .with_label_values(&[GET_HEADER_ENDPOINT_TAG, &relay.id])
-    //     .observe(request_latency.as_secs_f64());
+    RELAY_LATENCY
+        .with_label_values(&[GET_HEADER_WP_TAG, &relay.id])
+        .observe(request_latency.as_secs_f64());
 
     let code = res.status();
-    // RELAY_STATUS_CODE.with_label_values(&[code.as_str(), GET_HEADER_ENDPOINT_TAG, &relay.id]).inc();
+    RELAY_STATUS_CODE
+        .with_label_values(&[code.as_str(), GET_HEADER_WP_TAG, &relay.id])
+        .inc();
 
     let response_bytes = res.bytes().await?;
     if !code.is_success() {

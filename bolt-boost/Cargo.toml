@@ -18,9 +18,10 @@ ssz_rs = { git = "https://github.com/ralexstokes/ssz-rs", rev = "1df4cd9b", feat
     "sha2-asm",
 ] } # crypto
 
-# tracing
+# tracing & metrics
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
+prometheus = "0.13.4"
 
 # serialization
 serde = { version = "1.0.197", features = ["derive"] }
@@ -44,3 +45,4 @@ cb-common = { git = "https://github.com/commit-boost/commit-boost-client", rev =
 types = { git = "https://github.com/sigp/lighthouse", rev = "2e0eb6d1" }
 rand = "0.8.5"
 parking_lot = "0.12.3"
+lazy_static = "1.5.0"
