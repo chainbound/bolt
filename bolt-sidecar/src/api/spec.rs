@@ -30,12 +30,6 @@ pub const SUBMIT_CONSTRAINTS_PATH: &str = "/constraints/v1/builder/constraints";
 pub const DELEGATE_PATH: &str = "/constraints/v1/builder/delegate";
 /// The path to the constraints API revoke endpoint.
 pub const REVOKE_PATH: &str = "/constraints/v1/builder/revoke";
-<<<<<<< HEAD
-=======
-/// The path to the constraints API get header with proofs endpoint.
-pub const GET_HEADER_WITH_PROOFS_PATH: &str =
-    "/eth/v1/builder/header_with_proofs/:slot/:parent_hash/:pubkey";
->>>>>>> aa08f32 (feat(sidecar): constraints client init)
 
 /// A response object for errors.
 #[derive(Debug, Clone, Serialize, Deserialize)]
