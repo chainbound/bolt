@@ -15,6 +15,7 @@ import {ISlasherFactory} from "@symbiotic/interfaces/ISlasherFactory.sol";
 import {IVetoSlasher} from "@symbiotic/interfaces/slasher/IVetoSlasher.sol";
 import {IDelegatorFactory} from "@symbiotic/interfaces/IDelegatorFactory.sol";
 import {IMigratablesFactory} from "@symbiotic/interfaces/common/IMigratablesFactory.sol";
+import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
 
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
@@ -27,6 +28,7 @@ import {SymbioticSetupFixture} from "./fixtures/SymbioticSetup.f.sol";
 
 contract BoltManagerTest is Test {
     using BLS12381 for BLS12381.G1Point;
+    using Subnetwork for address;
 
     uint48 public constant EPOCH_DURATION = 1 days;
 
@@ -47,11 +49,10 @@ contract BoltManagerTest is Test {
     address public networkMiddlewareService;
     address public operatorVaultOptInService;
     address public operatorNetworkOptInService;
-    address public slasherImpl;
-    address public vetoSlasherImpl;
+    address public vetoSlasher;
+    address public vault;
+    address public networkRestakeDelegator;
     address public vaultConfigurator;
-    address public vaultImpl;
-    address public networkRestakeDelegatorImpl;
 
     address deployer = makeAddr("deployer");
     address admin = makeAddr("admin");
@@ -62,7 +63,6 @@ contract BoltManagerTest is Test {
     address vaultAdmin = makeAddr("vaultAdmin");
 
     function setUp() public {
-        // Deploy Symbiotic core contracts
         (
             vaultFactory,
             delegatorFactory,
@@ -112,8 +112,11 @@ contract BoltManagerTest is Test {
             operatorNetworkSharesSetRoleHolders: adminRoleHolders
         });
 
-        IVetoSlasher.InitParams memory vetoSlasherInitParams =
-            IVetoSlasher.InitParams({vetoDuration: uint48(1 days), resolverSetEpochsDelay: 3});
+        IVetoSlasher.InitParams memory vetoSlasherInitParams = IVetoSlasher.InitParams({
+            // veto duration must be smaller than epoch duration
+            vetoDuration: uint48(12 hours),
+            resolverSetEpochsDelay: 3
+        });
 
         IVaultConfigurator.InitParams memory vaultConfiguratorInitParams = IVaultConfigurator.InitParams({
             version: IMigratablesFactory(IVaultConfigurator(vaultConfigurator).VAULT_FACTORY()).lastVersion(),
@@ -126,28 +129,16 @@ contract BoltManagerTest is Test {
             slasherParams: abi.encode(vetoSlasherInitParams)
         });
 
-        (vaultImpl, networkRestakeDelegatorImpl, slasherImpl) =
+        (vault, networkRestakeDelegator, vetoSlasher) =
             IVaultConfigurator(vaultConfigurator).create(vaultConfiguratorInitParams);
         vm.stopPrank();
 
-        assertEq(networkRestakeDelegatorImpl, address(IVault(vaultImpl).delegator()));
-        assertEq(slasherImpl, address(IVault(vaultImpl).slasher()));
+        assertEq(networkRestakeDelegator, address(IVault(vault).delegator()));
+        assertEq(vetoSlasher, address(IVault(vault).slasher()));
 
         // Register the network in Symbiotic
         vm.prank(networkAdmin);
         INetworkRegistry(networkRegistry).registerNetwork();
-
-        // Whitelist the vault in Symbiotic
-        vm.prank(admin);
-        IVaultFactory(vaultFactory).whitelist(vaultImpl);
-
-        // Whitelist the slasher in Symbiotic
-        vm.prank(admin);
-        ISlasherFactory(slasherFactory).whitelist(slasherImpl);
-
-        // Whitelist the delegator in Symbiotic
-        vm.prank(admin);
-        IDelegatorFactory(delegatorFactory).whitelist(networkRestakeDelegatorImpl);
 
         // Deploy Bolt contracts
         validators = new BoltValidators(admin);
@@ -186,9 +177,10 @@ contract BoltManagerTest is Test {
         // --- 4. set the stake limit for the Vault ---
 
         vm.prank(admin);
-        INetworkRestakeDelegator(networkRestakeDelegatorImpl).setNetworkLimit(0, 1 ether);
+        bytes32 subnetwork = networkAdmin.subnetwork(0);
+        INetworkRestakeDelegator(IVault(vault).delegator()).setNetworkLimit(subnetwork, 1 ether);
 
         vm.prank(admin);
-        IBaseDelegator(IVault(vaultImpl).delegator()).setMaxNetworkLimit(0, 1 ether);
+        IBaseDelegator(IVault(vault).delegator()).setMaxNetworkLimit(0, 1 ether);
     }
 }

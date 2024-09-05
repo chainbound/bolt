@@ -46,12 +46,60 @@ contract SymbioticSetupFixture is Test {
         SlasherFactory slasherFactory_ = new SlasherFactory(deployer);
         NetworkRegistry networkRegistry_ = new NetworkRegistry();
         OperatorRegistry operatorRegistry_ = new OperatorRegistry();
-        MetadataService operatorMetadataService_ = new MetadataService(address(operatorRegistry));
-        MetadataService networkMetadataService_ = new MetadataService(address(networkRegistry));
-        NetworkMiddlewareService networkMiddlewareService_ = new NetworkMiddlewareService(address(networkRegistry));
-        OptInService operatorVaultOptInService_ = new OptInService(address(operatorRegistry), address(vaultFactory));
+        MetadataService operatorMetadataService_ = new MetadataService(address(operatorRegistry_));
+        MetadataService networkMetadataService_ = new MetadataService(address(networkRegistry_));
+        NetworkMiddlewareService networkMiddlewareService_ = new NetworkMiddlewareService(address(networkRegistry_));
+        OptInService operatorVaultOptInService_ = new OptInService(address(operatorRegistry_), address(vaultFactory_));
         OptInService operatorNetworkOptInService_ =
-            new OptInService(address(operatorRegistry), address(networkRegistry));
+            new OptInService(address(operatorRegistry_), address(networkRegistry_));
+
+        Vault vault_ = new Vault(address(delegatorFactory_), address(slasherFactory_), address(vaultFactory_));
+        vaultFactory_.whitelist(address(vault_));
+
+        address networkRestakeDelegator_ = address(
+            new NetworkRestakeDelegator(
+                address(networkRegistry_),
+                address(vaultFactory_),
+                address(operatorVaultOptInService_),
+                address(operatorNetworkOptInService_),
+                address(delegatorFactory_),
+                delegatorFactory_.totalTypes()
+            )
+        );
+        delegatorFactory_.whitelist(networkRestakeDelegator_);
+
+        address fullRestakeDelegator_ = address(
+            new FullRestakeDelegator(
+                address(networkRegistry_),
+                address(vaultFactory_),
+                address(operatorVaultOptInService_),
+                address(operatorNetworkOptInService_),
+                address(delegatorFactory_),
+                delegatorFactory_.totalTypes()
+            )
+        );
+        delegatorFactory_.whitelist(fullRestakeDelegator_);
+
+        address slasher_ = address(
+            new Slasher(
+                address(vaultFactory_),
+                address(networkMiddlewareService_),
+                address(slasherFactory_),
+                slasherFactory_.totalTypes()
+            )
+        );
+        slasherFactory_.whitelist(slasher_);
+
+        address vetoSlasher_ = address(
+            new VetoSlasher(
+                address(vaultFactory_),
+                address(networkMiddlewareService_),
+                address(networkRegistry_),
+                address(slasherFactory_),
+                slasherFactory_.totalTypes()
+            )
+        );
+        slasherFactory_.whitelist(vetoSlasher_);
 
         VaultConfigurator vaultConfigurator_ =
             new VaultConfigurator(address(vaultFactory_), address(delegatorFactory_), address(slasherFactory_));
