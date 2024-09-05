@@ -1117,7 +1117,7 @@ dependencies = [
 [[package]]
 name = "bls"
 version = "0.2.0"
-source = "git+https://github.com/sigp/lighthouse?rev=9e12c21f268c80a3f002ae0ca27477f9f512eb6f#9e12c21f268c80a3f002ae0ca27477f9f512eb6f"
+source = "git+https://github.com/sigp/lighthouse?rev=2e0eb6d1#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
 dependencies = [
  "arbitrary",
  "blst",
@@ -1135,7 +1135,7 @@ dependencies = [
 [[package]]
 name = "bls"
 version = "0.2.0"
-source = "git+https://github.com/sigp/lighthouse#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
+source = "git+https://github.com/sigp/lighthouse?rev=9e12c21f268c80a3f002ae0ca27477f9f512eb6f#9e12c21f268c80a3f002ae0ca27477f9f512eb6f"
 dependencies = [
  "arbitrary",
  "blst",
@@ -1233,7 +1233,7 @@ dependencies = [
 [[package]]
 name = "cb-cli"
 version = "0.1.0"
-source = "git+https://github.com/commit-boost/commit-boost-client#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
+source = "git+https://github.com/commit-boost/commit-boost-client?rev=45ce8f1b#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
 dependencies = [
  "cb-common",
  "clap",
@@ -1249,7 +1249,7 @@ dependencies = [
 [[package]]
 name = "cb-common"
 version = "0.1.0"
-source = "git+https://github.com/commit-boost/commit-boost-client#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
+source = "git+https://github.com/commit-boost/commit-boost-client?rev=45ce8f1b#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
 dependencies = [
  "alloy",
  "axum",
@@ -1282,7 +1282,7 @@ dependencies = [
 [[package]]
 name = "cb-metrics"
 version = "0.1.0"
-source = "git+https://github.com/commit-boost/commit-boost-client#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
+source = "git+https://github.com/commit-boost/commit-boost-client?rev=45ce8f1b#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
 dependencies = [
  "axum",
  "cb-common",
@@ -1296,7 +1296,7 @@ dependencies = [
 [[package]]
 name = "cb-pbs"
 version = "0.1.0"
-source = "git+https://github.com/commit-boost/commit-boost-client#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
+source = "git+https://github.com/commit-boost/commit-boost-client?rev=45ce8f1b#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
 dependencies = [
  "alloy",
  "async-trait",
@@ -1321,7 +1321,7 @@ dependencies = [
 [[package]]
 name = "cb-signer"
 version = "0.1.0"
-source = "git+https://github.com/commit-boost/commit-boost-client#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
+source = "git+https://github.com/commit-boost/commit-boost-client?rev=45ce8f1b#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
 dependencies = [
  "alloy",
  "axum",
@@ -1455,7 +1455,7 @@ checksum = "d3fd119d74b830634cea2a0f58bbd0d54540518a14397557951e79340abc28c0"
 [[package]]
 name = "commit-boost"
 version = "0.1.0"
-source = "git+https://github.com/commit-boost/commit-boost-client#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
+source = "git+https://github.com/commit-boost/commit-boost-client?rev=45ce8f1b#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
 dependencies = [
  "cb-cli",
  "cb-common",
@@ -1473,7 +1473,7 @@ dependencies = [
 [[package]]
 name = "compare_fields"
 version = "0.2.0"
-source = "git+https://github.com/sigp/lighthouse#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
+source = "git+https://github.com/sigp/lighthouse?rev=2e0eb6d1#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
 dependencies = [
  "itertools 0.10.5",
 ]
@@ -1481,7 +1481,7 @@ dependencies = [
 [[package]]
 name = "compare_fields_derive"
 version = "0.2.0"
-source = "git+https://github.com/sigp/lighthouse#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
+source = "git+https://github.com/sigp/lighthouse?rev=2e0eb6d1#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -1941,9 +1941,9 @@ dependencies = [
 [[package]]
 name = "eth2_interop_keypairs"
 version = "0.2.0"
-source = "git+https://github.com/sigp/lighthouse#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
+source = "git+https://github.com/sigp/lighthouse?rev=2e0eb6d1#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
 dependencies = [
- "bls 0.2.0 (git+https://github.com/sigp/lighthouse)",
+ "bls 0.2.0 (git+https://github.com/sigp/lighthouse?rev=2e0eb6d1)",
  "ethereum_hashing 0.6.0",
  "hex",
  "lazy_static",
@@ -2661,7 +2661,7 @@ dependencies = [
 [[package]]
 name = "int_to_bytes"
 version = "0.2.0"
-source = "git+https://github.com/sigp/lighthouse#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
+source = "git+https://github.com/sigp/lighthouse?rev=2e0eb6d1#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
 dependencies = [
  "bytes",
 ]
@@ -2768,7 +2768,7 @@ dependencies = [
 [[package]]
 name = "kzg"
 version = "0.1.0"
-source = "git+https://github.com/sigp/lighthouse#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
+source = "git+https://github.com/sigp/lighthouse?rev=2e0eb6d1#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
 dependencies = [
  "arbitrary",
  "c-kzg",
@@ -2875,7 +2875,7 @@ checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 [[package]]
 name = "merkle_proof"
 version = "0.2.0"
-source = "git+https://github.com/sigp/lighthouse#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
+source = "git+https://github.com/sigp/lighthouse?rev=2e0eb6d1#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
 dependencies = [
  "ethereum-types",
  "ethereum_hashing 0.6.0",
@@ -3811,7 +3811,7 @@ checksum = "f3cb5ba0dc43242ce17de99c180e96db90b235b8a9fdc9543c96d2209116bd9f"
 [[package]]
 name = "safe_arith"
 version = "0.1.0"
-source = "git+https://github.com/sigp/lighthouse#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
+source = "git+https://github.com/sigp/lighthouse?rev=2e0eb6d1#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
 
 [[package]]
 name = "salsa20"
@@ -4196,7 +4196,7 @@ dependencies = [
 [[package]]
 name = "ssz_rs"
 version = "0.9.0"
-source = "git+https://github.com/ralexstokes/ssz-rs#1df4cd9b849a48c44a6105abc3a38d21cd4fd8d3"
+source = "git+https://github.com/ralexstokes/ssz-rs?rev=1df4cd9b#1df4cd9b849a48c44a6105abc3a38d21cd4fd8d3"
 dependencies = [
  "alloy-primitives",
  "bitvec",
@@ -4208,7 +4208,7 @@ dependencies = [
 [[package]]
 name = "ssz_rs_derive"
 version = "0.9.0"
-source = "git+https://github.com/ralexstokes/ssz-rs#1df4cd9b849a48c44a6105abc3a38d21cd4fd8d3"
+source = "git+https://github.com/ralexstokes/ssz-rs?rev=1df4cd9b#1df4cd9b849a48c44a6105abc3a38d21cd4fd8d3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4319,7 +4319,7 @@ dependencies = [
 [[package]]
 name = "swap_or_not_shuffle"
 version = "0.2.0"
-source = "git+https://github.com/sigp/lighthouse#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
+source = "git+https://github.com/sigp/lighthouse?rev=2e0eb6d1#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
 dependencies = [
  "ethereum-types",
  "ethereum_hashing 0.6.0",
@@ -4417,7 +4417,7 @@ dependencies = [
 [[package]]
 name = "test_random_derive"
 version = "0.2.0"
-source = "git+https://github.com/sigp/lighthouse#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
+source = "git+https://github.com/sigp/lighthouse?rev=2e0eb6d1#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -4856,12 +4856,12 @@ checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 [[package]]
 name = "types"
 version = "0.2.1"
-source = "git+https://github.com/sigp/lighthouse#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
+source = "git+https://github.com/sigp/lighthouse?rev=2e0eb6d1#2e0eb6d1b8705bbda2ba56eb195d9cc7c6575e95"
 dependencies = [
  "alloy-primitives",
  "alloy-rlp",
  "arbitrary",
- "bls 0.2.0 (git+https://github.com/sigp/lighthouse)",
+ "bls 0.2.0 (git+https://github.com/sigp/lighthouse?rev=2e0eb6d1)",
  "compare_fields",
  "compare_fields_derive",
  "derivative",

@@ -14,10 +14,9 @@ eyre = "0.6.12"
 thiserror = "1.0.63"
 reqwest = "0.12.7"
 
-# crypto
-ssz_rs = { git = "https://github.com/ralexstokes/ssz-rs", features = [
+ssz_rs = { git = "https://github.com/ralexstokes/ssz-rs", rev = "1df4cd9b", features = [
     "sha2-asm",
-] }
+] } # crypto
 
 # tracing
 tracing = "0.1.40"
@@ -38,9 +37,9 @@ alloy = { version = "0.2.0", features = [
 ] }
 
 # commit-boost
-commit-boost = { git = "https://github.com/commit-boost/commit-boost-client" }
-cb-common = { git = "https://github.com/commit-boost/commit-boost-client" }
+commit-boost = { git = "https://github.com/commit-boost/commit-boost-client", rev = "45ce8f1b" }
+cb-common = { git = "https://github.com/commit-boost/commit-boost-client", rev = "45ce8f1b" }
 
 # other
-types = { git = "https://github.com/sigp/lighthouse" }
+types = { git = "https://github.com/sigp/lighthouse", rev = "2e0eb6d1" }
 rand = "0.8.5"
