@@ -84,6 +84,7 @@ mod tests {
 
     use crate::testutil::*;
 
+    /// NOTE: This test is disabled because multiproof support has not landed in ssz-rs main yet.
     // #[test]
     // fn test_single_multiproof() {
     //     let (root, transactions) = read_test_transactions();
