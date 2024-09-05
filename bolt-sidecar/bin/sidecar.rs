@@ -1,5 +1,4 @@
-use bolt_sidecar::telemetry::init_telemetry_stack;
-use bolt_sidecar::{Config, SidecarDriver};
+use bolt_sidecar::{telemetry::init_telemetry_stack, Config, SidecarDriver};
 use eyre::{bail, Result};
 use tracing::info;
 
@@ -16,10 +15,20 @@ async fn main() -> Result<()> {
     }
 
     info!(chain = config.chain.name(), "Starting Bolt sidecar");
-    match SidecarDriver::new(config).await {
-        Ok(driver) => driver.run_forever().await,
-        Err(err) => bail!("Failed to initialize the sidecar driver: {:?}", err),
-    };
+
+    if config.private_key.is_some() {
+        match SidecarDriver::with_local_signer(config).await {
+            Ok(driver) => driver.run_forever().await,
+            Err(err) => bail!("Failed to initialize the sidecar driver: {:?}", err),
+        }
+    } else {
+        match SidecarDriver::with_commit_boost_signer(config).await {
+            Ok(driver) => driver.run_forever().await,
+            Err(err) => {
+                bail!("Failed to initialize the sidecar driver with commit boost: {:?}", err)
+            }
+        }
+    }
 
     Ok(())
 }

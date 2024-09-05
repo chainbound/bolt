@@ -12,7 +12,9 @@ pub use api::{
 };
 
 mod client;
-pub use client::{mevboost::MevBoostClient, rpc::RpcClient, BeaconClient};
+pub use client::{
+    commit_boost::CommitBoostSigner, mevboost::MevBoostClient, rpc::RpcClient, BeaconClient,
+};
 
 /// Telemetry and metrics utilities
 pub mod telemetry;

@@ -1,3 +1,6 @@
+use std::fmt::Debug;
+
+use alloy::signers::{local::PrivateKeySigner, Signature as AlloySignature, Signer};
 use secp256k1::{ecdsa::Signature, Message, PublicKey, SecretKey};
 
 /// Trait for any types that can be signed and verified with ECDSA.
@@ -51,11 +54,26 @@ impl ECDSASigner {
     }
 }
 
+/// A generic signing trait to generate ECDSA signatures.
+#[async_trait::async_trait]
+pub trait SignerECDSA: Send + Debug {
+    /// Sign the given hash and return the signature.
+    async fn sign_hash(&self, hash: &[u8; 32]) -> eyre::Result<AlloySignature>;
+}
+
+#[async_trait::async_trait]
+impl SignerECDSA for PrivateKeySigner {
+    async fn sign_hash(&self, hash: &[u8; 32]) -> eyre::Result<AlloySignature> {
+        Ok(Signer::sign_hash(self, hash.into()).await?)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::test_util::TestSignableData;
 
     use super::ECDSASigner;
+    use rand::Rng;
     use secp256k1::{PublicKey, SecretKey};
 
     #[test]
@@ -63,7 +81,11 @@ mod tests {
         let secp256k1_key = SecretKey::from_slice(&[1; 32]).unwrap();
         let signer = ECDSASigner::new(secp256k1_key);
 
-        let message = TestSignableData { data: vec![1, 2, 3, 4] };
+        // Generate random data for the test
+        let mut rng = rand::thread_rng();
+        let mut data = [0u8; 32];
+        rng.fill(&mut data);
+        let message = TestSignableData { data };
 
         let signature = signer.sign_ecdsa(&message);
         let pubkey = PublicKey::from_secret_key(&secp256k1::Secp256k1::new(), &secp256k1_key);

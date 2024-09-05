@@ -1,18 +1,14 @@
 //! This module contains the `RpcClient` struct, which is a wrapper around the `alloy_rpc_client`.
 //! It provides a simple interface to interact with the Execution layer JSON-RPC API.
 
-use std::{
-    ops::{Deref, DerefMut},
-};
+use std::ops::{Deref, DerefMut};
 
 use alloy::{
     eips::BlockNumberOrTag,
     primitives::{Address, Bytes, B256, U256, U64},
     rpc::{
         client::{self as alloyClient, ClientBuilder},
-        types::{
-            Block, FeeHistory,
-        },
+        types::{Block, FeeHistory},
     },
     transports::{http::Http, TransportErrorKind, TransportResult},
 };

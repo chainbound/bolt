@@ -118,11 +118,11 @@ pub(crate) fn test_bls_secret_key() -> SecretKey {
 
 /// Arbitrary bytes that can be signed with both ECDSA and BLS keys
 pub(crate) struct TestSignableData {
-    pub data: Vec<u8>,
+    pub data: [u8; 32],
 }
 
 impl SignableBLS for TestSignableData {
-    fn digest(&self) -> Vec<u8> {
+    fn digest(&self) -> [u8; 32] {
         self.data.clone()
     }
 }
@@ -131,14 +131,14 @@ impl SignableECDSA for TestSignableData {
     fn digest(&self) -> Message {
         // pad the data to 32 bytes
         let as_32 = if self.data.len() < 32 {
-            let mut padded = vec![0; 32];
+            let mut padded = [0u8; 32];
             padded[..self.data.len()].copy_from_slice(&self.data);
             padded
         } else {
             self.data.clone()
         };
 
-        Message::from_digest_slice(as_32.as_slice()).expect("valid message")
+        Message::from_digest_slice(&as_32).expect("valid message")
     }
 }
 
