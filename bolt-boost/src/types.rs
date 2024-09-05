@@ -12,21 +12,17 @@ use ssz_derive::{Decode, Encode};
 use std::ops::Deref;
 
 use cb_common::{
+    constants::COMMIT_BOOST_DOMAIN,
     pbs::{DenebSpec, EthSpec, SignedExecutionPayloadHeader, Transaction, VersionedResponse},
-    signer::schemes::bls::verify_bls_signature,
+    signature::verify_signed_message,
+    types::Chain,
 };
 
 /// A hash tree root.
 pub type HashTreeRoot = tree_hash::Hash256;
 
-/// Extra config loaded from the config file
-/// You should add an `inc_amount` field to the config file in the `pbs`
-/// section. Be sure also to change the `pbs.docker_image` field,
-/// `test_status_api` in this case (from scripts/build_local_modules.sh).
-#[derive(Debug, Deserialize)]
-pub struct ExtraConfig {
-    pub inc_amount: u64,
-}
+#[derive(Debug, Clone, Deserialize)]
+pub struct Config {}
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub struct GetHeaderParams {
@@ -43,14 +39,11 @@ pub struct SignedConstraints {
 
 impl SignedConstraints {
     /// Verifies the signature on this message against the provided BLS public key.
-    /// TODO: this should have a signing domain!
-    pub fn verify_signature(&self, pubkey: &BlsPublicKey) -> bool {
-        verify_bls_signature(
-            pubkey,
-            self.message.tree_hash_root().as_bytes(),
-            &self.signature,
-        )
-        .is_ok()
+    /// The `chain` and `COMMIT_BOOST_DOMAIN` are used to compute the signing root.
+    #[allow(unused)]
+    pub fn verify_signature(&self, chain: Chain, pubkey: &BlsPublicKey) -> bool {
+        verify_signed_message(chain, pubkey, &self.message, &self.signature, COMMIT_BOOST_DOMAIN)
+            .is_ok()
     }
 }
 
@@ -88,12 +81,8 @@ impl TreeHash for ConstraintsMessage {
         hasher
             .write(&self.validator_index.to_le_bytes())
             .expect("Should write validator index bytes");
-        hasher
-            .write(&self.slot.to_le_bytes())
-            .expect("Should write slot bytes");
-        hasher
-            .write(&(self.top as u8).to_le_bytes())
-            .expect("Should write top flag");
+        hasher.write(&self.slot.to_le_bytes()).expect("Should write slot bytes");
+        hasher.write(&(self.top as u8).to_le_bytes()).expect("Should write top flag");
 
         for transaction in &self.transactions {
             hasher
@@ -138,10 +127,7 @@ impl TryFrom<ConstraintsMessage> for ConstraintsWithProofData {
             })
             .collect::<Result<Vec<_>, Eip2718Error>>()?;
 
-        Ok(Self {
-            message: value,
-            proof_data: transactions,
-        })
+        Ok(Self { message: value, proof_data: transactions })
     }
 }
 

@@ -28,6 +28,7 @@ use super::spec::{
 use crate::{
     client::constraint_client::ConstraintClient,
     primitives::{GetPayloadResponse, PayloadFetcher, SignedBuilderBid},
+    telemetry::ApiMetrics,
 };
 
 const MAX_BLINDED_BLOCK_LENGTH: usize = 1024 * 1024;
@@ -187,7 +188,9 @@ where
         if let Some(local_payload) = server.local_payload.lock().take() {
             check_locally_built_payload_integrity(&signed_blinded_block, &local_payload)?;
 
-            debug!("Valid local block found, returning: {local_payload:?}");
+            info!("Valid local block found, returning: {local_payload:?}");
+            ApiMetrics::increment_local_blocks_proposed();
+
             return Ok(Json(local_payload));
         }
 
@@ -204,7 +207,8 @@ where
                 e
             })?;
 
-        debug!(elapsed = ?start.elapsed(), "Returning payload");
+        info!(elapsed = ?start.elapsed(), "Returning payload from mev-boost");
+        ApiMetrics::increment_remote_blocks_proposed();
 
         Ok(payload)
     }

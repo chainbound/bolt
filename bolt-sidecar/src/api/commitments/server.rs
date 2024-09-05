@@ -4,22 +4,24 @@ use std::{
     future::Future,
     net::{SocketAddr, ToSocketAddrs},
     pin::Pin,
-    str::FromStr,
     sync::Arc,
 };
 
-use alloy::primitives::{Address, Signature};
-use axum::{extract::State, http::HeaderMap, routing::post, Json, Router};
-use axum_extra::extract::WithRejection;
-use serde_json::Value;
+use alloy::primitives::Address;
+use axum::{
+    middleware,
+    routing::{get, post},
+    Router,
+};
 use tokio::{
     net::TcpListener,
     sync::{mpsc, oneshot},
 };
-use tracing::{debug, error, info, instrument};
+use tower_http::timeout::TimeoutLayer;
+use tracing::{error, info};
 
 use crate::{
-    common::CARGO_PKG_VERSION,
+    commitments::handlers,
     primitives::{
         commitment::{InclusionCommitment, SignedCommitment},
         CommitmentRequest, InclusionRequest,
@@ -27,11 +29,9 @@ use crate::{
 };
 
 use super::{
-    jsonrpc::{JsonPayload, JsonResponse},
-    spec::{
-        CommitmentsApi, Error, RejectionError, GET_VERSION_METHOD, REQUEST_INCLUSION_METHOD,
-        SIGNATURE_HEADER,
-    },
+    middleware::track_server_metrics,
+    spec,
+    spec::{CommitmentsApi, Error},
 };
 
 /// Event type emitted by the commitments API.
@@ -122,7 +122,7 @@ impl CommitmentsApiServer {
     pub async fn run(&mut self, events_tx: mpsc::Sender<Event>) {
         let api = Arc::new(CommitmentsApiInner::new(events_tx));
 
-        let router = Router::new().route("/", post(Self::handle_rpc)).with_state(api);
+        let router = make_router(api);
 
         let listener = match TcpListener::bind(self.addr).await {
             Ok(listener) => listener,
@@ -150,104 +150,27 @@ impl CommitmentsApiServer {
     pub fn local_addr(&self) -> SocketAddr {
         self.addr
     }
-
-    /// Handler function for the root JSON-RPC path.
-    #[instrument(skip_all, name = "RPC", fields(method = %payload.method))]
-    async fn handle_rpc(
-        headers: HeaderMap,
-        State(api): State<Arc<CommitmentsApiInner>>,
-        WithRejection(Json(payload), _): WithRejection<Json<JsonPayload>, Error>,
-    ) -> Result<Json<JsonResponse>, Error> {
-        debug!("Received new request");
-
-        let (signer, signature) = auth_from_headers(&headers).inspect_err(|e| {
-            error!("Failed to extract signature from headers: {:?}", e);
-        })?;
-
-        match payload.method.as_str() {
-            GET_VERSION_METHOD => {
-                let version_string = format!("bolt-sidecar-v{CARGO_PKG_VERSION}");
-                Ok(Json(JsonResponse {
-                    id: payload.id,
-                    result: Value::String(version_string),
-                    ..Default::default()
-                }))
-            }
-
-            REQUEST_INCLUSION_METHOD => {
-                let Some(request_json) = payload.params.first().cloned() else {
-                    return Err(RejectionError::ValidationFailed("Bad params".to_string()).into());
-                };
-
-                // Parse the inclusion request from the parameters
-                let mut inclusion_request: InclusionRequest = serde_json::from_value(request_json)
-                    .map_err(|e| RejectionError::ValidationFailed(e.to_string()))?;
-
-                // Set the signature here for later processing
-                inclusion_request.set_signature(signature);
-
-                let digest = inclusion_request.digest();
-                let recovered_signer = signature.recover_address_from_prehash(&digest)?;
-
-                if recovered_signer != signer {
-                    error!(
-                        ?recovered_signer,
-                        ?signer,
-                        "Recovered signer does not match the provided signer"
-                    );
-
-                    return Err(Error::InvalidSignature(crate::primitives::SignatureError));
-                }
-
-                // Set the request signer
-                inclusion_request.set_signer(recovered_signer);
-
-                info!(signer = ?recovered_signer, %digest, "New valid inclusion request received");
-                let inclusion_commitment = api.request_inclusion(inclusion_request).await?;
-
-                // Create the JSON-RPC response
-                let response = JsonResponse {
-                    id: payload.id,
-                    result: serde_json::to_value(inclusion_commitment).unwrap(),
-                    ..Default::default()
-                };
-
-                Ok(Json(response))
-            }
-            other => {
-                error!("Unknown method: {}", other);
-                Err(Error::UnknownMethod)
-            }
-        }
-    }
 }
 
-/// Extracts the signature ([SIGNATURE_HEADER]) from the HTTP headers.
+/// Creates a new [Router]
+///
+/// NOTE: Keeping the router separate from the server start method allows
+/// for easier integration testing through the [`tower::Service`] interface.
 #[inline]
-fn auth_from_headers(headers: &HeaderMap) -> Result<(Address, Signature), Error> {
-    let auth = headers.get(SIGNATURE_HEADER).ok_or(Error::NoSignature)?;
-
-    // Remove the "0x" prefix
-    let auth = auth.to_str().map_err(|_| Error::MalformedHeader)?;
-
-    let mut split = auth.split(':');
-
-    let address = split.next().ok_or(Error::MalformedHeader)?;
-    let address = Address::from_str(address).map_err(|_| Error::MalformedHeader)?;
-
-    let sig = split.next().ok_or(Error::MalformedHeader)?;
-    let sig = Signature::from_str(sig)
-        .map_err(|_| Error::InvalidSignature(crate::primitives::SignatureError))?;
-
-    Ok((address, sig))
+fn make_router(state: Arc<CommitmentsApiInner>) -> Router {
+    Router::new()
+        .route("/", post(handlers::rpc_entrypoint))
+        .route("/status", get(handlers::status))
+        .fallback(handlers::not_found)
+        .layer(TimeoutLayer::new(spec::MAX_REQUEST_TIMEOUT))
+        .route_layer(middleware::from_fn(track_server_metrics))
+        .with_state(state)
 }
 
 #[cfg(test)]
 mod test {
-    use alloy::{
-        primitives::TxHash,
-        signers::{k256::SecretKey, local::PrivateKeySigner, Signer},
-    };
+    use crate::commitments::{jsonrpc::JsonResponse, spec::SIGNATURE_HEADER};
+    use alloy::signers::{k256::SecretKey, local::PrivateKeySigner};
     use serde_json::json;
 
     use crate::{
@@ -256,22 +179,6 @@ mod test {
     };
 
     use super::*;
-
-    #[tokio::test]
-    async fn test_signature_from_headers() {
-        let mut headers = HeaderMap::new();
-        let hash = TxHash::random();
-        let signer = PrivateKeySigner::random();
-        let addr = signer.address();
-
-        let expected_sig = signer.sign_hash(&hash).await.unwrap();
-        headers
-            .insert(SIGNATURE_HEADER, format!("{addr}:{}", expected_sig.to_hex()).parse().unwrap());
-
-        let (address, signature) = auth_from_headers(&headers).unwrap();
-        assert_eq!(signature, expected_sig);
-        assert_eq!(address, addr);
-    }
 
     #[tokio::test]
     async fn test_request_unauthorized() {

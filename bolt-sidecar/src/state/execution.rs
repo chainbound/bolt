@@ -20,6 +20,9 @@ use crate::{
 use super::fetcher::StateFetcher;
 
 /// Possible commitment validation errors.
+///
+/// NOTE: unfortuntately it cannot implement `Clone` due to `BlobTransactionValidationError`
+/// not implementing it
 #[derive(Debug, Error)]
 pub enum ValidationError {
     /// The transaction fee is too low to cover the maximum base fee.
@@ -85,6 +88,35 @@ impl ValidationError {
     /// Returns true if the error is internal.
     pub fn is_internal(&self) -> bool {
         matches!(self, Self::Internal(_))
+    }
+
+    /// Returns the tag of the enum as a string, mainly for metrics purposes
+    pub const fn to_tag_str(&self) -> &'static str {
+        match self {
+            ValidationError::BaseFeeTooLow(_) => "base_fee_too_low",
+            ValidationError::BlobBaseFeeTooLow(_) => "blob_base_fee_too_low",
+            ValidationError::BlobValidation(_) => "blob_validation",
+            ValidationError::MaxBaseFeeCalcOverflow => "max_base_fee_calc_overflow",
+            ValidationError::NonceTooLow(_, _) => "nonce_too_low",
+            ValidationError::NonceTooHigh(_, _) => "nonce_too_high",
+            ValidationError::AccountHasCode => "account_has_code",
+            ValidationError::GasLimitTooHigh => "gas_limit_too_high",
+            ValidationError::TransactionSizeTooHigh => "transaction_size_too_high",
+            ValidationError::MaxPriorityFeePerGasTooHigh => "max_priority_fee_per_gas_too_high",
+            ValidationError::InsufficientBalance => "insufficient_balance",
+            ValidationError::Eip4844Limit => "eip4844_limit",
+            ValidationError::SlotTooLow(_) => "slot_too_low",
+            ValidationError::MaxCommitmentsReachedForSlot(_, _) => {
+                "max_commitments_reached_for_slot"
+            }
+            ValidationError::MaxCommittedGasReachedForSlot(_, _) => {
+                "max_committed_gas_reached_for_slot"
+            }
+            ValidationError::Signature(_) => "signature",
+            ValidationError::RecoverSigner => "recover_signer",
+            ValidationError::ChainIdMismatch => "chain_id_mismatch",
+            ValidationError::Internal(_) => "internal",
+        }
     }
 }
 
@@ -692,7 +724,7 @@ mod tests {
         assert!(state.validate_request(&mut request).await.is_ok());
 
         let message = ConstraintsMessage::build(0, request.as_inclusion_request().unwrap().clone());
-        let signature = signer.sign(&message.digest())?;
+        let signature = signer.sign(&message.digest()).await?;
         let signed_constraints = SignedConstraints { message, signature };
         state.add_constraint(10, signed_constraints);
 
@@ -807,7 +839,7 @@ mod tests {
 
         let bls_signer = Signer::random();
         let message = ConstraintsMessage::build(0, inclusion_request);
-        let signature = bls_signer.sign(&message.digest()).unwrap();
+        let signature = bls_signer.sign(&message.digest()).await.unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
         state.add_constraint(target_slot, signed_constraints);
@@ -855,7 +887,7 @@ mod tests {
 
         let bls_signer = Signer::random();
         let message = ConstraintsMessage::build(0, inclusion_request);
-        let signature = bls_signer.sign(&message.digest()).unwrap();
+        let signature = bls_signer.sign(&message.digest()).await.unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
         state.add_constraint(target_slot, signed_constraints);
@@ -901,7 +933,7 @@ mod tests {
 
         let bls_signer = Signer::random();
         let message = ConstraintsMessage::build(0, inclusion_request);
-        let signature = bls_signer.sign(&message.digest()).unwrap();
+        let signature = bls_signer.sign(&message.digest()).await.unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
         state.add_constraint(target_slot, signed_constraints);

@@ -1,10 +1,7 @@
 use core::fmt;
 use std::time::{Duration, Instant};
 
-use alloy::{
-    rpc::types::beacon::events::HeadEvent,
-    signers::{local::PrivateKeySigner, Signer as SignerECDSA},
-};
+use alloy::{rpc::types::beacon::events::HeadEvent, signers::local::PrivateKeySigner};
 use beacon_api_client::mainnet::Client as BeaconClient;
 use ethereum_consensus::{
     clock::{self, SlotStream, SystemTimeProvider},
@@ -19,25 +16,23 @@ use crate::{
         server::{CommitmentsApiServer, Event as CommitmentEvent},
         spec::Error as CommitmentError,
     },
-    crypto::{
-        bls::{BlsSignerType, Signer as BlsSigner},
-        SignableBLS, SignerBLSAsync,
-    },
+    crypto::{bls::Signer as BlsSigner, SignableBLS, SignerBLS, SignerECDSA},
     primitives::{
         CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
-        SignedConstraints,
+        SignedConstraints, TransactionExt,
     },
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
-    BuilderProxyConfig, CommitBoostClient, Config, ConstraintClient, ConstraintsApi, LocalBuilder,
+    telemetry::ApiMetrics,
+    BuilderProxyConfig, CommitBoostSigner, Config, ConstraintClient, ConstraintsApi, LocalBuilder,
 };
 
 /// The driver for the sidecar, responsible for managing the main event loop.
-pub struct SidecarDriver<C, ECDSA> {
+pub struct SidecarDriver<C, BLS, ECDSA> {
     head_tracker: HeadTracker,
     execution: ExecutionState<C>,
     consensus: ConsensusState,
-    constraint_signer: BlsSignerType,
+    constraint_signer: BLS,
     commitment_signer: ECDSA,
     local_builder: LocalBuilder,
     mevboost_client: ConstraintClient,
@@ -47,7 +42,7 @@ pub struct SidecarDriver<C, ECDSA> {
     slot_stream: SlotStream<SystemTimeProvider>,
 }
 
-impl fmt::Debug for SidecarDriver<StateClient, PrivateKeySigner> {
+impl<B: SignerBLS> fmt::Debug for SidecarDriver<StateClient, B, PrivateKeySigner> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SidecarDriver")
             .field("head_tracker", &self.head_tracker)
@@ -63,23 +58,14 @@ impl fmt::Debug for SidecarDriver<StateClient, PrivateKeySigner> {
     }
 }
 
-impl SidecarDriver<StateClient, PrivateKeySigner> {
-    /// Create a new sidecar driver with the given [Config] and default components.
-    pub async fn new(cfg: Config) -> eyre::Result<Self> {
+impl SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
+    /// Create a new sidecar driver with the given [Config] and private key signer.
+    pub async fn with_local_signer(cfg: Config) -> eyre::Result<Self> {
         // The default state client simply uses the execution API URL to fetch state updates.
         let state_client = StateClient::new(cfg.execution_api_url.clone());
 
-        // Constraints are signed with a BLS private key or Commit-Boost
-        let constraint_signer = if let Some(private_key) = cfg.private_key.clone() {
-            BlsSignerType::PrivateKey(BlsSigner::new(private_key))
-        } else {
-            let commit_boost_client = CommitBoostClient::new(
-                cfg.commit_boost_address.clone().expect("CommitBoost URL must be provided"),
-                &cfg.commit_boost_jwt_hex.clone().expect("CommitBoost JWT must be provided"),
-            )
-            .await?;
-            BlsSignerType::CommitBoost(commit_boost_client)
-        };
+        // Constraints are signed with a BLS private key
+        let constraint_signer = BlsSigner::new(cfg.private_key.clone().unwrap());
 
         // Commitment responses are signed with a regular Ethereum wallet private key.
         // This is now generated randomly because slashing is not yet implemented.
@@ -89,11 +75,33 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
     }
 }
 
-impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
+impl SidecarDriver<StateClient, CommitBoostSigner, CommitBoostSigner> {
+    /// Create a new sidecar driver with the given [Config] and commit-boost signer.
+    pub async fn with_commit_boost_signer(cfg: Config) -> eyre::Result<Self> {
+        // The default state client simply uses the execution API URL to fetch state updates.
+        let state_client = StateClient::new(cfg.execution_api_url.clone());
+
+        let commit_boost_signer = CommitBoostSigner::new(
+            cfg.commit_boost_address.clone().expect("CommitBoost URL must be provided"),
+            &cfg.commit_boost_jwt_hex.clone().expect("CommitBoost JWT must be provided"),
+        )
+        .await?;
+
+        // Constraints are signed with commit-boost signer
+        let constraint_signer = commit_boost_signer.clone();
+
+        // Commitment responses are signed with commit-boost signer
+        let commitment_signer = commit_boost_signer.clone();
+
+        Self::from_components(cfg, constraint_signer, commitment_signer, state_client).await
+    }
+}
+
+impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, ECDSA> {
     /// Create a new sidecar driver with the given components
     pub async fn from_components(
         cfg: Config,
-        constraint_signer: BlsSignerType,
+        constraint_signer: BLS,
         commitment_signer: ECDSA,
         fetcher: C,
     ) -> eyre::Result<Self> {
@@ -180,6 +188,8 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
     async fn handle_incoming_api_event(&mut self, event: CommitmentEvent) {
         let CommitmentEvent { mut request, response } = event;
         info!("Received new commitment request: {:?}", request);
+        ApiMetrics::increment_inclusion_commitments_received();
+
         let start = Instant::now();
 
         let validator_index = match self.consensus.validate_request(&request) {
@@ -193,6 +203,7 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
 
         if let Err(err) = self.execution.validate_request(&mut request).await {
             error!(?err, "Execution: failed to commit request");
+            ApiMetrics::increment_validation_errors(err.to_tag_str().to_owned());
             let _ = response.send(Err(CommitmentError::Validation(err)));
             return;
         }
@@ -219,6 +230,10 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
             }
         };
 
+        // Track the number of transactions preconfirmed considering their type
+        signed_constraints.message.constraints.iter().map(|c| &c.transaction).for_each(|full_tx| {
+            ApiMetrics::increment_transactions_preconfirmed(full_tx.tx_type());
+        });
         self.execution.add_constraint(slot, signed_constraints);
 
         // Create a commitment by signing the request
@@ -229,6 +244,8 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
                 response.send(Err(CommitmentError::Internal)).ok()
             }
         };
+
+        ApiMetrics::increment_inclusion_commitments_accepted();
     }
 
     /// Handle a new head event, updating the execution state.
