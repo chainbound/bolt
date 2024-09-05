@@ -15,8 +15,8 @@ thiserror = "1.0.63"
 reqwest = "0.12.7"
 
 # crypto
-ssz_rs = { git = "https://github.com/mempirate/ssz-rs", branch = "feat/hashtree", features = [
-    "hashtree",
+ssz_rs = { git = "https://github.com/ralexstokes/ssz-rs", features = [
+    "sha2-asm",
 ] }
 
 # tracing

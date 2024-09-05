@@ -2358,16 +2358,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hashtree-rs"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "581dba7aacbf2c203c72f3d977f8b46bf83491a58bf908a335c7efc5d0604f74"
-dependencies = [
- "cc",
- "libc",
-]
-
-[[package]]
 name = "headers"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4065,6 +4055,7 @@ dependencies = [
  "cpufeatures",
  "digest 0.9.0",
  "opaque-debug",
+ "sha2-asm",
 ]
 
 [[package]]
@@ -4076,6 +4067,15 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest 0.10.7",
+]
+
+[[package]]
+name = "sha2-asm"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b845214d6175804686b2bd482bcffe96651bb2d1200742b712003504a2dac1ab"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -4196,11 +4196,10 @@ dependencies = [
 [[package]]
 name = "ssz_rs"
 version = "0.9.0"
-source = "git+https://github.com/mempirate/ssz-rs?branch=feat/hashtree#dc1eca62ba40c15dc4587f494946f5562054d43a"
+source = "git+https://github.com/ralexstokes/ssz-rs#1df4cd9b849a48c44a6105abc3a38d21cd4fd8d3"
 dependencies = [
  "alloy-primitives",
  "bitvec",
- "hashtree-rs",
  "serde",
  "sha2 0.9.9",
  "ssz_rs_derive",
@@ -4209,7 +4208,7 @@ dependencies = [
 [[package]]
 name = "ssz_rs_derive"
 version = "0.9.0"
-source = "git+https://github.com/mempirate/ssz-rs?branch=feat/hashtree#dc1eca62ba40c15dc4587f494946f5562054d43a"
+source = "git+https://github.com/ralexstokes/ssz-rs#1df4cd9b849a48c44a6105abc3a38d21cd4fd8d3"
 dependencies = [
  "proc-macro2",
  "quote",

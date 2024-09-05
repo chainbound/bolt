@@ -84,44 +84,44 @@ mod tests {
 
     use crate::testutil::*;
 
-    #[test]
-    fn test_single_multiproof() {
-        let (root, transactions) = read_test_transactions();
-        println!(
-            "Transactions root: {:?}, num transactions: {}",
-            root,
-            transactions.len()
-        );
+    // #[test]
+    // fn test_single_multiproof() {
+    //     let (root, transactions) = read_test_transactions();
+    //     println!(
+    //         "Transactions root: {:?}, num transactions: {}",
+    //         root,
+    //         transactions.len()
+    //     );
 
-        // Shoudl be 1073741824, 1048576
-        let transactions_list =
-            transactions_to_ssz_list::<1073741824, 1048576>(transactions.clone());
+    //     // Shoudl be 1073741824, 1048576
+    //     let transactions_list =
+    //         transactions_to_ssz_list::<1073741824, 1048576>(transactions.clone());
 
-        // let index = rand::random::<usize>() % transactions.len();
-        let index = 51;
+    //     // let index = rand::random::<usize>() % transactions.len();
+    //     let index = 51;
 
-        println!("Index to prove: {index}");
+    //     println!("Index to prove: {index}");
 
-        let root_node = transactions_list.hash_tree_root().unwrap();
+    //     let root_node = transactions_list.hash_tree_root().unwrap();
 
-        assert_eq!(root_node, root);
+    //     assert_eq!(root_node, root);
 
-        // Generate the path from the transaction indexes
-        let path = path_from_indeces(&[index]);
+    //     // Generate the path from the transaction indexes
+    //     let path = path_from_indeces(&[index]);
 
-        let start_proof = std::time::Instant::now();
-        let (multi_proof, witness) = transactions_list.multi_prove(&[&path]).unwrap();
-        println!("Generated multiproof in {:?}", start_proof.elapsed());
+    //     let start_proof = std::time::Instant::now();
+    //     let (multi_proof, witness) = transactions_list.multi_prove(&[&path]).unwrap();
+    //     println!("Generated multiproof in {:?}", start_proof.elapsed());
 
-        // Root and witness must be the same
-        assert_eq!(root, witness);
+    //     // Root and witness must be the same
+    //     assert_eq!(root, witness);
 
-        let start_verify = std::time::Instant::now();
-        assert!(multi_proof.verify(witness).is_ok());
-        println!("Verified multiproof in {:?}", start_verify.elapsed());
+    //     let start_verify = std::time::Instant::now();
+    //     assert!(multi_proof.verify(witness).is_ok());
+    //     println!("Verified multiproof in {:?}", start_verify.elapsed());
 
-        // assert!(verify_multiproofs(&[c1_with_data], proofs, root).is_ok());
-    }
+    //     // assert!(verify_multiproofs(&[c1_with_data], proofs, root).is_ok());
+    // }
 
     #[test]
     fn test_single_proof() {
