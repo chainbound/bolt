@@ -212,11 +212,6 @@ mod tests {
             .collect::<Vec<_>>()
     }
 
-    /// Converts a transaction index to a generalized index.
-    // fn tx_index_to_generalized_index(index: usize) -> usize {
-    //     2usize * 2usize.pow(21u32) + index
-    // }
-
     fn transactions_to_ssz_list<const B: usize, const N: usize>(
         txs: Vec<Bytes>,
     ) -> List<List<u8, B>, N> {
