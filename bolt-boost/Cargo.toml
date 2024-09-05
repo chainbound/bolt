@@ -43,3 +43,4 @@ cb-common = { git = "https://github.com/commit-boost/commit-boost-client", rev =
 # other
 types = { git = "https://github.com/sigp/lighthouse", rev = "2e0eb6d1" }
 rand = "0.8.5"
+parking_lot = "0.12.3"

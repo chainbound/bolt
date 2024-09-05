@@ -1,7 +1,5 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock},
-};
+use parking_lot::RwLock;
+use std::{collections::HashMap, sync::Arc};
 use tracing::error;
 
 use super::types::{ConstraintsMessage, ConstraintsWithProofData};
@@ -24,7 +22,7 @@ impl ConstraintsCache {
     /// - Multiple ToB constraints per slot
     /// - Duplicates of the same transaction per slot
     pub fn conflicts_with(&self, slot: &u64, constraints: &ConstraintsMessage) -> bool {
-        if let Some(saved_constraints) = self.cache.read().unwrap().get(slot) {
+        if let Some(saved_constraints) = self.cache.read().get(slot) {
             for saved_constraint in saved_constraints {
                 // Only 1 ToB constraint per slot
                 if constraints.top && saved_constraint.message.top {
@@ -63,13 +61,10 @@ impl ConstraintsCache {
             return false;
         };
 
-        if let Some(cs) = self.cache.write().unwrap().get_mut(&slot) {
+        if let Some(cs) = self.cache.write().get_mut(&slot) {
             cs.push(message_with_data);
         } else {
-            self.cache
-                .write()
-                .unwrap()
-                .insert(slot, vec![message_with_data]);
+            self.cache.write().insert(slot, vec![message_with_data]);
         }
 
         true
@@ -77,11 +72,11 @@ impl ConstraintsCache {
 
     /// Removes all constraints before the given slot.
     pub fn remove_before(&self, slot: u64) {
-        self.cache.write().unwrap().retain(|k, _| *k >= slot);
+        self.cache.write().retain(|k, _| *k >= slot);
     }
 
     /// Gets and removes the constraints for the given slot.
     pub fn remove(&self, slot: u64) -> Option<Vec<ConstraintsWithProofData>> {
-        self.cache.write().unwrap().remove(&slot)
+        self.cache.write().remove(&slot)
     }
 }
