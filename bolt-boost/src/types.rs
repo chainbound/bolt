@@ -42,14 +42,8 @@ impl SignedConstraints {
     /// The `chain` and `COMMIT_BOOST_DOMAIN` are used to compute the signing root.
     #[allow(unused)]
     pub fn verify_signature(&self, chain: Chain, pubkey: &BlsPublicKey) -> bool {
-        verify_signed_message(
-            chain,
-            pubkey,
-            &self.message,
-            &self.signature,
-            COMMIT_BOOST_DOMAIN,
-        )
-        .is_ok()
+        verify_signed_message(chain, pubkey, &self.message, &self.signature, COMMIT_BOOST_DOMAIN)
+            .is_ok()
     }
 }
 
@@ -87,12 +81,8 @@ impl TreeHash for ConstraintsMessage {
         hasher
             .write(&self.validator_index.to_le_bytes())
             .expect("Should write validator index bytes");
-        hasher
-            .write(&self.slot.to_le_bytes())
-            .expect("Should write slot bytes");
-        hasher
-            .write(&(self.top as u8).to_le_bytes())
-            .expect("Should write top flag");
+        hasher.write(&self.slot.to_le_bytes()).expect("Should write slot bytes");
+        hasher.write(&(self.top as u8).to_le_bytes()).expect("Should write top flag");
 
         for transaction in &self.transactions {
             hasher
@@ -137,10 +127,7 @@ impl TryFrom<ConstraintsMessage> for ConstraintsWithProofData {
             })
             .collect::<Result<Vec<_>, Eip2718Error>>()?;
 
-        Ok(Self {
-            message: value,
-            proof_data: transactions,
-        })
+        Ok(Self { message: value, proof_data: transactions })
     }
 }
 

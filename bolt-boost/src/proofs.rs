@@ -129,11 +129,7 @@ mod tests {
     #[test]
     fn test_single_proof() {
         let (root, transactions) = read_test_transactions();
-        println!(
-            "Transactions root: {:?}, num transactions: {}",
-            root,
-            transactions.len()
-        );
+        println!("Transactions root: {:?}, num transactions: {}", root, transactions.len());
 
         // Shoudl be 1073741824, 1048576
         let transactions_list =
@@ -209,20 +205,15 @@ mod tests {
     }
 
     fn path_from_indeces(indeces: &[usize]) -> Vec<PathElement> {
-        indeces
-            .iter()
-            .map(|i| PathElement::from(*i))
-            .collect::<Vec<_>>()
+        indeces.iter().map(|i| PathElement::from(*i)).collect::<Vec<_>>()
     }
 
     fn transactions_to_ssz_list<const B: usize, const N: usize>(
         txs: Vec<Bytes>,
     ) -> List<List<u8, B>, N> {
         // fn transactions_to_ssz_list(txs: Vec<Bytes>) -> List<List<u8, 1073741824>, 1048576> {
-        let inner: Vec<List<u8, B>> = txs
-            .into_iter()
-            .map(|tx| List::try_from(tx.to_vec()).unwrap())
-            .collect();
+        let inner: Vec<List<u8, B>> =
+            txs.into_iter().map(|tx| List::try_from(tx.to_vec()).unwrap()).collect();
 
         List::try_from(inner).unwrap()
     }

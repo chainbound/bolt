@@ -31,9 +31,7 @@ pub enum Error {
 
 impl ConstraintsCache {
     pub fn new() -> Self {
-        Self {
-            cache: Default::default(),
-        }
+        Self { cache: Default::default() }
     }
 
     /// Checks if the constraints for the given slot conflict with the existing constraints.
@@ -52,12 +50,7 @@ impl ConstraintsCache {
 
                 // Check if the transactions are the same
                 for tx in &constraints.transactions {
-                    if saved_constraint
-                        .message
-                        .transactions
-                        .iter()
-                        .any(|existing| tx == existing)
-                    {
+                    if saved_constraint.message.transactions.iter().any(|existing| tx == existing) {
                         return Some(Conflict::DuplicateTransaction);
                     }
                 }

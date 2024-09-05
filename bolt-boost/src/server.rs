@@ -67,10 +67,7 @@ impl BuilderApiState for BuilderState {}
 
 impl BuilderState {
     pub fn from_config(config: Config) -> Self {
-        Self {
-            config,
-            constraints: ConstraintsCache::new(),
-        }
+        Self { config, constraints: ConstraintsCache::new() }
     }
 }
 
@@ -121,10 +118,11 @@ async fn submit_constraints(
     info!("Submitting {} constraints to relays", constraints.len());
     // Save constraints for the slot to verify proofs against later.
     for signed_constraints in &constraints {
-        if let Err(e) = state.data.constraints.insert(
-            signed_constraints.message.slot,
-            signed_constraints.message.clone(),
-        ) {
+        if let Err(e) = state
+            .data
+            .constraints
+            .insert(signed_constraints.message.slot, signed_constraints.message.clone())
+        {
             error!(slot = signed_constraints.message.slot, error = %e, "Failed to save constraints");
             return Err(PbsClientError::BadRequest);
         }
@@ -167,12 +165,10 @@ async fn get_header_with_proofs(
     req_headers: HeaderMap,
 ) -> Result<impl IntoResponse, PbsClientError> {
     let ms_into_slot = ms_into_slot(params.slot, state.config.chain);
-    let max_timeout_ms = state.pbs_config().timeout_get_header_ms.min(
-        state
-            .pbs_config()
-            .late_in_slot_time_ms
-            .saturating_sub(ms_into_slot),
-    );
+    let max_timeout_ms = state
+        .pbs_config()
+        .timeout_get_header_ms
+        .min(state.pbs_config().late_in_slot_time_ms.saturating_sub(ms_into_slot));
 
     if max_timeout_ms == 0 {
         warn!(
@@ -189,14 +185,9 @@ async fn get_header_with_proofs(
     // prepare headers, except for start time which is set in `send_one_get_header`
     let mut send_headers = HeaderMap::new();
     // TODO: error handling
-    send_headers.insert(
-        HEADER_SLOT_UUID_KEY,
-        HeaderValue::from_str(&slot_uuid.to_string()).unwrap(),
-    );
-    send_headers.insert(
-        USER_AGENT,
-        get_user_agent_with_version(&req_headers).unwrap(),
-    );
+    send_headers
+        .insert(HEADER_SLOT_UUID_KEY, HeaderValue::from_str(&slot_uuid.to_string()).unwrap());
+    send_headers.insert(USER_AGENT, get_user_agent_with_version(&req_headers).unwrap());
 
     let relays = state.relays();
     let mut handles = Vec::with_capacity(relays.len());
@@ -244,10 +235,8 @@ async fn get_header_with_proofs(
                         .insert(res.data.header.message.header.block_hash, res.data.proofs);
                 }
 
-                let vanilla_response = GetHeaderResponse {
-                    version: res.version,
-                    data: res.data.header,
-                };
+                let vanilla_response =
+                    GetHeaderResponse { version: res.version, data: res.data.header };
 
                 relay_bids.push(vanilla_response)
             }
@@ -298,27 +287,18 @@ async fn send_timed_get_header(
 
             let delay = target_ms.saturating_sub(ms_into_slot);
             if delay > 0 {
-                debug!(
-                    target_ms,
-                    ms_into_slot, "TG: waiting to send first header request"
-                );
+                debug!(target_ms, ms_into_slot, "TG: waiting to send first header request");
                 timeout_left_ms = timeout_left_ms.saturating_sub(delay);
                 sleep(Duration::from_millis(delay)).await;
             } else {
-                debug!(
-                    target_ms,
-                    ms_into_slot, "TG: request already late enough in slot"
-                );
+                debug!(target_ms, ms_into_slot, "TG: request already late enough in slot");
             }
         }
 
         if let Some(send_freq_ms) = relay.config.frequency_get_header_ms {
             let mut handles = Vec::new();
 
-            debug!(
-                send_freq_ms,
-                timeout_left_ms, "TG: sending multiple header requests"
-            );
+            debug!(send_freq_ms, timeout_left_ms, "TG: sending multiple header requests");
 
             loop {
                 handles.push(tokio::spawn(
@@ -388,11 +368,7 @@ async fn send_timed_get_header(
         chain,
         pbs_config.skip_sigverify,
         pbs_config.min_bid_wei,
-        RequestConfig {
-            timeout_ms: timeout_left_ms,
-            url,
-            headers,
-        },
+        RequestConfig { timeout_ms: timeout_left_ms, url, headers },
     )
     .await
     .map(|(_, maybe_header)| maybe_header)
@@ -410,10 +386,7 @@ async fn send_one_get_header(
     // use the beginning of the request as proxy to make sure we use only the
     // last one received
     let start_request_time = utcnow_ms();
-    req_config.headers.insert(
-        HEADER_START_TIME_UNIX_MS,
-        HeaderValue::from(start_request_time),
-    );
+    req_config.headers.insert(HEADER_START_TIME_UNIX_MS, HeaderValue::from(start_request_time));
 
     let start_request = Instant::now();
     let res = match relay
@@ -439,9 +412,7 @@ async fn send_one_get_header(
         .observe(request_latency.as_secs_f64());
 
     let code = res.status();
-    RELAY_STATUS_CODE
-        .with_label_values(&[code.as_str(), GET_HEADER_WP_TAG, &relay.id])
-        .inc();
+    RELAY_STATUS_CODE.with_label_values(&[code.as_str(), GET_HEADER_WP_TAG, &relay.id]).inc();
 
     let response_bytes = res.bytes().await?;
     if !code.is_success() {
@@ -511,10 +482,7 @@ fn validate_header(
     }
 
     if value <= minimum_bid_wei {
-        return Err(ValidationError::BidTooLow {
-            min: minimum_bid_wei,
-            got: value,
-        });
+        return Err(ValidationError::BidTooLow { min: minimum_bid_wei, got: value });
     }
 
     if expected_relay_pubkey != received_relay_pubkey {
@@ -553,9 +521,7 @@ where
     let mut responses = FuturesUnordered::new();
 
     for relay in state.relays() {
-        let url = relay
-            .get_url(path)
-            .map_err(|_| PbsClientError::BadRequest)?;
+        let url = relay.get_url(path).map_err(|_| PbsClientError::BadRequest)?;
         responses.push(relay.client.post(url).json(&body).send());
     }
 
