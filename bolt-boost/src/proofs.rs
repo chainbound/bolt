@@ -77,8 +77,7 @@ pub fn verify_multiproofs(
 #[cfg(test)]
 mod tests {
     use alloy::primitives::Bytes;
-    use ssz_rs::{HashTreeRoot, List, Node, Path, PathElement, Prove};
-    use types::MainnetEthSpec;
+    use ssz_rs::{HashTreeRoot, List, PathElement, Prove};
 
     use super::*;
 

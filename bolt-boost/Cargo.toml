@@ -38,12 +38,9 @@ alloy = { version = "0.2.0", features = [
 ] }
 
 # commit-boost
-commit-boost = { git = "https://github.com/mempirate/commit-boost-client", branch = "feat/exports" }
-cb-common = { git = "https://github.com/mempirate/commit-boost-client", branch = "feat/exports" }
+commit-boost = { git = "https://github.com/mempirate/commit-boost-client", branch = "feat/generic-get-header" }
+cb-common = { git = "https://github.com/mempirate/commit-boost-client", branch = "feat/generic-get-header" }
 
 # other
 types = { git = "https://github.com/sigp/lighthouse" }
 rand = "0.8.5"
-
-# [patch.'https://github.com/ralexstokes/ssz-rs']
-# ssz_rs = { git = "https://github.com/mempirate/ssz-rs", branch = "feat/sha2-asm" }

@@ -4,7 +4,7 @@ use std::{
 };
 use tracing::error;
 
-use super::types::{ConstraintsMessage, ConstraintsWithProofData, HashTreeRoot};
+use super::types::{ConstraintsMessage, ConstraintsWithProofData};
 
 /// A concurrent cache of constraints.
 #[derive(Clone, Default, Debug)]

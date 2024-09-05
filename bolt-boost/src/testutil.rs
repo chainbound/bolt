@@ -1,10 +1,6 @@
 use alloy::primitives::{Bytes, B256};
-use cb_common::pbs::SignedBlindedBeaconBlock;
 use ssz::Decode;
-use ssz_rs::HashTreeRoot;
-use types::{
-    ChainSpec, ExecPayload, MainnetEthSpec, SignedBeaconBlock, SignedBeaconBlockDeneb, Transactions,
-};
+use types::{ExecPayload, MainnetEthSpec, SignedBeaconBlockDeneb};
 
 const TEST_BLOCK: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),

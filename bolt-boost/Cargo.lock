@@ -1232,8 +1232,8 @@ dependencies = [
 
 [[package]]
 name = "cb-cli"
-version = "0.0.1"
-source = "git+https://github.com/mempirate/commit-boost-client?branch=feat/exports#137933456a1f46428f30ff5ac65c8c5a0bf29c64"
+version = "0.1.0"
+source = "git+https://github.com/mempirate/commit-boost-client?branch=feat/generic-get-header#f1cae574731de9c1eefc7d3b0cf2200c4d0117ed"
 dependencies = [
  "cb-common",
  "clap",
@@ -1248,8 +1248,8 @@ dependencies = [
 
 [[package]]
 name = "cb-common"
-version = "0.0.1"
-source = "git+https://github.com/mempirate/commit-boost-client?branch=feat/exports#137933456a1f46428f30ff5ac65c8c5a0bf29c64"
+version = "0.1.0"
+source = "git+https://github.com/mempirate/commit-boost-client?branch=feat/generic-get-header#f1cae574731de9c1eefc7d3b0cf2200c4d0117ed"
 dependencies = [
  "alloy",
  "axum",
@@ -1281,8 +1281,8 @@ dependencies = [
 
 [[package]]
 name = "cb-metrics"
-version = "0.0.1"
-source = "git+https://github.com/mempirate/commit-boost-client?branch=feat/exports#137933456a1f46428f30ff5ac65c8c5a0bf29c64"
+version = "0.1.0"
+source = "git+https://github.com/mempirate/commit-boost-client?branch=feat/generic-get-header#f1cae574731de9c1eefc7d3b0cf2200c4d0117ed"
 dependencies = [
  "axum",
  "cb-common",
@@ -1295,8 +1295,8 @@ dependencies = [
 
 [[package]]
 name = "cb-pbs"
-version = "0.0.1"
-source = "git+https://github.com/mempirate/commit-boost-client?branch=feat/exports#137933456a1f46428f30ff5ac65c8c5a0bf29c64"
+version = "0.1.0"
+source = "git+https://github.com/mempirate/commit-boost-client?branch=feat/generic-get-header#f1cae574731de9c1eefc7d3b0cf2200c4d0117ed"
 dependencies = [
  "alloy",
  "async-trait",
@@ -1310,6 +1310,7 @@ dependencies = [
  "lazy_static",
  "prometheus",
  "reqwest",
+ "serde",
  "serde_json",
  "thiserror",
  "tokio",
@@ -1320,8 +1321,8 @@ dependencies = [
 
 [[package]]
 name = "cb-signer"
-version = "0.0.1"
-source = "git+https://github.com/mempirate/commit-boost-client?branch=feat/exports#137933456a1f46428f30ff5ac65c8c5a0bf29c64"
+version = "0.1.0"
+source = "git+https://github.com/mempirate/commit-boost-client?branch=feat/generic-get-header#f1cae574731de9c1eefc7d3b0cf2200c4d0117ed"
 dependencies = [
  "alloy",
  "axum",
@@ -1454,8 +1455,8 @@ checksum = "d3fd119d74b830634cea2a0f58bbd0d54540518a14397557951e79340abc28c0"
 
 [[package]]
 name = "commit-boost"
-version = "0.0.1"
-source = "git+https://github.com/mempirate/commit-boost-client?branch=feat/exports#137933456a1f46428f30ff5ac65c8c5a0bf29c64"
+version = "0.1.0"
+source = "git+https://github.com/mempirate/commit-boost-client?branch=feat/generic-get-header#f1cae574731de9c1eefc7d3b0cf2200c4d0117ed"
 dependencies = [
  "cb-cli",
  "cb-common",
