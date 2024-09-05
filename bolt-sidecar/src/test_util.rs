@@ -123,7 +123,7 @@ pub(crate) struct TestSignableData {
 
 impl SignableBLS for TestSignableData {
     fn digest(&self) -> [u8; 32] {
-        self.data.clone()
+        self.data
     }
 }
 
@@ -135,7 +135,7 @@ impl SignableECDSA for TestSignableData {
             padded[..self.data.len()].copy_from_slice(&self.data);
             padded
         } else {
-            self.data.clone()
+            self.data
         };
 
         Message::from_digest_slice(&as_32).expect("valid message")

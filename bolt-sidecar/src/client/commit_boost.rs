@@ -2,12 +2,10 @@ use std::{str::FromStr, sync::Arc};
 
 use alloy::{rpc::types::beacon::BlsSignature, signers::Signature};
 use cb_common::{
-    commit::{
-        client::SignerClient,
-        request::{SignConsensusRequest, SignProxyRequest},
-    },
-    signer::{BlsPublicKey as CBBlsPublicKey, EcdsaPublicKey},
+    commit::{client::SignerClient, request::SignConsensusRequest},
+    signer::{BlsPublicKey, EcdsaPublicKey},
 };
+use commit_boost::prelude::SignProxyRequest;
 use eyre::ErrReport;
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -26,7 +24,7 @@ use crate::{
 pub struct CommitBoostSigner {
     /// A client for interacting with CommitBoost and handling signing operations.
     signer_client: SignerClient,
-    pubkeys: Arc<RwLock<Vec<CBBlsPublicKey>>>,
+    pubkeys: Arc<RwLock<Vec<BlsPublicKey>>>,
     proxy_ecdsa: Arc<RwLock<Vec<EcdsaPublicKey>>>,
 }
 
@@ -75,7 +73,7 @@ impl CommitBoostSigner {
     }
 
     /// Get the consensus public key from the Commit-Boost signer.
-    pub fn get_consensus_pubkey(&self) -> CBBlsPublicKey {
+    pub fn get_consensus_pubkey(&self) -> BlsPublicKey {
         *self.pubkeys.read().first().expect("consensus pubkey loaded")
     }
 
