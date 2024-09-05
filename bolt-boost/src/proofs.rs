@@ -76,12 +76,13 @@ pub fn verify_multiproofs(
 
 #[cfg(test)]
 mod tests {
-    use alloy::primitives::Bytes;
+    use alloy::{
+        hex::{self, FromHex},
+        primitives::{Bytes, B256},
+    };
     use ssz_rs::{HashTreeRoot, List, PathElement, Prove};
 
-    use super::*;
-
-    use crate::{testutil::*, types::ConstraintsMessage};
+    use crate::testutil::*;
 
     #[test]
     fn test_single_multiproof() {
@@ -100,15 +101,6 @@ mod tests {
         let index = 51;
 
         println!("Index to prove: {index}");
-
-        let c1 = ConstraintsMessage {
-            validator_index: 0,
-            slot: 1,
-            top: false,
-            transactions: vec![transactions[index].clone()],
-        };
-
-        let c1_with_data = ConstraintsWithProofData::try_from(c1).unwrap();
 
         let root_node = transactions_list.hash_tree_root().unwrap();
 
@@ -149,14 +141,14 @@ mod tests {
 
         println!("Index to prove: {index}");
 
-        let c1 = ConstraintsMessage {
-            validator_index: 0,
-            slot: 1,
-            top: false,
-            transactions: vec![transactions[index].clone()],
-        };
+        // let c1 = ConstraintsMessage {
+        //     validator_index: 0,
+        //     slot: 1,
+        //     top: false,
+        //     transactions: vec![transactions[index].clone()],
+        // };
 
-        let c1_with_data = ConstraintsWithProofData::try_from(c1).unwrap();
+        // let c1_with_data = ConstraintsWithProofData::try_from(c1).unwrap();
 
         let root_node = transactions_list.hash_tree_root().unwrap();
 
@@ -177,6 +169,40 @@ mod tests {
         println!("Verified proof in {:?}", start_verify.elapsed());
 
         // assert!(verify_multiproofs(&[c1_with_data], proofs, root).is_ok());
+    }
+
+    #[test]
+    /// Testdata from https://github.com/ferranbt/fastssz/blob/455b54c08c81c3a270b6a7160f92ce68408491d4/tests/codetrie_test.go#L195
+    fn test_fastssz_multiproof() {
+        let root =
+            B256::from_hex("f1824b0084956084591ff4c91c11bcc94a40be82da280e5171932b967dd146e9")
+                .unwrap();
+
+        let proof = vec![
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "f5a5fd42d16a20302798ef6ed309979b43003d2320d9f0e8ea9831a92759fb4b",
+            "0000000000000000000000000000000000000000000000000000000000000000",
+            "0100000000000000000000000000000000000000000000000000000000000000",
+            "f58f76419d9235451a8290a88ba380d852350a1843f8f26b8257a421633042b4",
+        ]
+        .into_iter()
+        .map(|hex| B256::from_hex(hex).unwrap())
+        .collect::<Vec<_>>();
+
+        let leaves = vec![
+            "0200000000000000000000000000000000000000000000000000000000000000",
+            "6001000000000000000000000000000000000000000000000000000000000000",
+        ]
+        .into_iter()
+        .map(|hex| B256::from_hex(hex).unwrap())
+        .collect::<Vec<_>>();
+
+        let indices = vec![10usize, 49usize];
+
+        assert!(
+            ssz_rs::multiproofs::verify_merkle_multiproof(&leaves, &proof, &indices, root).is_ok()
+        );
     }
 
     fn path_from_indeces(indeces: &[usize]) -> Vec<PathElement> {

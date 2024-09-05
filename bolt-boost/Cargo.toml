@@ -38,8 +38,8 @@ alloy = { version = "0.2.0", features = [
 ] }
 
 # commit-boost
-commit-boost = { git = "https://github.com/mempirate/commit-boost-client", branch = "feat/generic-get-header" }
-cb-common = { git = "https://github.com/mempirate/commit-boost-client", branch = "feat/generic-get-header" }
+commit-boost = { git = "https://github.com/commit-boost/commit-boost-client", tag = "v0.1.0" }
+cb-common = { git = "https://github.com/commit-boost/commit-boost-client", tag = "v0.1.0" }
 
 # other
 types = { git = "https://github.com/sigp/lighthouse" }
