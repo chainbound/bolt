@@ -1,3 +1,4 @@
+use alloy::eips::eip2718::Eip2718Error;
 use parking_lot::RwLock;
 use std::{collections::HashMap, sync::Arc};
 use tracing::error;
@@ -10,6 +11,22 @@ pub struct ConstraintsCache {
     cache: Arc<RwLock<HashMap<u64, Vec<ConstraintsWithProofData>>>>,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum Conflict {
+    #[error("Multiple ToB constraints per slot")]
+    TopOfBlock,
+    #[error("Duplicate transaction in the same slot")]
+    DuplicateTransaction,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Conflict(#[from] Conflict),
+    #[error(transparent)]
+    Decode(#[from] Eip2718Error),
+}
+
 impl ConstraintsCache {
     pub fn new() -> Self {
         Self {
@@ -18,15 +35,17 @@ impl ConstraintsCache {
     }
 
     /// Checks if the constraints for the given slot conflict with the existing constraints.
-    /// Will check for:
+    /// Returns a [Conflict] in case of a conflict, None otherwise.
+    ///
+    /// # Possible conflicts
     /// - Multiple ToB constraints per slot
     /// - Duplicates of the same transaction per slot
-    pub fn conflicts_with(&self, slot: &u64, constraints: &ConstraintsMessage) -> bool {
+    pub fn conflicts_with(&self, slot: &u64, constraints: &ConstraintsMessage) -> Option<Conflict> {
         if let Some(saved_constraints) = self.cache.read().get(slot) {
             for saved_constraint in saved_constraints {
                 // Only 1 ToB constraint per slot
                 if constraints.top && saved_constraint.message.top {
-                    return true;
+                    return Some(Conflict::TopOfBlock);
                 }
 
                 // Check if the transactions are the same
@@ -37,29 +56,24 @@ impl ConstraintsCache {
                         .iter()
                         .any(|existing| tx == existing)
                     {
-                        return true;
+                        return Some(Conflict::DuplicateTransaction);
                     }
                 }
             }
         }
 
-        false
+        None
     }
 
     /// Inserts the constraints for the given slot. Also decodes the raw transactions to save their
     /// transaction hashes and hash tree roots for later use. Will first check for conflicts, and return
-    /// false if there are any.
-    ///
-    /// TODO: return Result instead of bool
-    pub fn insert(&self, slot: u64, constraints: ConstraintsMessage) -> bool {
-        if self.conflicts_with(&slot, &constraints) {
-            return false;
+    /// an error if there are any.
+    pub fn insert(&self, slot: u64, constraints: ConstraintsMessage) -> Result<(), Error> {
+        if let Some(conflict) = self.conflicts_with(&slot, &constraints) {
+            return Err(conflict.into());
         }
 
-        let Ok(message_with_data) = ConstraintsWithProofData::try_from(constraints) else {
-            error!("Failed decoding constraints, not inserting");
-            return false;
-        };
+        let message_with_data = ConstraintsWithProofData::try_from(constraints)?;
 
         if let Some(cs) = self.cache.write().get_mut(&slot) {
             cs.push(message_with_data);
@@ -67,7 +81,7 @@ impl ConstraintsCache {
             self.cache.write().insert(slot, vec![message_with_data]);
         }
 
-        true
+        Ok(())
     }
 
     /// Removes all constraints before the given slot.
