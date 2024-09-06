@@ -22,6 +22,7 @@ contract DeployBoltManager is Script {
         console.log("BoltValidators deployed at", address(validators));
 
         BoltManager manager = new BoltManager(
+            address(sender),
             address(validators),
             symbioticNetwork,
             symbioticOperatorRegistry,
