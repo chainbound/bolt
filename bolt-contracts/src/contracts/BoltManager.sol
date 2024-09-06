@@ -3,6 +3,7 @@ pragma solidity 0.8.25;
 
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {EnumerableMap} from "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 import {IBaseDelegator} from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
 import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
@@ -15,6 +16,7 @@ import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
 contract BoltManager is IBoltManager {
+    using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
     using Subnetwork for address;
@@ -49,6 +51,12 @@ contract BoltManager is IBoltManager {
 
     /// @notice Start timestamp of the first epoch.
     uint48 public immutable START_TIMESTAMP;
+
+    /// @notice Address of the account that is authorized to set the collateral whitelist.
+    address public immutable COLLATERAL_WHITELIST_SETTER;
+
+    /// @notice Set of collateral addresses that are whitelisted.
+    EnumerableSet.AddressSet private whitelistedCollaterals;
 
     /// @notice Constructor for the BoltManager contract.
     /// @param _validators The address of the validators registry.
@@ -85,6 +93,14 @@ contract BoltManager is IBoltManager {
     /// @notice Get the current epoch.
     function getCurrentEpoch() public view returns (uint48 epoch) {
         return getEpochAtTs(Time.timestamp());
+    }
+
+    function getWhitelistedCollaterals() public view returns (address[] memory collaterals) {
+        return whitelistedCollaterals.values();
+    }
+
+    function isCollateralWhitelisted(address collateral) public view returns (bool) {
+        return whitelistedCollaterals.contains(collateral);
     }
 
     /// @notice Allow an operator to signal opt-in to Bolt Protocol.
@@ -175,6 +191,53 @@ contract BoltManager is IBoltManager {
     function isSymbioticOperatorEnabled(address operator) public view returns (bool) {
         (uint48 enabledTime, uint48 disabledTime) = symbioticOperators.getTimes(operator);
         return enabledTime != 0 && disabledTime == 0;
+    }
+
+    /// @notice Get the status of multiple proposers, given their pubkey hashes.
+    /// @param pubkeyHashes The pubkey hashes of the proposers to get the status for.
+    /// @return statuses The statuses of the proposers, including their operator and active stake.
+    function getProposersStatus(bytes32[] memory pubkeyHashes) public view returns (ProposerStatus[] memory statuses) {
+        statuses = new ProposerStatus[](pubkeyHashes.length);
+        for (uint256 i = 0; i < pubkeyHashes.length; ++i) {
+            statuses[i] = getProposerStatus(pubkeyHashes[i]);
+        }
+    }
+
+    /// @notice Get the status of a proposer, given their pubkey hash.
+    /// @param pubkeyHash The pubkey hash of the proposer to get the status for.
+    /// @return status The status of the proposer, including their operator and active stake.
+    function getProposerStatus(bytes32 pubkeyHash) public view returns (ProposerStatus memory status) {
+        if (pubkeyHash == bytes32(0)) {
+            revert InvalidQuery();
+        }
+
+        uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
+        IBoltValidators.Validator memory validator = validators.getValidatorByPubkeyHash(pubkeyHash);
+        address operator = validator.authorizedOperator;
+
+        status.pubkeyHash = pubkeyHash;
+        status.active = validator.exists;
+        status.operator = operator;
+
+        (uint48 enabledTime, uint48 disabledTime) = symbioticOperators.getTimes(operator);
+        if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
+            return status;
+        }
+
+        status.collaterals = new address[](symbioticVaults.length());
+        status.amounts = new uint256[](symbioticVaults.length());
+
+        for (uint256 i = 0; i < symbioticVaults.length(); ++i) {
+            (address vault, uint48 enabledVaultTime, uint48 disabledVaultTime) = symbioticVaults.atWithTimes(i);
+
+            address collateral = IVault(vault).collateral();
+            status.collaterals[i] = collateral;
+            if (!_wasEnabledAt(enabledVaultTime, disabledVaultTime, epochStartTs)) {
+                continue;
+            }
+
+            status.amounts[i] = getSymbioticOperatorStakeAt(operator, collateral, epochStartTs);
+        }
     }
 
     /// @notice Check if an operator address is authorized to work for a validator,
