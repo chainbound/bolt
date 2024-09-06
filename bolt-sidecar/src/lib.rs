@@ -13,7 +13,7 @@ pub use api::{
 
 mod client;
 pub use client::{
-    commit_boost::CommitBoostSigner, constraint_client::ConstraintClient, rpc::RpcClient,
+    commit_boost::CommitBoostSigner, constraints_client::ConstraintsClient, rpc::RpcClient,
     BeaconClient,
 };
 

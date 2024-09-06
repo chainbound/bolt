@@ -31,11 +31,11 @@ pub fn make_get_payload_response() -> GetPayloadResponse {
     GetPayloadResponse::Deneb(PayloadAndBlobs { execution_payload, blobs_bundle })
 }
 
-pub struct MockConstraintClient {
+pub struct MockConstraintsClient {
     pub response_rx: watch::Receiver<Value>,
 }
 
-impl MockConstraintClient {
+impl MockConstraintsClient {
     pub fn new() -> (Self, watch::Sender<Value>) {
         let (response_tx, response_rx) = watch::channel(Value::Null);
         (Self { response_rx }, response_tx)
@@ -43,10 +43,10 @@ impl MockConstraintClient {
 }
 
 #[async_trait::async_trait]
-impl BuilderApi for MockConstraintClient {
+impl BuilderApi for MockConstraintsClient {
     async fn status(&self) -> Result<StatusCode, BuilderApiError> {
         Err(BuilderApiError::Generic(
-            "MockConstraintClient does not support getting status".to_string(),
+            "MockConstraintsClient does not support getting status".to_string(),
         ))
     }
 
@@ -55,7 +55,7 @@ impl BuilderApi for MockConstraintClient {
         _registrations: Vec<SignedValidatorRegistration>,
     ) -> Result<(), BuilderApiError> {
         Err(BuilderApiError::Generic(
-            "MockConstraintClient does not support registering validators".to_string(),
+            "MockConstraintsClient does not support registering validators".to_string(),
         ))
     }
 
@@ -79,13 +79,13 @@ impl BuilderApi for MockConstraintClient {
 }
 
 #[async_trait::async_trait]
-impl ConstraintsApi for MockConstraintClient {
+impl ConstraintsApi for MockConstraintsClient {
     async fn submit_constraints(
         &self,
         _constraints: &BatchedSignedConstraints,
     ) -> Result<(), BuilderApiError> {
         Err(BuilderApiError::Generic(
-            "MockConstraintClient does not support submitting constraints".to_string(),
+            "MockConstraintsClient does not support submitting constraints".to_string(),
         ))
     }
 
@@ -100,12 +100,12 @@ impl ConstraintsApi for MockConstraintClient {
 
     async fn delegate(&self, signed_data: SignedDelegation) -> Result<(), BuilderApiError> {
         Err(BuilderApiError::Generic(
-            "MockConstraintClient does not support delegating".to_string(),
+            "MockConstraintsClient does not support delegating".to_string(),
         ))
     }
 
     async fn revoke(&self, signed_data: SignedRevocation) -> Result<(), BuilderApiError> {
-        Err(BuilderApiError::Generic("MockConstraintClient does not support revoking".to_string()))
+        Err(BuilderApiError::Generic("MockConstraintsClient does not support revoking".to_string()))
     }
 }
 

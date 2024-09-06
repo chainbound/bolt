@@ -27,12 +27,12 @@ use crate::{
 
 /// A client for interacting with the MEV-Boost API.
 #[derive(Debug, Clone)]
-pub struct ConstraintClient {
+pub struct ConstraintsClient {
     url: Url,
     client: reqwest::Client,
 }
 
-impl ConstraintClient {
+impl ConstraintsClient {
     /// Creates a new constraint client with the given URL.
     pub fn new<U: Into<Url>>(url: U) -> Self {
         Self {
@@ -50,7 +50,7 @@ impl ConstraintClient {
 }
 
 #[async_trait::async_trait]
-impl BuilderApi for ConstraintClient {
+impl BuilderApi for ConstraintsClient {
     /// Implements: <https://ethereum.github.io/builder-specs/#/Builder/status>
     async fn status(&self) -> Result<StatusCode, BuilderApiError> {
         Ok(self
@@ -136,7 +136,7 @@ impl BuilderApi for ConstraintClient {
 }
 
 #[async_trait::async_trait]
-impl ConstraintsApi for ConstraintClient {
+impl ConstraintsApi for ConstraintsClient {
     async fn submit_constraints(
         &self,
         constraints: &BatchedSignedConstraints,
@@ -229,11 +229,11 @@ impl ConstraintsApi for ConstraintClient {
 mod tests {
     use reqwest::Url;
 
-    use crate::ConstraintClient;
+    use crate::ConstraintsClient;
 
     #[test]
     fn test_join_endpoints() {
-        let client = ConstraintClient::new(Url::parse("http://localhost:8080/").unwrap());
+        let client = ConstraintsClient::new(Url::parse("http://localhost:8080/").unwrap());
         assert_eq!(
             client.endpoint("/eth/v1/builder/header/1/0x123/0x456"),
             Url::parse("http://localhost:8080/eth/v1/builder/header/1/0x123/0x456").unwrap()

@@ -26,7 +26,7 @@ use super::spec::{
     STATUS_PATH,
 };
 use crate::{
-    client::constraint_client::ConstraintClient,
+    client::constraints_client::ConstraintsClient,
     primitives::{GetPayloadResponse, PayloadFetcher, SignedBuilderBid},
     telemetry::ApiMetrics,
 };
@@ -218,7 +218,7 @@ where
 #[derive(Debug, Clone)]
 pub struct BuilderProxyConfig {
     /// The URL of the target mev-boost server.
-    pub mevboost_url: Url,
+    pub constraints_url: Url,
     /// The port on which the builder proxy should listen.
     pub server_port: u16,
 }
@@ -233,11 +233,11 @@ where
 {
     info!(
         port = config.server_port,
-        target = config.mevboost_url.to_string(),
+        target = config.constraints_url.to_string(),
         "Starting builder proxy..."
     );
 
-    let mev_boost = ConstraintClient::new(config.mevboost_url);
+    let mev_boost = ConstraintsClient::new(config.constraints_url);
     let server = Arc::new(BuilderProxyServer::new(mev_boost, payload_fetcher));
 
     let router = Router::new()

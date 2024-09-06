@@ -24,7 +24,7 @@ use crate::{
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
     telemetry::ApiMetrics,
-    BuilderProxyConfig, CommitBoostSigner, Config, ConstraintClient, ConstraintsApi, LocalBuilder,
+    BuilderProxyConfig, CommitBoostSigner, Config, ConstraintsApi, ConstraintsClient, LocalBuilder,
 };
 
 /// The driver for the sidecar, responsible for managing the main event loop.
@@ -35,7 +35,7 @@ pub struct SidecarDriver<C, BLS, ECDSA> {
     constraint_signer: BLS,
     commitment_signer: ECDSA,
     local_builder: LocalBuilder,
-    mevboost_client: ConstraintClient,
+    constraints_client: ConstraintsClient,
     api_events_rx: mpsc::Receiver<CommitmentEvent>,
     payload_requests_rx: mpsc::Receiver<FetchPayloadRequest>,
     /// Stream of slots made from the consensus clock
@@ -51,7 +51,7 @@ impl<B: SignerBLS> fmt::Debug for SidecarDriver<StateClient, B, PrivateKeySigner
             .field("constraint_signer", &self.constraint_signer)
             .field("commitment_signer", &self.commitment_signer)
             .field("local_builder", &self.local_builder)
-            .field("mevboost_client", &self.mevboost_client)
+            .field("constraints_client", &self.constraints_client)
             .field("api_events_rx", &self.api_events_rx)
             .field("payload_requests_rx", &self.payload_requests_rx)
             .finish()
@@ -105,7 +105,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         commitment_signer: ECDSA,
         fetcher: C,
     ) -> eyre::Result<Self> {
-        let mevboost_client = ConstraintClient::new(cfg.mevboost_url.clone());
+        let constraints_client = ConstraintsClient::new(cfg.constraints_url.clone());
         let beacon_client = BeaconClient::new(cfg.beacon_api_url.clone());
         let execution = ExecutionState::new(fetcher, cfg.limits).await?;
 
@@ -125,8 +125,8 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
 
         let (payload_requests_tx, payload_requests_rx) = mpsc::channel(16);
         let builder_proxy_cfg = BuilderProxyConfig {
-            mevboost_url: cfg.mevboost_url.clone(),
-            server_port: cfg.mevboost_proxy_port,
+            constraints_url: cfg.constraints_url.clone(),
+            server_port: cfg.constraints_proxy_port,
         };
 
         // start the builder api proxy server
@@ -149,7 +149,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
             constraint_signer,
             commitment_signer,
             local_builder,
-            mevboost_client,
+            constraints_client,
             api_events_rx,
             payload_requests_rx,
             slot_stream,
@@ -274,13 +274,13 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
             error!(err = ?e, "Error while building local payload at deadline for slot {slot}");
         };
 
-        // TODO: fix retry logic, and move this to separate task in the mevboost client itself
+        // TODO: fix retry logic, and move this to separate task in the constraints client itself
         let constraints = template.signed_constraints_list.clone();
-        let mevboost = self.mevboost_client.clone();
+        let constraints_client = self.constraints_client.clone();
         tokio::spawn(async move {
             let max_retries = 5;
             let mut i = 0;
-            while let Err(e) = mevboost.submit_constraints(&constraints).await {
+            while let Err(e) = constraints_client.submit_constraints(&constraints).await {
                 error!(err = ?e, "Error submitting constraints to mev-boost, retrying...");
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 i += 1;

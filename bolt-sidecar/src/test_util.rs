@@ -122,10 +122,6 @@ pub(crate) struct TestSignableData {
 }
 
 impl SignableBLS for TestSignableData {
-    fn digest(&self) -> [u8; 32] {
-        self.data
-    }
-
     fn tree_hash_root(&self) -> [u8; 32] {
         self.data
     }
