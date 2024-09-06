@@ -129,3 +129,55 @@ impl Constraint {
         self.transaction.sender().expect("Recovered sender")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{rngs::ThreadRng, Rng};
+
+    fn random_u64(rng: &mut ThreadRng) -> u64 {
+        rng.gen_range(0..u64::MAX)
+    }
+
+    fn random_constraints(rng: &mut ThreadRng, count: usize) -> Vec<Constraint> {
+        // Random inclusion request
+        let json_req = r#"{
+            "slot": 10,
+            "txs": ["0x02f86c870c72dd9d5e883e4d0183408f2382520894d2e2adf7177b7a8afddbc12d1634cf23ea1a71020180c001a08556dcfea479b34675db3fe08e29486fe719c2b22f6b0c1741ecbbdce4575cc6a01cd48009ccafd6b9f1290bbe2ceea268f94101d1d322c787018423ebcbc87ab4"]
+        }"#;
+
+        let req: InclusionRequest = serde_json::from_str(json_req).unwrap();
+
+        (0..count)
+            .map(|_| {
+                Constraint::from_transaction(
+                    req.txs.first().unwrap().clone(),
+                    Some(random_u64(rng)),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn test_tree_hash_root() {
+        let mut rng = rand::thread_rng();
+
+        // Generate random values for the `ConstraintsMessage` fields
+        let validator_index = random_u64(&mut rng);
+        let slot = random_u64(&mut rng);
+        let top = false;
+        let constraints = random_constraints(&mut rng, 10); // Generate 10 random constraints
+
+        // Create a random `ConstraintsMessage`
+        let message = ConstraintsMessage { validator_index, slot, top, constraints };
+
+        // Compute tree hash root
+        let tree_root = message.tree_hash_root();
+
+        // Verify that the tree hash root is a valid 32-byte array
+        assert_eq!(tree_root.len(), 32, "Tree hash root should be 32 bytes long");
+
+        // Additional checks can be added here, depending on your specific requirements
+        println!("Computed tree hash root: {:?}", tree_root);
+    }
+}
