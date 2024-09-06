@@ -72,11 +72,14 @@ impl ConstraintsMessage {
 }
 
 impl SignableBLS for ConstraintsMessage {
-    fn digest(&self) -> [u8; 32] {
-        let mut hasher = Sha256::new();
-        hasher.update(self.validator_index.to_le_bytes());
-        hasher.update(self.slot.to_le_bytes());
-        hasher.update((self.top as u8).to_le_bytes());
+    fn tree_hash_root(&self) -> [u8; 32] {
+        let mut hasher = MerkleHasher::with_leaves(self.total_leaves());
+
+        hasher
+            .write(&self.validator_index.to_le_bytes())
+            .expect("Should write validator index bytes");
+        hasher.write(&self.slot.to_le_bytes()).expect("Should write slot bytes");
+        hasher.write(&(self.top as u8).to_le_bytes()).expect("Should write top flag");
 
         for constraint in &self.constraints {
             hasher.update(constraint.hash());
