@@ -164,17 +164,25 @@ contract BoltManager is IBoltManager {
         return validators.getValidatorByPubkeyHash(pubkeyHash).authorizedOperator == operator;
     }
 
+    /// @notice Get the stake of an operator in Symbiotic protocol at the current timestamp.
+    /// @param operator The operator address to check the stake for.
+    /// @param collateral The collateral address to check the stake for.
+    /// @return amount The stake of the operator at the current timestamp, in collateral token.
+    function getSymbioticOperatorStake(address operator, address collateral) public view returns (uint256 amount) {
+        uint48 timestamp = Time.timestamp();
+        return getSymbioticOperatorStakeAt(operator, collateral, timestamp);
+    }
+
     /// @notice Get the stake of an operator in Symbiotic protocol at a given timestamp.
-    /// @dev If the collateral is not a Symbiotic vault, the stake is 0.
     /// @param operator The operator address to check the stake for.
     /// @param collateral The collateral address to check the stake for.
     /// @param timestamp The timestamp to check the stake at.
-    /// @return The stake of the operator at the given timestamp, in collateral token.
+    /// @return amount The stake of the operator at the given timestamp, in collateral token.
     function getSymbioticOperatorStakeAt(
         address operator,
         address collateral,
         uint48 timestamp
-    ) public view returns (uint256) {
+    ) public view returns (uint256 amount) {
         if (timestamp > Time.timestamp() || timestamp < START_TIMESTAMP) {
             revert InvalidQuery();
         }
@@ -194,18 +202,18 @@ contract BoltManager is IBoltManager {
 
             // in order to have stake in a network, the operator needs to be opted in to that vault.
             // this authorization is fully handled in the Vault, we just need to read the stake.
-            return IBaseDelegator(IVault(vault).delegator()).stakeAt(
+            amount += IBaseDelegator(IVault(vault).delegator()).stakeAt(
                 // The stake for each subnetwork is stored in the vault's delegator contract.
                 // stakeAt returns the stake of "operator" at "timestamp" for "network" (or subnetwork)
-                // bytes(0) is hints, which we don't use.
+                // bytes(0) is for hints, which we don't currently use.
                 BOLT_SYMBIOTIC_NETWORK.subnetwork(0),
                 operator,
-                timestamp,
+                epochStartTs,
                 new bytes(0)
             );
         }
 
-        return 0;
+        return amount;
     }
 
     /// @notice Check if a map entry was active at a given timestamp.

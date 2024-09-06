@@ -10,7 +10,9 @@ import {IVault} from "@symbiotic/interfaces/vault/IVault.sol";
 import {IOptInService} from "@symbiotic/interfaces/service/IOptInService.sol";
 import {IVaultConfigurator} from "@symbiotic/interfaces/IVaultConfigurator.sol";
 import {IBaseDelegator} from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
+import {IMetadataService} from "@symbiotic/interfaces/service/IMetadataService.sol";
 import {INetworkRestakeDelegator} from "@symbiotic/interfaces/delegator/INetworkRestakeDelegator.sol";
+import {INetworkMiddlewareService} from "@symbiotic/interfaces/service/INetworkMiddlewareService.sol";
 import {ISlasherFactory} from "@symbiotic/interfaces/ISlasherFactory.sol";
 import {IVetoSlasher} from "@symbiotic/interfaces/slasher/IVetoSlasher.sol";
 import {IDelegatorFactory} from "@symbiotic/interfaces/IDelegatorFactory.sol";
@@ -21,10 +23,8 @@ import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
 import {BLS12381} from "../src/lib/bls/BLS12381.sol";
 
-import {Token} from "./mocks/Token.sol";
-import {SimpleCollateral} from "./mocks/SimpleCollateral.sol";
-
 import {SymbioticSetupFixture} from "./fixtures/SymbioticSetup.f.sol";
+import {SimpleCollateral} from "./mocks/SimpleCollateral.sol";
 
 contract BoltManagerTest is Test {
     using BLS12381 for BLS12381.G1Point;
@@ -35,24 +35,21 @@ contract BoltManagerTest is Test {
     BoltValidators public validators;
     BoltManager public manager;
 
+    IVaultFactory public vaultFactory;
+    IDelegatorFactory public delegatorFactory;
+    ISlasherFactory public slasherFactory;
+    INetworkRegistry public networkRegistry;
+    IOperatorRegistry public operatorRegistry;
+    IMetadataService public operatorMetadataService;
+    IMetadataService public networkMetadataService;
+    INetworkMiddlewareService public networkMiddlewareService;
+    IOptInService public operatorVaultOptInService;
+    IOptInService public operatorNetworkOptInService;
+    IVetoSlasher public vetoSlasher;
+    IVault public vault;
+    INetworkRestakeDelegator public networkRestakeDelegator;
+    IVaultConfigurator public vaultConfigurator;
     SimpleCollateral public collateral;
-
-    uint64[] public validatorIndexes;
-
-    address public vaultFactory;
-    address public delegatorFactory;
-    address public slasherFactory;
-    address public networkRegistry;
-    address public operatorRegistry;
-    address public operatorMetadataService;
-    address public networkMetadataService;
-    address public networkMiddlewareService;
-    address public operatorVaultOptInService;
-    address public operatorNetworkOptInService;
-    address public vetoSlasher;
-    address public vault;
-    address public networkRestakeDelegator;
-    address public vaultConfigurator;
 
     address deployer = makeAddr("deployer");
     address admin = makeAddr("admin");
@@ -61,8 +58,10 @@ contract BoltManagerTest is Test {
     address validator = makeAddr("validator");
     address networkAdmin = makeAddr("networkAdmin");
     address vaultAdmin = makeAddr("vaultAdmin");
+    address user = makeAddr("user");
 
     function setUp() public {
+        // --- Deploy Symbiotic contracts ---
         (
             vaultFactory,
             delegatorFactory,
@@ -74,81 +73,91 @@ contract BoltManagerTest is Test {
             networkMiddlewareService,
             operatorVaultOptInService,
             operatorNetworkOptInService,
-            vaultConfigurator
+            vaultConfigurator,
+            collateral
         ) = new SymbioticSetupFixture().setUp(deployer, admin);
 
-        // Deploy collateral token
-        vm.startPrank(deployer);
-        Token token = new Token("Token");
-        collateral = new SimpleCollateral(address(token));
-        collateral.mint(token.totalSupply());
+        // --- Create vault ---
 
         address[] memory adminRoleHolders = new address[](1);
         adminRoleHolders[0] = vaultAdmin;
 
-        IVault.InitParams memory vaultInitParams = IVault.InitParams({
-            collateral: address(collateral),
-            delegator: address(0),
-            slasher: address(0),
-            burner: address(0xdead),
-            epochDuration: EPOCH_DURATION,
-            depositWhitelist: false,
-            isDepositLimit: false,
-            depositLimit: 0,
-            defaultAdminRoleHolder: vaultAdmin,
-            depositWhitelistSetRoleHolder: vaultAdmin,
-            depositorWhitelistRoleHolder: vaultAdmin,
-            isDepositLimitSetRoleHolder: vaultAdmin,
-            depositLimitSetRoleHolder: vaultAdmin
-        });
-
-        INetworkRestakeDelegator.InitParams memory delegatorInitParams = INetworkRestakeDelegator.InitParams({
-            baseParams: IBaseDelegator.BaseParams({
-                defaultAdminRoleHolder: vaultAdmin,
-                hook: address(0), // we don't need a hook
-                hookSetRoleHolder: vaultAdmin
-            }),
-            networkLimitSetRoleHolders: adminRoleHolders,
-            operatorNetworkSharesSetRoleHolders: adminRoleHolders
-        });
-
-        IVetoSlasher.InitParams memory vetoSlasherInitParams = IVetoSlasher.InitParams({
-            // veto duration must be smaller than epoch duration
-            vetoDuration: uint48(12 hours),
-            resolverSetEpochsDelay: 3
-        });
-
         IVaultConfigurator.InitParams memory vaultConfiguratorInitParams = IVaultConfigurator.InitParams({
-            version: IMigratablesFactory(IVaultConfigurator(vaultConfigurator).VAULT_FACTORY()).lastVersion(),
+            version: IMigratablesFactory(vaultConfigurator.VAULT_FACTORY()).lastVersion(),
             owner: vaultAdmin,
-            vaultParams: vaultInitParams,
+            vaultParams: IVault.InitParams({
+                collateral: address(collateral),
+                delegator: address(0),
+                slasher: address(0),
+                burner: address(0xdead),
+                epochDuration: EPOCH_DURATION,
+                depositWhitelist: false,
+                isDepositLimit: false,
+                depositLimit: 0,
+                defaultAdminRoleHolder: vaultAdmin,
+                depositWhitelistSetRoleHolder: vaultAdmin,
+                depositorWhitelistRoleHolder: vaultAdmin,
+                isDepositLimitSetRoleHolder: vaultAdmin,
+                depositLimitSetRoleHolder: vaultAdmin
+            }),
             delegatorIndex: 0, // Use NetworkRestakeDelegator
-            delegatorParams: abi.encode(delegatorInitParams),
+            delegatorParams: abi.encode(
+                INetworkRestakeDelegator.InitParams({
+                    baseParams: IBaseDelegator.BaseParams({
+                        defaultAdminRoleHolder: vaultAdmin,
+                        hook: address(0), // we don't need a hook
+                        hookSetRoleHolder: vaultAdmin
+                    }),
+                    networkLimitSetRoleHolders: adminRoleHolders,
+                    operatorNetworkSharesSetRoleHolders: adminRoleHolders
+                })
+            ),
             withSlasher: true,
             slasherIndex: 1, // Use VetoSlasher
-            slasherParams: abi.encode(vetoSlasherInitParams)
+            slasherParams: abi.encode(
+                IVetoSlasher.InitParams({
+                    // veto duration must be smaller than epoch duration
+                    vetoDuration: uint48(12 hours),
+                    resolverSetEpochsDelay: 3
+                })
+            )
         });
 
-        (vault, networkRestakeDelegator, vetoSlasher) =
-            IVaultConfigurator(vaultConfigurator).create(vaultConfiguratorInitParams);
-        vm.stopPrank();
+        (address vault_, address networkRestakeDelegator_, address vetoSlasher_) =
+            vaultConfigurator.create(vaultConfiguratorInitParams);
+        vault = IVault(vault_);
+        networkRestakeDelegator = INetworkRestakeDelegator(networkRestakeDelegator_);
+        vetoSlasher = IVetoSlasher(vetoSlasher_);
 
-        assertEq(networkRestakeDelegator, address(IVault(vault).delegator()));
-        assertEq(vetoSlasher, address(IVault(vault).slasher()));
+        assertEq(address(networkRestakeDelegator), address(vault.delegator()));
+        assertEq(address(vetoSlasher), address(vault.slasher()));
+        assertEq(address(vault.collateral()), address(collateral));
+        assertEq(vault.epochDuration(), EPOCH_DURATION);
 
-        // Register the network in Symbiotic
-        vm.prank(networkAdmin);
-        INetworkRegistry(networkRegistry).registerNetwork();
+        // --- Deploy Bolt contracts ---
 
-        // Deploy Bolt contracts
         validators = new BoltValidators(admin);
         manager = new BoltManager(
-            address(validators), networkAdmin, operatorRegistry, operatorNetworkOptInService, vaultFactory
+            address(validators),
+            networkAdmin,
+            address(operatorRegistry),
+            address(operatorNetworkOptInService),
+            address(vaultFactory)
         );
     }
 
     function testFullSymbioticOptIn() public {
-        // --- 1. register Validator in BoltValidators ---
+        // --- 1. Register Network in Symbiotic ---
+
+        vm.prank(networkAdmin);
+        networkRegistry.registerNetwork();
+
+        // --- 2. register Middleware in Symbiotic ---
+
+        vm.prank(networkAdmin);
+        networkMiddlewareService.setMiddleware(address(manager));
+
+        // --- 3. register Validator in BoltValidators ---
 
         // pubkeys aren't checked, any point will be fine
         BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
@@ -159,28 +168,69 @@ contract BoltManagerTest is Test {
         assertEq(validators.getValidatorByPubkey(pubkey).authorizedOperator, operator);
         assertEq(validators.getValidatorByPubkey(pubkey).authorizedCollateralProvider, provider);
 
-        // --- 2. register Operator in Symbiotic ---
+        // --- 4. register Operator in Symbiotic, opt-in network and vault ---
 
         vm.prank(operator);
-        IOperatorRegistry(operatorRegistry).registerOperator();
-        assertEq(IOperatorRegistry(operatorRegistry).isEntity(operator), true);
+        operatorRegistry.registerOperator();
+        assertEq(operatorRegistry.isEntity(operator), true);
 
         vm.prank(operator);
-        IOptInService(operatorNetworkOptInService).optIn(networkAdmin);
-        assertEq(IOptInService(operatorNetworkOptInService).isOptedIn(operator, networkAdmin), true);
+        operatorNetworkOptInService.optIn(networkAdmin);
+        assertEq(operatorNetworkOptInService.isOptedIn(operator, networkAdmin), true);
 
-        // --- 3. register Operator in BoltManager ---
+        vm.prank(operator);
+        operatorVaultOptInService.optIn(address(vault));
+        assertEq(operatorVaultOptInService.isOptedIn(operator, address(vault)), true);
+
+        // --- 5. register Operator in BoltManager (middleware) ---
 
         manager.registerSymbioticOperator(operator);
         assertEq(manager.isSymbioticOperatorEnabled(operator), true);
 
-        // --- 4. set the stake limit for the Vault ---
+        // --- 6. set the stake limit for the Vault ---
 
-        vm.prank(admin);
-        bytes32 subnetwork = networkAdmin.subnetwork(0);
-        INetworkRestakeDelegator(IVault(vault).delegator()).setNetworkLimit(subnetwork, 1 ether);
+        uint96 subnetworkId = 0;
+        bytes32 subnetwork = networkAdmin.subnetwork(subnetworkId);
 
-        vm.prank(admin);
-        IBaseDelegator(IVault(vault).delegator()).setMaxNetworkLimit(0, 1 ether);
+        vm.prank(networkAdmin);
+        networkRestakeDelegator.setMaxNetworkLimit(subnetworkId, 10 ether);
+
+        vm.prank(vaultAdmin);
+        networkRestakeDelegator.setNetworkLimit(subnetwork, 2 ether);
+
+        // --- 7. add stake to the Vault ---
+
+        vm.prank(provider);
+        SimpleCollateral(collateral).mint(1 ether);
+
+        vm.prank(provider);
+        SimpleCollateral(collateral).approve(address(vault), 1 ether);
+
+        // deposit collateral from "provider" on behalf of "operator"
+        vm.prank(provider);
+        (uint256 depositedAmount, uint256 mintedShares) = vault.deposit(operator, 1 ether);
+        assertEq(SimpleCollateral(collateral).balanceOf(address(vault)), 1 ether);
+        assertEq(vault.balanceOf(operator), 1 ether);
+
+        // --- 8. read the new operator stake ---
+
+        // initial state
+        uint256 shares = networkRestakeDelegator.totalOperatorNetworkShares(subnetwork);
+        uint256 stakeFromDelegator = networkRestakeDelegator.stake(subnetwork, operator);
+        uint256 stakeFromManager = manager.getSymbioticOperatorStake(operator, address(collateral));
+        assertEq(shares, 0);
+        assertEq(stakeFromManager, stakeFromDelegator);
+        assertEq(stakeFromManager, 0);
+
+        vm.warp(block.timestamp + EPOCH_DURATION + 1);
+
+        // after an epoch has passed
+        assertEq(IVault(vault).totalStake(), 1 ether);
+        shares = networkRestakeDelegator.totalOperatorNetworkShares(subnetwork);
+        stakeFromDelegator = networkRestakeDelegator.stake(subnetwork, operator);
+        stakeFromManager = manager.getSymbioticOperatorStake(operator, address(collateral));
+        assertEq(shares, 1 ether);
+        assertEq(stakeFromDelegator, stakeFromManager);
+        assertEq(stakeFromManager, 1 ether);
     }
 }

@@ -19,6 +19,9 @@ import {Slasher} from "@symbiotic/contracts/slasher/Slasher.sol";
 import {VetoSlasher} from "@symbiotic/contracts/slasher/VetoSlasher.sol";
 import {VaultConfigurator} from "@symbiotic/contracts/VaultConfigurator.sol";
 
+import {SimpleCollateral} from "../mocks/SimpleCollateral.sol";
+import {Token} from "../mocks/Token.sol";
+
 contract SymbioticSetupFixture is Test {
     function setUp(
         address deployer,
@@ -26,17 +29,18 @@ contract SymbioticSetupFixture is Test {
     )
         public
         returns (
-            address vaultFactory,
-            address delegatorFactory,
-            address slasherFactory,
-            address networkRegistry,
-            address operatorRegistry,
-            address operatorMetadataService,
-            address networkMetadataService,
-            address networkMiddlewareService,
-            address operatorVaultOptInService,
-            address operatorNetworkOptInService,
-            address vaultConfigurator
+            VaultFactory vaultFactory,
+            DelegatorFactory delegatorFactory,
+            SlasherFactory slasherFactory,
+            NetworkRegistry networkRegistry,
+            OperatorRegistry operatorRegistry,
+            MetadataService operatorMetadataService,
+            MetadataService networkMetadataService,
+            NetworkMiddlewareService networkMiddlewareService,
+            OptInService operatorVaultOptInService,
+            OptInService operatorNetworkOptInService,
+            VaultConfigurator vaultConfigurator,
+            SimpleCollateral collateral
         )
     {
         vm.startPrank(deployer);
@@ -108,20 +112,24 @@ contract SymbioticSetupFixture is Test {
         delegatorFactory_.transferOwnership(owner);
         slasherFactory_.transferOwnership(owner);
 
+        Token token_ = new Token("Token");
+        SimpleCollateral collateral_ = new SimpleCollateral(address(token_));
+
         vm.stopPrank();
 
         return (
-            address(vaultFactory_),
-            address(delegatorFactory_),
-            address(slasherFactory_),
-            address(networkRegistry_),
-            address(operatorRegistry_),
-            address(operatorMetadataService_),
-            address(networkMetadataService_),
-            address(networkMiddlewareService_),
-            address(operatorVaultOptInService_),
-            address(operatorNetworkOptInService_),
-            address(vaultConfigurator_)
+            vaultFactory_,
+            delegatorFactory_,
+            slasherFactory_,
+            networkRegistry_,
+            operatorRegistry_,
+            operatorMetadataService_,
+            networkMetadataService_,
+            networkMiddlewareService_,
+            operatorVaultOptInService_,
+            operatorNetworkOptInService_,
+            vaultConfigurator_,
+            collateral_
         );
     }
 }
