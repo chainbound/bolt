@@ -223,10 +223,11 @@ contract BoltManagerTest is Test {
         // deposit collateral from "provider" on behalf of "operator"
         vm.prank(provider);
         (uint256 depositedAmount, uint256 mintedShares) = vault.deposit(operator, 1 ether);
+
         assertEq(depositedAmount, 1 ether);
         assertEq(mintedShares, 1 ether);
-        assertEq(SimpleCollateral(collateral).balanceOf(address(vault)), 1 ether);
         assertEq(vault.balanceOf(operator), 1 ether);
+        assertEq(SimpleCollateral(collateral).balanceOf(address(vault)), 1 ether);
     }
 
     /// @notice Compute the hash of a BLS public key
