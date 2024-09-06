@@ -33,7 +33,7 @@ pub struct ConstraintClient {
 }
 
 impl ConstraintClient {
-    /// Creates a new MEV-Boost client with the given URL.
+    /// Creates a new constraint client with the given URL.
     pub fn new<U: Into<Url>>(url: U) -> Self {
         Self {
             url: url.into(),
