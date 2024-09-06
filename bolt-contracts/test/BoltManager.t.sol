@@ -19,6 +19,7 @@ import {IDelegatorFactory} from "@symbiotic/interfaces/IDelegatorFactory.sol";
 import {IMigratablesFactory} from "@symbiotic/interfaces/common/IMigratablesFactory.sol";
 import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
 
+import {IBoltManager} from "../src/interfaces/IBoltManager.sol";
 import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
@@ -146,23 +147,26 @@ contract BoltManagerTest is Test {
 
         validators = new BoltValidators(admin);
         manager = new BoltManager(
+            admin,
             address(validators),
             networkAdmin,
             address(operatorRegistry),
             address(operatorNetworkOptInService),
             address(vaultFactory)
         );
+
+        // --- Whitelist collateral in BoltManager ---
+        vm.prank(admin);
+        manager.addWhitelistedCollateral(address(collateral));
     }
 
     /// @notice Internal helper to register Symbiotic contracts and opt-in operators and vaults.
     /// Should be called inside other tests that need a common setup beyond the default setUp().
-    function _optInSymbioticRoutine() internal {
-        // --- Register Network in Symbiotic ---
+    function _symbioticOptInRoutine() internal {
+        // --- Register Network and Middleware in Symbiotic ---
 
         vm.prank(networkAdmin);
         networkRegistry.registerNetwork();
-
-        // --- Register Middleware in Symbiotic ---
 
         vm.prank(networkAdmin);
         networkMiddlewareService.setMiddleware(address(manager));
@@ -232,7 +236,7 @@ contract BoltManagerTest is Test {
     }
 
     function testReadOperatorStake() public {
-        _optInSymbioticRoutine();
+        _symbioticOptInRoutine();
 
         // --- Read the operator stake ---
 
@@ -276,7 +280,7 @@ contract BoltManagerTest is Test {
     }
 
     function testGetProposerStatus() public {
-        _optInSymbioticRoutine();
+        _symbioticOptInRoutine();
 
         BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
         bytes32 pubkeyHash = _pubkeyHash(pubkey);
@@ -295,11 +299,26 @@ contract BoltManagerTest is Test {
     }
 
     function testGetNonExistentProposerStatus() public {
-        _optInSymbioticRoutine();
+        _symbioticOptInRoutine();
 
         bytes32 pubkeyHash = bytes32(uint256(1));
 
         vm.expectRevert(IBoltValidators.ValidatorDoesNotExist.selector);
         manager.getProposerStatus(pubkeyHash);
+    }
+
+    function testGetWhitelistedCollaterals() public {
+        address[] memory collaterals = manager.getWhitelistedCollaterals();
+        assertEq(collaterals.length, 1);
+        assertEq(collaterals[0], address(collateral));
+    }
+
+    function testNonWhitelistedCollateral() public {
+        vm.prank(admin);
+        manager.removeWhitelistedCollateral(address(collateral));
+
+        vm.prank(vaultAdmin);
+        vm.expectRevert(IBoltManager.CollateralNotWhitelisted.selector);
+        manager.registerSymbioticVault(address(vault));
     }
 }

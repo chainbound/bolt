@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {EnumerableMap} from "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
@@ -15,7 +16,7 @@ import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
-contract BoltManager is IBoltManager {
+contract BoltManager is IBoltManager, Ownable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
@@ -52,9 +53,6 @@ contract BoltManager is IBoltManager {
     /// @notice Start timestamp of the first epoch.
     uint48 public immutable START_TIMESTAMP;
 
-    /// @notice Address of the account that is authorized to set the collateral whitelist.
-    address public immutable COLLATERAL_WHITELIST_SETTER;
-
     /// @notice Set of collateral addresses that are whitelisted.
     EnumerableSet.AddressSet private whitelistedCollaterals;
 
@@ -65,12 +63,13 @@ contract BoltManager is IBoltManager {
     /// @param _symbioticOperatorNetOptIn The address of the Symbiotic operator network opt-in contract.
     /// @param _symbioticVaultRegistry The address of the Symbiotic vault registry.
     constructor(
+        address _owner,
         address _validators,
         address _symbioticNetwork,
         address _symbioticOperatorRegistry,
         address _symbioticOperatorNetOptIn,
         address _symbioticVaultRegistry
-    ) {
+    ) Ownable(_owner) {
         validators = IBoltValidators(_validators);
         START_TIMESTAMP = Time.timestamp();
 
@@ -93,6 +92,14 @@ contract BoltManager is IBoltManager {
     /// @notice Get the current epoch.
     function getCurrentEpoch() public view returns (uint48 epoch) {
         return getEpochAtTs(Time.timestamp());
+    }
+
+    function addWhitelistedCollateral(address collateral) public onlyOwner {
+        whitelistedCollaterals.add(collateral);
+    }
+
+    function removeWhitelistedCollateral(address collateral) public onlyOwner {
+        whitelistedCollaterals.remove(collateral);
     }
 
     function getWhitelistedCollaterals() public view returns (address[] memory collaterals) {
@@ -151,7 +158,9 @@ contract BoltManager is IBoltManager {
             revert NotVault();
         }
 
-        // TODO: check collateral asset against whitelist?
+        if (!isCollateralWhitelisted(IVault(vault).collateral())) {
+            revert CollateralNotWhitelisted();
+        }
 
         // TODO: check slashing conditions and veto duration
 

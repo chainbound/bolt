@@ -19,6 +19,7 @@ interface IBoltManager {
     error OperatorNotOptedIn();
     error NotOperator();
     error NotVault();
+    error CollateralNotWhitelisted();
 
     function registerSymbioticOperator(address operator) external;
 
