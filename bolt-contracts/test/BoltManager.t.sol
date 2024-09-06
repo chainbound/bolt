@@ -19,6 +19,7 @@ import {IDelegatorFactory} from "@symbiotic/interfaces/IDelegatorFactory.sol";
 import {IMigratablesFactory} from "@symbiotic/interfaces/common/IMigratablesFactory.sol";
 import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
 
+import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
 import {BLS12381} from "../src/lib/bls/BLS12381.sol";
@@ -60,6 +61,9 @@ contract BoltManagerTest is Test {
     address networkAdmin = makeAddr("networkAdmin");
     address vaultAdmin = makeAddr("vaultAdmin");
     address user = makeAddr("user");
+
+    uint96 subnetworkId = 0;
+    bytes32 subnetwork = networkAdmin.subnetwork(subnetworkId);
 
     function setUp() public {
         // fast forward a few days to avoid timestamp underflows
@@ -150,18 +154,20 @@ contract BoltManagerTest is Test {
         );
     }
 
-    function testFullSymbioticOptIn() public {
-        // --- 1. Register Network in Symbiotic ---
+    /// @notice Internal helper to register Symbiotic contracts and opt-in operators and vaults.
+    /// Should be called inside other tests that need a common setup beyond the default setUp().
+    function _optInSymbioticRoutine() internal {
+        // --- Register Network in Symbiotic ---
 
         vm.prank(networkAdmin);
         networkRegistry.registerNetwork();
 
-        // --- 2. register Middleware in Symbiotic ---
+        // --- Register Middleware in Symbiotic ---
 
         vm.prank(networkAdmin);
         networkMiddlewareService.setMiddleware(address(manager));
 
-        // --- 3. register Validator in BoltValidators ---
+        // --- Register Validator in BoltValidators ---
 
         // pubkeys aren't checked, any point will be fine
         BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
@@ -172,7 +178,7 @@ contract BoltManagerTest is Test {
         assertEq(validators.getValidatorByPubkey(pubkey).authorizedOperator, operator);
         assertEq(validators.getValidatorByPubkey(pubkey).authorizedCollateralProvider, provider);
 
-        // --- 4. register Operator in Symbiotic, opt-in network and vault ---
+        // --- Register Operator in Symbiotic, opt-in network and vault ---
 
         vm.prank(operator);
         operatorRegistry.registerOperator();
@@ -186,7 +192,7 @@ contract BoltManagerTest is Test {
         operatorVaultOptInService.optIn(address(vault));
         assertEq(operatorVaultOptInService.isOptedIn(operator, address(vault)), true);
 
-        // --- 5. register Vault and Operator in BoltManager (middleware) ---
+        // --- Register Vault and Operator in BoltManager (middleware) ---
 
         manager.registerSymbioticVault(address(vault));
         assertEq(manager.isSymbioticVaultEnabled(address(vault)), true);
@@ -194,10 +200,7 @@ contract BoltManagerTest is Test {
         manager.registerSymbioticOperator(operator);
         assertEq(manager.isSymbioticOperatorEnabled(operator), true);
 
-        // --- 6. set the stake limit for the Vault ---
-
-        uint96 subnetworkId = 0;
-        bytes32 subnetwork = networkAdmin.subnetwork(subnetworkId);
+        // --- Set the stake limit for the Vault ---
 
         vm.prank(networkAdmin);
         networkRestakeDelegator.setMaxNetworkLimit(subnetworkId, 10 ether);
@@ -205,7 +208,7 @@ contract BoltManagerTest is Test {
         vm.prank(vaultAdmin);
         networkRestakeDelegator.setNetworkLimit(subnetwork, 2 ether);
 
-        // --- 7. add stake to the Vault ---
+        // --- Add stake to the Vault ---
 
         vm.prank(provider);
         SimpleCollateral(collateral).mint(1 ether);
@@ -220,8 +223,18 @@ contract BoltManagerTest is Test {
         assertEq(mintedShares, 1 ether);
         assertEq(SimpleCollateral(collateral).balanceOf(address(vault)), 1 ether);
         assertEq(vault.balanceOf(operator), 1 ether);
+    }
 
-        // --- 8. read the new operator stake ---
+    /// @notice Compute the hash of a BLS public key
+    function _pubkeyHash(BLS12381.G1Point memory pubkey) internal pure returns (bytes32) {
+        uint256[2] memory compressedPubKey = pubkey.compress();
+        return keccak256(abi.encodePacked(compressedPubKey));
+    }
+
+    function testReadOperatorStake() public {
+        _optInSymbioticRoutine();
+
+        // --- Read the operator stake ---
 
         // initial state
         uint256 shares = networkRestakeDelegator.totalOperatorNetworkShares(subnetwork);
@@ -262,7 +275,31 @@ contract BoltManagerTest is Test {
         // assertEq(stakeFromManager, 1 ether);
     }
 
-    function testReadProposersInLookahead() public {
-        // TODO
+    function testGetProposerStatus() public {
+        _optInSymbioticRoutine();
+
+        BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
+        bytes32 pubkeyHash = _pubkeyHash(pubkey);
+
+        BoltManager.ProposerStatus memory status = manager.getProposerStatus(pubkeyHash);
+        assertEq(status.pubkeyHash, pubkeyHash);
+        assertEq(status.operator, operator);
+        assertEq(status.active, true);
+        assertEq(status.collaterals.length, 1);
+        assertEq(status.amounts.length, 1);
+        assertEq(status.collaterals[0], address(collateral));
+
+        // TODO: this should be 1 ether, but reading from delegator doesn't work
+        // see testReadOperatorStake above for details.
+        assertEq(status.amounts[0], 0);
+    }
+
+    function testGetNonExistentProposerStatus() public {
+        _optInSymbioticRoutine();
+
+        bytes32 pubkeyHash = bytes32(uint256(1));
+
+        vm.expectRevert(IBoltValidators.ValidatorDoesNotExist.selector);
+        manager.getProposerStatus(pubkeyHash);
     }
 }

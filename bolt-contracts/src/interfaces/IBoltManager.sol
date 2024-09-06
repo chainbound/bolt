@@ -5,6 +5,14 @@ import {BLS12381} from "../lib/bls/BLS12381.sol";
 import {IBoltValidators} from "./IBoltValidators.sol";
 
 interface IBoltManager {
+    struct ProposerStatus {
+        bytes32 pubkeyHash;
+        bool active;
+        address operator;
+        address[] collaterals;
+        uint256[] amounts;
+    }
+
     error InvalidQuery();
     error AlreadyRegistered();
     error NotRegistered();
