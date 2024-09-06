@@ -127,12 +127,10 @@ mod tests {
         let validator_index = random_u64(&mut rng);
         let slot = random_u64(&mut rng);
         let top = false;
-        let constraints = random_constraints(1); // Generate 10 random constraints
+        let constraints = random_constraints(1); // Generate 'n' random constraints
 
         // Create a random `ConstraintsMessage`
         let message = ConstraintsMessage { validator_index, slot, top, constraints };
-
-        println!("Generated random constraints message: {:?}", message);
 
         // Compute tree hash root
         let tree_root = message.tree_hash_root();
