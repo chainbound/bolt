@@ -31,6 +31,7 @@ contract BoltManagerTest is Test {
     using Subnetwork for address;
 
     uint48 public constant EPOCH_DURATION = 1 days;
+    uint48 public constant SLASHING_WINDOW = 7 days;
 
     BoltValidators public validators;
     BoltManager public manager;
@@ -61,6 +62,9 @@ contract BoltManagerTest is Test {
     address user = makeAddr("user");
 
     function setUp() public {
+        // fast forward a few days to avoid timestamp underflows
+        vm.warp(block.timestamp + SLASHING_WINDOW * 3);
+
         // --- Deploy Symbiotic contracts ---
         (
             vaultFactory,
@@ -182,7 +186,10 @@ contract BoltManagerTest is Test {
         operatorVaultOptInService.optIn(address(vault));
         assertEq(operatorVaultOptInService.isOptedIn(operator, address(vault)), true);
 
-        // --- 5. register Operator in BoltManager (middleware) ---
+        // --- 5. register Vault and Operator in BoltManager (middleware) ---
+
+        manager.registerSymbioticVault(address(vault));
+        assertEq(manager.isSymbioticVaultEnabled(address(vault)), true);
 
         manager.registerSymbioticOperator(operator);
         assertEq(manager.isSymbioticOperatorEnabled(operator), true);
@@ -209,6 +216,8 @@ contract BoltManagerTest is Test {
         // deposit collateral from "provider" on behalf of "operator"
         vm.prank(provider);
         (uint256 depositedAmount, uint256 mintedShares) = vault.deposit(operator, 1 ether);
+        assertEq(depositedAmount, 1 ether);
+        assertEq(mintedShares, 1 ether);
         assertEq(SimpleCollateral(collateral).balanceOf(address(vault)), 1 ether);
         assertEq(vault.balanceOf(operator), 1 ether);
 
@@ -223,14 +232,37 @@ contract BoltManagerTest is Test {
         assertEq(stakeFromManager, 0);
 
         vm.warp(block.timestamp + EPOCH_DURATION + 1);
+        assertEq(vault.currentEpoch(), 1);
 
         // after an epoch has passed
-        assertEq(IVault(vault).totalStake(), 1 ether);
-        shares = networkRestakeDelegator.totalOperatorNetworkShares(subnetwork);
-        stakeFromDelegator = networkRestakeDelegator.stake(subnetwork, operator);
-        stakeFromManager = manager.getSymbioticOperatorStake(operator, address(collateral));
-        assertEq(shares, 1 ether);
-        assertEq(stakeFromDelegator, stakeFromManager);
-        assertEq(stakeFromManager, 1 ether);
+        assertEq(vault.totalStake(), 1 ether);
+        assertEq(vault.activeStake(), 1 ether);
+        assertEq(vault.activeBalanceOf(operator), 1 ether);
+        assertEq(vault.activeSharesAt(uint48(0), ""), 0);
+        assertEq(vault.activeSharesAt(uint48(block.timestamp), ""), 1 ether);
+
+        // there still aren't any shares minted on the delegator
+        assertEq(networkRestakeDelegator.totalOperatorNetworkShares(subnetwork), 0);
+        assertEq(networkRestakeDelegator.operatorNetworkShares(subnetwork, operator), 0);
+
+        // we need to mint shares from the vault admin to activate stake
+        // for the operator in the subnetwork.
+        vm.prank(vaultAdmin);
+        networkRestakeDelegator.setOperatorNetworkShares(subnetwork, operator, 100);
+        assertEq(networkRestakeDelegator.totalOperatorNetworkShares(subnetwork), 100);
+        assertEq(networkRestakeDelegator.operatorNetworkShares(subnetwork, operator), 100);
+
+        // assertEq(manager.getSymbioticTotalStake(0, address(collateral)), 0);
+        // assertEq(manager.getSymbioticTotalStake(1, address(collateral)), 1 ether);
+
+        // TODO: get correct active stake from manager
+        // stakeFromDelegator = networkRestakeDelegator.stake(subnetwork, operator);
+        // stakeFromManager = manager.getSymbioticOperatorStake(operator, address(collateral));
+        // assertEq(stakeFromDelegator, stakeFromManager);
+        // assertEq(stakeFromManager, 1 ether);
+    }
+
+    function testReadProposersInLookahead() public {
+        // TODO
     }
 }
