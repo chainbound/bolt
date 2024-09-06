@@ -125,6 +125,10 @@ impl SignableBLS for TestSignableData {
     fn digest(&self) -> [u8; 32] {
         self.data
     }
+
+    fn tree_hash_root(&self) -> [u8; 32] {
+        self.data
+    }
 }
 
 impl SignableECDSA for TestSignableData {

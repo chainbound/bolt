@@ -1608,8 +1608,8 @@ dependencies = [
 
 [[package]]
 name = "cb-cli"
-version = "0.0.1"
-source = "git+https://github.com/Commit-Boost/commit-boost-client#f1e6ff199f9f71b45cc3c138976716e1b9b17f7c"
+version = "0.1.0"
+source = "git+https://github.com/Commit-Boost/commit-boost-client?rev=45ce8f1#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
 dependencies = [
  "cb-common",
  "clap",
@@ -1624,8 +1624,8 @@ dependencies = [
 
 [[package]]
 name = "cb-common"
-version = "0.0.1"
-source = "git+https://github.com/Commit-Boost/commit-boost-client#f1e6ff199f9f71b45cc3c138976716e1b9b17f7c"
+version = "0.1.0"
+source = "git+https://github.com/Commit-Boost/commit-boost-client?rev=45ce8f1#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
 dependencies = [
  "alloy",
  "axum",
@@ -1657,8 +1657,8 @@ dependencies = [
 
 [[package]]
 name = "cb-metrics"
-version = "0.0.1"
-source = "git+https://github.com/Commit-Boost/commit-boost-client#f1e6ff199f9f71b45cc3c138976716e1b9b17f7c"
+version = "0.1.0"
+source = "git+https://github.com/Commit-Boost/commit-boost-client?rev=45ce8f1#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
 dependencies = [
  "axum",
  "cb-common",
@@ -1671,8 +1671,8 @@ dependencies = [
 
 [[package]]
 name = "cb-pbs"
-version = "0.0.1"
-source = "git+https://github.com/Commit-Boost/commit-boost-client#f1e6ff199f9f71b45cc3c138976716e1b9b17f7c"
+version = "0.1.0"
+source = "git+https://github.com/Commit-Boost/commit-boost-client?rev=45ce8f1#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
 dependencies = [
  "alloy",
  "async-trait",
@@ -1696,8 +1696,8 @@ dependencies = [
 
 [[package]]
 name = "cb-signer"
-version = "0.0.1"
-source = "git+https://github.com/Commit-Boost/commit-boost-client#f1e6ff199f9f71b45cc3c138976716e1b9b17f7c"
+version = "0.1.0"
+source = "git+https://github.com/Commit-Boost/commit-boost-client?rev=45ce8f1#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
 dependencies = [
  "alloy",
  "axum",
@@ -1877,8 +1877,8 @@ dependencies = [
 
 [[package]]
 name = "commit-boost"
-version = "0.0.1"
-source = "git+https://github.com/Commit-Boost/commit-boost-client#f1e6ff199f9f71b45cc3c138976716e1b9b17f7c"
+version = "0.1.0"
+source = "git+https://github.com/Commit-Boost/commit-boost-client?rev=45ce8f1#45ce8f1b8febd778c7a8a1fd7651b6e39afa8478"
 dependencies = [
  "cb-cli",
  "cb-common",

@@ -20,6 +20,9 @@ pub trait SignableBLS {
     /// This API doesn't enforce a specific hash or encoding method.
     fn digest(&self) -> [u8; 32];
 
+    /// Creates SSZ tree hash root of the object.
+    fn tree_hash_root(&self) -> [u8; 32];
+
     /// Sign the object with the given key. Returns the signature.
     ///
     /// Note: The default implementation should be used where possible.

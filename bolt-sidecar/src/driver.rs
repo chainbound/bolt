@@ -221,7 +221,8 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         // parse the request into constraints and sign them
         let slot = inclusion_request.slot;
         let message = ConstraintsMessage::build(validator_index, inclusion_request);
-        let signed_constraints = match self.constraint_signer.sign(&message.digest()).await {
+        let signed_constraints = match self.constraint_signer.sign(&message.tree_hash_root()).await
+        {
             Ok(signature) => SignedConstraints { message, signature },
             Err(err) => {
                 error!(?err, "Failed to sign constraints");

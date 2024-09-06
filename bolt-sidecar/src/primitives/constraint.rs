@@ -1,6 +1,8 @@
 use alloy::primitives::{keccak256, Address};
+use cb_common::pbs::{DenebSpec, EthSpec, Transaction};
 use secp256k1::Message;
 use serde::Serialize;
+use tree_hash::{MerkleHasher, TreeHash};
 
 use crate::crypto::{bls::BLSSig, ecdsa::SignableECDSA, SignableBLS};
 
@@ -63,6 +65,11 @@ impl ConstraintsMessage {
 
         Self { validator_index, slot: request.slot, top: false, constraints }
     }
+
+    /// Returns the total number of leaves in the tree.
+    fn total_leaves(&self) -> usize {
+        4 + self.constraints.len()
+    }
 }
 
 impl SignableBLS for ConstraintsMessage {
@@ -79,6 +86,30 @@ impl SignableBLS for ConstraintsMessage {
 
         // Compute the Keccak-256 hash and return the 32-byte array directly
         keccak256(data).0
+    }
+
+    fn tree_hash_root(&self) -> [u8; 32] {
+        let mut hasher = MerkleHasher::with_leaves(self.total_leaves());
+
+        hasher
+            .write(&self.validator_index.to_le_bytes())
+            .expect("Should write validator index bytes");
+        hasher.write(&self.slot.to_le_bytes()).expect("Should write slot bytes");
+        hasher.write(&(self.top as u8).to_le_bytes()).expect("Should write top flag");
+
+        for constraint in &self.constraints {
+            hasher
+                .write(
+                    Transaction::<<DenebSpec as EthSpec>::MaxBytesPerTransaction>::from(
+                        constraint.transaction.envelope_encoded().to_vec(),
+                    )
+                    .tree_hash_root()
+                    .as_bytes(),
+                )
+                .expect("Should write transaction root");
+        }
+
+        hasher.finish().unwrap().0
     }
 }
 
