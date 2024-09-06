@@ -41,9 +41,13 @@ contract BoltManager is IBoltManager {
     /// @notice Address of the Symbiotic Operator Network Opt-In contract.
     address public immutable SYMBIOTIC_OPERATOR_NET_OPTIN;
 
+    /// @notice Duration of an epoch in seconds.
     uint48 public constant EPOCH_DURATION = 1 days;
+
+    /// @notice Duration of the slashing window in seconds.
     uint48 public constant SLASHING_WINDOW = 7 days;
 
+    /// @notice Start timestamp of the first epoch.
     uint48 public immutable START_TIMESTAMP;
 
     /// @notice Constructor for the BoltManager contract.
@@ -112,6 +116,15 @@ contract BoltManager is IBoltManager {
         symbioticOperators.disable(msg.sender);
     }
 
+    /// @notice Allow a disabled operator to signal opt-in to Bolt Protocol.
+    function unpauseSymbioticOperator() public {
+        if (!symbioticOperators.contains(msg.sender)) {
+            revert NotRegistered();
+        }
+
+        symbioticOperators.enable(msg.sender);
+    }
+
     /// @notice Allow a vault to signal opt-in to Bolt Protocol.
     function registerSymbioticVault(address vault) public {
         if (symbioticVaults.contains(vault)) {
@@ -137,6 +150,23 @@ contract BoltManager is IBoltManager {
         }
 
         symbioticVaults.disable(msg.sender);
+    }
+
+    /// @notice Allow a disabled vault to signal opt-in to Bolt Protocol.
+    function unpauseSymbioticVault() public {
+        if (!symbioticVaults.contains(msg.sender)) {
+            revert NotRegistered();
+        }
+
+        symbioticVaults.enable(msg.sender);
+    }
+
+    /// @notice Check if a vault is currently enabled to work in Bolt Protocol.
+    /// @param vault The vault address to check the enabled status for.
+    /// @return True if the vault is enabled, false otherwise.
+    function isSymbioticVaultEnabled(address vault) public view returns (bool) {
+        (uint48 enabledTime, uint48 disabledTime) = symbioticVaults.getTimes(vault);
+        return enabledTime != 0 && disabledTime == 0;
     }
 
     /// @notice Check if an operator is currently enabled to work in Bolt Protocol.
@@ -214,6 +244,33 @@ contract BoltManager is IBoltManager {
         }
 
         return amount;
+    }
+
+    /// @notice Get the total stake of all Symbiotic operators at a given epoch for a collateral asset.
+    /// @param epoch The epoch to check the total stake for.
+    /// @param collateral The collateral address to check the total stake for.
+    /// @return totalStake The total stake of all operators at the given epoch, in collateral token.
+    function getSymbioticTotalStake(uint48 epoch, address collateral) public view returns (uint256 totalStake) {
+        uint48 epochStartTs = getEpochStartTs(epoch);
+
+        // for epoch older than SLASHING_WINDOW total stake can be invalidated
+        if (
+            epochStartTs < SLASHING_WINDOW || epochStartTs < Time.timestamp() - SLASHING_WINDOW
+                || epochStartTs > Time.timestamp()
+        ) {
+            revert InvalidQuery();
+        }
+
+        for (uint256 i; i < symbioticOperators.length(); ++i) {
+            (address operator, uint48 enabledTime, uint48 disabledTime) = symbioticOperators.atWithTimes(i);
+
+            // just skip operator if it was added after the target epoch or paused
+            if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
+                continue;
+            }
+
+            totalStake += getSymbioticOperatorStakeAt(operator, collateral, epochStartTs);
+        }
     }
 
     /// @notice Check if a map entry was active at a given timestamp.
