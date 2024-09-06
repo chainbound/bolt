@@ -1,4 +1,4 @@
-use alloy::primitives::{keccak256, Address};
+use alloy::primitives::keccak256;
 use cb_common::pbs::{DenebSpec, EthSpec, Transaction};
 use secp256k1::Message;
 use serde::Serialize;
@@ -17,7 +17,7 @@ impl SignableECDSA for ConstraintsMessage {
 
         let mut constraint_bytes = Vec::new();
         for constraint in &self.constraints {
-            constraint_bytes.extend_from_slice(&constraint.as_bytes());
+            constraint_bytes.extend_from_slice(&constraint.envelope_encoded().0);
         }
         data.extend_from_slice(&constraint_bytes);
 
@@ -54,14 +54,13 @@ pub struct ConstraintsMessage {
     /// NOTE: Per slot, only 1 top-of-block bundle is valid.
     pub top: bool,
     /// The constraints that need to be signed.
-    pub constraints: Vec<Constraint>,
+    pub constraints: Vec<FullTransaction>,
 }
 
 impl ConstraintsMessage {
     /// Builds a constraints message from an inclusion request and metadata
     pub fn build(validator_index: u64, request: InclusionRequest) -> Self {
-        let constraints =
-            request.txs.into_iter().map(|tx| Constraint::from_transaction(tx, None)).collect();
+        let constraints = request.txs;
 
         Self { validator_index, slot: request.slot, top: false, constraints }
     }
@@ -86,7 +85,7 @@ impl SignableBLS for ConstraintsMessage {
             hasher
                 .write(
                     Transaction::<<DenebSpec as EthSpec>::MaxBytesPerTransaction>::from(
-                        constraint.transaction.envelope_encoded().to_vec(),
+                        constraint.envelope_encoded().to_vec(),
                     )
                     .tree_hash_root()
                     .as_bytes(),
@@ -98,48 +97,17 @@ impl SignableBLS for ConstraintsMessage {
     }
 }
 
-/// A general constraint on block building.
-///
-/// Reference: https://chainbound.github.io/bolt-docs/api/builder-api#ethv1builderconstraints
-#[derive(Serialize, Debug, Clone, PartialEq)]
-pub struct Constraint {
-    /// The optional index at which the transaction needs to be included in the block
-    pub index: Option<u64>,
-    /// The transaction to be included in the block, in hex format
-    #[serde(rename(serialize = "tx"))]
-    pub(crate) transaction: FullTransaction,
-}
-
-impl Constraint {
-    /// Builds a constraint from a transaction, with an optional index
-    pub fn from_transaction(transaction: FullTransaction, index: Option<u64>) -> Self {
-        Self { transaction, index }
-    }
-
-    /// Converts the constraint to a byte representation useful for signing
-    /// TODO: remove if we go with SSZ
-    pub fn as_bytes(&self) -> Vec<u8> {
-        let mut data = Vec::new();
-        self.transaction.encode_enveloped(&mut data);
-        data.extend_from_slice(&self.index.unwrap_or(0).to_le_bytes());
-        data
-    }
-
-    pub fn sender(&self) -> Address {
-        self.transaction.sender().expect("Recovered sender")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloy::hex::ToHexExt;
     use rand::{rngs::ThreadRng, Rng};
 
     fn random_u64(rng: &mut ThreadRng) -> u64 {
         rng.gen_range(0..u64::MAX)
     }
 
-    fn random_constraints(rng: &mut ThreadRng, count: usize) -> Vec<Constraint> {
+    fn random_constraints(count: usize) -> Vec<FullTransaction> {
         // Random inclusion request
         let json_req = r#"{
             "slot": 10,
@@ -148,14 +116,7 @@ mod tests {
 
         let req: InclusionRequest = serde_json::from_str(json_req).unwrap();
 
-        (0..count)
-            .map(|_| {
-                Constraint::from_transaction(
-                    req.txs.first().unwrap().clone(),
-                    Some(random_u64(rng)),
-                )
-            })
-            .collect()
+        (0..count).map(|_| req.txs.first().unwrap().clone()).collect()
     }
 
     #[test]
@@ -166,10 +127,12 @@ mod tests {
         let validator_index = random_u64(&mut rng);
         let slot = random_u64(&mut rng);
         let top = false;
-        let constraints = random_constraints(&mut rng, 10); // Generate 10 random constraints
+        let constraints = random_constraints(1); // Generate 10 random constraints
 
         // Create a random `ConstraintsMessage`
         let message = ConstraintsMessage { validator_index, slot, top, constraints };
+
+        println!("Generated random constraints message: {:?}", message);
 
         // Compute tree hash root
         let tree_root = message.tree_hash_root();
@@ -178,6 +141,6 @@ mod tests {
         assert_eq!(tree_root.len(), 32, "Tree hash root should be 32 bytes long");
 
         // Additional checks can be added here, depending on your specific requirements
-        println!("Computed tree hash root: {:?}", tree_root);
+        println!("Computed tree hash root: {:?}", tree_root.encode_hex());
     }
 }

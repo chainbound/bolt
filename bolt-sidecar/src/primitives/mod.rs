@@ -376,8 +376,8 @@ impl FullTransaction {
     }
 
     /// Returns the sender of the transaction, if recovered.
-    pub fn sender(&self) -> Option<Address> {
-        self.sender
+    pub fn sender(&self) -> Address {
+        self.sender.expect("Recovered sender")
     }
 }
 

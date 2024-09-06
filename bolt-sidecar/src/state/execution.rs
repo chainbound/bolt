@@ -312,7 +312,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         let mut bundle_nonce_diff_map = HashMap::new();
         let mut bundle_balance_diff_map = HashMap::new();
         for tx in req.txs.iter() {
-            let sender = tx.sender().expect("Recovered sender");
+            let sender = tx.sender();
 
             // From previous preconfirmations requests retrieve
             // - the nonce difference from the account state.

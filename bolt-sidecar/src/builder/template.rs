@@ -16,9 +16,7 @@ use tracing::warn;
 
 use crate::{
     common::max_transaction_cost,
-    primitives::{
-        constraint::Constraint, AccountState, FullTransaction, SignedConstraints, TransactionExt,
-    },
+    primitives::{AccountState, FullTransaction, SignedConstraints, TransactionExt},
 };
 
 /// A block template that serves as a fallback block, but is also used
@@ -47,10 +45,7 @@ impl BlockTemplate {
     /// Returns the cloned list of transactions from the constraints.
     #[inline]
     pub fn transactions(&self) -> Vec<FullTransaction> {
-        self.signed_constraints_list
-            .iter()
-            .flat_map(|sc| sc.message.constraints.iter().map(|c| c.transaction.clone()))
-            .collect()
+        self.signed_constraints_list.iter().flat_map(|sc| sc.message.constraints.clone()).collect()
     }
 
     /// Converts the list of signed constraints into a list of signed transactions. Use this when
@@ -60,10 +55,7 @@ impl BlockTemplate {
         self.signed_constraints_list
             .iter()
             .flat_map(|sc| {
-                sc.message
-                    .constraints
-                    .iter()
-                    .map(|c| c.transaction.clone().into_inner().into_transaction())
+                sc.message.constraints.iter().map(|c| c.clone().into_inner().into_transaction())
             })
             .collect()
     }
@@ -76,7 +68,7 @@ impl BlockTemplate {
             self.signed_constraints_list
                 .iter()
                 .flat_map(|sc| sc.message.constraints.iter())
-                .filter_map(|c| c.transaction.blob_sidecar())
+                .filter_map(|c| c.blob_sidecar())
                 .fold(
                     (Vec::new(), Vec::new(), Vec::new()),
                     |(mut commitments, mut proofs, mut blobs), bs| {
@@ -108,7 +100,7 @@ impl BlockTemplate {
     #[inline]
     pub fn committed_gas(&self) -> u64 {
         self.signed_constraints_list.iter().fold(0, |acc, sc| {
-            acc + sc.message.constraints.iter().fold(0, |acc, c| acc + c.transaction.gas_limit())
+            acc + sc.message.constraints.iter().fold(0, |acc, c| acc + c.gas_limit())
         })
     }
 
@@ -117,11 +109,7 @@ impl BlockTemplate {
     pub fn blob_count(&self) -> usize {
         self.signed_constraints_list.iter().fold(0, |mut acc, sc| {
             acc += sc.message.constraints.iter().fold(0, |acc, c| {
-                acc + c
-                    .transaction
-                    .as_eip4844()
-                    .map(|tx| tx.blob_versioned_hashes.len())
-                    .unwrap_or(0)
+                acc + c.as_eip4844().map(|tx| tx.blob_versioned_hashes.len()).unwrap_or(0)
             });
 
             acc
@@ -131,7 +119,7 @@ impl BlockTemplate {
     /// Adds a list of constraints to the block template and updates the state diff.
     pub fn add_constraints(&mut self, constraints: SignedConstraints) {
         for constraint in constraints.message.constraints.iter() {
-            let max_cost = max_transaction_cost(&constraint.transaction);
+            let max_cost = max_transaction_cost(&constraint);
             self.state_diff
                 .diffs
                 .entry(constraint.sender())
@@ -150,13 +138,10 @@ impl BlockTemplate {
         let constraints = self.signed_constraints_list.remove(index);
 
         for constraint in constraints.message.constraints.iter() {
-            self.state_diff
-                .diffs
-                .entry(constraint.transaction.sender().expect("Recovered sender"))
-                .and_modify(|(nonce, balance)| {
-                    *nonce = nonce.saturating_sub(1);
-                    *balance -= max_transaction_cost(&constraint.transaction);
-                });
+            self.state_diff.diffs.entry(constraint.sender()).and_modify(|(nonce, balance)| {
+                *nonce = nonce.saturating_sub(1);
+                *balance -= max_transaction_cost(&constraint);
+            });
         }
     }
 
@@ -166,7 +151,7 @@ impl BlockTemplate {
 
         // The preconfirmations made by such address, and the indexes of the signed constraints
         // in which they appear
-        let constraints_with_address: Vec<(usize, Vec<&Constraint>)> = self
+        let constraints_with_address: Vec<(usize, Vec<&FullTransaction>)> = self
             .signed_constraints_list
             .iter()
             .enumerate()
@@ -181,10 +166,7 @@ impl BlockTemplate {
             .iter()
             .flat_map(|c| c.1.clone())
             .fold((U256::ZERO, u64::MAX), |(total_cost, min_nonce), c| {
-                (
-                    total_cost + max_transaction_cost(&c.transaction),
-                    min_nonce.min(c.transaction.nonce()),
-                )
+                (total_cost + max_transaction_cost(&c), min_nonce.min(c.nonce()))
             });
 
         if state.balance < max_total_cost || state.transaction_count > min_nonce {
