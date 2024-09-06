@@ -94,23 +94,33 @@ contract BoltManager is IBoltManager, Ownable {
         return getEpochAtTs(Time.timestamp());
     }
 
+    /// @notice Add a collateral address to the whitelist.
+    /// @param collateral The collateral address to add to the whitelist.
     function addWhitelistedCollateral(address collateral) public onlyOwner {
         whitelistedCollaterals.add(collateral);
     }
 
+    /// @notice Remove a collateral address from the whitelist.
+    /// @param collateral The collateral address to remove from the whitelist.
     function removeWhitelistedCollateral(address collateral) public onlyOwner {
         whitelistedCollaterals.remove(collateral);
     }
 
+    /// @notice Get the list of collateral addresses that are whitelisted.
+    /// @return collaterals The list of collateral addresses that are whitelisted.
     function getWhitelistedCollaterals() public view returns (address[] memory collaterals) {
         return whitelistedCollaterals.values();
     }
 
+    /// @notice Check if a collateral address is whitelisted.
+    /// @param collateral The collateral address to check the whitelist status for.
+    /// @return True if the collateral address is whitelisted, false otherwise.
     function isCollateralWhitelisted(address collateral) public view returns (bool) {
         return whitelistedCollaterals.contains(collateral);
     }
 
     /// @notice Allow an operator to signal opt-in to Bolt Protocol.
+    /// @param operator The operator address to signal opt-in for.
     function registerSymbioticOperator(address operator) public {
         if (symbioticOperators.contains(operator)) {
             revert AlreadyRegistered();
@@ -149,6 +159,7 @@ contract BoltManager is IBoltManager, Ownable {
     }
 
     /// @notice Allow a vault to signal opt-in to Bolt Protocol.
+    /// @param vault The vault address to signal opt-in for.
     function registerSymbioticVault(address vault) public {
         if (symbioticVaults.contains(vault)) {
             revert AlreadyRegistered();
