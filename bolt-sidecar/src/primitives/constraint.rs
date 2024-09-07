@@ -32,7 +32,7 @@ pub type BatchedSignedConstraints = Vec<SignedConstraints>;
 
 /// A container for a list of constraints and the signature of the proposer sidecar.
 ///
-/// Reference: https://chainbound.github.io/bolt-docs/api/builder-api#ethv1builderconstraints
+/// Reference: https://chainbound.github.io/bolt-docs/api/builder#constraints
 #[derive(Serialize, Default, Debug, Clone, PartialEq)]
 pub struct SignedConstraints {
     /// The constraints that need to be signed.
@@ -43,7 +43,7 @@ pub struct SignedConstraints {
 
 /// A message that contains the constraints that need to be signed by the proposer sidecar.
 ///
-/// Reference: https://chainbound.github.io/bolt-docs/api/builder-api#ethv1builderconstraints
+/// Reference: https://chainbound.github.io/bolt-docs/api/builder#constraints
 #[derive(Serialize, Debug, Clone, PartialEq, Default)]
 pub struct ConstraintsMessage {
     /// The validator index of the proposer sidecar.
