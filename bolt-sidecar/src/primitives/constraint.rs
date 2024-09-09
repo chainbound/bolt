@@ -1,7 +1,7 @@
 use alloy::primitives::keccak256;
 use cb_common::pbs::{DenebSpec, EthSpec, Transaction};
 use secp256k1::Message;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tree_hash::{MerkleHasher, TreeHash};
 
 use crate::crypto::{bls::BLSSig, ecdsa::SignableECDSA, SignableBLS};
@@ -44,7 +44,7 @@ pub struct SignedConstraints {
 /// A message that contains the constraints that need to be signed by the proposer sidecar.
 ///
 /// Reference: https://chainbound.github.io/bolt-docs/api/builder#constraints
-#[derive(Serialize, Debug, Clone, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct ConstraintsMessage {
     /// The validator index of the proposer sidecar.
     pub validator_index: u64,
@@ -140,5 +140,28 @@ mod tests {
 
         // Additional checks can be added here, depending on your specific requirements
         println!("Computed tree hash root: {:?}", tree_root.encode_hex());
+    }
+
+    #[test]
+    fn test_serialize_deserialize_roundtrip() {
+        let mut rng = rand::thread_rng();
+
+        // Generate random values for the `ConstraintsMessage` fields
+        let validator_index = random_u64(&mut rng);
+        let slot = random_u64(&mut rng);
+        let top = false;
+        let constraints = random_constraints(2); // Generate 'n' random constraints
+
+        // Create a random `ConstraintsMessage`
+        let message = ConstraintsMessage { validator_index, slot, top, constraints };
+
+        // Serialize the `ConstraintsMessage` to JSON
+        let json = serde_json::to_string(&message).unwrap();
+
+        // Deserialize the JSON back to a `ConstraintsMessage`
+        let deserialized_message: ConstraintsMessage = serde_json::from_str(&json).unwrap();
+
+        // Verify that the deserialized message is equal to the original message
+        assert_eq!(message, deserialized_message);
     }
 }
