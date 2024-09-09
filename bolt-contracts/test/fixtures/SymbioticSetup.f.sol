@@ -19,7 +19,7 @@ import {Slasher} from "@symbiotic/contracts/slasher/Slasher.sol";
 import {VetoSlasher} from "@symbiotic/contracts/slasher/VetoSlasher.sol";
 import {VaultConfigurator} from "@symbiotic/contracts/VaultConfigurator.sol";
 
-import {SimpleCollateral} from "../mocks/SimpleCollateral.sol";
+import {SimpleCollateral} from "@symbiotic/../test/mocks/SimpleCollateral.sol";
 import {Token} from "../mocks/Token.sol";
 
 contract SymbioticSetupFixture is Test {
