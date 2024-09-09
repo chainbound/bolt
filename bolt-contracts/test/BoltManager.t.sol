@@ -270,21 +270,35 @@ contract BoltManagerTest is Test {
         assertEq(networkRestakeDelegator.totalOperatorNetworkShares(subnetwork), 100);
         assertEq(networkRestakeDelegator.operatorNetworkShares(subnetwork, operator), 100);
 
-        // assertEq(manager.getSymbioticTotalStake(0, address(collateral)), 0);
-        // assertEq(manager.getSymbioticTotalStake(1, address(collateral)), 1 ether);
+        vm.warp(block.timestamp + EPOCH_DURATION + 1);
+        assertEq(vault.currentEpoch(), 2);
 
-        // TODO: get correct active stake from manager
-        // stakeFromDelegator = networkRestakeDelegator.stake(subnetwork, operator);
-        // stakeFromManager = manager.getSymbioticOperatorStake(operator, address(collateral));
-        // assertEq(stakeFromDelegator, stakeFromManager);
-        // assertEq(stakeFromManager, 1 ether);
+        // it takes 2 epochs to activate the stake
+        assertEq(manager.getSymbioticTotalStake(0, address(collateral)), 0);
+        assertEq(manager.getSymbioticTotalStake(1, address(collateral)), 0);
+        assertEq(manager.getSymbioticTotalStake(2, address(collateral)), 1 ether);
+
+        stakeFromDelegator = networkRestakeDelegator.stake(subnetwork, operator);
+        stakeFromManager = manager.getSymbioticOperatorStake(operator, address(collateral));
+        assertEq(stakeFromDelegator, stakeFromManager);
+        assertEq(stakeFromManager, 1 ether);
     }
 
     function testGetProposerStatus() public {
         _symbioticOptInRoutine();
 
+        // we need to mint shares from the vault admin to activate stake
+        // for the operator in the subnetwork.
+        vm.prank(vaultAdmin);
+        networkRestakeDelegator.setOperatorNetworkShares(subnetwork, operator, 100);
+        assertEq(networkRestakeDelegator.totalOperatorNetworkShares(subnetwork), 100);
+        assertEq(networkRestakeDelegator.operatorNetworkShares(subnetwork, operator), 100);
+
         BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
         bytes32 pubkeyHash = _pubkeyHash(pubkey);
+
+        vm.warp(block.timestamp + EPOCH_DURATION * 2 + 1);
+        assertEq(vault.currentEpoch(), 2);
 
         BoltManager.ProposerStatus memory status = manager.getProposerStatus(pubkeyHash);
         assertEq(status.pubkeyHash, pubkeyHash);
@@ -293,10 +307,7 @@ contract BoltManagerTest is Test {
         assertEq(status.collaterals.length, 1);
         assertEq(status.amounts.length, 1);
         assertEq(status.collaterals[0], address(collateral));
-
-        // TODO: this should be 1 ether, but reading from delegator doesn't work
-        // see testReadOperatorStake above for details.
-        assertEq(status.amounts[0], 0);
+        assertEq(status.amounts[0], 1 ether);
     }
 
     function testProposersLookaheadStatus() public {
@@ -314,6 +325,9 @@ contract BoltManagerTest is Test {
             validators.registerValidatorUnsafe(pubkey, provider, operator);
         }
 
+        vm.warp(block.timestamp + EPOCH_DURATION * 2 + 1);
+        assertEq(vault.currentEpoch(), 2);
+
         BoltManager.ProposerStatus[] memory statuses = manager.getProposersStatus(pubkeyHashes);
         assertEq(statuses.length, 10);
     }
@@ -327,7 +341,7 @@ contract BoltManagerTest is Test {
         manager.getProposerStatus(pubkeyHash);
     }
 
-    function testGetWhitelistedCollaterals() public {
+    function testGetWhitelistedCollaterals() public view {
         address[] memory collaterals = manager.getWhitelistedCollaterals();
         assertEq(collaterals.length, 1);
         assertEq(collaterals[0], address(collateral));
