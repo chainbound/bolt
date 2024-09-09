@@ -13,26 +13,26 @@ ignored_warnings_from = ["lib/openzeppelin-contracts/contracts", "lib/core"]
 
 remappings = [
   # Bolt remappings
-  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  # "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
   "@relic/=lib/relic-sdk/packages/contracts",
   "@symbiotic/=lib/core/src/",
   "@eigenlayer/=lib/eigenlayer-contracts/",
 
   # Symbiotic remappings contexts
-  "lib/core/:forge-std=lib/core/lib/forge-std/src/",
-  "lib/core/:@openzeppelin/contracts=lib/core/lib/openzeppelin-contracts/contracts/",
-  "lib/core/:@openzeppelin/contracts-upgradeable=lib/core/lib/openzeppelin-contracts-upgradeable/contracts/",
+  "lib/core/:forge-std/=lib/core/lib/forge-std/src/",
+  "lib/core/:@openzeppelin/contracts/=lib/core/lib/openzeppelin-contracts/contracts/",
+  "lib/core/:@openzeppelin/contracts-upgradeable/=lib/core/lib/openzeppelin-contracts-upgradeable/contracts/",
 
   # Eigenlayer remappings contexts
-  "lib/eigenlayer-contracts/:@openzeppelin-upgrades=lib/eigenlayer-contracts/lib/openzeppelin-contracts-upgradeable/",
-  "lib/eigenlayer-contracts/:@openzeppelin=lib/eigenlayer-contracts/lib/openzeppelin-contracts/",
-  "lib/eigenlayer-contracts/:@openzeppelin-v4.9.0=lib/eigenlayer-contracts/lib/openzeppelin-contracts-v4.9.0/",
-  "lib/eigenlayer-contracts/:@openzeppelin-upgrades-v4.9.0=lib/eigenlayer-contracts/lib/openzeppelin-contracts-upgradeable-v4.9.0/",
-  "lib/eigenlayer-contracts/:ds-test=lib/eigenlayer-contracts/lib/ds-test/src/",
-  "lib/eigenlayer-contracts/:forge-std=lib/eigenlayer-contracts/lib/forge-std/src/",
+  "lib/eigenlayer-contracts/:@openzeppelin-upgrades/=lib/eigenlayer-contracts/lib/openzeppelin-contracts-upgradeable/",
+  "lib/eigenlayer-contracts/:@openzeppelin/=lib/eigenlayer-contracts/lib/openzeppelin-contracts/",
+  "lib/eigenlayer-contracts/:@openzeppelin-v4.9.0/=lib/eigenlayer-contracts/lib/openzeppelin-contracts-v4.9.0/",
+  "lib/eigenlayer-contracts/:@openzeppelin-upgrades-v4.9.0/=lib/eigenlayer-contracts/lib/openzeppelin-contracts-upgradeable-v4.9.0/",
+  "lib/eigenlayer-contracts/:ds-test/=lib/eigenlayer-contracts/lib/ds-test/src/",
+  "lib/eigenlayer-contracts/:forge-std/=lib/eigenlayer-contracts/lib/forge-std/src/",
 
   # OpenZeppelin remappings contexts
-  "lib/openzeppelin-contracts/:@openzeppelin/contracts=lib/openzeppelin-contracts/contracts/",
+  # "lib/openzeppelin-contracts/:@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
 ]
 
 [rpc_endpoints]
