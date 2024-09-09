@@ -26,7 +26,7 @@ import {BoltManager} from "../src/contracts/BoltManager.sol";
 import {BLS12381} from "../src/lib/bls/BLS12381.sol";
 
 import {SymbioticSetupFixture} from "./fixtures/SymbioticSetup.f.sol";
-import {SimpleCollateral} from "./mocks/SimpleCollateral.sol";
+import {SimpleCollateral} from "@symbiotic/../test/mocks/SimpleCollateral.sol";
 
 contract BoltManagerTest is Test {
     using BLS12381 for BLS12381.G1Point;
@@ -154,7 +154,7 @@ contract BoltManagerTest is Test {
 
         validators = new BoltValidators(admin);
         manager = new BoltManager(
-            address(validators), networkAdmin, operatorRegistry, operatorNetworkOptInService, vaultFactory, address(0), address(0)
+            address(validators), networkAdmin, address(operatorRegistry), address(operatorNetworkOptInService), address(vaultFactory), address(0), address(0), address(0)
         );
 
         // --- Whitelist collateral in BoltManager ---
