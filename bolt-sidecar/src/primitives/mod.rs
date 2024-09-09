@@ -1,7 +1,10 @@
 // TODO: add docs
 #![allow(missing_docs)]
 
-use std::sync::{atomic::AtomicU64, Arc};
+use std::{
+    borrow::Cow,
+    sync::{atomic::AtomicU64, Arc},
+};
 
 use alloy::primitives::{Address, U256};
 use ethereum_consensus::{
@@ -376,8 +379,8 @@ impl FullTransaction {
     }
 
     /// Returns the sender of the transaction, if recovered.
-    pub fn sender(&self) -> Address {
-        self.sender.expect("Recovered sender")
+    pub fn sender(&self) -> Option<&Address> {
+        self.sender.as_ref()
     }
 }
 
@@ -397,8 +400,8 @@ fn deserialize_txs<'de, D>(deserializer: D) -> Result<Vec<FullTransaction>, D::E
 where
     D: serde::Deserializer<'de>,
 {
-    let hex_strings = <Vec<String> as de::Deserialize>::deserialize(deserializer)?;
-    let mut txs = Vec::new();
+    let hex_strings = <Vec<Cow<'_, str>> as de::Deserialize>::deserialize(deserializer)?;
+    let mut txs = Vec::with_capacity(hex_strings.len());
 
     for s in hex_strings {
         let data = hex::decode(s.trim_start_matches("0x")).map_err(de::Error::custom)?;

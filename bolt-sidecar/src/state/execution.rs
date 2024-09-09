@@ -312,7 +312,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         let mut bundle_nonce_diff_map = HashMap::new();
         let mut bundle_balance_diff_map = HashMap::new();
         for tx in req.txs.iter() {
-            let sender = tx.sender();
+            let sender = tx.sender().expect("Recovered sender");
 
             // From previous preconfirmations requests retrieve
             // - the nonce difference from the account state.
@@ -326,7 +326,7 @@ impl<C: StateFetcher> ExecutionState<C> {
                     (0, U256::ZERO, 0),
                     |(nonce_diff_acc, balance_diff_acc, highest_slot), (slot, block_template)| {
                         let (nonce_diff, balance_diff, slot) = block_template
-                            .get_diff(&sender)
+                            .get_diff(sender)
                             .map(|(nonce, balance)| (nonce, balance, *slot))
                             .unwrap_or((0, U256::ZERO, 0));
 
@@ -345,11 +345,11 @@ impl<C: StateFetcher> ExecutionState<C> {
 
             trace!(?signer, nonce_diff, %balance_diff, "Applying diffs to account state");
 
-            let account_state = match self.account_state(&sender).copied() {
+            let account_state = match self.account_state(sender).copied() {
                 Some(account) => account,
                 None => {
                     // Fetch the account state from the client if it does not exist
-                    let account = match self.client.get_account_state(&sender, None).await {
+                    let account = match self.client.get_account_state(sender, None).await {
                         Ok(account) => account,
                         Err(err) => {
                             return Err(ValidationError::Internal(format!(
@@ -359,7 +359,7 @@ impl<C: StateFetcher> ExecutionState<C> {
                         }
                     };
 
-                    self.account_states.insert(sender, account);
+                    self.account_states.insert(*sender, account);
                     account
                 }
             };
@@ -724,7 +724,7 @@ mod tests {
         assert!(state.validate_request(&mut request).await.is_ok());
 
         let message = ConstraintsMessage::build(0, request.as_inclusion_request().unwrap().clone());
-        let signature = signer.sign(&message.tree_hash_root()).await?;
+        let signature = signer.sign(&message.digest()).await?;
         let signed_constraints = SignedConstraints { message, signature };
         state.add_constraint(10, signed_constraints);
 
@@ -839,7 +839,7 @@ mod tests {
 
         let bls_signer = Signer::random();
         let message = ConstraintsMessage::build(0, inclusion_request);
-        let signature = bls_signer.sign(&message.tree_hash_root()).await.unwrap();
+        let signature = bls_signer.sign(&message.digest()).await.unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
         state.add_constraint(target_slot, signed_constraints);
@@ -887,7 +887,7 @@ mod tests {
 
         let bls_signer = Signer::random();
         let message = ConstraintsMessage::build(0, inclusion_request);
-        let signature = bls_signer.sign(&message.tree_hash_root()).await.unwrap();
+        let signature = bls_signer.sign(&message.digest()).await.unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
         state.add_constraint(target_slot, signed_constraints);
@@ -933,7 +933,7 @@ mod tests {
 
         let bls_signer = Signer::random();
         let message = ConstraintsMessage::build(0, inclusion_request);
-        let signature = bls_signer.sign(&message.tree_hash_root()).await.unwrap();
+        let signature = bls_signer.sign(&message.digest()).await.unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
         state.add_constraint(target_slot, signed_constraints);

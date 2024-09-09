@@ -1,9 +1,6 @@
 //! Package `template` contains the functionality for building local block templates that can
 //! be used as a fallback. It's also used to keep any intermediary state that is needed to simulate
 //! new commitment requests.
-
-// Should this be a trait?
-
 use std::collections::HashMap;
 
 use alloy::primitives::{Address, U256};
@@ -119,10 +116,10 @@ impl BlockTemplate {
     /// Adds a list of constraints to the block template and updates the state diff.
     pub fn add_constraints(&mut self, constraints: SignedConstraints) {
         for constraint in constraints.message.constraints.iter() {
-            let max_cost = max_transaction_cost(&constraint);
+            let max_cost = max_transaction_cost(constraint);
             self.state_diff
                 .diffs
-                .entry(constraint.sender())
+                .entry(*constraint.sender().expect("recovered sender"))
                 .and_modify(|(nonce, balance)| {
                     *nonce += 1;
                     *balance += max_cost;
@@ -138,10 +135,13 @@ impl BlockTemplate {
         let constraints = self.signed_constraints_list.remove(index);
 
         for constraint in constraints.message.constraints.iter() {
-            self.state_diff.diffs.entry(constraint.sender()).and_modify(|(nonce, balance)| {
-                *nonce = nonce.saturating_sub(1);
-                *balance -= max_transaction_cost(&constraint);
-            });
+            self.state_diff
+                .diffs
+                .entry(*constraint.sender().expect("recovered sender"))
+                .and_modify(|(nonce, balance)| {
+                    *nonce = nonce.saturating_sub(1);
+                    *balance -= max_transaction_cost(constraint);
+                });
         }
     }
 
@@ -156,8 +156,15 @@ impl BlockTemplate {
             .iter()
             .enumerate()
             .map(|(idx, c)| (idx, &c.message.constraints))
-            .filter(|(_idx, c)| c.iter().any(|c| c.sender() == address))
-            .map(|(idx, c)| (idx, c.iter().filter(|c| c.sender() == address).collect()))
+            .filter(|(_idx, c)| c.iter().any(|c| c.sender().expect("recovered sender") == &address))
+            .map(|(idx, c)| {
+                (
+                    idx,
+                    c.iter()
+                        .filter(|c| c.sender().expect("recovered sender") == &address)
+                        .collect(),
+                )
+            })
             .collect();
 
         // For every preconfirmation, gather the max total balance cost,
@@ -166,7 +173,7 @@ impl BlockTemplate {
             .iter()
             .flat_map(|c| c.1.clone())
             .fold((U256::ZERO, u64::MAX), |(total_cost, min_nonce), c| {
-                (total_cost + max_transaction_cost(&c), min_nonce.min(c.nonce()))
+                (total_cost + max_transaction_cost(c), min_nonce.min(c.nonce()))
             });
 
         if state.balance < max_total_cost || state.transaction_count > min_nonce {

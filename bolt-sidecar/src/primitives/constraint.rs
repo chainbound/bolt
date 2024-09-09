@@ -1,8 +1,9 @@
-use alloy::primitives::keccak256;
-use cb_common::pbs::{DenebSpec, EthSpec, Transaction};
+use alloy::{
+    primitives::keccak256,
+    signers::k256::sha2::{Digest, Sha256},
+};
 use secp256k1::Message;
 use serde::{Deserialize, Serialize};
-use tree_hash::{MerkleHasher, TreeHash};
 
 use crate::{
     crypto::{bls::BLSSig, ecdsa::SignableECDSA, SignableBLS},
@@ -68,43 +69,26 @@ impl ConstraintsMessage {
 
         Self { validator_index, slot: request.slot, top: false, constraints }
     }
-
-    /// Returns the total number of leaves in the tree.
-    fn total_leaves(&self) -> usize {
-        4 + self.constraints.len()
-    }
 }
 
 impl SignableBLS for ConstraintsMessage {
-    fn tree_hash_root(&self) -> [u8; 32] {
-        let mut hasher = MerkleHasher::with_leaves(self.total_leaves());
-
-        hasher
-            .write(&self.validator_index.to_le_bytes())
-            .expect("Should write validator index bytes");
-        hasher.write(&self.slot.to_le_bytes()).expect("Should write slot bytes");
-        hasher.write(&(self.top as u8).to_le_bytes()).expect("Should write top flag");
+    fn digest(&self) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update(self.validator_index.to_le_bytes());
+        hasher.update(self.slot.to_le_bytes());
+        hasher.update((self.top as u8).to_le_bytes());
 
         for constraint in &self.constraints {
-            hasher
-                .write(
-                    Transaction::<<DenebSpec as EthSpec>::MaxBytesPerTransaction>::from(
-                        constraint.envelope_encoded().to_vec(),
-                    )
-                    .tree_hash_root()
-                    .as_bytes(),
-                )
-                .expect("Should write transaction root");
+            hasher.update(constraint.hash());
         }
 
-        hasher.finish().unwrap().0
+        hasher.finalize().into()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use alloy::hex::ToHexExt;
     use rand::{rngs::ThreadRng, Rng};
 
     fn random_u64(rng: &mut ThreadRng) -> u64 {
@@ -124,7 +108,7 @@ mod tests {
     }
 
     #[test]
-    fn test_tree_hash_root() {
+    fn test_bls_digest() {
         let mut rng = rand::thread_rng();
 
         // Generate random values for the `ConstraintsMessage` fields
@@ -134,16 +118,16 @@ mod tests {
         let constraints = random_constraints(1); // Generate 'n' random constraints
 
         // Create a random `ConstraintsMessage`
-        let message = ConstraintsMessage { validator_index, slot, top, constraints };
+        let mut message = ConstraintsMessage { validator_index, slot, top, constraints };
+        message.validator_index = 0;
+        message.slot = 0;
+        message.top = false;
 
         // Compute tree hash root
-        let tree_root = message.tree_hash_root();
+        let digest = SignableBLS::digest(&message);
 
         // Verify that the tree hash root is a valid 32-byte array
-        assert_eq!(tree_root.len(), 32, "Tree hash root should be 32 bytes long");
-
-        // Additional checks can be added here, depending on your specific requirements
-        println!("Computed tree hash root: {:?}", tree_root.encode_hex());
+        assert_eq!(digest.len(), 32, "Digest should be 32 bytes long");
     }
 
     #[test]
