@@ -57,7 +57,9 @@ library BLS12381 {
      * @dev Assumes that the Y coordinate is always less than the field modulus
      * @param point The G1 point to negate
      */
-    function negate(G1Point memory point) internal pure returns (G1Point memory) {
+    function negate(
+        G1Point memory point
+    ) internal pure returns (G1Point memory) {
         uint256[2] memory fieldModulus = baseFieldModulus();
         uint256[2] memory yNeg;
 
@@ -128,7 +130,9 @@ library BLS12381 {
      * @dev Based on https://github.com/zcash/librustzcash/blob/6e0364cd42a2b3d2b958a54771ef51a8db79dd29/pairing/src/bls12_381/README.md#serialization
      * @param point The G1 point to compress
      */
-    function compress(G1Point memory point) internal pure returns (uint256[2] memory) {
+    function compress(
+        G1Point memory point
+    ) internal pure returns (uint256[2] memory) {
         uint256[2] memory r = point.x;
 
         // Set the first MSB
@@ -195,7 +199,9 @@ library BLS12381 {
     /**
      * @notice Maps an element of the FP2 field to a G2 point using the precompile at 0x13
      */
-    function mapToG2(FieldPoint2 memory fp2) internal view returns (G2Point memory) {
+    function mapToG2(
+        FieldPoint2 memory fp2
+    ) internal view returns (G2Point memory) {
         G2Point memory r;
 
         uint256[4] memory input = [fp2.u[0], fp2.u[1], fp2.u_I[0], fp2.u_I[1]];

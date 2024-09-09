@@ -99,12 +99,16 @@ contract BoltManager is IBoltManager, Ownable {
     // ========= VIEW FUNCTIONS =========
 
     /// @notice Get the start timestamp of an epoch.
-    function getEpochStartTs(uint48 epoch) public view returns (uint48 timestamp) {
+    function getEpochStartTs(
+        uint48 epoch
+    ) public view returns (uint48 timestamp) {
         return START_TIMESTAMP + epoch * EPOCH_DURATION;
     }
 
     /// @notice Get the epoch at a given timestamp.
-    function getEpochAtTs(uint48 timestamp) public view returns (uint48 epoch) {
+    function getEpochAtTs(
+        uint48 timestamp
+    ) public view returns (uint48 epoch) {
         return (timestamp - START_TIMESTAMP) / EPOCH_DURATION;
     }
 
@@ -122,7 +126,9 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Check if a collateral address is whitelisted.
     /// @param collateral The collateral address to check the whitelist status for.
     /// @return True if the collateral address is whitelisted, false otherwise.
-    function isCollateralWhitelisted(address collateral) public view returns (bool) {
+    function isCollateralWhitelisted(
+        address collateral
+    ) public view returns (bool) {
         return whitelistedCollaterals.contains(collateral);
     }
 
@@ -130,13 +136,17 @@ contract BoltManager is IBoltManager, Ownable {
 
     /// @notice Add a collateral address to the whitelist.
     /// @param collateral The collateral address to add to the whitelist.
-    function addWhitelistedCollateral(address collateral) public onlyOwner {
+    function addWhitelistedCollateral(
+        address collateral
+    ) public onlyOwner {
         whitelistedCollaterals.add(collateral);
     }
 
     /// @notice Remove a collateral address from the whitelist.
     /// @param collateral The collateral address to remove from the whitelist.
-    function removeWhitelistedCollateral(address collateral) public onlyOwner {
+    function removeWhitelistedCollateral(
+        address collateral
+    ) public onlyOwner {
         whitelistedCollaterals.remove(collateral);
     }
 
@@ -144,7 +154,9 @@ contract BoltManager is IBoltManager, Ownable {
 
     /// @notice Allow an operator to signal opt-in to Bolt Protocol.
     /// @param operator The operator address to signal opt-in for.
-    function registerSymbioticOperator(address operator) public {
+    function registerSymbioticOperator(
+        address operator
+    ) public {
         if (symbioticOperators.contains(operator)) {
             revert AlreadyRegistered();
         }
@@ -183,7 +195,9 @@ contract BoltManager is IBoltManager, Ownable {
 
     /// @notice Allow a vault to signal opt-in to Bolt Protocol.
     /// @param vault The vault address to signal opt-in for.
-    function registerSymbioticVault(address vault) public {
+    function registerSymbioticVault(
+        address vault
+    ) public {
         if (symbioticVaults.contains(vault)) {
             revert AlreadyRegistered();
         }
@@ -223,7 +237,9 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Check if a vault is currently enabled to work in Bolt Protocol.
     /// @param vault The vault address to check the enabled status for.
     /// @return True if the vault is enabled, false otherwise.
-    function isSymbioticVaultEnabled(address vault) public view returns (bool) {
+    function isSymbioticVaultEnabled(
+        address vault
+    ) public view returns (bool) {
         (uint48 enabledTime, uint48 disabledTime) = symbioticVaults.getTimes(vault);
         return enabledTime != 0 && disabledTime == 0;
     }
@@ -231,7 +247,9 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Check if an operator is currently enabled to work in Bolt Protocol.
     /// @param operator The operator address to check the enabled status for.
     /// @return True if the operator is enabled, false otherwise.
-    function isSymbioticOperatorEnabled(address operator) public view returns (bool) {
+    function isSymbioticOperatorEnabled(
+        address operator
+    ) public view returns (bool) {
         (uint48 enabledTime, uint48 disabledTime) = symbioticOperators.getTimes(operator);
         return enabledTime != 0 && disabledTime == 0;
     }
@@ -239,7 +257,9 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Get the status of multiple proposers, given their pubkey hashes.
     /// @param pubkeyHashes The pubkey hashes of the proposers to get the status for.
     /// @return statuses The statuses of the proposers, including their operator and active stake.
-    function getProposersStatus(bytes32[] memory pubkeyHashes) public view returns (ProposerStatus[] memory statuses) {
+    function getProposersStatus(
+        bytes32[] memory pubkeyHashes
+    ) public view returns (ProposerStatus[] memory statuses) {
         statuses = new ProposerStatus[](pubkeyHashes.length);
         for (uint256 i = 0; i < pubkeyHashes.length; ++i) {
             statuses[i] = getProposerStatus(pubkeyHashes[i]);
@@ -249,7 +269,9 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Get the status of a proposer, given their pubkey hash.
     /// @param pubkeyHash The pubkey hash of the proposer to get the status for.
     /// @return status The status of the proposer, including their operator and active stake.
-    function getProposerStatus(bytes32 pubkeyHash) public view returns (ProposerStatus memory status) {
+    function getProposerStatus(
+        bytes32 pubkeyHash
+    ) public view returns (ProposerStatus memory status) {
         if (pubkeyHash == bytes32(0)) {
             revert InvalidQuery();
         }
@@ -402,11 +424,16 @@ contract BoltManager is IBoltManager, Ownable {
             }
 
             uint256 operatorStake = getSymbioticOperatorStakeAt(operator, collateral, epochStartTs);
+
+            if (amount > operatorStake) {
+                revert SlashAmountTooHigh();
+            }
+
             uint256 vaultStake = IBaseDelegator(IVault(vault).delegator()).stakeAt(
                 BOLT_SYMBIOTIC_NETWORK.subnetwork(0), operator, epochStartTs, new bytes(0)
             );
 
-            // Slash the vault pro-rata
+            // Slash the vault pro-rata.
             _slashSymbioticVault(epochStartTs, vault, operator, amount * vaultStake / operatorStake);
         }
     }
