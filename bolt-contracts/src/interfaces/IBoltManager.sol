@@ -20,6 +20,7 @@ interface IBoltManager {
     error NotOperator();
     error NotVault();
     error CollateralNotWhitelisted();
+    error UnknownSlasherType();
 
     function getEpochStartTs(uint48 epoch) external view returns (uint48);
 
