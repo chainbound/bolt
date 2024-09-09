@@ -131,12 +131,12 @@ contract EigenLayerDeployer is Operators {
 
     //strategy indexes for undelegation (see commitUndelegation function)
     uint256[] public strategyIndexes;
-    address[2] public stakers;
     address sample_registrant = cheats.addr(436364636);
 
     address[] public slashingContracts;
 
     uint256 wethInitialSupply = 10e50;
+    address staker;
     uint256 public constant eigenTotalSupply = 1000e18;
     uint256 nonce = 69;
     uint256 public gasLimit = 750000;
@@ -183,6 +183,10 @@ contract EigenLayerDeployer is Operators {
             bytes("Initializable: contract is already initialized")
         );
         _;
+    }
+
+    constructor(address _staker) {
+        staker = _staker;
     }
 
     //performs basic deployment before each test
@@ -357,7 +361,7 @@ contract EigenLayerDeployer is Operators {
             "weth",
             "WETH",
             wethInitialSupply,
-            address(this)
+            staker
         );
 
         // deploy StrategyBase contract implementation, then create upgradeable proxy that points to implementation and initialize it
@@ -380,7 +384,7 @@ contract EigenLayerDeployer is Operators {
             "eigen",
             "EIGEN",
             wethInitialSupply,
-            address(this)
+            staker
         );
 
         // deploy upgradeable proxy that points to StrategyBase implementation and initialize it
@@ -397,8 +401,6 @@ contract EigenLayerDeployer is Operators {
                 )
             )
         );
-
-        stakers = [acct_0, acct_1];
     }
 
     function _setAddresses(string memory config) internal {

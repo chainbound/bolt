@@ -13,18 +13,22 @@ import {EigenLayerDeployer} from "../test/fixtures/EigenLayerDeplyer.f.sol";
 contract BoltManagerEigenLayerTest is Test {
     BoltValidators public validators;
     BoltManager public manager;
+    EigenLayerDeployer public eigenLayerDeployer;
+
+    address public staker = makeAddr("staker");
 
     address admin = makeAddr("admin");
 
     function setUp() public {
         // Deploy EigenLayer contracts
-        EigenLayerDeployer eigenLayerDeployer = new EigenLayerDeployer();
+        eigenLayerDeployer = new EigenLayerDeployer(staker);
+        eigenLayerDeployer.setUp();
 
         // Deploy Bolt contracts
         validators = new BoltValidators(admin);
         manager = new BoltManager(
             address(validators),
-            networkAdmin,
+            address(0),
             address(0),
             address(0),
             address(0),
@@ -32,7 +36,7 @@ contract BoltManagerEigenLayerTest is Test {
             address(eigenLayerDeployer.avsDirectory()),
             address(eigenLayerDeployer.delegationManager())
         );
-
-        console.logAddress(address(eigenLayerDeployer.strategyManager()));
     }
+
+    function test_just_deployed() public {}
 }
