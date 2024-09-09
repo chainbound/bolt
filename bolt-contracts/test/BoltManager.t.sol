@@ -18,6 +18,7 @@ import {IVetoSlasher} from "@symbiotic/interfaces/slasher/IVetoSlasher.sol";
 import {IDelegatorFactory} from "@symbiotic/interfaces/IDelegatorFactory.sol";
 import {IMigratablesFactory} from "@symbiotic/interfaces/common/IMigratablesFactory.sol";
 import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
+import {SimpleCollateral} from "@symbiotic/../test/mocks/SimpleCollateral.sol";
 
 import {IBoltManager} from "../src/interfaces/IBoltManager.sol";
 import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
@@ -26,7 +27,6 @@ import {BoltManager} from "../src/contracts/BoltManager.sol";
 import {BLS12381} from "../src/lib/bls/BLS12381.sol";
 
 import {SymbioticSetupFixture} from "./fixtures/SymbioticSetup.f.sol";
-import {SimpleCollateral} from "./mocks/SimpleCollateral.sol";
 
 contract BoltManagerTest is Test {
     using BLS12381 for BLS12381.G1Point;
