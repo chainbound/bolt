@@ -18,7 +18,7 @@ use ethereum_consensus::{
     Fork,
 };
 use reth_primitives::{BlobTransactionSidecar, Bytes, PooledTransactionsElement, TxKind, TxType};
-use serde::{de, Serialize};
+use serde::{de, ser::SerializeSeq, Serialize};
 use tokio::sync::{mpsc, oneshot};
 
 pub use ethereum_consensus::crypto::{PublicKey as BlsPublicKey, Signature as BlsSignature};
@@ -381,22 +381,34 @@ impl FullTransaction {
     }
 }
 
-impl serde::Serialize for FullTransaction {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut data = Vec::new();
-        self.tx.encode_enveloped(&mut data);
-        serializer.serialize_str(&format!("0x{}", hex::encode(&data)))
+fn serialize_txs<S: serde::Serializer>(
+    txs: &[FullTransaction],
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    let mut seq = serializer.serialize_seq(Some(txs.len()))?;
+    for tx in txs {
+        let encoded = tx.tx.envelope_encoded();
+        seq.serialize_element(&format!("0x{}", hex::encode(encoded)))?;
     }
+    seq.end()
 }
 
-impl<'de> serde::Deserialize<'de> for FullTransaction {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let s = String::deserialize(deserializer)?;
+fn deserialize_txs<'de, D>(deserializer: D) -> Result<Vec<FullTransaction>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let hex_strings = <Vec<String> as de::Deserialize>::deserialize(deserializer)?;
+    let mut txs = Vec::new();
+
+    for s in hex_strings {
         let data = hex::decode(s.trim_start_matches("0x")).map_err(de::Error::custom)?;
-        PooledTransactionsElement::decode_enveloped(&mut data.as_slice())
+        let tx = PooledTransactionsElement::decode_enveloped(&mut data.as_slice())
             .map_err(de::Error::custom)
-            .map(|tx| FullTransaction { tx, sender: None })
+            .map(|tx| FullTransaction { tx, sender: None })?;
+        txs.push(tx);
     }
+
+    Ok(txs)
 }
 
 #[derive(Debug, thiserror::Error)]

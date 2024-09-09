@@ -4,7 +4,10 @@ use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 use tree_hash::{MerkleHasher, TreeHash};
 
-use crate::crypto::{bls::BLSSig, ecdsa::SignableECDSA, SignableBLS};
+use crate::{
+    crypto::{bls::BLSSig, ecdsa::SignableECDSA, SignableBLS},
+    primitives::{deserialize_txs, serialize_txs},
+};
 
 use super::{FullTransaction, InclusionRequest};
 
@@ -54,6 +57,7 @@ pub struct ConstraintsMessage {
     /// NOTE: Per slot, only 1 top-of-block bundle is valid.
     pub top: bool,
     /// The constraints that need to be signed.
+    #[serde(deserialize_with = "deserialize_txs", serialize_with = "serialize_txs")]
     pub constraints: Vec<FullTransaction>,
 }
 
