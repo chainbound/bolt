@@ -25,8 +25,8 @@ use telemetry::TelemetryOpts;
 /// Default port for the JSON-RPC server exposed by the sidecar.
 pub const DEFAULT_RPC_PORT: u16 = 8000;
 
-/// Default port for the MEV-Boost proxy server.
-pub const DEFAULT_MEV_BOOST_PROXY_PORT: u16 = 18551;
+/// Default port for the Constraints proxy server.
+pub const DEFAULT_CONSTRAINTS_PROXY_PORT: u16 = 18551;
 
 /// Command-line options for the Bolt sidecar
 #[derive(Parser, Debug)]
@@ -37,7 +37,7 @@ pub struct Opts {
     /// URL for the beacon client
     #[clap(long, env = "BOLT_SIDECAR_BEACON_API_URL")]
     pub(super) beacon_api_url: String,
-    /// URL for the MEV-Boost sidecar client to use
+    /// URL for the Constraint sidecar client to use
     #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_URL")]
     pub(super) constraints_url: String,
     /// Execution client API URL
@@ -46,7 +46,7 @@ pub struct Opts {
     /// Execution client Engine API URL
     #[clap(long, env = "BOLT_SIDECAR_ENGINE_API_URL")]
     pub(super) engine_api_url: String,
-    /// MEV-Boost proxy server port to use
+    /// Constraint proxy server port to use
     #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT")]
     pub(super) constraints_proxy_port: u16,
     /// Max number of commitments to accept per block
@@ -132,7 +132,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             rpc_port: DEFAULT_RPC_PORT,
-            constraints_proxy_port: DEFAULT_MEV_BOOST_PROXY_PORT,
+            constraints_proxy_port: DEFAULT_CONSTRAINTS_PROXY_PORT,
             commit_boost_address: None,
             commit_boost_jwt_hex: None,
             constraints_url: "http://localhost:3030".parse().expect("Valid URL"),

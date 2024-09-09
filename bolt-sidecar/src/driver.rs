@@ -260,7 +260,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         }
     }
 
-    /// Handle a commitment deadline event, submitting constraints to the MEV-Boost service
+    /// Handle a commitment deadline event, submitting constraints to the Constraints client service
     /// and starting to build a local payload for the given target slot.
     async fn handle_commitment_deadline(&mut self, slot: u64) {
         debug!(slot, "Commitment deadline reached, building local block");
@@ -281,11 +281,11 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
             let max_retries = 5;
             let mut i = 0;
             while let Err(e) = constraints_client.submit_constraints(&constraints).await {
-                error!(err = ?e, "Error submitting constraints to mev-boost, retrying...");
+                error!(err = ?e, "Error submitting constraints to constraints client, retrying...");
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 i += 1;
                 if i >= max_retries {
-                    error!("Max retries reached while submitting to MEV-Boost");
+                    error!("Max retries reached while submitting to Constraints client");
                     break;
                 }
             }

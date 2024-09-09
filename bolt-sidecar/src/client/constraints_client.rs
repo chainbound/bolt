@@ -1,5 +1,5 @@
-//! Module for interacting with the MEV-Boost API via its Builder API interface.
-//! The Bolt sidecar's main purpose is to sit between the beacon node and MEV-Boost,
+//! Module for interacting with the Constraints client API via its Builder API interface.
+//! The Bolt sidecar's main purpose is to sit between the beacon node and Constraints client,
 //! so most requests are simply proxied to its API.
 
 use axum::http::StatusCode;
@@ -25,7 +25,7 @@ use crate::{
     },
 };
 
-/// A client for interacting with the MEV-Boost API.
+/// A client for interacting with the Constraints client API.
 #[derive(Debug, Clone)]
 pub struct ConstraintsClient {
     url: Url,

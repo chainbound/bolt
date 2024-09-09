@@ -11,7 +11,7 @@ The sidecar is responsible for:
 3. Implementing pricing strategies
 4. Building a block template & simulation
 5. Communicating constraints to the downstream PBS pipeline
-6. Verifying any incoming builder bids from mev-boost
+6. Verifying any incoming builder bids from constraints client
 7. Dealing with PBS failures by falling back to the local template
 
 ### Local Block Template
@@ -38,4 +38,4 @@ in case a fallback block is required.
 
 ## Running
 
-- We require Anvil to be installed in the $PATH for running tests
+-   We require Anvil to be installed in the $PATH for running tests
