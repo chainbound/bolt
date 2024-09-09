@@ -21,26 +21,34 @@ library BeaconChainUtils {
     /// @notice Get the slot number from a given timestamp
     /// @param _timestamp The timestamp
     /// @return The slot number
-    function _getSlotFromTimestamp(uint256 _timestamp) internal pure returns (uint256) {
+    function _getSlotFromTimestamp(
+        uint256 _timestamp
+    ) internal pure returns (uint256) {
         return (_timestamp - ETH2_GENESIS_TIMESTAMP) / SLOT_TIME;
     }
 
     /// @notice Get the timestamp from a given slot
     /// @param _slot The slot number
     /// @return The timestamp
-    function _getTimestampFromSlot(uint256 _slot) internal pure returns (uint256) {
+    function _getTimestampFromSlot(
+        uint256 _slot
+    ) internal pure returns (uint256) {
         return ETH2_GENESIS_TIMESTAMP + _slot * SLOT_TIME;
     }
 
     /// @notice Get the beacon block root for a given slot
     /// @param _slot The slot number
     /// @return The beacon block root
-    function _getBeaconBlockRootAtSlot(uint256 _slot) internal view returns (bytes32) {
+    function _getBeaconBlockRootAtSlot(
+        uint256 _slot
+    ) internal view returns (bytes32) {
         uint256 slotTimestamp = ETH2_GENESIS_TIMESTAMP + _slot * SLOT_TIME;
         return _getBeaconBlockRootAtTimestamp(slotTimestamp);
     }
 
-    function _getBeaconBlockRootAtTimestamp(uint256 _timestamp) internal view returns (bytes32) {
+    function _getBeaconBlockRootAtTimestamp(
+        uint256 _timestamp
+    ) internal view returns (bytes32) {
         (bool success, bytes memory data) = BEACON_ROOTS_CONTRACT.staticcall(abi.encode(_timestamp));
 
         if (!success || data.length == 0) {
@@ -66,7 +74,9 @@ library BeaconChainUtils {
     /// @notice Check if a timestamp is within the EIP-4788 window
     /// @param _timestamp The timestamp
     /// @return True if the timestamp is within the EIP-4788 window, false otherwise
-    function _isWithinEIP4788Window(uint256 _timestamp) internal view returns (bool) {
+    function _isWithinEIP4788Window(
+        uint256 _timestamp
+    ) internal view returns (bool) {
         return _getSlotFromTimestamp(_timestamp) <= _getCurrentSlot() + EIP4788_WINDOW;
     }
 }

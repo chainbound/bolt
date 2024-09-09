@@ -48,13 +48,17 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
 
     /// @notice Constructor
     /// @param _owner Address of the owner of the contract
-    constructor(address _owner) Ownable(_owner) {}
+    constructor(
+        address _owner
+    ) Ownable(_owner) {}
 
     // ========= ADMIN FUNCTIONS =========
 
     /// @notice Enable or disable the use of the BLS precompile
     /// @param allowUnsafeRegistration Whether to allow unsafe registration of validators
-    function setAllowUnsafeRegistration(bool allowUnsafeRegistration) public onlyOwner {
+    function setAllowUnsafeRegistration(
+        bool allowUnsafeRegistration
+    ) public onlyOwner {
         ALLOW_UNSAFE_REGISTRATION = allowUnsafeRegistration;
     }
 
@@ -74,14 +78,18 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     }
 
     /// @notice Get a validator by its BLS public key
-    function getValidatorByPubkey(BLS12381.G1Point calldata pubkey) public view returns (Validator memory) {
+    function getValidatorByPubkey(
+        BLS12381.G1Point calldata pubkey
+    ) public view returns (Validator memory) {
         return getValidatorByPubkeyHash(_pubkeyHash(pubkey));
     }
 
     /// @notice Get a validator by its BLS public key hash
     /// @param pubkeyHash BLS public key hash of the validator
     /// @return Validator memory Validator struct
-    function getValidatorByPubkeyHash(bytes32 pubkeyHash) public view returns (Validator memory) {
+    function getValidatorByPubkeyHash(
+        bytes32 pubkeyHash
+    ) public view returns (Validator memory) {
         Validator memory validator = VALIDATORS[pubkeyHash];
         if (!validator.exists) {
             revert ValidatorDoesNotExist();
@@ -92,7 +100,9 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     /// @notice Get a validator by its sequence number
     /// @param sequenceNumber Sequence number of the validator
     /// @return Validator memory Validator struct
-    function getValidatorBySequenceNumber(uint64 sequenceNumber) public view returns (Validator memory) {
+    function getValidatorBySequenceNumber(
+        uint64 sequenceNumber
+    ) public view returns (Validator memory) {
         bytes32 pubkeyHash = sequenceNumberToPubkeyHash[sequenceNumber];
         return VALIDATORS[pubkeyHash];
     }
@@ -218,7 +228,9 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     /// @notice Compute the hash of a BLS public key
     /// @param pubkey BLS public key
     /// @return Hash of the public key in compressed form
-    function _pubkeyHash(BLS12381.G1Point memory pubkey) internal pure returns (bytes32) {
+    function _pubkeyHash(
+        BLS12381.G1Point memory pubkey
+    ) internal pure returns (bytes32) {
         uint256[2] memory compressedPubKey = pubkey.compress();
         return keccak256(abi.encodePacked(compressedPubKey));
     }

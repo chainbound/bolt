@@ -42,7 +42,9 @@ contract BLSSignatureVerifier {
      * @param pubkeys The list of BLS public keys to aggregate
      * @return The aggregated BLS public key
      */
-    function _aggregatePubkeys(BLS12381.G1Point[] calldata pubkeys) internal pure returns (BLS12381.G1Point memory) {
+    function _aggregatePubkeys(
+        BLS12381.G1Point[] calldata pubkeys
+    ) internal pure returns (BLS12381.G1Point memory) {
         // TODO: implement + test.
 
         // Simply adding pubkeys will result in a rogue key vulnerability.

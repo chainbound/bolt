@@ -108,7 +108,9 @@ library SSZ {
 
     /// @notice Converts a value to a little-endian byte array
     /// @dev from https://github.com/succinctlabs/telepathy-contracts/blob/main/src/libraries/SimpleSerialize.sol
-    function _toLittleEndian(uint256 v) internal pure returns (bytes32) {
+    function _toLittleEndian(
+        uint256 v
+    ) internal pure returns (bytes32) {
         v = ((v & 0xFF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00) >> 8)
             | ((v & 0x00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF00FF) << 8);
         v = ((v & 0xFFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000FFFF0000) >> 16)
@@ -122,14 +124,18 @@ library SSZ {
     }
 
     /// @notice Converts a boolean to a little-endian byte array
-    function _toLittleEndian(bool v) internal pure returns (bytes32) {
+    function _toLittleEndian(
+        bool v
+    ) internal pure returns (bytes32) {
         return bytes32(v ? 1 << 248 : 0);
     }
 
     /// @notice Log base 2 of a number
     /// @dev From solady FixedPointMath
     /// @dev Equivalent to computing the index of the most significant bit (MSB) of `x`.
-    function _log2(uint256 x) internal pure returns (uint256 r) {
+    function _log2(
+        uint256 x
+    ) internal pure returns (uint256 r) {
         /// @solidity memory-safe-assembly
         assembly {
             if iszero(x) {

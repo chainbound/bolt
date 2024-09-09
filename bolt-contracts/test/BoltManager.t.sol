@@ -231,7 +231,9 @@ contract BoltManagerTest is Test {
     }
 
     /// @notice Compute the hash of a BLS public key
-    function _pubkeyHash(BLS12381.G1Point memory pubkey) internal pure returns (bytes32) {
+    function _pubkeyHash(
+        BLS12381.G1Point memory pubkey
+    ) internal pure returns (bytes32) {
         uint256[2] memory compressedPubKey = pubkey.compress();
         return keccak256(abi.encodePacked(compressedPubKey));
     }

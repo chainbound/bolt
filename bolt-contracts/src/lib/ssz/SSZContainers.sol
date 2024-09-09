@@ -28,7 +28,9 @@ library SSZContainers {
     }
 
     /// @notice Computes the hash tree root of a validator SSZ container
-    function _validatorHashTreeRoot(Validator memory validator) internal view returns (bytes32) {
+    function _validatorHashTreeRoot(
+        Validator memory validator
+    ) internal view returns (bytes32) {
         bytes32 pubkeyRoot;
         uint256 _sha256 = SSZ.SHA256_PRECOMPILE;
 
@@ -57,7 +59,9 @@ library SSZContainers {
     }
 
     /// @notice Computes the hash tree root of a beacon block header SSZ container
-    function _beaconHeaderHashTreeRoot(BeaconBlockHeader memory header) internal view returns (bytes32) {
+    function _beaconHeaderHashTreeRoot(
+        BeaconBlockHeader memory header
+    ) internal view returns (bytes32) {
         bytes32[] memory nodes = new bytes32[](8);
         nodes[0] = SSZ._toLittleEndian(header.slot);
         nodes[1] = SSZ._toLittleEndian(header.proposerIndex);
@@ -72,7 +76,9 @@ library SSZContainers {
     }
 
     /// @notice Computes the hash tree root of an RLP-encoded signed transaction (raw bytes)
-    function _transactionHashTreeRoot(bytes memory transaction) internal view returns (bytes32) {
+    function _transactionHashTreeRoot(
+        bytes memory transaction
+    ) internal view returns (bytes32) {
         uint256 chunkCount = (transaction.length + 31) / 32;
         bytes32[] memory nodes = new bytes32[](chunkCount);
 

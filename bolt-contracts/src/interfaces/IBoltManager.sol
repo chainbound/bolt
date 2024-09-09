@@ -21,40 +21,63 @@ interface IBoltManager {
     error NotVault();
     error CollateralNotWhitelisted();
     error UnknownSlasherType();
+    error SlashAmountTooHigh();
 
-    function getEpochStartTs(uint48 epoch) external view returns (uint48);
+    function getEpochStartTs(
+        uint48 epoch
+    ) external view returns (uint48);
 
-    function getEpochAtTs(uint48 timestamp) external view returns (uint48);
+    function getEpochAtTs(
+        uint48 timestamp
+    ) external view returns (uint48);
 
     function getCurrentEpoch() external view returns (uint48);
 
-    function addWhitelistedCollateral(address collateral) external;
+    function addWhitelistedCollateral(
+        address collateral
+    ) external;
 
-    function removeWhitelistedCollateral(address collateral) external;
+    function removeWhitelistedCollateral(
+        address collateral
+    ) external;
 
     function getWhitelistedCollaterals() external view returns (address[] memory);
 
-    function isCollateralWhitelisted(address collateral) external view returns (bool);
+    function isCollateralWhitelisted(
+        address collateral
+    ) external view returns (bool);
 
-    function registerSymbioticOperator(address operator) external;
+    function registerSymbioticOperator(
+        address operator
+    ) external;
 
     function pauseSymbioticOperator() external;
 
     function unpauseSymbioticOperator() external;
 
-    function registerSymbioticVault(address vault) external;
+    function registerSymbioticVault(
+        address vault
+    ) external;
 
     function pauseSymbioticVault() external;
 
     function unpauseSymbioticVault() external;
 
-    function isSymbioticVaultEnabled(address vault) external view returns (bool);
+    function isSymbioticVaultEnabled(
+        address vault
+    ) external view returns (bool);
 
-    function isSymbioticOperatorEnabled(address operator) external view returns (bool);
+    function isSymbioticOperatorEnabled(
+        address operator
+    ) external view returns (bool);
 
-    function getProposersStatus(bytes32[] memory pubkeyHashes) external view returns (ProposerStatus[] memory);
+    function getProposersStatus(
+        bytes32[] memory pubkeyHashes
+    ) external view returns (ProposerStatus[] memory);
 
-    function getProposerStatus(bytes32 pubkeyHash) external view returns (ProposerStatus memory);
+    function getProposerStatus(
+        bytes32 pubkeyHash
+    ) external view returns (ProposerStatus memory);
 
     function isSymbioticOperatorAuthorizedForValidator(
         address operator,
