@@ -26,6 +26,7 @@ import {DelegationManagerStorage} from "@eigenlayer/src/contracts/core/Delegatio
 
 contract BoltManager is IBoltManager, Ownable {
     using EnumerableSet for EnumerableSet.AddressSet;
+    using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
     using Subnetwork for address;
 
@@ -82,8 +83,8 @@ contract BoltManager is IBoltManager, Ownable {
         address _symbioticOperatorRegistry,
         address _symbioticOperatorNetOptIn,
         address _symbioticVaultRegistry,
-        AVSDirectoryStorage _eigenlayerAVSDirectory,
-        DelegationManagerStorage _eigenlayerDelegationManager
+        address _eigenlayerAVSDirectory,
+        address _eigenlayerDelegationManager
     ) Ownable(_owner) {
         validators = IBoltValidators(_validators);
         START_TIMESTAMP = Time.timestamp();
