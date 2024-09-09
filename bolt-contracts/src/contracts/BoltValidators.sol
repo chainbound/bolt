@@ -2,6 +2,7 @@
 pragma solidity 0.8.25;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+
 import {BLS12381} from "../lib/bls/BLS12381.sol";
 import {BLSSignatureVerifier} from "../lib/bls/BLSSignatureVerifier.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
@@ -10,6 +11,8 @@ import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 /// @notice This contract is responsible for registering validators and managing their configuration
 contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     using BLS12381 for BLS12381.G1Point;
+
+    // ========= STORAGE =========
 
     /// @notice Validators (aka Blockspace providers)
     /// @dev For our purpose, validators are blockspace providers for commitments.
@@ -34,20 +37,28 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     /// It is not related to the `validatorIndex` assigned by the Beacon Chain.
     uint64 internal nextValidatorSequenceNumber;
 
+    // ========= EVENTS =========
+
     /// @notice Emitted when a validator is registered
     /// @param pubkeyHash BLS public key hash of the validator
     /// @param validator Validator struct
     event ValidatorRegistered(bytes32 indexed pubkeyHash, Validator validator);
 
+    // ========= CONSTRUCTOR =========
+
     /// @notice Constructor
     /// @param _owner Address of the owner of the contract
     constructor(address _owner) Ownable(_owner) {}
+
+    // ========= ADMIN FUNCTIONS =========
 
     /// @notice Enable or disable the use of the BLS precompile
     /// @param allowUnsafeRegistration Whether to allow unsafe registration of validators
     function setAllowUnsafeRegistration(bool allowUnsafeRegistration) public onlyOwner {
         ALLOW_UNSAFE_REGISTRATION = allowUnsafeRegistration;
     }
+
+    // ========= VIEW FUNCTIONS =========
 
     /// @notice Get all validators
     /// @dev This function should be used with caution as it can return a large amount of data.
@@ -85,6 +96,8 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
         bytes32 pubkeyHash = sequenceNumberToPubkeyHash[sequenceNumber];
         return VALIDATORS[pubkeyHash];
     }
+
+    // ========= REGISTRATION LOGIC =========
 
     /// @notice Register a single Validator and authorize a Collateral Provider and Operator for it
     /// @dev This function allows anyone to register a single Validator. We do not perform any checks.
@@ -158,6 +171,8 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
             );
         }
     }
+
+    // ========= HELPERS =========
 
     /// @notice Internal helper to add a validator to the registry
     /// @param pubkey BLS public key of the validator
