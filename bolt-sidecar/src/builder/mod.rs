@@ -102,7 +102,7 @@ impl LocalBuilder {
         // the current head of the chain
         let block = self.fallback_builder.build_fallback_payload(slot, &transactions).await?;
 
-        // NOTE: we use a big value for the bid to ensure it gets chosen by mev-boost.
+        // NOTE: we use a big value for the bid to ensure it gets chosen by constraints client.
         // the client has no way to actually verify this, and we don't need to trust
         // an external relay as this block is self-built, so the fake bid value is fine.
         //

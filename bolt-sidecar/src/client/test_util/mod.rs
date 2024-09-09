@@ -15,7 +15,10 @@ use tokio::sync::watch;
 
 use crate::{
     api::{builder::GetHeaderParams, spec::BuilderApiError},
-    primitives::{BatchedSignedConstraints, GetPayloadResponse, PayloadAndBlobs, SignedBuilderBid},
+    primitives::{
+        BatchedSignedConstraints, GetPayloadResponse, PayloadAndBlobs, SignedBuilderBid,
+        SignedDelegation, SignedRevocation,
+    },
     BuilderApi, ConstraintsApi,
 };
 
@@ -28,11 +31,11 @@ pub fn make_get_payload_response() -> GetPayloadResponse {
     GetPayloadResponse::Deneb(PayloadAndBlobs { execution_payload, blobs_bundle })
 }
 
-pub struct MockMevBoost {
+pub struct MockConstraintsClient {
     pub response_rx: watch::Receiver<Value>,
 }
 
-impl MockMevBoost {
+impl MockConstraintsClient {
     pub fn new() -> (Self, watch::Sender<Value>) {
         let (response_tx, response_rx) = watch::channel(Value::Null);
         (Self { response_rx }, response_tx)
@@ -40,9 +43,11 @@ impl MockMevBoost {
 }
 
 #[async_trait::async_trait]
-impl BuilderApi for MockMevBoost {
+impl BuilderApi for MockConstraintsClient {
     async fn status(&self) -> Result<StatusCode, BuilderApiError> {
-        Err(BuilderApiError::Generic("MockMevBoost does not support getting status".to_string()))
+        Err(BuilderApiError::Generic(
+            "MockConstraintsClient does not support getting status".to_string(),
+        ))
     }
 
     async fn register_validators(
@@ -50,7 +55,7 @@ impl BuilderApi for MockMevBoost {
         _registrations: Vec<SignedValidatorRegistration>,
     ) -> Result<(), BuilderApiError> {
         Err(BuilderApiError::Generic(
-            "MockMevBoost does not support registering validators".to_string(),
+            "MockConstraintsClient does not support registering validators".to_string(),
         ))
     }
 
@@ -74,13 +79,13 @@ impl BuilderApi for MockMevBoost {
 }
 
 #[async_trait::async_trait]
-impl ConstraintsApi for MockMevBoost {
+impl ConstraintsApi for MockConstraintsClient {
     async fn submit_constraints(
         &self,
         _constraints: &BatchedSignedConstraints,
     ) -> Result<(), BuilderApiError> {
         Err(BuilderApiError::Generic(
-            "MockMevBoost does not support submitting constraints".to_string(),
+            "MockConstraintsClient does not support submitting constraints".to_string(),
         ))
     }
 
@@ -91,6 +96,16 @@ impl ConstraintsApi for MockMevBoost {
         let response = self.response_rx.borrow().clone();
         let bid = serde_json::from_value(response)?;
         Ok(bid)
+    }
+
+    async fn delegate(&self, signed_data: SignedDelegation) -> Result<(), BuilderApiError> {
+        Err(BuilderApiError::Generic(
+            "MockConstraintsClient does not support delegating".to_string(),
+        ))
+    }
+
+    async fn revoke(&self, signed_data: SignedRevocation) -> Result<(), BuilderApiError> {
+        Err(BuilderApiError::Generic("MockConstraintsClient does not support revoking".to_string()))
     }
 }
 
