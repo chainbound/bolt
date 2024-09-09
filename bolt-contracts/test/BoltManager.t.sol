@@ -299,6 +299,25 @@ contract BoltManagerTest is Test {
         assertEq(status.amounts[0], 0);
     }
 
+    function testProposersLookaheadStatus() public {
+        _symbioticOptInRoutine();
+
+        bytes32[] memory pubkeyHashes = new bytes32[](10);
+
+        // register 10 proposers with random pubkeys
+        for (uint256 i = 0; i < 10; i++) {
+            BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
+            pubkey.x[0] = pubkey.x[0] + i + 2;
+            pubkey.y[0] = pubkey.y[0] + i + 2;
+
+            pubkeyHashes[i] = _pubkeyHash(pubkey);
+            validators.registerValidatorUnsafe(pubkey, provider, operator);
+        }
+
+        BoltManager.ProposerStatus[] memory statuses = manager.getProposersStatus(pubkeyHashes);
+        assertEq(statuses.length, 10);
+    }
+
     function testGetNonExistentProposerStatus() public {
         _symbioticOptInRoutine();
 
