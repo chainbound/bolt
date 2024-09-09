@@ -385,6 +385,9 @@ contract BoltManager is IBoltManager, Ownable {
     /// @param collateral The collateral address to slash.
     /// @param amount The amount of collateral to slash.
     function slash(uint48 timestamp, address operator, address collateral, uint256 amount) public onlyOwner {
+        // TODO: remove onlyOwner modifier and gate the slashing logic behind the BoltChallenger
+        // fault proof mechanism to allow for permissionless slashing.
+
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(timestamp));
 
         for (uint256 i = 0; i < symbioticVaults.length(); ++i) {
