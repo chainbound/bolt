@@ -27,7 +27,9 @@ contract DeployBoltManager is Script {
             symbioticNetwork,
             symbioticOperatorRegistry,
             symbioticOperatorNetOptIn,
-            symbioticVaultRegistry
+            symbioticVaultRegistry,
+            address(0),
+            address(0)
         );
         console.log("BoltManager deployed at", address(manager));
 
