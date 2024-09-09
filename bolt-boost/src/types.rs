@@ -1,11 +1,12 @@
 use alloy::{
     consensus::TxEnvelope,
     eips::eip2718::{Decodable2718, Eip2718Error},
-    primitives::{Bytes, TxHash, B256},
+    primitives::{keccak256, Bytes, TxHash, B256},
     rpc::types::beacon::{BlsPublicKey, BlsSignature},
+    signers::k256::sha2::{Digest, Sha256},
 };
 use axum::http::HeaderMap;
-use commit_boost::prelude::tree_hash::{self, MerkleHasher, TreeHash, TreeHashType};
+use commit_boost::prelude::tree_hash;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use ssz_derive::{Decode, Encode};
@@ -14,7 +15,8 @@ use std::ops::Deref;
 use cb_common::{
     constants::COMMIT_BOOST_DOMAIN,
     pbs::{DenebSpec, EthSpec, SignedExecutionPayloadHeader, Transaction, VersionedResponse},
-    signature::verify_signed_message,
+    signature::{compute_domain, compute_signing_root},
+    signer::schemes::bls::verify_bls_signature,
     types::Chain,
 };
 
@@ -42,8 +44,10 @@ impl SignedConstraints {
     /// The `chain` and `COMMIT_BOOST_DOMAIN` are used to compute the signing root.
     #[allow(unused)]
     pub fn verify_signature(&self, chain: Chain, pubkey: &BlsPublicKey) -> bool {
-        verify_signed_message(chain, pubkey, &self.message, &self.signature, COMMIT_BOOST_DOMAIN)
-            .is_ok()
+        let domain = compute_domain(chain, COMMIT_BOOST_DOMAIN);
+        let signing_root = compute_signing_root(self.message.digest(), domain);
+
+        verify_bls_signature(pubkey, &signing_root, &self.signature).is_ok()
     }
 }
 
@@ -56,47 +60,18 @@ pub struct ConstraintsMessage {
 }
 
 impl ConstraintsMessage {
-    /// Returns the total number of leaves in the tree.
-    fn total_leaves(&self) -> usize {
-        4 + self.transactions.len()
-    }
-}
+    /// Returns the digest of this message.
+    pub fn digest(&self) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update(self.validator_index.to_le_bytes());
+        hasher.update(self.slot.to_le_bytes());
+        hasher.update((self.top as u8).to_le_bytes());
 
-impl TreeHash for ConstraintsMessage {
-    fn tree_hash_type() -> TreeHashType {
-        TreeHashType::Container
-    }
-
-    fn tree_hash_packed_encoding(&self) -> tree_hash::PackedEncoding {
-        unreachable!("ConstraintsMessage should never be packed.")
-    }
-
-    fn tree_hash_packing_factor() -> usize {
-        unreachable!("ConstraintsMessage should never be packed.")
-    }
-
-    fn tree_hash_root(&self) -> HashTreeRoot {
-        let mut hasher = MerkleHasher::with_leaves(self.total_leaves());
-
-        hasher
-            .write(&self.validator_index.to_le_bytes())
-            .expect("Should write validator index bytes");
-        hasher.write(&self.slot.to_le_bytes()).expect("Should write slot bytes");
-        hasher.write(&(self.top as u8).to_le_bytes()).expect("Should write top flag");
-
-        for transaction in &self.transactions {
-            hasher
-                .write(
-                    Transaction::<<DenebSpec as EthSpec>::MaxBytesPerTransaction>::from(
-                        transaction.to_vec(),
-                    )
-                    .tree_hash_root()
-                    .as_bytes(),
-                )
-                .expect("Should write transaction root");
+        for constraint in &self.transactions {
+            hasher.update(keccak256(constraint));
         }
 
-        hasher.finish().unwrap()
+        hasher.finalize().into()
     }
 }
 
