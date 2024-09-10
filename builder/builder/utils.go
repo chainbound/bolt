@@ -28,10 +28,10 @@ func DecodeConstraints(constraints *common.SignedConstraints) (types.HashToConst
 	decodedConstraints := make(types.HashToConstraintDecoded)
 	for _, tx := range constraints.Message.Constraints {
 		decoded := new(types.Transaction)
-		if err := decoded.UnmarshalBinary(tx.Tx); err != nil {
+		if err := decoded.UnmarshalBinary([]byte(*tx)); err != nil {
 			return nil, err
 		}
-		decodedConstraints[decoded.Hash()] = &types.ConstraintDecoded{Index: tx.Index, Tx: decoded}
+		decodedConstraints[decoded.Hash()] = decoded
 	}
 	return decodedConstraints, nil
 }
@@ -158,8 +158,7 @@ func CalculateMerkleMultiProofs(
 	payloadTransactions types.Transactions,
 	HashToConstraintDecoded types.HashToConstraintDecoded,
 ) (inclusionProof *common.InclusionProof, rootNode *ssz.Node, err error) {
-	constraintsOrderedByIndex, constraintsWithoutIndex, _, _ := types.ParseConstraintsDecoded(HashToConstraintDecoded)
-	constraints := slices.Concat(constraintsOrderedByIndex, constraintsWithoutIndex)
+	constraints, _, _ := types.ParseConstraintsDecoded(HashToConstraintDecoded)
 
 	// BOLT: generate merkle tree from payload transactions (we need raw RLP bytes for this)
 	rawTxs := make([]bellatrix.Transaction, len(payloadTransactions))
@@ -190,7 +189,7 @@ func CalculateMerkleMultiProofs(
 	transactionHashes := make([]common.Hash, len(constraints))
 
 	for i, constraint := range constraints {
-		tx := constraint.Tx
+		tx := constraint
 		// get the index of the preconfirmed transaction in the block
 		preconfIndex := slices.IndexFunc(payloadTransactions, func(payloadTx *types.Transaction) bool { return payloadTx.Hash() == tx.Hash() })
 		if preconfIndex == -1 {

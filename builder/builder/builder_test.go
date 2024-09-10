@@ -277,13 +277,9 @@ func TestBlockWithPreconfs(t *testing.T) {
 	defer builder.Stop()
 
 	// Add the transaction to the cache directly
-	builder.constraintsCache.Put(25, map[common.Hash]*types.ConstraintDecoded{
-		preconfTx.Hash(): {
-			Tx: preconfTx,
-		},
-		preconfTxWithBlob.Hash(): {
-			Tx: preconfTxWithBlob,
-		},
+	builder.constraintsCache.Put(25, map[common.Hash]*types.Transaction{
+		preconfTx.Hash():         preconfTx,
+		preconfTxWithBlob.Hash(): preconfTxWithBlob,
 	})
 
 	err = builder.OnPayloadAttribute(testPayloadAttributes)
@@ -461,7 +457,7 @@ func TestSubscribeProposerConstraints(t *testing.T) {
 		for key := range cachedConstraints {
 			_, ok := decodedConstraint[key]
 			require.True(t, ok, fmt.Sprintf("Key %s found in cachedConstraints but not in decodedConstraint", key.String()))
-			require.Equal(t, cachedConstraints[key].Tx.Data(), decodedConstraint[key].Tx.Data(), "The decodedConstraint Tx should be equal to the cachedConstraints Tx")
+			require.Equal(t, cachedConstraints[key].Data(), decodedConstraint[key].Data(), "The decodedConstraint Tx should be equal to the cachedConstraints Tx")
 		}
 		for key := range decodedConstraint {
 			_, ok := cachedConstraints[key]
@@ -514,7 +510,7 @@ func generateMockConstraintsForSlot(slot uint64) common.SignedConstraintsList {
 	return common.SignedConstraintsList{
 		&common.SignedConstraints{
 			Message: common.ConstraintMessage{
-				Constraints: []*common.Constraint{{Tx: *rawTx}}, ValidatorIndex: 0, Slot: slot,
+				Constraints: []*common.HexBytes{rawTx}, ValidatorIndex: 0, Slot: slot,
 			}, Signature: phase0.BLSSignature{},
 		},
 	}

@@ -609,16 +609,16 @@ type SignedConstraints struct {
 
 // Reference: https://chainbound.github.io/bolt-docs/api/builder-api
 type ConstraintMessage struct {
-	Constraints    []*Constraint `json:"constraints"`
-	ValidatorIndex uint64        `json:"validator_index"`
-	Slot           uint64        `json:"slot"`
+	Constraints    []*HexBytes `json:"constraints"`
+	ValidatorIndex uint64      `json:"validator_index"`
+	Slot           uint64      `json:"slot"`
 }
 
 // Reference: https://chainbound.github.io/bolt-docs/api/builder-api
-type Constraint struct {
-	Index *uint64  `json:"index"`
-	Tx    HexBytes `json:"tx"`
-}
+// type Constraint struct {
+// 	Index *uint64  `json:"index"`
+// 	Tx    HexBytes `json:"tx"`
+// }
 
 // ConstraintSubscriptionAuth is the struct the builder signs over to authenticate
 // when subscribing to SSE constraint events from the relay
