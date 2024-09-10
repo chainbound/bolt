@@ -597,21 +597,22 @@ func (v *VersionedSubmitBlockRequestWithProofs) String() string {
 
 // SignedConstraintsList are a list of proposer constraints that a builder must satisfy
 // in order to produce a valid bid. This is not defined on the
-// [spec](https://chainbound.github.io/bolt-docs/api/builder-api)
+// [spec](https://chainbound.github.io/bolt-docs/api/builder)
 // but it's useful as an helper type
 type SignedConstraintsList = []*SignedConstraints
 
-// Reference: https://chainbound.github.io/bolt-docs/api/builder-api
+// Reference: https://chainbound.github.io/bolt-docs/api/builder
 type SignedConstraints struct {
 	Message   ConstraintMessage   `json:"message"`
 	Signature phase0.BLSSignature `json:"signature"`
 }
 
-// Reference: https://chainbound.github.io/bolt-docs/api/builder-api
+// Reference: https://chainbound.github.io/bolt-docs/api/builder
 type ConstraintMessage struct {
 	Constraints    []*HexBytes `json:"constraints"`
 	ValidatorIndex uint64      `json:"validator_index"`
 	Slot           uint64      `json:"slot"`
+	Top            bool        `json:"top"`
 }
 
 // Reference: https://chainbound.github.io/bolt-docs/api/builder-api
