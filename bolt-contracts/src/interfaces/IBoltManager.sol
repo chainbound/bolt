@@ -22,42 +22,34 @@ interface IBoltManager {
     error CollateralNotWhitelisted();
     error UnknownSlasherType();
     error SlashAmountTooHigh();
+    error StrategyNotAllowed();
 
-    function getEpochStartTs(
-        uint48 epoch
-    ) external view returns (uint48);
+    function getEpochStartTs(uint48 epoch) external view returns (uint48);
 
-    function getEpochAtTs(
-        uint48 timestamp
-    ) external view returns (uint48);
+    function getEpochAtTs(uint48 timestamp) external view returns (uint48);
 
     function getCurrentEpoch() external view returns (uint48);
 
-    function addWhitelistedCollateral(
-        address collateral
-    ) external;
+    function addWhitelistedSymbioticCollateral(address collateral) external;
 
-    function removeWhitelistedCollateral(
-        address collateral
-    ) external;
+    function removeWhitelistedSymbioticCollateral(address collateral) external;
 
-    function getWhitelistedCollaterals() external view returns (address[] memory);
+    function getWhitelistedSymbioticCollaterals()
+        external
+        view
+        returns (address[] memory);
 
-    function isCollateralWhitelisted(
+    function isSymbioticCollateralWhitelisted(
         address collateral
     ) external view returns (bool);
 
-    function registerSymbioticOperator(
-        address operator
-    ) external;
+    function registerSymbioticOperator(address operator) external;
 
     function pauseSymbioticOperator() external;
 
     function unpauseSymbioticOperator() external;
 
-    function registerSymbioticVault(
-        address vault
-    ) external;
+    function registerSymbioticVault(address vault) external;
 
     function pauseSymbioticVault() external;
 
@@ -84,7 +76,10 @@ interface IBoltManager {
         bytes32 pubkeyHash
     ) external view returns (bool);
 
-    function getSymbioticOperatorStake(address operator, address collateral) external view returns (uint256);
+    function getSymbioticOperatorStake(
+        address operator,
+        address collateral
+    ) external view returns (uint256);
 
     function getSymbioticOperatorStakeAt(
         address operator,
@@ -92,5 +87,8 @@ interface IBoltManager {
         uint48 timestamp
     ) external view returns (uint256);
 
-    function getSymbioticTotalStake(uint48 epoch, address collateral) external view returns (uint256);
+    function getSymbioticTotalStake(
+        uint48 epoch,
+        address collateral
+    ) external view returns (uint256);
 }
