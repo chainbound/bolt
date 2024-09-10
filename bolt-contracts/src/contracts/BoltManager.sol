@@ -569,6 +569,12 @@ contract BoltManager is IBoltManager, Ownable {
         return _tokenAmounts;
     }
 
+    /// @notice emits an `AVSMetadataURIUpdated` event indicating the information has updated.
+    /// @param metadataURI The URI for metadata associated with an avs
+    function updateEigenLayerAVSMetadataURI(string calldata metadataURI) onlyOwner public {
+      EIGENLAYER_AVS_DIRECTORY.updateAVSMetadataURI(metadataURI);
+    }
+
     // ========= HELPER FUNCTIONS =========
 
     /// @notice Check if a map entry was active at a given timestamp.
