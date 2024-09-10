@@ -401,6 +401,18 @@ contract EigenLayerDeployer is Operators {
                 )
             )
         );
+
+        // Whitelist strategies for deposit
+        IStrategy[] memory strategiesToWhitelist = new IStrategy[](2);
+        strategiesToWhitelist[0] = wethStrat;
+        strategiesToWhitelist[1] = eigenStrat;
+
+        bool[] memory thirdPartyTransfersForbidden = new bool[](2);
+
+        strategyManager.addStrategiesToDepositWhitelist(
+            strategiesToWhitelist,
+            thirdPartyTransfersForbidden
+        );
     }
 
     function _setAddresses(string memory config) internal {
