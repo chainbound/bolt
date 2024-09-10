@@ -60,4 +60,10 @@ interface IBoltValidators {
         address authorizedCollateralProvider,
         address authorizedOperator
     ) external;
+
+    function batchRegisterValidatorsUnsafe(
+        BLS12381.G1Point[] calldata pubkeys,
+        address authorizedCollateralProvider,
+        address authorizedOperator
+    ) external;
 }
