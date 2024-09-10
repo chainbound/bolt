@@ -24,10 +24,7 @@ contract RegisterValidators is Script {
         console.log("Bolt registry address:", registryAddress);
         BoltRegistry registry = BoltRegistry(registryAddress);
 
-        console.log(
-            "Bolt registry minimum collateral:",
-            registry.MINIMUM_COLLATERAL()
-        );
+        console.log("Bolt registry minimum collateral:", registry.MINIMUM_COLLATERAL());
 
         address sender = vm.addr(signerKey);
 
@@ -39,11 +36,7 @@ contract RegisterValidators is Script {
         }
 
         // Register with minimal collateral
-        registry.register{value: registry.MINIMUM_COLLATERAL()}(
-            validatorIndexes,
-            rpc,
-            ""
-        );
+        registry.register{value: registry.MINIMUM_COLLATERAL()}(validatorIndexes, rpc, "");
 
         vm.stopBroadcast();
     }
@@ -62,7 +55,7 @@ library StringToUintArrayLib {
         uint256 rangeStart;
 
         for (uint256 i = 0; i < strBytes.length; i++) {
-            if (strBytes[i] == ',') {
+            if (strBytes[i] == ",") {
                 if (parsingRange) {
                     // Handle end of range
                     for (uint256 j = rangeStart; j <= tempNum; j++) {
@@ -76,15 +69,15 @@ library StringToUintArrayLib {
                     vecIndex++;
                 }
                 tempNum = 0;
-            } else if (strBytes[i] == '.') {
-                if (i + 1 < strBytes.length && strBytes[i + 1] == '.') {
+            } else if (strBytes[i] == ".") {
+                if (i + 1 < strBytes.length && strBytes[i + 1] == ".") {
                     // Handle start of range
                     parsingRange = true;
                     rangeStart = tempNum;
                     tempNum = 0;
                     i++; // Skip next dot
                 }
-            } else if (strBytes[i] >= '0' && strBytes[i] <= '9') {
+            } else if (strBytes[i] >= "0" && strBytes[i] <= "9") {
                 tempNum = tempNum * 10 + (uint8(strBytes[i]) - 48); // Convert ASCII to integer
             }
         }

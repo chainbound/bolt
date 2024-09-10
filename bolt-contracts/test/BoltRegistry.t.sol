@@ -27,10 +27,7 @@ contract BoltRegistryTest is Test {
 
         registry.register{value: 10 ether}(validatorIndexes, "rpc", "");
 
-        assertEq(
-            uint8(registry.getOperatorStatus(alice)),
-            uint8(IBoltRegistry.Status.ACTIVE)
-        );
+        assertEq(uint8(registry.getOperatorStatus(alice)), uint8(IBoltRegistry.Status.ACTIVE));
 
         assertEq(registry.isActiveOperator(alice), true);
 

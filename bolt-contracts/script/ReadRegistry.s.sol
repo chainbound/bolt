@@ -12,21 +12,11 @@ contract ReadRegistry is Script {
         console.log("Bolt registry address:", registryAddress);
         BoltRegistry registry = BoltRegistry(registryAddress);
 
-        console.log(
-            "Bolt registry minimum collateral:",
-            registry.MINIMUM_COLLATERAL()
-        );
+        console.log("Bolt registry minimum collateral:", registry.MINIMUM_COLLATERAL());
 
         for (uint64 i = 0; i < 2000; i++) {
-            try registry.getOperatorForValidator(i) returns (
-                IBoltRegistry.Registrant memory operator
-            ) {
-                console.log(
-                    "Operator for validator found",
-                    i,
-                    ":",
-                    operator.operator
-                );
+            try registry.getOperatorForValidator(i) returns (IBoltRegistry.Registrant memory operator) {
+                console.log("Operator for validator found", i, ":", operator.operator);
                 console.log("Operator RPC:", operator.metadata.rpc);
             } catch {
                 // console.log("No operator for validator", i);

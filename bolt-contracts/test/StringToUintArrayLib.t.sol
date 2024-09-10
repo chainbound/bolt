@@ -5,7 +5,6 @@ import "forge-std/Test.sol";
 import "../script/RegisterValidators.s.sol";
 
 contract StringToUintArrayTest is Test {
-
     function setUp() public {}
 
     function testParseValidatorIndexes1() public pure {
