@@ -48,9 +48,7 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
 
     /// @notice Constructor
     /// @param _owner Address of the owner of the contract
-    constructor(
-        address _owner
-    ) Ownable(_owner) {}
+    constructor(address _owner) Ownable(_owner) {}
 
     // ========= ADMIN FUNCTIONS =========
 
@@ -120,7 +118,12 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
             revert UnsafeRegistrationNotAllowed();
         }
 
-        _registerValidator(pubkey, nextValidatorSequenceNumber, authorizedCollateralProvider, authorizedOperator);
+        _registerValidator(
+            pubkey,
+            nextValidatorSequenceNumber,
+            authorizedCollateralProvider,
+            authorizedOperator
+        );
     }
 
     /// @notice Register a single Validator and authorize a Collateral Provider and Operator for it
@@ -136,12 +139,21 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
         address authorizedCollateralProvider,
         address authorizedOperator
     ) public {
-        bytes memory message = abi.encodePacked(block.chainid, msg.sender, nextValidatorSequenceNumber);
+        bytes memory message = abi.encodePacked(
+            block.chainid,
+            msg.sender,
+            nextValidatorSequenceNumber
+        );
         if (!_verifySignature(message, signature, pubkey)) {
             revert InvalidAuthorizedCollateralProvider();
         }
 
-        _registerValidator(pubkey, nextValidatorSequenceNumber, authorizedCollateralProvider, authorizedOperator);
+        _registerValidator(
+            pubkey,
+            nextValidatorSequenceNumber,
+            authorizedCollateralProvider,
+            authorizedOperator
+        );
     }
 
     /// @notice Register a batch of Validators and authorize a Collateral Provider and Operator for them
@@ -157,15 +169,23 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
         address authorizedOperator
     ) public {
         uint256 validatorsCount = pubkeys.length;
-        uint64[] memory expectedValidatorSequenceNumbers = new uint64[](validatorsCount);
+        uint64[] memory expectedValidatorSequenceNumbers = new uint64[](
+            validatorsCount
+        );
         for (uint256 i = 0; i < validatorsCount; i++) {
-            expectedValidatorSequenceNumbers[i] = nextValidatorSequenceNumber + uint64(i);
+            expectedValidatorSequenceNumbers[i] =
+                nextValidatorSequenceNumber +
+                uint64(i);
         }
 
         // Reconstruct the unique message for which we expect an aggregated signature.
         // We need the msg.sender to prevent a front-running attack by an EOA that may
         // try to register the same validators
-        bytes memory message = abi.encodePacked(block.chainid, msg.sender, expectedValidatorSequenceNumbers);
+        bytes memory message = abi.encodePacked(
+            block.chainid,
+            msg.sender,
+            expectedValidatorSequenceNumbers
+        );
 
         // Aggregate the pubkeys into a single pubkey to verify the aggregated signature once
         BLS12381.G1Point memory aggPubkey = _aggregatePubkeys(pubkeys);
@@ -177,7 +197,45 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
         // Register the validators and authorize the Collateral Provider and Operator for them
         for (uint256 i = 0; i < validatorsCount; i++) {
             _registerValidator(
-                pubkeys[i], expectedValidatorSequenceNumbers[i], authorizedCollateralProvider, authorizedOperator
+                pubkeys[i],
+                expectedValidatorSequenceNumbers[i],
+                authorizedCollateralProvider,
+                authorizedOperator
+            );
+        }
+    }
+
+    /// @notice Register a batch of Validators and authorize a Collateral Provider and Operator for them
+    /// @dev This function allows anyone to register a list of Validators.
+    /// @param pubkeys List of BLS public keys for the Validators to be registered
+    /// @param authorizedCollateralProvider The address of the authorized collateral provider
+    /// @param authorizedOperator The address of the authorized operator
+    function batchRegisterValidatorsUnsafe(
+        BLS12381.G1Point[] calldata pubkeys,
+        address authorizedCollateralProvider,
+        address authorizedOperator
+    ) public {
+        if (!ALLOW_UNSAFE_REGISTRATION) {
+            revert UnsafeRegistrationNotAllowed();
+        }
+
+        uint256 validatorsCount = pubkeys.length;
+        uint64[] memory expectedValidatorSequenceNumbers = new uint64[](
+            validatorsCount
+        );
+        for (uint256 i = 0; i < validatorsCount; i++) {
+            expectedValidatorSequenceNumbers[i] =
+                nextValidatorSequenceNumber +
+                uint64(i);
+        }
+
+        // Register the validators and authorize the Collateral Provider and Operator for them
+        for (uint256 i = 0; i < validatorsCount; i++) {
+            _registerValidator(
+                pubkeys[i],
+                expectedValidatorSequenceNumbers[i],
+                authorizedCollateralProvider,
+                authorizedOperator
             );
         }
     }
