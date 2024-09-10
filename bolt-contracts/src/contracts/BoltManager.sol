@@ -5,6 +5,7 @@ import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 import {Time} from "lib/openzeppelin-contracts/contracts/utils/types/Time.sol";
 import {EnumerableMap} from "lib/openzeppelin-contracts/contracts/utils/structs/EnumerableMap.sol";
 import {EnumerableSet} from "lib/openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
+import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 import {IBaseDelegator} from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
 import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
@@ -42,11 +43,20 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Set of Symbiotic operator addresses that have opted in to Bolt Protocol.
     EnumerableMap.AddressToUintMap private symbioticOperators;
 
-    /// @notice Set of Symbiotic protocol vaults that have opted in to Bolt Protocol.
+    /// @notice Set of Symbiotic protocol vaults that are used in Bolt Protocol.
     EnumerableMap.AddressToUintMap private symbioticVaults;
 
-    /// @notice Set of collateral addresses that are whitelisted.
-    EnumerableSet.AddressSet private whitelistedCollaterals;
+    /// @notice Set of Symbiotic collateral addresses that are whitelisted.
+    EnumerableSet.AddressSet private whitelistedSymbioticCollaterals;
+
+    /// @notice Set of EigenLayer operators addresses that have opted in to Bolt Protocol.
+    EnumerableMap.AddressToUintMap private eigenLayerOperators;
+
+    /// @notice Set of EigenLayer protocol strategies that are used in Bolt Protocol.
+    EnumerableMap.AddressToUintMap private eigenLayerStrategies;
+
+    /// @notice Set of EigenLayer collaterals addresses that are allowed.
+    EnumerableSet.AddressSet private whitelistedEigenLayerCollaterals;
 
     // ========= IMMUTABLES =========
 
@@ -137,35 +147,74 @@ contract BoltManager is IBoltManager, Ownable {
 
     /// @notice Get the list of collateral addresses that are whitelisted.
     /// @return collaterals The list of collateral addresses that are whitelisted.
-    function getWhitelistedCollaterals()
+    function getWhitelistedSymbioticCollaterals()
         public
         view
         returns (address[] memory collaterals)
     {
-        return whitelistedCollaterals.values();
+        return whitelistedSymbioticCollaterals.values();
     }
 
     /// @notice Check if a collateral address is whitelisted.
     /// @param collateral The collateral address to check the whitelist status for.
     /// @return True if the collateral address is whitelisted, false otherwise.
-    function isCollateralWhitelisted(
+    function isSymbioticCollateralWhitelisted(
         address collateral
     ) public view returns (bool) {
-        return whitelistedCollaterals.contains(collateral);
+        return whitelistedSymbioticCollaterals.contains(collateral);
+    }
+
+    /// @notice Get the list of EigenLayer strategies addresses that are allowed.
+    /// @return strategies The list of strategies addresses that are allowed.
+    function getWhitelistedEigenLayerCollaterals()
+        public
+        view
+        returns (address[] memory strategies)
+    {
+        return whitelistedEigenLayerCollaterals.values();
+    }
+
+    /// @notice Check if an EigenLayer strategy address is allowed.
+    /// @param strategy The strategy address to check if it is allowed.
+    /// @return true if the strategy address is allowed, false otherwise.
+    function isEigenLayerCollateralWhitelisted(
+        address strategy
+    ) public view returns (bool) {
+        return whitelistedEigenLayerCollaterals.contains(strategy);
     }
 
     // ========= ADMIN FUNCTIONS =========
 
     /// @notice Add a collateral address to the whitelist.
     /// @param collateral The collateral address to add to the whitelist.
-    function addWhitelistedCollateral(address collateral) public onlyOwner {
-        whitelistedCollaterals.add(collateral);
+    function addWhitelistedSymbioticCollateral(
+        address collateral
+    ) public onlyOwner {
+        whitelistedSymbioticCollaterals.add(collateral);
     }
 
     /// @notice Remove a collateral address from the whitelist.
     /// @param collateral The collateral address to remove from the whitelist.
-    function removeWhitelistedCollateral(address collateral) public onlyOwner {
-        whitelistedCollaterals.remove(collateral);
+    function removeWhitelistedSymbioticCollateral(
+        address collateral
+    ) public onlyOwner {
+        whitelistedSymbioticCollaterals.remove(collateral);
+    }
+
+    /// @notice Add a collateral address to the whitelist.
+    /// @param collateral The collateral address to add to the whitelist.
+    function addWhitelistedEigenLayerCollateral(
+        address strategy
+    ) public onlyOwner {
+        whitelistedEigenLayerCollaterals.add(strategy);
+    }
+
+    /// @notice Remove a collateral address from the whitelist.
+    /// @param collateral The collateral address to remove from the whitelist.
+    function removeWhitelistedEigenLayerCollateral(
+        address strategy
+    ) public onlyOwner {
+        whitelistedEigenLayerCollaterals.remove(strategy);
     }
 
     // ========= SYMBIOTIC MIDDLEWARE LOGIC =========
@@ -225,7 +274,7 @@ contract BoltManager is IBoltManager, Ownable {
             revert NotVault();
         }
 
-        if (!isCollateralWhitelisted(IVault(vault).collateral())) {
+        if (!isSymbioticCollateralWhitelisted(IVault(vault).collateral())) {
             revert CollateralNotWhitelisted();
         }
 
@@ -497,6 +546,13 @@ contract BoltManager is IBoltManager, Ownable {
                 collateral,
                 epochStartTs
             );
+            uint256 vaultStake = IBaseDelegator(IVault(vault).delegator())
+                .stakeAt(
+                    BOLT_SYMBIOTIC_NETWORK.subnetwork(0),
+                    operator,
+                    epochStartTs,
+                    new bytes(0)
+                );
 
             if (amount > operatorStake) {
                 revert SlashAmountTooHigh();
@@ -518,6 +574,101 @@ contract BoltManager is IBoltManager, Ownable {
                 (amount * vaultStake) / operatorStake
             );
         }
+    }
+
+    // ========= EIGENLAYER MIDDLEWARE LOGIC =========
+
+    /// @notice Allow an operator to signal opt-in to Bolt Protocol.
+    /// @param operator The operator address to signal opt-in for.
+    function registerEigenLayerOperator(address operator) public {
+        if (eigenLayerOperators.contains(operator)) {
+            revert AlreadyRegistered();
+        }
+
+        if (!EIGENLAYER_DELEGATION_MANAGER.isOperator(operator)) {
+            revert NotOperator();
+        }
+
+        if (!checkIfEigenLayerOperatorRegisteredToAVS(operator)) {
+            revert OperatorNotRegisteredToAVS();
+        }
+
+        eigenLayerOperators.add(operator);
+        eigenLayerOperators.enable(operator);
+    }
+
+    /// @notice Allow an operator to signal indefinite opt-out from Bolt Protocol.
+    /// @dev Pausing activity does not prevent the operator from being slashable for
+    /// the current network epoch until the end of the slashing window.
+    function pauseEigenLayerOperator() public {
+        if (!eigenLayerOperators.contains(msg.sender)) {
+            revert NotRegistered();
+        }
+
+        eigenLayerOperators.disable(msg.sender);
+    }
+
+    /// @notice Allow a disabled operator to signal opt-in to Bolt Protocol.
+    function unpauseEigenLayerOperator() public {
+        if (!eigenLayerOperators.contains(msg.sender)) {
+            revert NotRegistered();
+        }
+
+        eigenLayerOperators.enable(msg.sender);
+    }
+
+    function registerEigenLayerStrategy(IStrategy strategy) public {
+        if (eigenLayerStrategies.contains(address(strategy))) {
+            revert AlreadyRegistered();
+        }
+
+        if (
+            !EIGENLAYER_STRATEGY_MANAGER.strategyIsWhitelistedForDeposit(
+                strategy
+            )
+        ) {
+            revert StrategyNotAllowed();
+        }
+
+        if (
+            !isEigenLayerCollateralWhitelisted(
+                address(strategy.underlyingToken())
+            )
+        ) {
+            revert CollateralNotWhitelisted();
+        }
+
+        eigenLayerStrategies.add(vault);
+        eigenLayerStrategies.enable(vault);
+    }
+
+    /// @notice Allow a strategy to signal indefinite opt-out from Bolt Protocol.
+    function pauseEigenLayerStrategy() public {
+        if (!eigenLayerStrategies.contains(msg.sender)) {
+            revert NotRegistered();
+        }
+
+        eigenLayerStrategies.disable(msg.sender);
+    }
+
+    /// @notice Allow a disabled strategy to signal opt-in to Bolt Protocol.
+    function unpauseEigenLayerStrategy() public {
+        if (!eigenLayerStrategies.contains(msg.sender)) {
+            revert NotRegistered();
+        }
+
+        eigenLayerStrategies.enable(msg.sender);
+    }
+
+    /// @notice Check if an operator is currently enabled to work in Bolt Protocol.
+    /// @param operator The operator address to check the enabled status for.
+    /// @return True if the operator is enabled, false otherwise.
+    function isEigenLayerOperatorEnabled(
+        address operator
+    ) public view returns (bool) {
+        (uint48 enabledTime, uint48 disabledTime) = eigenLayerOperators
+            .getTimes(operator);
+        return enabledTime != 0 && disabledTime == 0;
     }
 
     // ========= EIGENLAYER FUNCTIONS =========
@@ -552,27 +703,40 @@ contract BoltManager is IBoltManager, Ownable {
         EIGENLAYER_AVS_DIRECTORY.deregisterOperatorFromAVS(msg.sender);
     }
 
-    /// @notice Get the amount of tokens delegated to an operator across the specified strategies
+    /// @notice Get the amount of tokens delegated to an operator across the allowed strategies.
+    //  @param operator The operator address to get the stake for.
+    //  @param strategies The list of strategies to get the stake for.
+    //  @return tokenAmounts The amount of tokens delegated to the operator for each strategy.
     function getEigenLayerOperatorStake(
         address operator,
-        IStrategy[] calldata strategies
-    ) public view returns (uint256[] memory) {
+        IERC20 collateral
+    ) public view returns (uint256 amount) {
+        // NOTE: Can this be done more gas-efficiently?
+        address[] memory strategiesRaw = whitelistedEigenLayerCollaterals
+            .values();
+        es();
+        IStrategy[] memory strategies = new IStrategy[](strategiesRaw.length);
+        for (uint256 i = 0; i < strategiesRaw.length; i++) {
+            strategies[i] = IStrategy(strategiesRaw[i]);
+        }
+
         // NOTE: order is preserved i.e., shares[i] corresponds to strategies[i]
         uint256[] memory shares = EIGENLAYER_DELEGATION_MANAGER
             .getOperatorShares(operator, strategies);
 
-        uint256[] memory _tokenAmounts = new uint256[](strategies.length);
         for (uint256 i = 0; i < strategies.length; i++) {
-            _tokenAmounts[i] = strategies[i].sharesToUnderlyingView(shares[i]);
+            if (isEigenLayerCollateralWhitelisted(address(strategies[i]))) {
+                amount += strategies[i].sharesToUnderlyingView(shares[i]);
+            }
         }
-
-        return _tokenAmounts;
     }
 
     /// @notice emits an `AVSMetadataURIUpdated` event indicating the information has updated.
     /// @param metadataURI The URI for metadata associated with an avs
-    function updateEigenLayerAVSMetadataURI(string calldata metadataURI) onlyOwner public {
-      EIGENLAYER_AVS_DIRECTORY.updateAVSMetadataURI(metadataURI);
+    function updateEigenLayerAVSMetadataURI(
+        string calldata metadataURI
+    ) public onlyOwner {
+        EIGENLAYER_AVS_DIRECTORY.updateAVSMetadataURI(metadataURI);
     }
 
     // ========= HELPER FUNCTIONS =========

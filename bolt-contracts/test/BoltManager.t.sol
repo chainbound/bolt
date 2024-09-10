@@ -159,7 +159,7 @@ contract BoltManagerTest is Test {
 
         // --- Whitelist collateral in BoltManager ---
         vm.prank(admin);
-        manager.addWhitelistedCollateral(address(collateral));
+        manager.addWhitelistedSymbioticCollateral(address(collateral));
     }
 
     /// @notice Internal helper to register Symbiotic contracts and opt-in operators and vaults.
@@ -346,14 +346,14 @@ contract BoltManagerTest is Test {
     }
 
     function testGetWhitelistedCollaterals() public view {
-        address[] memory collaterals = manager.getWhitelistedCollaterals();
+        address[] memory collaterals = manager.getWhitelistedSymbioticCollaterals();
         assertEq(collaterals.length, 1);
         assertEq(collaterals[0], address(collateral));
     }
 
     function testNonWhitelistedCollateral() public {
         vm.prank(admin);
-        manager.removeWhitelistedCollateral(address(collateral));
+        manager.removeWhitelistedSymbioticCollateral(address(collateral));
 
         vm.prank(vaultAdmin);
         vm.expectRevert(IBoltManager.CollateralNotWhitelisted.selector);
