@@ -41,27 +41,15 @@ interface IBoltRegistry {
     /// @notice Event to log the status change of a based proposer
     event StatusChange(address indexed operator, Status status);
 
-    event Registered(
-        address indexed operator,
-        uint64[] validatorIndexes,
-        MetaData metadata
-    );
+    event Registered(address indexed operator, uint64[] validatorIndexes, MetaData metadata);
 
-    function register(
-        uint64[] calldata validatorIndexes,
-        string calldata rpc,
-        bytes calldata extra
-    ) external payable;
+    function register(uint64[] calldata validatorIndexes, string calldata rpc, bytes calldata extra) external payable;
 
     function isActiveOperator(address _operator) external view returns (bool);
 
-    function getOperatorStatus(
-        address _operator
-    ) external view returns (Status);
+    function getOperatorStatus(address _operator) external view returns (Status);
 
-    function getOperatorForValidator(
-        uint64 _validatorIndex
-    ) external view returns (Registrant memory);
+    function getOperatorForValidator(uint64 _validatorIndex) external view returns (Registrant memory);
 
     function startExit() external;
 
