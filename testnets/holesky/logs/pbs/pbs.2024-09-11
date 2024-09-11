@@ -1,0 +1,46 @@
+{"timestamp":"2024-09-11T12:36:34.518374Z","level":"INFO","fields":{"message":"Starting bolt-boost with the following relays:","chain":"Holesky"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T12:36:34.518388Z","level":"INFO","fields":{"message":"ID: example-relay - URI: http://0xa1cec75a3f0661e99299274182938151e8433c61a19222347ea1313d839229cb4ce4e3e5aa2bdeb71c8fcf1b084963c2@abc.xyz/"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T12:44:09.499978Z","level":"INFO","fields":{"message":"Starting bolt-boost with the following relays:","chain":"Holesky"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T12:44:09.499990Z","level":"INFO","fields":{"message":"ID: example-relay - URI: http://0xa1cec75a3f0661e99299274182938151e8433c61a19222347ea1313d839229cb4ce4e3e5aa2bdeb71c8fcf1b084963c2@abc.xyz/"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T12:44:09.500852Z","level":"INFO","fields":{"message":"Starting PBS service","address":"0.0.0.0:18550","events_subs":0},"target":"cb_pbs::service"}
+{"timestamp":"2024-09-11T12:44:09.501500Z","level":"INFO","fields":{"message":"Starting metrics server on port 10000"},"target":"cb_metrics::provider"}
+{"timestamp":"2024-09-11T12:58:05.935766Z","level":"INFO","fields":{"message":"Starting bolt-boost with the following relays:","chain":"Holesky"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T12:58:05.935775Z","level":"INFO","fields":{"message":"ID: example-relay - URI: http://0xa1cec75a3f0661e99299274182938151e8433c61a19222347ea1313d839229cb4ce4e3e5aa2bdeb71c8fcf1b084963c2@abc.xyz/"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T12:58:05.936286Z","level":"INFO","fields":{"message":"Starting metrics server on port 10000"},"target":"cb_metrics::provider"}
+{"timestamp":"2024-09-11T12:58:05.936371Z","level":"INFO","fields":{"message":"Starting PBS service","address":"0.0.0.0:18550","events_subs":0},"target":"cb_pbs::service"}
+{"timestamp":"2024-09-11T13:29:40.402543Z","level":"INFO","fields":{"message":"Starting bolt-boost with the following relays:","chain":"Holesky"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T13:29:40.402859Z","level":"INFO","fields":{"message":"ID: example-relay - URI: http://0xa1cec75a3f0661e99299274182938151e8433c61a19222347ea1313d839229cb4ce4e3e5aa2bdeb71c8fcf1b084963c2@abc.xyz/"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T13:29:40.403625Z","level":"INFO","fields":{"message":"Starting metrics server on port 10000"},"target":"cb_metrics::provider"}
+{"timestamp":"2024-09-11T13:29:40.403807Z","level":"INFO","fields":{"message":"Starting PBS service","address":"0.0.0.0:18550","events_subs":0},"target":"cb_pbs::service"}
+{"timestamp":"2024-09-11T13:33:47.575507Z","level":"INFO","fields":{"message":"Starting bolt-boost with the following relays:","chain":"Holesky"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T13:33:47.575515Z","level":"INFO","fields":{"message":"ID: example-relay - URI: http://0xa1cec75a3f0661e99299274182938151e8433c61a19222347ea1313d839229cb4ce4e3e5aa2bdeb71c8fcf1b084963c2@abc.xyz/"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T13:33:47.576128Z","level":"INFO","fields":{"message":"Starting PBS service","address":"0.0.0.0:18550","events_subs":0},"target":"cb_pbs::service"}
+{"timestamp":"2024-09-11T13:33:47.576135Z","level":"INFO","fields":{"message":"Starting metrics server on port 10000"},"target":"cb_metrics::provider"}
+{"timestamp":"2024-09-11T13:38:26.286570Z","level":"INFO","fields":{"message":"Starting bolt-boost with the following relays:","chain":"Holesky"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T13:38:26.286579Z","level":"INFO","fields":{"message":"ID: example-relay - URI: http://0xa1cec75a3f0661e99299274182938151e8433c61a19222347ea1313d839229cb4ce4e3e5aa2bdeb71c8fcf1b084963c2@abc.xyz/"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T13:38:26.287236Z","level":"INFO","fields":{"message":"Starting metrics server on port 10000"},"target":"cb_metrics::provider"}
+{"timestamp":"2024-09-11T13:38:26.288260Z","level":"INFO","fields":{"message":"Starting PBS service","address":"0.0.0.0:18550","events_subs":0},"target":"cb_pbs::service"}
+{"timestamp":"2024-09-11T13:39:32.787030Z","level":"INFO","fields":{"message":"Starting bolt-boost with the following relays:","chain":"Holesky"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T13:39:32.787110Z","level":"INFO","fields":{"message":"ID: example-relay - URI: http://0xa1cec75a3f0661e99299274182938151e8433c61a19222347ea1313d839229cb4ce4e3e5aa2bdeb71c8fcf1b084963c2@abc.xyz/"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T13:39:32.787435Z","level":"INFO","fields":{"message":"Starting PBS service","address":"0.0.0.0:18550","events_subs":0},"target":"cb_pbs::service"}
+{"timestamp":"2024-09-11T13:39:32.787456Z","level":"INFO","fields":{"message":"Starting metrics server on port 10000"},"target":"cb_metrics::provider"}
+{"timestamp":"2024-09-11T13:48:03.820547Z","level":"INFO","fields":{"message":"Starting bolt-boost with the following relays:","chain":"Holesky"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T13:48:03.820629Z","level":"INFO","fields":{"message":"ID: example-relay - URI: http://0xa1cec75a3f0661e99299274182938151e8433c61a19222347ea1313d839229cb4ce4e3e5aa2bdeb71c8fcf1b084963c2@abc.xyz/"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T13:48:03.820971Z","level":"INFO","fields":{"message":"Starting metrics server on port 10000"},"target":"cb_metrics::provider"}
+{"timestamp":"2024-09-11T13:48:03.821076Z","level":"INFO","fields":{"message":"Starting PBS service","address":"0.0.0.0:18550","events_subs":0},"target":"cb_pbs::service"}
+{"timestamp":"2024-09-11T13:49:46.905956Z","level":"INFO","fields":{"message":"Starting bolt-boost with the following relays:","chain":"Holesky"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T13:49:46.906113Z","level":"INFO","fields":{"message":"ID: example-relay - URI: http://0xa1cec75a3f0661e99299274182938151e8433c61a19222347ea1313d839229cb4ce4e3e5aa2bdeb71c8fcf1b084963c2@abc.xyz/"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T13:49:46.906254Z","level":"INFO","fields":{"message":"Starting metrics server on port 10000"},"target":"cb_metrics::provider"}
+{"timestamp":"2024-09-11T13:49:46.906373Z","level":"INFO","fields":{"message":"Starting PBS service","address":"0.0.0.0:18550","events_subs":0},"target":"cb_pbs::service"}
+{"timestamp":"2024-09-11T13:59:13.961663Z","level":"INFO","fields":{"message":"Starting bolt-boost with the following relays:","chain":"Holesky"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T13:59:13.961717Z","level":"INFO","fields":{"message":"ID: example-relay - URI: http://0xa1cec75a3f0661e99299274182938151e8433c61a19222347ea1313d839229cb4ce4e3e5aa2bdeb71c8fcf1b084963c2@abc.xyz/"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T13:59:13.962299Z","level":"INFO","fields":{"message":"Starting metrics server on port 10000"},"target":"cb_metrics::provider"}
+{"timestamp":"2024-09-11T13:59:13.962488Z","level":"INFO","fields":{"message":"Starting PBS service","address":"0.0.0.0:18550","events_subs":0},"target":"cb_pbs::service"}
+{"timestamp":"2024-09-11T14:04:43.274986Z","level":"INFO","fields":{"message":"Starting bolt-boost with the following relays:","chain":"Holesky"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T14:04:43.275020Z","level":"INFO","fields":{"message":"ID: example-relay - URI: http://0xa1cec75a3f0661e99299274182938151e8433c61a19222347ea1313d839229cb4ce4e3e5aa2bdeb71c8fcf1b084963c2@abc.xyz/"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T14:04:43.276642Z","level":"INFO","fields":{"message":"Starting PBS service","address":"0.0.0.0:18550","events_subs":0},"target":"cb_pbs::service"}
+{"timestamp":"2024-09-11T14:04:43.276947Z","level":"INFO","fields":{"message":"Starting metrics server on port 10000"},"target":"cb_metrics::provider"}
+{"timestamp":"2024-09-11T14:12:27.560971Z","level":"INFO","fields":{"message":"Starting bolt-boost with the following relays:","chain":"Holesky"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T14:12:27.561262Z","level":"INFO","fields":{"message":"ID: example-relay - URI: http://0xa1cec75a3f0661e99299274182938151e8433c61a19222347ea1313d839229cb4ce4e3e5aa2bdeb71c8fcf1b084963c2@abc.xyz/"},"target":"bolt_boost"}
+{"timestamp":"2024-09-11T14:12:27.561943Z","level":"INFO","fields":{"message":"Starting metrics server on port 10000"},"target":"cb_metrics::provider"}
+{"timestamp":"2024-09-11T14:12:27.562565Z","level":"INFO","fields":{"message":"Starting PBS service","address":"0.0.0.0:18550","events_subs":0},"target":"cb_pbs::service"}
