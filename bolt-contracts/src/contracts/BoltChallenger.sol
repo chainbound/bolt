@@ -24,7 +24,9 @@ contract BoltChallenger {
         // unimplemented!();
     }
 
+    /// @notice Prove the block header data of a recent block.
     /// @dev Only works with block headers that are less than 256 blocks old.
+    /// @param header The RLP-encoded block header to prove.
     function proveRecentBlockHeaderData(
         bytes calldata header
     )
@@ -39,8 +41,8 @@ contract BoltChallenger {
             uint256 baseFee
         )
     {
-        // RLP decode the header
-        // https://github.com/ethereum/go-ethereum/blob/master/core/types/block.go
+        // RLP decode the block header and extract the necessary fields
+        // ref: https://github.com/ethereum/go-ethereum/blob/master/core/types/block.go
         RLPReader.RLPItem[] memory headerFields = header.toRLPItem().readList();
         transactionsRoot = headerFields[4].readBytes32();
         blockNumber = headerFields[8].readUint256();
@@ -49,12 +51,12 @@ contract BoltChallenger {
         timestamp = headerFields[11].readUint256();
         baseFee = headerFields[15].readUint256();
 
-        if (blockhash(blockNumber) == bytes32(0) || blockNumber < block.number - 256) {
+        bytes32 trustedBlockHash = blockhash(blockNumber);
+        if (trustedBlockHash == bytes32(0) || blockNumber < block.number - 256) {
             revert BlockIsTooOld();
         }
 
-        // verify that the block hash matches the one in the EVM
-        if (keccak256(header) != blockhash(blockNumber)) {
+        if (keccak256(header) != trustedBlockHash) {
             revert InvalidBlockHash();
         }
     }
@@ -62,24 +64,23 @@ contract BoltChallenger {
     /// @notice Prove the account data of an account at a given state root.
     /// @dev This function assumes that the provided state root and account proof match.
     /// @param account The account address to prove.
-    /// @param stateRoot The TRUSTED state root to prove against. Checking how the state root is obtained
-    /// is the responsibility of the caller.
+    /// @param trustedStateRoot The state root to prove against.
     /// @param accountProof The MPT account proof to prove the account data.
     /// @return nonce The nonce of the account at the given state root height.
     /// @return balance The balance of the account at the given state root height.
     function proveAccountData(
         address account,
-        bytes32 stateRoot,
+        bytes32 trustedStateRoot,
         bytes calldata accountProof
     ) public pure returns (uint256 nonce, uint256 balance) {
         (bool exists, bytes memory accountRLP) =
-            SecureMerkleTrie.get(abi.encodePacked(account), accountProof, stateRoot);
+            SecureMerkleTrie.get(abi.encodePacked(account), accountProof, trustedStateRoot);
 
         if (!exists) {
             revert AccountDoesNotExist();
         }
 
-        // decode the account RLP into nonce and balance
+        // RLP decode the account and extract the nonce and balance
         RLPReader.RLPItem[] memory accountFields = accountRLP.toRLPItem().readList();
         nonce = accountFields[0].readUint256();
         balance = accountFields[1].readUint256();

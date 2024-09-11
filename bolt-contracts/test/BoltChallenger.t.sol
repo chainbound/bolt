@@ -26,11 +26,9 @@ contract BoltChallengerTest is Test {
         // for recent blocks, we can simply use the blockhash function in the EVM.
         bytes32 trustedBlockHash = 0x531b257cc7ecda14d12007aae5f45924789ea70ab20e3e28d67025028fed61a9;
 
-        // Read the RLP-encoded block header from a file
+        // Read the RLP-encoded block header from a file (obtained via `debug_getRawHeader` RPC call)
         bytes memory headerRLP = vm.parseBytes(vm.readFile("./test/testdata/header_rlp.hex"));
 
-        // In prod, this check would be done using the blockhash function in the EVM,
-        // using the RLP-decoded block number as the input. This is just a sanity check here.
         assertEq(keccak256(headerRLP), trustedBlockHash);
 
         // RLP decode the header
