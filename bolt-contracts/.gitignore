@@ -3,3 +3,6 @@ out/
 broadcast/
 
 .env
+
+node_modules/
+target/
