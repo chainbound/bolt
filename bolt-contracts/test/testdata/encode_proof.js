@@ -1,6 +1,12 @@
 const RLP = require("rlp");
 const { utils } = require("ethers");
 
+function encodeProof(proof) {
+  return (
+    "0x" + RLP.encode(proof.map((part) => RLP.decode(part))).toString("hex")
+  );
+}
+
 function main() {
   const accountProof = [
     "0xf90211a0811c959d191db81cf1929f44231271707897d34acbdf1ff395ebd1664ed0d402a08cb5b5fcff8a8af29bfa184a62bc0eb5c4e13ddee909a5df288d0ba9f502250da0b9ce97b6d45b73111c420162db054697d67ae3330f7e3160474c4633bf32d3b9a03c65835e979a0d0fa9abc98638ee8ec1caa1cc11afad2d3014449ee881846c07a0de57c186ef9f1ed6fbfbdc0dd1e093bb017bab02a74f6bb2f55dff8276bd84eca01a8c58f62a77ac22822b90de03da14aa4e5ae109397db3bc037072e0a471e8f3a0eeb33f25372db45d01b38a73e981ac2a6fd2edb47bbbfb35c211bfadcdab98eea06afcd2aebc853ab00b624c9131713496beb4c31caf8fe8de668c4cc6a2fc402ea07102458c5da434a6b10dc534a1af09734076bb508f75d06b5c176a27203a6052a02fe0924a5eab75a28d4d7c654e1001fb9f31f8dcd3771c7bebd4d2d268a83761a0dd07a648c3b8308bf0df970717940ae5fac547d721c8adb2aea7521c33a5343aa0a4767329f798db09bb9708644db469bfc82f75d14fa7acffb6e8873b093bc328a00d86b3bc4dcf43b26948a38722327332729d1cb3b8ea7a9bd886cc39bf81c582a07f263804cc9465bc39205072c4390cf7494e959ead1604c325b6276a20a63f13a080df7adfb547dfe0bafbe8e43b75196d5efd1b4c2b89d6826e18def24a4982dca040d60c99fad8c70721ec6980c5ef0ab9c972c629ff19c1291763f8c001cf66c580",
@@ -16,8 +22,10 @@ function main() {
   const coder = new utils.AbiCoder();
 
   const trieProofRLP = "0x" + RLP.encode(accountProof).toString("hex");
+  console.log(trieProofRLP);
   const encodedProof = coder.encode(["bytes"], [trieProofRLP]);
   console.log(encodedProof);
+  console.log(encodeProof(accountProof));
 }
 
 main();

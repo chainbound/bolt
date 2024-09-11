@@ -71,7 +71,7 @@ contract BoltChallenger {
         address account,
         bytes32 stateRoot,
         bytes calldata accountProof
-    ) public returns (uint256 nonce, uint256 balance) {
+    ) public pure returns (uint256 nonce, uint256 balance) {
         (bool exists, bytes memory accountRLP) =
             SecureMerkleTrie.get(abi.encodePacked(account), accountProof, stateRoot);
 

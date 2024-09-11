@@ -4,8 +4,14 @@ pragma solidity 0.8.25;
 import {Test, console} from "forge-std/Test.sol";
 
 import {BoltChallenger} from "../src/contracts/BoltChallenger.sol";
+import {RLPReader} from "../src/lib/rlp/RLPReader.sol";
+import {RLPWriter} from "../src/lib/rlp/RLPWriter.sol";
+import {SecureMerkleTrie} from "../src/lib/trie/SecureMerkleTrie.sol";
 
 contract BoltChallengerTest is Test {
+    using RLPReader for bytes;
+    using RLPReader for RLPReader.RLPItem;
+
     BoltChallenger boltChallenger;
 
     address challenger = makeAddr("challenger");
@@ -15,31 +21,97 @@ contract BoltChallengerTest is Test {
         boltChallenger = new BoltChallenger();
     }
 
-    // TODO: to fix this test we need to have the right block hash on the test evm
-    // function testProveHeaderData() public {
-    //     bytes memory headerRLP =
-    //         hex"f90262a05fec8a42a343a05f3768385b69fded75042c9bcf5b159d1d75afb195533dd1b0a01dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347944838b106fce9647bdf1e7877bf73ce8b0bad5f97a05e9f1c386d2c33a9bc1a0c09b506cf1610833e986a0f4c6b5e6419691a54ee5ca03d513346b4f4f7de4017e9f0775fe7b20a8eb83115d1d6924327d8d34a1e0a53a0c8e276fa4db7cb4d12804058dc68da18341be2235b4c606cf627ae933923db4cb90100fbe169767f663d41d2b4da71eabafb6dd1dd2aa1eb6564b2a3db4641b53b8d0a07519542c67a34bd4e013f652f3e8df2ab3b8f208d137ebc079da44e452fc92b75f2a5b87c0a9d7bdaf65d2ff06094aac197d3f5544c4981ea965f4d8dff44d11ee9f7f82a63a9faa11c7bbad30c7cf5ad2fcf1f2cd4a737ce22de3e4809b5028cf2b659bbe43d5d29d9b163eeeeead0ef67e5cb99e1de3c682103517ff0fca8b7aff16a52d3a3c37a345ad5ac04ad6eeeaf463aa83d07140f64d9062c9885747b5fa3a6a9100b5357104df7634bbb96decbbf921e43f8951dee57d66d6fff9ffc71a9e9a00ab458276cd7b5555a29a6625ed298f9b07eda2137e1eb5dc5fee78084013c2cc38401c9c380840129b0ad8466e058ef98546974616e2028746974616e6275696c6465722e78797a29a06e7ff2a061a2b7ac1029c8a6ce1975bf32cf9030f8a447a8e11f3dc2d830539a88000000000000000085017aacac89a0a6c1c6fbce582b1401ec7ba51c3ad0510c96eb1b73bb5f42526c77d117418be780831a0000a0a4bd43aa3cbc5ebc7b805509b825a50cb7cf4bdbf14fd4125d21f36d1fb45dff";
-    // 
-    //     (
-    //         bytes32 transactionsRoot,
-    //         uint256 blockNumber,
-    //         uint256 gasLimit,
-    //         uint256 gasUsed,
-    //         uint256 timestamp,
-    //         uint256 baseFee
-    //     ) = boltChallenger.proveRecentBlockHeaderData(headerRLP);
-    // 
-    // 
-    //     assertEq(transactionsRoot, 0x5fec8a42a343a05f3768385b69fded75042c9bcf5b159d1d75afb195533dd1b0);
-    // }
+    function testProveHeaderData() public view {
+        // Note: In prod, how we obtain the trusted block hash would depend on the context.
+        // for recent blocks, we can simply use the blockhash function in the EVM.
+        bytes32 trustedBlockHash = 0x531b257cc7ecda14d12007aae5f45924789ea70ab20e3e28d67025028fed61a9;
 
-    function testProveAccountData() public {
+        // Read the RLP-encoded block header from a file
+        bytes memory headerRLP = vm.parseBytes(vm.readFile("./test/testdata/header_rlp.hex"));
+
+        // In prod, this check would be done using the blockhash function in the EVM,
+        // using the RLP-decoded block number as the input. This is just a sanity check here.
+        assertEq(keccak256(headerRLP), trustedBlockHash);
+
+        // RLP decode the header
+        // https://github.com/ethereum/go-ethereum/blob/master/core/types/block.go
+        RLPReader.RLPItem[] memory headerFields = headerRLP.toRLPItem().readList();
+        bytes32 stateRoot = headerFields[3].readBytes32();
+        bytes32 transactionsRoot = headerFields[4].readBytes32();
+        uint256 blockNumber = headerFields[8].readUint256();
+        uint256 gasLimit = headerFields[9].readUint256();
+        uint256 gasUsed = headerFields[10].readUint256();
+        uint256 timestamp = headerFields[11].readUint256();
+        uint256 baseFee = headerFields[15].readUint256();
+
+        assertEq(stateRoot, 0x5e9f1c386d2c33a9bc1a0c09b506cf1610833e986a0f4c6b5e6419691a54ee5c);
+        assertEq(transactionsRoot, 0x3d513346b4f4f7de4017e9f0775fe7b20a8eb83115d1d6924327d8d34a1e0a53);
+        assertEq(blockNumber, 20_720_835);
+        assertEq(gasLimit, 30_000_000);
+        assertEq(gasUsed, 19_509_421);
+        assertEq(timestamp, 1_725_978_863);
+        assertEq(baseFee, 6_353_104_009);
+    }
+
+    function testProveAccountData() public view {
+        // The account we want to prove
         address accountToProve = 0x0D9f5045B604bA0c050b5eb06D0b25d01c525Ea5;
-        bytes32 stateRootAtBlock = 0x5e9f1c386d2c33a9bc1a0c09b506cf1610833e986a0f4c6b5e6419691a54ee5c;
-        bytes memory accountProof = hex"00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000e96f90e93b90214f90211a0811c959d191db81cf1929f44231271707897d34acbdf1ff395ebd1664ed0d402a08cb5b5fcff8a8af29bfa184a62bc0eb5c4e13ddee909a5df288d0ba9f502250da0b9ce97b6d45b73111c420162db054697d67ae3330f7e3160474c4633bf32d3b9a03c65835e979a0d0fa9abc98638ee8ec1caa1cc11afad2d3014449ee881846c07a0de57c186ef9f1ed6fbfbdc0dd1e093bb017bab02a74f6bb2f55dff8276bd84eca01a8c58f62a77ac22822b90de03da14aa4e5ae109397db3bc037072e0a471e8f3a0eeb33f25372db45d01b38a73e981ac2a6fd2edb47bbbfb35c211bfadcdab98eea06afcd2aebc853ab00b624c9131713496beb4c31caf8fe8de668c4cc6a2fc402ea07102458c5da434a6b10dc534a1af09734076bb508f75d06b5c176a27203a6052a02fe0924a5eab75a28d4d7c654e1001fb9f31f8dcd3771c7bebd4d2d268a83761a0dd07a648c3b8308bf0df970717940ae5fac547d721c8adb2aea7521c33a5343aa0a4767329f798db09bb9708644db469bfc82f75d14fa7acffb6e8873b093bc328a00d86b3bc4dcf43b26948a38722327332729d1cb3b8ea7a9bd886cc39bf81c582a07f263804cc9465bc39205072c4390cf7494e959ead1604c325b6276a20a63f13a080df7adfb547dfe0bafbe8e43b75196d5efd1b4c2b89d6826e18def24a4982dca040d60c99fad8c70721ec6980c5ef0ab9c972c629ff19c1291763f8c001cf66c580b90214f90211a0597a26d8e55321031130772bd0edbaa9d93fb4fd5cb4ee386d5abca4c3d8aeeba07315915d766e641e0f59f890ebe999f6b3c4eb5e2f13b11bdd7d64cc622d8982a0c3d88c88b821718ad36846afc28dc27b57c9b3e814028f2677229196569a61efa09b98e5103e974df3c43ae46cc220c2aabf2801756cbde9017673f84615e3d588a09d4f0f18222d9fc2a7fe5e2272f1d6c0fc812bc88026b8ae3231d7ed41ec3c6da079e6650c8cead0a00f3be7282a317ea433b46c546233d50b342c1adf2f1c7b79a0e1dce0d24b41a927cef8ab6020fd16072a7ddfe5b330be4c0076ed084467c520a05fe0f634e8bcb450c6bea7093ea0a30fa88696af71547bcc061dd7f621a98b0ca0124ca7aa20069313f9c410714558a5961dbc53ae3b20674c2abccc35daaa91bda05accd06a38bb150686d79a6737daeaeac5b8aee70095c9de86d142ff5d3c4986a0cebd5d3771b0e15d91032172479fbeec48b579fbe42e8b58aee4dfa9fcd4d49ea07fdde85d73410096140cf9fd4eefffc7227c6eea1b304de828dc263e188aa09fa0a23e70c2d889bafc64cc9f696875c6a1cf8766b0408da93f944af663ca7ec7d2a0811e2a3befc6e6a6c8707f2b0166b1781903fde6bb65f01f5a6e529bbe0b601ca00f6489b50499b169ba4358084612e62f2797cdaa3550b916ab8c61f832678ee2a0f95d1980186fec7e4fe217bb47ec88413c126c05a14dd261b7be6570ea56d37580b90214f90211a0b23630acb1cf17e67160d18f74cdc571484064791078c1362f890cfb6bf74bc3a05b508b8ad59481fd45191ff9b7936fd624689766fc70706ab55fe7d8c16f26bea00a29bf174aec93658aeb90e92356bd6e7f7073962632db7a70b4985323432f18a0ddd49fc927ba19be8101e579d7dfb57645ab00f2451cc7b5663e3272da1d8ffda0fdd0c640a3f5c8f762d77b7ed4519f97444409be455ee2a88b3dea653bc8cc39a0929eefa2d310115c3209b60e7914a4c883e64e8781e57238ed892f0af5db4f34a0de4ca72eb7c28a07b9921f7f1e5b212615efb4cb34c2df6438bfa1d152270f6da021d21fb733f01b782023012b274a8bb81c3f008ff955e764e4bd373082cbc72ba068d350091322a3bef93717faf262f781a3689877c1400faa4486dab88a8c4909a0f7fb928e1b39505bd26891f731da8dbaa13afcdf5067b6800911dbb78568d4d8a0008db459bacce07bb24b2e75af21fdecf092e4ff4f69dd8893794d436ac8786da0b0be97cd51be4677263d35fefcabbdae9ec4ab1c98371c1825c2872ede26b17fa0eb6793de3fc77d5e5027d234d18c3969a279a59d5252546931f7220aa4d3c97ca0f0fbe59827d354c7a7555ba1302cf02947b044074fd74d8e5495b8843ade53c9a086980fa6a05caa8760b03a3a3a2777922f1747bd01a9225cd03465db3510164da08bee10930d7fa04169dd090682ce2f5fde1cab5d66bb752a9117372fd636700a80b90214f90211a042bc1721fc28b2b79306afe12500390b51a50505f8829e1aa81c2783f2003d56a0820a5842f1a3e836030584ddabf6689ff84b5046e01bee1c296e43692faf80faa05e4bea7a554535f76b941361a789c5b99f37df6353e81c7d2feb476781a6cd9da01fc8f103f35d728eee5d485b757a404b24f5382af63f2d6cbc412fa4120e3006a0a834e3a096fe2315fcfb159523a6569bf4ba08189d2c8296d0605809d3c08097a065d516c01f6066f33cd0d9e3218bcd175db534c44eb8a3719ef5dfaac22e419aa0c480208593ca766aa98eace44f642ddb997b895f59a53e088a5b5cd3923d67faa0fdc9f7a3a9001e58160de5e076ff90400f28ab46d6e7387dd0beae0dea1d7200a080ff08dede6c23e1c111ce8b4f9636d840c3a97041f1dd014ee205e8abe3c138a0dc839033ddc21e21033c44c06c0afc8ca1874c4d9d822b40f9aaa211f25372f6a0aba944735c5037760821093d75922fac3df506c18fa1815bb6bb2e2fc1182a72a0c140e23529c4ed7a532f5e1a3403c5da0d3b7b2781234ab52e9c0984ba047ebca0a64e02adb3000f493f8dc41f06c5c8251b0968f1810934c656b7507b2819e2fda0091a3f0609c1bbbc59925080392c7919c3b2515b90e7b16c41907c6307485f84a0c1dc1c449bbb7ab4a66301e831853443d94cb35f05e5688b5c7545ae6266635ca0e038f538492afb65eb990acfc020034f812ef3f91751bb4a988e3961ac72e4ce80b90214f90211a07accb50d92289f7c6870a958c7f5824727df1b7782c37284e2380964fe49bae3a0ebdda520a5bf8f960206839269df0955c666ae4010cabfa7594e50b5a47dd0e0a06652a79c42cf0d23532b84d47d58b6c898076d88147030581ff121d25407e25ba0a2791815cb8473ff7c0f293eac0365234c50f1a70fa52f529260390e9b6297e9a06519a8d5bf8febb422a4c7fc06895943b71e4f67b9ae0e3044330708e759323ea0be93e6dbe55fb8ebf349086832612d149c3af5f9066820fae13a230661392e74a02c187bea6ca54bacc98acd7e276ade111b0a14aef78be2f9dce829108c6b09a9a0982809a6ca9598bd67e2e39b214498a9acc5642011bbd5f68b5f8699e32e57baa0b268789c19f0615e9c6bb66579c729ed0c3e4b701457c219880fcbe5fbc5040ba00cf1ef59072b5c248e76221d5481c21e57eab944a5723e66a9d374e192c18aada0ceca857660555cc33f19ce530213ebfb2a9b0d9c34f9ed43d6d223d072255369a0cb41c230b31455fa5c830291faf053548f3273d6484345cc21723bb491470e24a0eb6e2079c07e7eadaede73e95ed1a23f9437ee7f4e9ae66d42a47916c4bcefdaa0d5533c62c8318a7e0bfb0bc5196f94c90f065da0668c4fb78f12c6a49d3d7fdfa0c8960e5b4f03757ebb594f634f0616602a78addddcc6da641917ff14ffac72cca0e35f2f148bfa3778d313b25ef0c8cc30c070a1ac0417ad33b07889bb526b5f1f80b90214f90211a023c9514b2fac99cd172f93d2db4d6578ec69fc2e0ef5c79fc76499ded09130eda07963b5c7dce6d662dee90bf64ce349a36d05df5268ff851bd1e1907f77bc0966a01206d33e26bffa7991db600d20e1cdebd28c623698e8d0481b37b47be68edd9ea0a6b7b10c53412201d9ca7461b7210d6457a6b275b95033e2d8ca9778e5071c05a03e6f50fedb2b9f9f963356fc2899800e46a38169a794a1e6906c02ce8e8f0d59a0d4cec6a796cbab7e9cb28063423fcf157bac02de0cf1f0931303a701006019a2a0fb7e5187937b4203cf97bce2f345c9161bfbb9eb431a105356009e6ce18a1fbca0c347aa16bba7f3d962b693f6cbb1c72fa14b8efa60c55097695c11502493fbe6a01c91aad4f4d391df268007fee771caedccc43369e07d6eb22fd45dab6beb0986a0672ca6ccfd8ac83f8974afefc9c9c2b58376991580158b16fd98cb9076cf8ea9a06cb3234503ad7116bb0e66257c646b2bce7603d774474a4f100cf93dde3eb594a085d0406435a6562f3370dd4b5de47a2b7d1084b9f25f0dbf49f54d2f46a2fc32a08bba9249e073397de4c46dd27688e9467b20fb8e61e04fd2594136cae26cd5c7a0a43fd38e14c38b64b84bb579b9a3cfab05cd5cc69c3a812a68e458acf72ea96ca0d848b40a2dbd5d8a4179e89fe8533f21db91982a0b8ecc1542c08ea27aec522aa0e03bc889898881f7ecb7caf0db5fb95125e26ff9e26bb85c33cbe360b50c9f1f80b90194f90191a017e9f741d070bfe3d975719f75663dabd5acdeb3678c50bd4872b817d7713d0b80a03e1570ab8528237e5c36ecce18a601c0d490eacbde79d7f29607e44b6f1f3168a0363162c748099d6ed114ead87c481972c1b0c124730b341c4ef1f963e0835a9880a09ef90c2a9ad234a08cbf4ea4ced535f227bc48becd22c1b05f2cbd586f018b73a0ae59576b0c1089b2828db7e54602ad0fabe4eff312ee5e0c21a04ac09b0e04d180a0fdbde0b4dbc02bb2ec472517c6f543de3673d33a6246a602479b43042ae9222da0c8d33ec13b89d8fd0ba487fe9cd61d18deff49bed48dc073384dc086a7361273a021253bb1110de615cede8c708a94cd6b898a61b5b1aaef8760b3341f232d63f0a06e7fbd4a6404e4acae007bb6147c58aebf6f19b3914a8d48b831bc3e50e5c05ea0c72d502ed522a796f823edefb721e64ff9d38904c9913b5be76f1e759c899b9da0fcc3a12a432daa29cb33f4a198624f6391124579ab7cbfae1eb30de076cfdd7980a0ab5019c60fef28581a93f0707739bbb24dcfbc2ffc550fb57aea59d91c79c04780b870f86e9d3a1698215d94a53d304dacf1ae39aec65065a3307b0d96cd2acd29de94b84ef84c81ea874f28d58d92e405a056e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421a0c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a47000000000000000000000";
 
-        (uint256 nonce, uint256 balance) = boltChallenger.proveAccountData(accountToProve, stateRootAtBlock, accountProof);
+        // Note: in prod the state root should be obtained from the block header proof.
+        // this way we can trust it comes from the right block number. This comes from Mainnet block 20_720_835.
+        bytes32 stateRootAtBlock = 0x5e9f1c386d2c33a9bc1a0c09b506cf1610833e986a0f4c6b5e6419691a54ee5c;
+
+        // Read the RLP-encoded account proof from a file. This is obtained from the `eth_getProof`
+        // RPC call + ABI-encoding of the resulting accountProof array.
+        bytes memory accountProofJson = vm.parseJson(vm.readFile("./test/testdata/eth_proof.json"), ".result.accountProof");
+        bytes[] memory accountProofJsonArray = abi.decode(accountProofJson, (bytes[]));
+        bytes[] memory accountProofJsonArrayEncoded = new bytes[](accountProofJsonArray.length);
+        for (uint i = 0; i < accountProofJsonArray.length; i++) {
+            accountProofJsonArrayEncoded[i] = RLPWriter.writeBytes(accountProofJsonArray[i]);
+        }
+        bytes memory accountProof = RLPWriter.writeList(accountProofJsonArrayEncoded);
+
+        // sanity check
+        RLPReader.RLPItem[] memory nodes = RLPReader.readList(accountProof);
+        for (uint i = 0; i < nodes.length; i++) {
+            // This will fail if the proof is encoded incorrectly
+            RLPReader.readBytes(nodes[i]);
+        }
+
+        // TODO: debug why the root hash is failing to match
+        console.log("before trie.get");
+        (bool exists, bytes memory accountRLP) =
+            SecureMerkleTrie.get(abi.encodePacked(accountToProve), accountProof, stateRootAtBlock);
+        console.log("after trie.get");
+        assertEq(exists, true);
+
+        console.logBytes(accountRLP);
+
+        // decode the account RLP into nonce and balance
+        RLPReader.RLPItem[] memory accountFields = accountRLP.toRLPItem().readList();
+        uint256 nonce = accountFields[0].readUint256();
+        uint256 balance = accountFields[1].readUint256();
+
         console.log(nonce);
         console.log(balance);
+    }
+
+    function testProveTransactionInclusion() public view {
+        bytes32 txRootAtBlock = 0x3d513346b4f4f7de4017e9f0775fe7b20a8eb83115d1d6924327d8d34a1e0a53;
+        bytes32 txHash = 0xdf15fd0565b9f0519259aaf6fef098189c21739ccdf05c31d5a6e13fd9acb669;
+        uint256 txIndex = 149;
+
+        // TODO: fix
+        // bytes memory txProofJson = vm.parseJson(vm.readFile("./test/testdata/tx_mpt_proof.json"), ".proof");
+        // bytes[] memory txProofJsonArray = abi.decode(txProofJson, (bytes[]));
+        // bytes[] memory txProofJsonArrayEncoded = new bytes[](txProofJsonArray.length);
+        // for (uint i = 0; i < txProofJsonArray.length; i++) {
+        //     txProofJsonArrayEncoded[i] = RLPWriter.writeBytes(txProofJsonArray[i]);
+        // }
+        // bytes memory txProof = RLPWriter.writeList(txProofJsonArrayEncoded);
+
+        // (bool exists, bytes memory transactionRLP) = 
+        //     SecureMerkleTrie.get(abi.encodePacked(txHash), txProof, txRootAtBlock);
+        // assertEq(exists, true);
     }
 }
