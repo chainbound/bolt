@@ -25,29 +25,35 @@ interface IBoltManager {
     error StrategyNotAllowed();
     error OperatorNotRegisteredToAVS();
 
-    function getEpochStartTs(uint48 epoch) external view returns (uint48);
+    function getEpochStartTs(
+        uint48 epoch
+    ) external view returns (uint48);
 
-    function getEpochAtTs(uint48 timestamp) external view returns (uint48);
+    function getEpochAtTs(
+        uint48 timestamp
+    ) external view returns (uint48);
 
     function getCurrentEpoch() external view returns (uint48);
 
-    function addWhitelistedSymbioticCollateral(address collateral) external;
+    function addWhitelistedSymbioticCollateral(
+        address collateral
+    ) external;
 
-    function addWhitelistedEigenLayerCollateral(address collateral) external;
+    function addWhitelistedEigenLayerCollateral(
+        address collateral
+    ) external;
 
-    function removeWhitelistedSymbioticCollateral(address collateral) external;
+    function removeWhitelistedSymbioticCollateral(
+        address collateral
+    ) external;
 
-    function removeWhitelistedEigenLayerCollateral(address collateral) external;
+    function removeWhitelistedEigenLayerCollateral(
+        address collateral
+    ) external;
 
-    function getWhitelistedSymbioticCollaterals()
-        external
-        view
-        returns (address[] memory);
+    function getWhitelistedSymbioticCollaterals() external view returns (address[] memory);
 
-    function getWhitelistedEigenLayerCollaterals()
-        external
-        view
-        returns (address[] memory);
+    function getWhitelistedEigenLayerCollaterals() external view returns (address[] memory);
 
     function isSymbioticCollateralWhitelisted(
         address collateral
@@ -57,9 +63,13 @@ interface IBoltManager {
         address collateral
     ) external view returns (bool);
 
-    function registerSymbioticOperator(address operator) external;
+    function registerSymbioticOperator(
+        address operator
+    ) external;
 
-    function registerEigenLayerOperator(address operator) external;
+    function registerEigenLayerOperator(
+        address operator
+    ) external;
 
     function pauseSymbioticOperator() external;
 
@@ -69,9 +79,13 @@ interface IBoltManager {
 
     function unpauseEigenLayerOperator() external;
 
-    function registerSymbioticVault(address vault) external;
+    function registerSymbioticVault(
+        address vault
+    ) external;
 
-    function registerEigenLayerStrategy(address vault) external;
+    function registerEigenLayerStrategy(
+        address vault
+    ) external;
 
     function pauseSymbioticVault() external;
 
@@ -113,20 +127,11 @@ interface IBoltManager {
         bytes32 pubkeyHash
     ) external view returns (ProposerStatus memory);
 
-    function isOperatorAuthorizedForValidator(
-        address operator,
-        bytes32 pubkeyHash
-    ) external view returns (bool);
+    function isOperatorAuthorizedForValidator(address operator, bytes32 pubkeyHash) external view returns (bool);
 
-    function getSymbioticOperatorStake(
-        address operator,
-        address collateral
-    ) external view returns (uint256);
+    function getSymbioticOperatorStake(address operator, address collateral) external view returns (uint256);
 
-    function getEigenLayerOperatorStake(
-        address operator,
-        address collateral
-    ) external view returns (uint256);
+    function getEigenLayerOperatorStake(address operator, address collateral) external view returns (uint256);
 
     function getSymbioticOperatorStakeAt(
         address operator,
@@ -140,13 +145,7 @@ interface IBoltManager {
         uint48 timestamp
     ) external view returns (uint256);
 
-    function getSymbioticTotalStake(
-        uint48 epoch,
-        address collateral
-    ) external view returns (uint256);
+    function getSymbioticTotalStake(uint48 epoch, address collateral) external view returns (uint256);
 
-    function getEigenLayerTotalStake(
-        uint48 epoch,
-        address collateral
-    ) external view returns (uint256);
+    function getEigenLayerTotalStake(uint48 epoch, address collateral) external view returns (uint256);
 }

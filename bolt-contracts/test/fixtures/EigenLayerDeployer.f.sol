@@ -30,58 +30,44 @@ import "forge-std/Test.sol";
 import "forge-std/Script.sol";
 import "forge-std/StdJson.sol";
 
-address constant HEVM_ADDRESS = address(
-    bytes20(uint160(uint256(keccak256("hevm cheat code"))))
-);
+address constant HEVM_ADDRESS = address(bytes20(uint160(uint256(keccak256("hevm cheat code")))));
 
 contract Operators is Test {
     string internal operatorConfigJson;
 
     constructor() {
-        operatorConfigJson = vm.readFile(
-            "./test/test_data_eigenlayer/operators.json"
-        );
+        operatorConfigJson = vm.readFile("./test/test_data_eigenlayer/operators.json");
     }
 
-    function operatorPrefix(uint256 index) public pure returns (string memory) {
-        return
-            string.concat(
-                ".operators[",
-                string.concat(vm.toString(index), "].")
-            );
+    function operatorPrefix(
+        uint256 index
+    ) public pure returns (string memory) {
+        return string.concat(".operators[", string.concat(vm.toString(index), "]."));
     }
 
     function getNumOperators() public view returns (uint256) {
         return stdJson.readUint(operatorConfigJson, ".numOperators");
     }
 
-    function getOperatorAddress(uint256 index) public view returns (address) {
-        return
-            stdJson.readAddress(
-                operatorConfigJson,
-                string.concat(operatorPrefix(index), "Address")
-            );
+    function getOperatorAddress(
+        uint256 index
+    ) public view returns (address) {
+        return stdJson.readAddress(operatorConfigJson, string.concat(operatorPrefix(index), "Address"));
     }
 
-    function getOperatorSecretKey(uint256 index) public view returns (uint256) {
+    function getOperatorSecretKey(
+        uint256 index
+    ) public view returns (uint256) {
         return readUint(operatorConfigJson, index, "SecretKey");
     }
 
-    function readUint(
-        string memory json,
-        uint256 index,
-        string memory key
-    ) public pure returns (uint256) {
-        return
-            stringToUint(
-                stdJson.readString(
-                    json,
-                    string.concat(operatorPrefix(index), key)
-                )
-            );
+    function readUint(string memory json, uint256 index, string memory key) public pure returns (uint256) {
+        return stringToUint(stdJson.readString(json, string.concat(operatorPrefix(index), key)));
     }
 
-    function stringToUint(string memory s) public pure returns (uint256) {
+    function stringToUint(
+        string memory s
+    ) public pure returns (uint256) {
         bytes memory b = bytes(s);
         uint256 result = 0;
         for (uint256 i = 0; i < b.length; i++) {
@@ -92,7 +78,9 @@ contract Operators is Test {
         return result;
     }
 
-    function setOperatorJsonFilePath(string memory filepath) public {
+    function setOperatorJsonFilePath(
+        string memory filepath
+    ) public {
         operatorConfigJson = vm.readFile(filepath);
     }
 }
@@ -124,14 +112,12 @@ contract EigenLayerDeployer is Operators {
     mapping(uint256 => IStrategy) public strategies;
 
     //from testing seed phrase
-    bytes32 priv_key_0 =
-        0x1234567812345678123456781234567812345678123456781234567812345678;
-    bytes32 priv_key_1 =
-        0x1234567812345678123456781234567812345698123456781234567812348976;
+    bytes32 priv_key_0 = 0x1234567812345678123456781234567812345678123456781234567812345678;
+    bytes32 priv_key_1 = 0x1234567812345678123456781234567812345698123456781234567812348976;
 
     //strategy indexes for undelegation (see commitUndelegation function)
     uint256[] public strategyIndexes;
-    address sample_registrant = cheats.addr(436364636);
+    address sample_registrant = cheats.addr(436_364_636);
 
     address[] public slashingContracts;
 
@@ -139,14 +125,14 @@ contract EigenLayerDeployer is Operators {
     address staker;
     uint256 public constant eigenTotalSupply = 1000e18;
     uint256 nonce = 69;
-    uint256 public gasLimit = 750000;
+    uint256 public gasLimit = 750_000;
     IStrategy[] public initializeStrategiesToSetDelayBlocks;
     uint256[] public initializeWithdrawalDelayBlocks;
     uint256 minWithdrawalDelayBlocks = 0;
     uint32 PARTIAL_WITHDRAWAL_FRAUD_PROOF_PERIOD_BLOCKS = 7 days / 12 seconds;
     uint256 REQUIRED_BALANCE_WEI = 32 ether;
     uint64 MAX_PARTIAL_WTIHDRAWAL_AMOUNT_GWEI = 1 ether / 1e9;
-    uint64 GOERLI_GENESIS_TIME = 1616508000;
+    uint64 GOERLI_GENESIS_TIME = 1_616_508_000;
 
     address pauser;
     address unpauser;
@@ -173,26 +159,28 @@ contract EigenLayerDeployer is Operators {
     mapping(address => bool) fuzzedAddressMapping;
 
     //ensures that a passed in address is not set to true in the fuzzedAddressMapping
-    modifier fuzzedAddress(address addr) virtual {
+    modifier fuzzedAddress(
+        address addr
+    ) virtual {
         cheats.assume(fuzzedAddressMapping[addr] == false);
         _;
     }
 
     modifier cannotReinit() {
-        cheats.expectRevert(
-            bytes("Initializable: contract is already initialized")
-        );
+        cheats.expectRevert(bytes("Initializable: contract is already initialized"));
         _;
     }
 
-    constructor(address _staker) {
+    constructor(
+        address _staker
+    ) {
         staker = _staker;
     }
 
     //performs basic deployment before each test
     function setUp() public virtual {
         try vm.envUint("CHAIN_ID") returns (uint256 chainId) {
-            if (chainId == 31337) {
+            if (chainId == 31_337) {
                 _deployEigenLayerContractsLocal();
             }
             // If CHAIN_ID ENV is not set, assume local deployment on 31337
@@ -225,49 +213,18 @@ contract EigenLayerDeployer is Operators {
          */
         emptyContract = new EmptyContract();
         delegationManager = DelegationManager(
-            address(
-                new TransparentUpgradeableProxy(
-                    address(emptyContract),
-                    address(eigenLayerProxyAdmin),
-                    ""
-                )
-            )
+            address(new TransparentUpgradeableProxy(address(emptyContract), address(eigenLayerProxyAdmin), ""))
         );
         strategyManager = StrategyManager(
-            address(
-                new TransparentUpgradeableProxy(
-                    address(emptyContract),
-                    address(eigenLayerProxyAdmin),
-                    ""
-                )
-            )
+            address(new TransparentUpgradeableProxy(address(emptyContract), address(eigenLayerProxyAdmin), ""))
         );
-        slasher = Slasher(
-            address(
-                new TransparentUpgradeableProxy(
-                    address(emptyContract),
-                    address(eigenLayerProxyAdmin),
-                    ""
-                )
-            )
-        );
+        slasher =
+            Slasher(address(new TransparentUpgradeableProxy(address(emptyContract), address(eigenLayerProxyAdmin), "")));
         eigenPodManager = EigenPodManager(
-            address(
-                new TransparentUpgradeableProxy(
-                    address(emptyContract),
-                    address(eigenLayerProxyAdmin),
-                    ""
-                )
-            )
+            address(new TransparentUpgradeableProxy(address(emptyContract), address(eigenLayerProxyAdmin), ""))
         );
         avsDirectory = AVSDirectory(
-            address(
-                new TransparentUpgradeableProxy(
-                    address(emptyContract),
-                    address(eigenLayerProxyAdmin),
-                    ""
-                )
-            )
+            address(new TransparentUpgradeableProxy(address(emptyContract), address(eigenLayerProxyAdmin), ""))
         );
         ethPOSDeposit = new ETHPOSDepositMock();
         pod = new EigenPod(ethPOSDeposit, eigenPodManager, GOERLI_GENESIS_TIME);
@@ -275,30 +232,12 @@ contract EigenLayerDeployer is Operators {
         eigenPodBeacon = new UpgradeableBeacon(address(pod));
 
         // Second, deploy the *implementation* contracts, using the *proxy contracts* as inputs
-        DelegationManager delegationImplementation = new DelegationManager(
-            strategyManager,
-            slasher,
-            eigenPodManager
-        );
-        StrategyManager strategyManagerImplementation = new StrategyManager(
-            delegationManager,
-            eigenPodManager,
-            slasher
-        );
-        Slasher slasherImplementation = new Slasher(
-            strategyManager,
-            delegationManager
-        );
-        EigenPodManager eigenPodManagerImplementation = new EigenPodManager(
-            ethPOSDeposit,
-            eigenPodBeacon,
-            strategyManager,
-            slasher,
-            delegationManager
-        );
-        AVSDirectory avsDirectoryImplementation = new AVSDirectory(
-            delegationManager
-        );
+        DelegationManager delegationImplementation = new DelegationManager(strategyManager, slasher, eigenPodManager);
+        StrategyManager strategyManagerImplementation = new StrategyManager(delegationManager, eigenPodManager, slasher);
+        Slasher slasherImplementation = new Slasher(strategyManager, delegationManager);
+        EigenPodManager eigenPodManagerImplementation =
+            new EigenPodManager(ethPOSDeposit, eigenPodBeacon, strategyManager, slasher, delegationManager);
+        AVSDirectory avsDirectoryImplementation = new AVSDirectory(delegationManager);
 
         // Third, upgrade the proxy contracts to use the correct implementation contracts and initialize them.
         eigenLayerProxyAdmin.upgradeAndCall(
@@ -308,7 +247,7 @@ contract EigenLayerDeployer is Operators {
                 DelegationManager.initialize.selector,
                 eigenLayerReputedMultisig,
                 eigenLayerPauserReg,
-                0 /*initialPausedStatus*/,
+                0, /*initialPausedStatus*/
                 minWithdrawalDelayBlocks,
                 initializeStrategiesToSetDelayBlocks,
                 initializeWithdrawalDelayBlocks
@@ -329,10 +268,7 @@ contract EigenLayerDeployer is Operators {
             TransparentUpgradeableProxy(payable(address(slasher))),
             address(slasherImplementation),
             abi.encodeWithSelector(
-                Slasher.initialize.selector,
-                eigenLayerReputedMultisig,
-                eigenLayerPauserReg,
-                0 /*initialPausedStatus*/
+                Slasher.initialize.selector, eigenLayerReputedMultisig, eigenLayerPauserReg, 0 /*initialPausedStatus*/
             )
         );
         eigenLayerProxyAdmin.upgradeAndCall(
@@ -357,12 +293,7 @@ contract EigenLayerDeployer is Operators {
         );
 
         //simple ERC20 (**NOT** WETH-like!), used in a test strategy
-        weth = new ERC20PresetFixedSupply(
-            "weth",
-            "WETH",
-            wethInitialSupply,
-            staker
-        );
+        weth = new ERC20PresetFixedSupply("weth", "WETH", wethInitialSupply, staker);
 
         // deploy StrategyBase contract implementation, then create upgradeable proxy that points to implementation and initialize it
         baseStrategyImplementation = new StrategyBase(strategyManager);
@@ -371,21 +302,12 @@ contract EigenLayerDeployer is Operators {
                 new TransparentUpgradeableProxy(
                     address(baseStrategyImplementation),
                     address(eigenLayerProxyAdmin),
-                    abi.encodeWithSelector(
-                        StrategyBase.initialize.selector,
-                        weth,
-                        eigenLayerPauserReg
-                    )
+                    abi.encodeWithSelector(StrategyBase.initialize.selector, weth, eigenLayerPauserReg)
                 )
             )
         );
 
-        eigenToken = new ERC20PresetFixedSupply(
-            "eigen",
-            "EIGEN",
-            wethInitialSupply,
-            staker
-        );
+        eigenToken = new ERC20PresetFixedSupply("eigen", "EIGEN", wethInitialSupply, staker);
 
         // deploy upgradeable proxy that points to StrategyBase implementation and initialize it
         eigenStrat = StrategyBase(
@@ -393,11 +315,7 @@ contract EigenLayerDeployer is Operators {
                 new TransparentUpgradeableProxy(
                     address(baseStrategyImplementation),
                     address(eigenLayerProxyAdmin),
-                    abi.encodeWithSelector(
-                        StrategyBase.initialize.selector,
-                        eigenToken,
-                        eigenLayerPauserReg
-                    )
+                    abi.encodeWithSelector(StrategyBase.initialize.selector, eigenToken, eigenLayerPauserReg)
                 )
             )
         );
@@ -409,45 +327,20 @@ contract EigenLayerDeployer is Operators {
 
         bool[] memory thirdPartyTransfersForbidden = new bool[](2);
 
-        strategyManager.addStrategiesToDepositWhitelist(
-            strategiesToWhitelist,
-            thirdPartyTransfersForbidden
-        );
+        strategyManager.addStrategiesToDepositWhitelist(strategiesToWhitelist, thirdPartyTransfersForbidden);
     }
 
-    function _setAddresses(string memory config) internal {
-        eigenLayerProxyAdminAddress = stdJson.readAddress(
-            config,
-            ".addresses.eigenLayerProxyAdmin"
-        );
-        eigenLayerPauserRegAddress = stdJson.readAddress(
-            config,
-            ".addresses.eigenLayerPauserReg"
-        );
-        delegationAddress = stdJson.readAddress(
-            config,
-            ".addresses.delegation"
-        );
-        strategyManagerAddress = stdJson.readAddress(
-            config,
-            ".addresses.strategyManager"
-        );
+    function _setAddresses(
+        string memory config
+    ) internal {
+        eigenLayerProxyAdminAddress = stdJson.readAddress(config, ".addresses.eigenLayerProxyAdmin");
+        eigenLayerPauserRegAddress = stdJson.readAddress(config, ".addresses.eigenLayerPauserReg");
+        delegationAddress = stdJson.readAddress(config, ".addresses.delegation");
+        strategyManagerAddress = stdJson.readAddress(config, ".addresses.strategyManager");
         slasherAddress = stdJson.readAddress(config, ".addresses.slasher");
-        eigenPodManagerAddress = stdJson.readAddress(
-            config,
-            ".addresses.eigenPodManager"
-        );
-        emptyContractAddress = stdJson.readAddress(
-            config,
-            ".addresses.emptyContract"
-        );
-        operationsMultisig = stdJson.readAddress(
-            config,
-            ".parameters.operationsMultisig"
-        );
-        executorMultisig = stdJson.readAddress(
-            config,
-            ".parameters.executorMultisig"
-        );
+        eigenPodManagerAddress = stdJson.readAddress(config, ".addresses.eigenPodManager");
+        emptyContractAddress = stdJson.readAddress(config, ".addresses.emptyContract");
+        operationsMultisig = stdJson.readAddress(config, ".parameters.operationsMultisig");
+        executorMultisig = stdJson.readAddress(config, ".parameters.executorMultisig");
     }
 }

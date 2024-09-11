@@ -28,8 +28,7 @@ contract BoltValidatorsTest is Test {
         vm.prank(validator);
         validators.registerValidatorUnsafe(pubkey, provider, operator);
 
-        BoltValidators.Validator memory registered = validators
-            .getValidatorByPubkey(pubkey);
+        BoltValidators.Validator memory registered = validators.getValidatorByPubkey(pubkey);
         assertEq(registered.exists, true);
         assertEq(registered.authorizedCollateralProvider, provider);
         assertEq(registered.authorizedOperator, operator);
@@ -62,9 +61,7 @@ contract BoltValidatorsTest is Test {
         BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
 
         vm.prank(validator);
-        vm.expectRevert(
-            IBoltValidators.InvalidAuthorizedCollateralProvider.selector
-        );
+        vm.expectRevert(IBoltValidators.InvalidAuthorizedCollateralProvider.selector);
         validators.registerValidatorUnsafe(pubkey, address(0), operator);
     }
 
