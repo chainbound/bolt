@@ -7,6 +7,7 @@ import {BoltChallenger} from "../src/contracts/BoltChallenger.sol";
 import {RLPReader} from "../src/lib/rlp/RLPReader.sol";
 import {RLPWriter} from "../src/lib/rlp/RLPWriter.sol";
 import {SecureMerkleTrie} from "../src/lib/trie/SecureMerkleTrie.sol";
+import {MerkleTrie} from "../src/lib/trie/MerkleTrie.sol";
 
 contract BoltChallengerTest is Test {
     using RLPReader for bytes;
@@ -23,8 +24,8 @@ contract BoltChallengerTest is Test {
 
     function testProveHeaderData() public view {
         // Note: In prod, how we obtain the trusted block hash would depend on the context.
-        // for recent blocks, we can simply use the blockhash function in the EVM.
-        bytes32 trustedBlockHash = 0x531b257cc7ecda14d12007aae5f45924789ea70ab20e3e28d67025028fed61a9;
+        // For recent blocks, we can simply use the blockhash function in the EVM.
+        bytes32 trustedBlockHash = 0xba212beac090306b5edea79b5f5cd4c91a0c1568acc489983e2545c48c1a0f42;
 
         // Read the RLP-encoded block header from a file (obtained via `debug_getRawHeader` RPC call)
         bytes memory headerRLP = vm.parseBytes(vm.readFile("./test/testdata/header_rlp.hex"));
@@ -42,13 +43,13 @@ contract BoltChallengerTest is Test {
         uint256 timestamp = headerFields[11].readUint256();
         uint256 baseFee = headerFields[15].readUint256();
 
-        assertEq(stateRoot, 0x5e9f1c386d2c33a9bc1a0c09b506cf1610833e986a0f4c6b5e6419691a54ee5c);
-        assertEq(transactionsRoot, 0x3d513346b4f4f7de4017e9f0775fe7b20a8eb83115d1d6924327d8d34a1e0a53);
-        assertEq(blockNumber, 20_720_835);
+        assertEq(stateRoot, 0xebfa3f5945e5d03bb94edf276ee36ca9ce56382686d16acb2e21f7ca6e58d712);
+        assertEq(transactionsRoot, 0xeea3c72aa7598c0b741dca81b196cdeaac3d503441fa3620e12eec924ba35c2b);
+        assertEq(blockNumber, 20_728_344);
         assertEq(gasLimit, 30_000_000);
-        assertEq(gasUsed, 19_509_421);
-        assertEq(timestamp, 1_725_978_863);
-        assertEq(baseFee, 6_353_104_009);
+        assertEq(gasUsed, 9_503_925);
+        assertEq(timestamp, 1_726_069_463);
+        assertEq(baseFee, 5_703_406_196);
     }
 
     function testProveAccountData() public view {
@@ -56,60 +57,67 @@ contract BoltChallengerTest is Test {
         address accountToProve = 0x0D9f5045B604bA0c050b5eb06D0b25d01c525Ea5;
 
         // Note: in prod the state root should be obtained from the block header proof.
-        // this way we can trust it comes from the right block number. This comes from Mainnet block 20_720_835.
-        bytes32 stateRootAtBlock = 0x5e9f1c386d2c33a9bc1a0c09b506cf1610833e986a0f4c6b5e6419691a54ee5c;
+        // this way we can trust it comes from the right block number. This comes from Mainnet block 20_728_344.
+        bytes32 stateRootAtBlock = 0xebfa3f5945e5d03bb94edf276ee36ca9ce56382686d16acb2e21f7ca6e58d712;
 
         // Read the RLP-encoded account proof from a file. This is obtained from the `eth_getProof`
         // RPC call + ABI-encoding of the resulting accountProof array.
-        bytes memory accountProofJson = vm.parseJson(vm.readFile("./test/testdata/eth_proof.json"), ".result.accountProof");
-        bytes[] memory accountProofJsonArray = abi.decode(accountProofJson, (bytes[]));
-        bytes[] memory accountProofJsonArrayEncoded = new bytes[](accountProofJsonArray.length);
-        for (uint i = 0; i < accountProofJsonArray.length; i++) {
-            accountProofJsonArrayEncoded[i] = RLPWriter.writeBytes(accountProofJsonArray[i]);
-        }
-        bytes memory accountProof = RLPWriter.writeList(accountProofJsonArrayEncoded);
+        string memory file = vm.readFile("./test/testdata/eth_proof.json");
+        bytes[] memory accountProofJson = vm.parseJsonBytesArray(file, ".result.accountProof");
+        bytes memory accountProof = _RLPEncodeList(accountProofJson);
 
-        // sanity check
+        // Perform a sanity check to see if the state root matches the expected trie node
         RLPReader.RLPItem[] memory nodes = RLPReader.readList(accountProof);
-        for (uint i = 0; i < nodes.length; i++) {
-            // This will fail if the proof is encoded incorrectly
-            RLPReader.readBytes(nodes[i]);
+        MerkleTrie.TrieNode[] memory proof = new MerkleTrie.TrieNode[](nodes.length);
+        for (uint256 i = 0; i < nodes.length; i++) {
+            bytes memory encoded = RLPReader.readBytes(nodes[i]);
+            proof[i] = MerkleTrie.TrieNode({encoded: encoded, decoded: RLPReader.readList(encoded)});
         }
+        assertEq(keccak256(proof[0].encoded), stateRootAtBlock, "Roots should match");
 
-        // TODO: debug why the root hash is failing to match
-        console.log("before trie.get");
         (bool exists, bytes memory accountRLP) =
             SecureMerkleTrie.get(abi.encodePacked(accountToProve), accountProof, stateRootAtBlock);
-        console.log("after trie.get");
         assertEq(exists, true);
-
-        console.logBytes(accountRLP);
 
         // decode the account RLP into nonce and balance
         RLPReader.RLPItem[] memory accountFields = accountRLP.toRLPItem().readList();
         uint256 nonce = accountFields[0].readUint256();
         uint256 balance = accountFields[1].readUint256();
 
-        console.log(nonce);
-        console.log(balance);
+        assertEq(nonce, 234);
+        assertEq(balance, 22_281_420_828_500_997);
     }
 
     function testProveTransactionInclusion() public view {
-        bytes32 txRootAtBlock = 0x3d513346b4f4f7de4017e9f0775fe7b20a8eb83115d1d6924327d8d34a1e0a53;
-        bytes32 txHash = 0xdf15fd0565b9f0519259aaf6fef098189c21739ccdf05c31d5a6e13fd9acb669;
-        uint256 txIndex = 149;
+        // The transaction we want to prove inclusion of
+        bytes32 txHash = 0xec9cbdb7ca9cc97542ba6f68b70543e89b701c438d50af827781248e37e06246;
 
-        // TODO: fix
-        // bytes memory txProofJson = vm.parseJson(vm.readFile("./test/testdata/tx_mpt_proof.json"), ".proof");
-        // bytes[] memory txProofJsonArray = abi.decode(txProofJson, (bytes[]));
-        // bytes[] memory txProofJsonArrayEncoded = new bytes[](txProofJsonArray.length);
-        // for (uint i = 0; i < txProofJsonArray.length; i++) {
-        //     txProofJsonArrayEncoded[i] = RLPWriter.writeBytes(txProofJsonArray[i]);
-        // }
-        // bytes memory txProof = RLPWriter.writeList(txProofJsonArrayEncoded);
+        // MPT proof, obtained with the `eth-trie-proof` CLI tool
+        string memory file = vm.readFile("./test/testdata/tx_mpt_proof.json");
+        bytes[] memory txProofJson = vm.parseJsonBytesArray(file, ".proof");
+        bytes memory txProof = _RLPEncodeList(txProofJson);
 
-        // (bool exists, bytes memory transactionRLP) = 
-        //     SecureMerkleTrie.get(abi.encodePacked(txHash), txProof, txRootAtBlock);
-        // assertEq(exists, true);
+        // The transactions root and index in the block, also included in the CLI response
+        bytes32 txRootAtBlock = vm.parseJsonBytes32(file, ".root");
+        uint256 txIndexInBlock = vm.parseJsonUint(file, ".index");
+
+        // TODO: fix inputs
+        (bool exists, bytes memory transactionRLP) =
+            SecureMerkleTrie.get(abi.encodePacked(txHash), txProof, txRootAtBlock);
+
+        assertEq(exists, true);
+
+        RLPReader.RLPItem[] memory txFields = transactionRLP.toRLPItem().readList();
+    }
+
+    // Helper function to encode a list of bytes[] into an RLP list with each item RLP-encoded
+    function _RLPEncodeList(
+        bytes[] memory _items
+    ) internal pure returns (bytes memory) {
+        bytes[] memory encodedItems = new bytes[](_items.length);
+        for (uint256 i = 0; i < _items.length; i++) {
+            encodedItems[i] = RLPWriter.writeBytes(_items[i]);
+        }
+        return RLPWriter.writeList(encodedItems);
     }
 }
