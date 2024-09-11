@@ -12,7 +12,10 @@ contract DeployBoltManager is Script {
         address symbioticNetwork,
         address symbioticOperatorRegistry,
         address symbioticOperatorNetOptIn,
-        address symbioticVaultRegistry
+        address symbioticVaultRegistry,
+        address eigenlayerAVSDirectory,
+        address eigenlayerDelegationManager,
+        address eigenlayerStrategyManager
     ) public {
         vm.startBroadcast();
 
@@ -27,7 +30,10 @@ contract DeployBoltManager is Script {
             symbioticNetwork,
             symbioticOperatorRegistry,
             symbioticOperatorNetOptIn,
-            symbioticVaultRegistry
+            symbioticVaultRegistry,
+            eigenlayerAVSDirectory,
+            eigenlayerDelegationManager,
+            eigenlayerStrategyManager
         );
         console.log("BoltManager deployed at", address(manager));
 

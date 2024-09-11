@@ -152,12 +152,15 @@ contract BoltManagerTest is Test {
             networkAdmin,
             address(operatorRegistry),
             address(operatorNetworkOptInService),
-            address(vaultFactory)
+            address(vaultFactory),
+            address(0),
+            address(0),
+            address(0)
         );
 
         // --- Whitelist collateral in BoltManager ---
         vm.prank(admin);
-        manager.addWhitelistedCollateral(address(collateral));
+        manager.addWhitelistedSymbioticCollateral(address(collateral));
     }
 
     /// @notice Internal helper to register Symbiotic contracts and opt-in operators and vaults.
@@ -302,7 +305,7 @@ contract BoltManagerTest is Test {
         vm.warp(block.timestamp + EPOCH_DURATION * 2 + 1);
         assertEq(vault.currentEpoch(), 2);
 
-        BoltManager.ProposerStatus memory status = manager.getProposerStatus(pubkeyHash);
+        BoltManager.ProposerStatus memory status = manager.getSymbioticProposerStatus(pubkeyHash);
         assertEq(status.pubkeyHash, pubkeyHash);
         assertEq(status.operator, operator);
         assertEq(status.active, true);
@@ -330,7 +333,7 @@ contract BoltManagerTest is Test {
         vm.warp(block.timestamp + EPOCH_DURATION * 2 + 1);
         assertEq(vault.currentEpoch(), 2);
 
-        BoltManager.ProposerStatus[] memory statuses = manager.getProposersStatus(pubkeyHashes);
+        BoltManager.ProposerStatus[] memory statuses = manager.getSymbioticProposersStatus(pubkeyHashes);
         assertEq(statuses.length, 10);
     }
 
@@ -340,18 +343,18 @@ contract BoltManagerTest is Test {
         bytes32 pubkeyHash = bytes32(uint256(1));
 
         vm.expectRevert(IBoltValidators.ValidatorDoesNotExist.selector);
-        manager.getProposerStatus(pubkeyHash);
+        manager.getSymbioticProposerStatus(pubkeyHash);
     }
 
     function testGetWhitelistedCollaterals() public view {
-        address[] memory collaterals = manager.getWhitelistedCollaterals();
+        address[] memory collaterals = manager.getWhitelistedSymbioticCollaterals();
         assertEq(collaterals.length, 1);
         assertEq(collaterals[0], address(collateral));
     }
 
     function testNonWhitelistedCollateral() public {
         vm.prank(admin);
-        manager.removeWhitelistedCollateral(address(collateral));
+        manager.removeWhitelistedSymbioticCollateral(address(collateral));
 
         vm.prank(vaultAdmin);
         vm.expectRevert(IBoltManager.CollateralNotWhitelisted.selector);
