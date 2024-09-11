@@ -554,13 +554,6 @@ contract BoltManager is IBoltManager, Ownable {
                 collateral,
                 epochStartTs
             );
-            uint256 vaultStake = IBaseDelegator(IVault(vault).delegator())
-                .stakeAt(
-                    BOLT_SYMBIOTIC_NETWORK.subnetwork(0),
-                    operator,
-                    epochStartTs,
-                    new bytes(0)
-                );
 
             if (amount > operatorStake) {
                 revert SlashAmountTooHigh();
