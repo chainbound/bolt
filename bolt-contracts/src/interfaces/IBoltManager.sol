@@ -23,6 +23,7 @@ interface IBoltManager {
     error UnknownSlasherType();
     error SlashAmountTooHigh();
     error StrategyNotAllowed();
+    error OperatorNotRegisteredToAVS();
 
     function getEpochStartTs(uint48 epoch) external view returns (uint48);
 
@@ -63,15 +64,15 @@ interface IBoltManager {
         address operator
     ) external view returns (bool);
 
-    function getProposersStatus(
+    function getSymbioticProposerStatus(
         bytes32[] memory pubkeyHashes
     ) external view returns (ProposerStatus[] memory);
 
-    function getProposerStatus(
+    function getSymbioticProposerStatus(
         bytes32 pubkeyHash
     ) external view returns (ProposerStatus memory);
 
-    function isSymbioticOperatorAuthorizedForValidator(
+    function isOperatorAuthorizedForValidator(
         address operator,
         bytes32 pubkeyHash
     ) external view returns (bool);

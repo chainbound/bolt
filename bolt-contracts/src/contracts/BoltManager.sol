@@ -27,6 +27,7 @@ import {ISignatureUtils} from "@eigenlayer/src/contracts/interfaces/ISignatureUt
 import {IStrategy} from "@eigenlayer/src/contracts/interfaces/IStrategy.sol";
 import {AVSDirectoryStorage} from "@eigenlayer/src/contracts/core/AVSDirectoryStorage.sol";
 import {DelegationManagerStorage} from "@eigenlayer/src/contracts/core/DelegationManagerStorage.sol";
+import {StrategyManagerStorage} from "@eigenlayer/src/contracts/core/StrategyManagerStorage.sol";
 
 contract BoltManager is IBoltManager, Ownable {
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -78,6 +79,9 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Address of the EigenLayer Delegation Manager contract.
     DelegationManagerStorage public immutable EIGENLAYER_DELEGATION_MANAGER;
 
+    /// @notice Address of the EigenLayer Strategy Manager contract.
+    StrategyManagerStorage public immutable EIGENLAYER_STRATEGY_MANAGER;
+
     /// @notice Start timestamp of the first epoch.
     uint48 public immutable START_TIMESTAMP;
 
@@ -111,7 +115,8 @@ contract BoltManager is IBoltManager, Ownable {
         address _symbioticOperatorNetOptIn,
         address _symbioticVaultRegistry,
         address _eigenlayerAVSDirectory,
-        address _eigenlayerDelegationManager
+        address _eigenlayerDelegationManager,
+        address _eigenlayerStrategyManager
     ) Ownable(_owner) {
         validators = IBoltValidators(_validators);
         START_TIMESTAMP = Time.timestamp();
@@ -123,6 +128,9 @@ contract BoltManager is IBoltManager, Ownable {
         EIGENLAYER_AVS_DIRECTORY = AVSDirectoryStorage(_eigenlayerAVSDirectory);
         EIGENLAYER_DELEGATION_MANAGER = DelegationManagerStorage(
             _eigenlayerDelegationManager
+        );
+        EIGENLAYER_STRATEGY_MANAGER = StrategyManagerStorage(
+            _eigenlayerStrategyManager
         );
     }
 
@@ -143,6 +151,26 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Get the current epoch.
     function getCurrentEpoch() public view returns (uint48 epoch) {
         return getEpochAtTs(Time.timestamp());
+    }
+
+    /// @notice Check if an operator address is authorized to work for a validator,
+    /// given the validator's pubkey hash. This function performs a lookup in the
+    /// validators registry to check if they explicitly authorized the operator.
+    /// @param operator The operator address to check the authorization for.
+    /// @param pubkeyHash The pubkey hash of the validator to check the authorization for.
+    /// @return True if the operator is authorized, false otherwise.
+    function isOperatorAuthorizedForValidator(
+        address operator,
+        bytes32 pubkeyHash
+    ) public view returns (bool) {
+        if (operator == address(0) || pubkeyHash == bytes32(0)) {
+            revert InvalidQuery();
+        }
+
+        return
+            validators
+                .getValidatorByPubkeyHash(pubkeyHash)
+                .authorizedOperator == operator;
     }
 
     /// @notice Get the list of collateral addresses that are whitelisted.
@@ -204,17 +232,17 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Add a collateral address to the whitelist.
     /// @param collateral The collateral address to add to the whitelist.
     function addWhitelistedEigenLayerCollateral(
-        address strategy
+        address collateral
     ) public onlyOwner {
-        whitelistedEigenLayerCollaterals.add(strategy);
+        whitelistedEigenLayerCollaterals.add(collateral);
     }
 
     /// @notice Remove a collateral address from the whitelist.
     /// @param collateral The collateral address to remove from the whitelist.
     function removeWhitelistedEigenLayerCollateral(
-        address strategy
+        address collateral
     ) public onlyOwner {
-        whitelistedEigenLayerCollaterals.remove(strategy);
+        whitelistedEigenLayerCollaterals.remove(collateral);
     }
 
     // ========= SYMBIOTIC MIDDLEWARE LOGIC =========
@@ -327,19 +355,19 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Get the status of multiple proposers, given their pubkey hashes.
     /// @param pubkeyHashes The pubkey hashes of the proposers to get the status for.
     /// @return statuses The statuses of the proposers, including their operator and active stake.
-    function getProposersStatus(
+    function getSymbioticProposerStatus(
         bytes32[] memory pubkeyHashes
     ) public view returns (ProposerStatus[] memory statuses) {
         statuses = new ProposerStatus[](pubkeyHashes.length);
         for (uint256 i = 0; i < pubkeyHashes.length; ++i) {
-            statuses[i] = getProposerStatus(pubkeyHashes[i]);
+            statuses[i] = getSymbioticProposerStatus(pubkeyHashes[i]);
         }
     }
 
     /// @notice Get the status of a proposer, given their pubkey hash.
     /// @param pubkeyHash The pubkey hash of the proposer to get the status for.
     /// @return status The status of the proposer, including their operator and active stake.
-    function getProposerStatus(
+    function getSymbioticProposerStatus(
         bytes32 pubkeyHash
     ) public view returns (ProposerStatus memory status) {
         if (pubkeyHash == bytes32(0)) {
@@ -390,26 +418,6 @@ contract BoltManager is IBoltManager, Ownable {
                 epochStartTs
             );
         }
-    }
-
-    /// @notice Check if an operator address is authorized to work for a validator,
-    /// given the validator's pubkey hash. This function performs a lookup in the
-    /// validators registry to check if they explicitly authorized the operator.
-    /// @param operator The operator address to check the authorization for.
-    /// @param pubkeyHash The pubkey hash of the validator to check the authorization for.
-    /// @return True if the operator is authorized, false otherwise.
-    function isSymbioticOperatorAuthorizedForValidator(
-        address operator,
-        bytes32 pubkeyHash
-    ) public view returns (bool) {
-        if (operator == address(0) || pubkeyHash == bytes32(0)) {
-            revert InvalidQuery();
-        }
-
-        return
-            validators
-                .getValidatorByPubkeyHash(pubkeyHash)
-                .authorizedOperator == operator;
     }
 
     /// @notice Get the stake of an operator in Symbiotic protocol at the current timestamp.
@@ -617,14 +625,14 @@ contract BoltManager is IBoltManager, Ownable {
         eigenLayerOperators.enable(msg.sender);
     }
 
-    function registerEigenLayerStrategy(IStrategy strategy) public {
-        if (eigenLayerStrategies.contains(address(strategy))) {
+    function registerEigenLayerStrategy(address strategy) public {
+        if (eigenLayerStrategies.contains(strategy)) {
             revert AlreadyRegistered();
         }
 
         if (
             !EIGENLAYER_STRATEGY_MANAGER.strategyIsWhitelistedForDeposit(
-                strategy
+                IStrategy(strategy)
             )
         ) {
             revert StrategyNotAllowed();
@@ -632,14 +640,14 @@ contract BoltManager is IBoltManager, Ownable {
 
         if (
             !isEigenLayerCollateralWhitelisted(
-                address(strategy.underlyingToken())
+                address(IStrategy(strategy).underlyingToken())
             )
         ) {
             revert CollateralNotWhitelisted();
         }
 
-        eigenLayerStrategies.add(vault);
-        eigenLayerStrategies.enable(vault);
+        eigenLayerStrategies.add(strategy);
+        eigenLayerStrategies.enable(strategy);
     }
 
     /// @notice Allow a strategy to signal indefinite opt-out from Bolt Protocol.
@@ -671,7 +679,141 @@ contract BoltManager is IBoltManager, Ownable {
         return enabledTime != 0 && disabledTime == 0;
     }
 
-    // ========= EIGENLAYER FUNCTIONS =========
+    /// @notice Get the status of multiple proposers, given their pubkey hashes.
+    /// @param pubkeyHashes The pubkey hashes of the proposers to get the status for.
+    /// @return statuses The statuses of the proposers, including their operator and active stake.
+    function getEigenLayerProposersStatus(
+        bytes32[] memory pubkeyHashes
+    ) public view returns (ProposerStatus[] memory statuses) {
+        statuses = new ProposerStatus[](pubkeyHashes.length);
+        for (uint256 i = 0; i < pubkeyHashes.length; ++i) {
+            statuses[i] = getEigenLayerProposerStatus(pubkeyHashes[i]);
+        }
+    }
+
+    /// @notice Get the status of a proposer, given their pubkey hash.
+    /// @param pubkeyHash The pubkey hash of the proposer to get the status for.
+    /// @return status The status of the proposer, including their operator and active stake.
+    function getEigenLayerProposerStatus(
+        bytes32 pubkeyHash
+    ) public view returns (ProposerStatus memory status) {
+        if (pubkeyHash == bytes32(0)) {
+            revert InvalidQuery();
+        }
+
+        uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
+        IBoltValidators.Validator memory validator = validators
+            .getValidatorByPubkeyHash(pubkeyHash);
+        address operator = validator.authorizedOperator;
+
+        status.pubkeyHash = pubkeyHash;
+        status.active = validator.exists;
+        status.operator = operator;
+
+        (uint48 enabledTime, uint48 disabledTime) = eigenLayerOperators
+            .getTimes(operator);
+        if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
+            return status;
+        }
+
+        status.collaterals = new address[](eigenLayerStrategies.length());
+        status.amounts = new uint256[](eigenLayerStrategies.length());
+
+        for (uint256 i = 0; i < eigenLayerStrategies.length(); ++i) {
+            (
+                address strategy,
+                uint48 enabledVaultTime,
+                uint48 disabledVaultTime
+            ) = eigenLayerStrategies.atWithTimes(i);
+
+            address collateral = address(IStrategy(strategy).underlyingToken());
+            status.collaterals[i] = collateral;
+            if (
+                !_wasEnabledAt(
+                    enabledVaultTime,
+                    disabledVaultTime,
+                    epochStartTs
+                )
+            ) {
+                continue;
+            }
+
+            status.amounts[i] = getEigenLayerOperatorStake(
+                operator,
+                IERC20(collateral)
+            );
+        }
+    }
+
+    /// @notice Get the amount of tokens delegated to an operator across the allowed strategies.
+    //  @param operator The operator address to get the stake for.
+    //  @param strategies The list of strategies to get the stake for.
+    //  @return tokenAmounts The amount of tokens delegated to the operator for each strategy.
+    function getEigenLayerOperatorStake(
+        address operator,
+        IERC20 collateral
+    ) public view returns (uint256 amount) {
+        // NOTE: Can this be done more gas-efficiently?
+        address[] memory strategiesRaw = whitelistedEigenLayerCollaterals
+            .values();
+        IStrategy[] memory strategies = new IStrategy[](strategiesRaw.length);
+        for (uint256 i = 0; i < strategiesRaw.length; i++) {
+            strategies[i] = IStrategy(strategiesRaw[i]);
+        }
+
+        // NOTE: order is preserved i.e., shares[i] corresponds to strategies[i]
+        uint256[] memory shares = EIGENLAYER_DELEGATION_MANAGER
+            .getOperatorShares(operator, strategies);
+
+        for (uint256 i = 0; i < strategies.length; i++) {
+            if (
+                isEigenLayerCollateralWhitelisted(address(strategies[i])) &&
+                address(strategies[i].underlyingToken()) == address(collateral)
+            ) {
+                amount += strategies[i].sharesToUnderlyingView(shares[i]);
+            }
+        }
+    }
+
+    /// @notice Get the total stake of all EigenLayer operators at a given epoch for a collateral asset.
+    /// @param epoch The epoch to check the total stake for.
+    /// @param collateral The collateral address to check the total stake for.
+    /// @return totalStake The total stake of all operators at the given epoch, in collateral token.
+    function getEigenLayerTotalStake(
+        uint48 epoch,
+        address collateral
+    ) public view returns (uint256 totalStake) {
+        uint48 epochStartTs = getEpochStartTs(epoch);
+
+        // for epoch older than SLASHING_WINDOW total stake can be invalidated
+        if (
+            epochStartTs < SLASHING_WINDOW ||
+            epochStartTs < Time.timestamp() - SLASHING_WINDOW ||
+            epochStartTs > Time.timestamp()
+        ) {
+            revert InvalidQuery();
+        }
+
+        for (uint256 i; i < eigenLayerOperators.length(); ++i) {
+            (
+                address operator,
+                uint48 enabledTime,
+                uint48 disabledTime
+            ) = eigenLayerOperators.atWithTimes(i);
+
+            // just skip operator if it was added after the target epoch or paused
+            if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
+                continue;
+            }
+
+            totalStake += getEigenLayerOperatorStake(
+                operator,
+                IERC20(collateral)
+            );
+        }
+    }
+
+    // ========= EIGENLAYER AVS FUNCTIONS =========
 
     /// @notice Register an EigenLayer layer operator to work in Bolt Protocol.
     /// @dev This requires calling the EigenLayer AVS Directory contract to register the operator.
@@ -701,34 +843,6 @@ contract BoltManager is IBoltManager, Ownable {
     /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator.
     function deregisterEigenLayerOperatorFromAVS() public {
         EIGENLAYER_AVS_DIRECTORY.deregisterOperatorFromAVS(msg.sender);
-    }
-
-    /// @notice Get the amount of tokens delegated to an operator across the allowed strategies.
-    //  @param operator The operator address to get the stake for.
-    //  @param strategies The list of strategies to get the stake for.
-    //  @return tokenAmounts The amount of tokens delegated to the operator for each strategy.
-    function getEigenLayerOperatorStake(
-        address operator,
-        IERC20 collateral
-    ) public view returns (uint256 amount) {
-        // NOTE: Can this be done more gas-efficiently?
-        address[] memory strategiesRaw = whitelistedEigenLayerCollaterals
-            .values();
-        es();
-        IStrategy[] memory strategies = new IStrategy[](strategiesRaw.length);
-        for (uint256 i = 0; i < strategiesRaw.length; i++) {
-            strategies[i] = IStrategy(strategiesRaw[i]);
-        }
-
-        // NOTE: order is preserved i.e., shares[i] corresponds to strategies[i]
-        uint256[] memory shares = EIGENLAYER_DELEGATION_MANAGER
-            .getOperatorShares(operator, strategies);
-
-        for (uint256 i = 0; i < strategies.length; i++) {
-            if (isEigenLayerCollateralWhitelisted(address(strategies[i]))) {
-                amount += strategies[i].sharesToUnderlyingView(shares[i]);
-            }
-        }
     }
 
     /// @notice emits an `AVSMetadataURIUpdated` event indicating the information has updated.

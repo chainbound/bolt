@@ -51,11 +51,11 @@ contract Operators is Test {
             );
     }
 
-    function getNumOperators() public returns (uint256) {
+    function getNumOperators() public view returns (uint256) {
         return stdJson.readUint(operatorConfigJson, ".numOperators");
     }
 
-    function getOperatorAddress(uint256 index) public returns (address) {
+    function getOperatorAddress(uint256 index) public view returns (address) {
         return
             stdJson.readAddress(
                 operatorConfigJson,
@@ -63,7 +63,7 @@ contract Operators is Test {
             );
     }
 
-    function getOperatorSecretKey(uint256 index) public returns (uint256) {
+    function getOperatorSecretKey(uint256 index) public view returns (uint256) {
         return readUint(operatorConfigJson, index, "SecretKey");
     }
 
@@ -71,7 +71,7 @@ contract Operators is Test {
         string memory json,
         uint256 index,
         string memory key
-    ) public returns (uint256) {
+    ) public pure returns (uint256) {
         return
             stringToUint(
                 stdJson.readString(
