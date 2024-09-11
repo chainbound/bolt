@@ -10,7 +10,11 @@ gas_reports = ["*"]
 # silence some warnings during compilation
 # https://book.getfoundry.sh/reference/config/solidity-compiler#ignored_error_codes
 ignored_error_codes = [3628, 1878, 5574]
-ignored_warnings_from = ["lib/openzeppelin-contracts/contracts", "lib/core"]
+ignored_warnings_from = [
+  "lib/openzeppelin-contracts/contracts",
+  "lib/core",
+  "lib/eigenlayer-contracts",
+]
 
 remappings = [
   # Bolt remappings
