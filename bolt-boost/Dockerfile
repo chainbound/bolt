@@ -14,11 +14,10 @@ COPY . .
 RUN cargo build --release
 
 
-FROM ubuntu AS runtime
+FROM debian:bookworm-slim AS runtime
 WORKDIR /app
 
-RUN apt-get update
-RUN apt-get install -y openssl ca-certificates libssl3 libssl-dev
+RUN apt-get update && apt-get install -y libssl-dev libssl3 openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/bolt-boost /usr/local/bin
 ENTRYPOINT ["/usr/local/bin/bolt-boost"]

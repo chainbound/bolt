@@ -35,19 +35,19 @@ pub struct Opts {
     #[clap(long, env = "BOLT_SIDECAR_PORT")]
     pub(super) port: Option<u16>,
     /// URL for the beacon client
-    #[clap(long, env = "BOLT_SIDECAR_BEACON_API_URL")]
+    #[clap(long, env = "BOLT_SIDECAR_BEACON_API")]
     pub(super) beacon_api_url: String,
-    /// URL for the MEV-Boost sidecar client to use
-    #[clap(long, env = "BOLT_SIDECAR_MEVBOOST_URL")]
-    pub(super) mevboost_url: String,
+    /// URL for the constraints API
+    #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_API")]
+    pub(super) constraints_url: String,
     /// Execution client API URL
-    #[clap(long, env = "BOLT_SIDECAR_EXECUTION_API_URL")]
+    #[clap(long, env = "BOLT_SIDECAR_EXECUTION_API")]
     pub(super) execution_api_url: String,
     /// Execution client Engine API URL
-    #[clap(long, env = "BOLT_SIDECAR_ENGINE_API_URL")]
+    #[clap(long, env = "BOLT_SIDECAR_ENGINE_API")]
     pub(super) engine_api_url: String,
     /// MEV-Boost proxy server port to use
-    #[clap(long, env = "BOLT_SIDECAR_MEVBOOST_PROXY_PORT")]
+    #[clap(long, env = "BOLT_SIDECAR_BUILDER_PROXY_PORT")]
     pub(super) mevboost_proxy_port: u16,
     /// Max number of commitments to accept per block
     #[clap(long, env = "BOLT_SIDECAR_MAX_COMMITMENTS")]
@@ -196,11 +196,11 @@ impl TryFrom<Opts> for Config {
         }
 
         if let Some(commit_boost_url) = &opts.signing.commit_boost_url {
-            if let Ok(url) = Url::parse(commit_boost_url) {
-                if let Ok(socket_addrs) = url.socket_addrs(|| None) {
-                    config.commit_boost_address = Some(socket_addrs[0].to_string());
-                }
-            }
+            config.commit_boost_address = Some(commit_boost_url.clone());
+        }
+
+        if let Some(cb_jwt) = &opts.signing.commit_boost_jwt_hex {
+            config.commit_boost_jwt_hex = Some(cb_jwt.clone());
         }
 
         config.private_key = if let Some(sk) = opts.signing.private_key {
@@ -241,7 +241,7 @@ impl TryFrom<Opts> for Config {
         config.engine_api_url = opts.engine_api_url.parse()?;
         config.execution_api_url = opts.execution_api_url.parse()?;
         config.beacon_api_url = opts.beacon_api_url.parse()?;
-        config.mevboost_url = opts.mevboost_url.parse()?;
+        config.mevboost_url = opts.constraints_url.parse()?;
 
         config.fee_recipient = opts.fee_recipient;
 

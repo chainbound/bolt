@@ -1,11 +1,8 @@
-use clap::{ArgGroup, Args};
+use clap::Args;
 
 /// Command-line options for signing
 #[derive(Debug, Clone, Args)]
-#[clap(
-    group = ArgGroup::new("signing-opts").required(true)
-        .args(&["private_key", "commit_boost_url", "commit_boost_jwt_hex"])
-)]
+#[group(required = true, multiple = true)]
 pub struct SigningOpts {
     /// Private key to use for signing preconfirmation requests
     #[clap(long, env = "BOLT_SIDECAR_PRIVATE_KEY", conflicts_with("commit_boost_url"))]
@@ -13,7 +10,7 @@ pub struct SigningOpts {
     /// URL for the commit-boost sidecar
     #[clap(
         long,
-        env = "BOLT_SIDECAR_CB_SIGNER_URL",
+        env = "SIGNER_SERVER",
         conflicts_with("private_key"),
         requires("commit_boost_jwt_hex")
     )]
@@ -21,7 +18,7 @@ pub struct SigningOpts {
     /// JWT in hexadecimal format for authenticating with the commit-boost service
     #[clap(
         long,
-        env = "BOLT_SIDECAR_CB_JWT_HEX",
+        env = "CB_SIGNER_JWT",
         conflicts_with("private_key"),
         requires("commit_boost_url")
     )]

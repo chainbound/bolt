@@ -1,4 +1,4 @@
-FROM rust:slim-bullseye AS compiler
+FROM rust:slim-bookworm AS compiler
 
 RUN cargo install cargo-chef
 
@@ -15,7 +15,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cargo build --release
 
-FROM debian:bullseye-slim
+FROM debian:bookworm-slim
 WORKDIR /usr/local/bin
 COPY --from=builder /app/target/release/bolt-sidecar /
 RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
