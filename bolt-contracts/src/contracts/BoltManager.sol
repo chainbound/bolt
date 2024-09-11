@@ -668,6 +668,17 @@ contract BoltManager is IBoltManager, Ownable {
         eigenLayerStrategies.enable(msg.sender);
     }
 
+    /// @notice Check if a strategy is currently enabled to work in Bolt Protocol.
+    /// @param strategy The strategy address to check the enabled status for.
+    /// @return True if the strategy is enabled, false otherwise.
+    function isEigenLayerStrategyEnabled(
+        address strategy
+    ) public view returns (bool) {
+        (uint48 enabledTime, uint48 disabledTime) = eigenLayerStrategies
+            .getTimes(strategy);
+        return enabledTime != 0 && disabledTime == 0;
+    }
+
     /// @notice Check if an operator is currently enabled to work in Bolt Protocol.
     /// @param operator The operator address to check the enabled status for.
     /// @return True if the operator is enabled, false otherwise.
@@ -740,7 +751,7 @@ contract BoltManager is IBoltManager, Ownable {
 
             status.amounts[i] = getEigenLayerOperatorStake(
                 operator,
-                IERC20(collateral)
+                collateral
             );
         }
     }
@@ -751,28 +762,54 @@ contract BoltManager is IBoltManager, Ownable {
     //  @return tokenAmounts The amount of tokens delegated to the operator for each strategy.
     function getEigenLayerOperatorStake(
         address operator,
-        IERC20 collateral
+        address collateral
     ) public view returns (uint256 amount) {
+        uint48 timestamp = Time.timestamp();
+        return getEigenLayerOperatorStakeAt(operator, collateral, timestamp);
+    }
+
+    /// @notice Get the stake of an operator in EigenLayer protocol at a given timestamp.
+    /// @param operator The operator address to check the stake for.
+    /// @param collateral The collateral address to check the stake for.
+    /// @param timestamp The timestamp to check the stake at.
+    /// @return amount The stake of the operator at the given timestamp, in collateral token.
+    function getEigenLayerOperatorStakeAt(
+        address operator,
+        address collateral,
+        uint48 timestamp
+    ) public view returns (uint256 amount) {
+        if (timestamp > Time.timestamp() || timestamp < START_TIMESTAMP) {
+            revert InvalidQuery();
+        }
+
+        uint48 epochStartTs = getEpochStartTs(getEpochAtTs(timestamp));
+
         // NOTE: Can this be done more gas-efficiently?
-        address[] memory strategiesRaw = whitelistedEigenLayerCollaterals
-            .values();
-        IStrategy[] memory strategies = new IStrategy[](strategiesRaw.length);
-        for (uint256 i = 0; i < strategiesRaw.length; i++) {
-            strategies[i] = IStrategy(strategiesRaw[i]);
-        }
+        IStrategy[] memory strategyMem = new IStrategy[](1);
 
-        // NOTE: order is preserved i.e., shares[i] corresponds to strategies[i]
-        uint256[] memory shares = EIGENLAYER_DELEGATION_MANAGER
-            .getOperatorShares(operator, strategies);
+        for (uint256 i = 0; i < eigenLayerStrategies.length(); i++) {
+            (
+                address strategy,
+                uint48 enabledTime,
+                uint48 disabledTime
+            ) = eigenLayerStrategies.atWithTimes(i);
 
-        for (uint256 i = 0; i < strategies.length; i++) {
-            if (
-                isEigenLayerCollateralWhitelisted(address(strategies[i])) &&
-                address(strategies[i].underlyingToken()) == address(collateral)
-            ) {
-                amount += strategies[i].sharesToUnderlyingView(shares[i]);
+            if (collateral != address(IStrategy(strategy).underlyingToken())) {
+                continue;
             }
+
+            if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
+                continue;
+            }
+
+            strategyMem[0] = IStrategy(strategy);
+            // NOTE: order is preserved i.e., shares[i] corresponds to strategies[i]
+            uint256[] memory shares = EIGENLAYER_DELEGATION_MANAGER
+                .getOperatorShares(operator, strategyMem);
+            amount += IStrategy(strategy).sharesToUnderlyingView(shares[0]);
         }
+
+        return amount;
     }
 
     /// @notice Get the total stake of all EigenLayer operators at a given epoch for a collateral asset.
@@ -786,13 +823,14 @@ contract BoltManager is IBoltManager, Ownable {
         uint48 epochStartTs = getEpochStartTs(epoch);
 
         // for epoch older than SLASHING_WINDOW total stake can be invalidated
-        if (
-            epochStartTs < SLASHING_WINDOW ||
-            epochStartTs < Time.timestamp() - SLASHING_WINDOW ||
-            epochStartTs > Time.timestamp()
-        ) {
-            revert InvalidQuery();
-        }
+        // NOTE: not available in EigenLayer yet since slashing is not live
+        // if (
+        //     epochStartTs < SLASHING_WINDOW ||
+        //     epochStartTs < Time.timestamp() - SLASHING_WINDOW ||
+        //     epochStartTs > Time.timestamp()
+        // ) {
+        //     revert InvalidQuery();
+        // }
 
         for (uint256 i; i < eigenLayerOperators.length(); ++i) {
             (
@@ -806,10 +844,7 @@ contract BoltManager is IBoltManager, Ownable {
                 continue;
             }
 
-            totalStake += getEigenLayerOperatorStake(
-                operator,
-                IERC20(collateral)
-            );
+            totalStake += getEigenLayerOperatorStake(operator, collateral);
         }
     }
 
