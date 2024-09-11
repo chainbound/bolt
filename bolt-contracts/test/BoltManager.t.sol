@@ -405,7 +405,7 @@ contract BoltManagerTest is Test {
         assertEq(vault.currentEpoch(), 2);
 
         BoltManager.ProposerStatus[] memory statuses = manager
-            .getSymbioticProposerStatus(pubkeyHashes);
+            .getSymbioticProposersStatus(pubkeyHashes);
         assertEq(statuses.length, 10);
     }
 

@@ -355,7 +355,7 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Get the status of multiple proposers, given their pubkey hashes.
     /// @param pubkeyHashes The pubkey hashes of the proposers to get the status for.
     /// @return statuses The statuses of the proposers, including their operator and active stake.
-    function getSymbioticProposerStatus(
+    function getSymbioticProposersStatus(
         bytes32[] memory pubkeyHashes
     ) public view returns (ProposerStatus[] memory statuses) {
         statuses = new ProposerStatus[](pubkeyHashes.length);
