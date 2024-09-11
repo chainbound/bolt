@@ -14,12 +14,15 @@ import {IAVSDirectory} from "@eigenlayer/src/contracts/interfaces/IAVSDirectory.
 import {IStrategy} from "@eigenlayer/src/contracts/interfaces/IStrategy.sol";
 import {EigenLayerDeployer} from "../test/fixtures/EigenLayerDeployer.f.sol";
 
+import {BLS12381} from "../src/lib/bls/BLS12381.sol";
+
 contract BoltManagerEigenLayerTest is Test {
     BoltValidators public validators;
     BoltManager public manager;
     EigenLayerDeployer public eigenLayerDeployer;
 
     address staker = makeAddr("staker");
+    address validator = makeAddr("validator");
     address operator;
     uint256 operatorSk;
 
@@ -50,6 +53,15 @@ contract BoltManagerEigenLayerTest is Test {
     }
 
     function _eigenLayerOptInRoutine() internal {
+        // PART 0: Admin setup -- Collateral whitelist
+        vm.startPrank(admin);
+        manager.addWhitelistedEigenLayerCollateral(
+            address(eigenLayerDeployer.weth())
+        );
+        vm.stopPrank();
+
+        // PART 1: External EigenLayer opt-in to BOLT AVS
+
         // 1. As a staker, I deposit some LSTs into a Stategy via the StrategyManager.depositIntoStrategy function.
         // After this, I get back some shares that I can use at a later time for withdrawal
 
@@ -162,6 +174,42 @@ contract BoltManagerEigenLayerTest is Test {
             manager.checkIfEigenLayerOperatorRegisteredToAVS(operator),
             true
         );
+
+        // PART 2: Validator and proposer opt into BOLT manager
+        //
+        // 1. --- Register Validator in BoltValidators ---
+
+        // pubkeys aren't checked, any point will be fine
+        BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
+
+        vm.prank(validator);
+        validators.registerValidatorUnsafe(pubkey, staker, operator);
+        assertEq(validators.getValidatorByPubkey(pubkey).exists, true);
+        assertEq(
+            validators.getValidatorByPubkey(pubkey).authorizedOperator,
+            operator
+        );
+        assertEq(
+            validators
+                .getValidatorByPubkey(pubkey)
+                .authorizedCollateralProvider,
+            staker
+        );
+
+        // 2. --- Operator and strategy registration into BoltManager (middleware) ---
+
+        manager.registerEigenLayerOperator(operator);
+        assertEq(manager.isEigenLayerOperatorEnabled(operator), true);
+
+        manager.registerEigenLayerStrategy(
+            address(eigenLayerDeployer.wethStrat())
+        );
+        assertEq(
+            manager.isEigenLayerStrategyEnabled(
+                address(eigenLayerDeployer.wethStrat())
+            ),
+            true
+        );
     }
 
     function test_deregisterEigenLayerOperatorFromAVS() public {
@@ -174,17 +222,18 @@ contract BoltManagerEigenLayerTest is Test {
         );
     }
 
-    // function test_getEigenLayerOperatorStake() public {
-    //     _eigenLayerOptInRoutine();
-    //
-    //     IStrategy[] memory strategies = new IStrategy[](1);
-    //     strategies[0] = eigenLayerDeployer.wethStrat();
-    //
-    //     uint256[] memory tokensAmounts = manager.getEigenLayerOperatorStake(
-    //         operator,
-    //         strategies
-    //     );
-    //     assertEq(tokensAmounts.length, 1);
-    //     assertEq(tokensAmounts[0], 1 ether);
-    // }
+    function test_getEigenLayerOperatorStake() public {
+        _eigenLayerOptInRoutine();
+
+        uint256 amount = manager.getEigenLayerOperatorStake(
+            operator,
+            address(eigenLayerDeployer.weth())
+        );
+        uint256 totalStake = manager.getEigenLayerTotalStake(
+            2,
+            address(eigenLayerDeployer.weth())
+        );
+        assertEq(amount, 1 ether);
+        assertEq(totalStake, 1 ether);
+    }
 }
