@@ -28,7 +28,8 @@ contract BoltChallengerTest is Test {
         bytes32 trustedBlockHash = 0xba212beac090306b5edea79b5f5cd4c91a0c1568acc489983e2545c48c1a0f42;
 
         // Read the RLP-encoded block header from a file (obtained via `debug_getRawHeader` RPC call)
-        bytes memory headerRLP = vm.parseBytes(vm.readFile("./test/testdata/header_rlp.hex"));
+        string memory file = vm.readFile("./test/testdata/raw_header.json");
+        bytes memory headerRLP = vm.parseJsonBytes(file, ".result");
 
         assertEq(keccak256(headerRLP), trustedBlockHash);
 
