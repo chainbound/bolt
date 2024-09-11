@@ -24,7 +24,7 @@ lazy_static! {
 
     /// The size of the constraints cache
     pub static ref CONSTRAINTS_CACHE_SIZE: IntGauge = register_int_gauge_with_registry!(
-        "bolt_boost.constraints_cache_size",
+        "constraints_cache_size",
         "size of the constraints cache",
         BOLT_BOOST_METRICS
     )

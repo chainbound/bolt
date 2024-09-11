@@ -35,16 +35,16 @@ pub struct Opts {
     #[clap(long, env = "BOLT_SIDECAR_PORT")]
     pub(super) port: Option<u16>,
     /// URL for the beacon client
-    #[clap(long, env = "BOLT_SIDECAR_BEACON_API_URL")]
+    #[clap(long, env = "BOLT_SIDECAR_BEACON_API")]
     pub(super) beacon_api_url: String,
     /// URL for the Constraint sidecar client to use
     #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_URL")]
     pub(super) constraints_url: String,
     /// Execution client API URL
-    #[clap(long, env = "BOLT_SIDECAR_EXECUTION_API_URL")]
+    #[clap(long, env = "BOLT_SIDECAR_EXECUTION_API")]
     pub(super) execution_api_url: String,
     /// Execution client Engine API URL
-    #[clap(long, env = "BOLT_SIDECAR_ENGINE_API_URL")]
+    #[clap(long, env = "BOLT_SIDECAR_ENGINE_API")]
     pub(super) engine_api_url: String,
     /// Constraint proxy server port to use
     #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT")]
@@ -196,11 +196,11 @@ impl TryFrom<Opts> for Config {
         }
 
         if let Some(commit_boost_url) = &opts.signing.commit_boost_url {
-            if let Ok(url) = Url::parse(commit_boost_url) {
-                if let Ok(socket_addrs) = url.socket_addrs(|| None) {
-                    config.commit_boost_address = Some(socket_addrs[0].to_string());
-                }
-            }
+            config.commit_boost_address = Some(commit_boost_url.clone());
+        }
+
+        if let Some(cb_jwt) = &opts.signing.commit_boost_jwt_hex {
+            config.commit_boost_jwt_hex = Some(cb_jwt.clone());
         }
 
         config.private_key = if let Some(sk) = opts.signing.private_key {
