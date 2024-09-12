@@ -46,9 +46,9 @@ pub struct Opts {
     /// Execution client Engine API URL
     #[clap(long, env = "BOLT_SIDECAR_ENGINE_API")]
     pub(super) engine_api_url: String,
-    /// Constraint proxy server port to use
-    #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT")]
-    pub(super) constraints_proxy_port: u16,
+    /// Builder proxy server port to use
+    #[clap(long, env = "BOLT_SIDECAR_BUILDER_PROXY_PORT")]
+    pub(super) builder_proxy_port: u16,
     /// Max number of commitments to accept per block
     #[clap(long, env = "BOLT_SIDECAR_MAX_COMMITMENTS")]
     pub(super) max_commitments: Option<NonZero<usize>>,
@@ -237,7 +237,7 @@ impl TryFrom<Opts> for Config {
             info!("Engine JWT secret loaded successfully");
         }
 
-        config.constraints_proxy_port = opts.constraints_proxy_port;
+        config.constraints_proxy_port = opts.builder_proxy_port;
         config.engine_api_url = opts.engine_api_url.parse()?;
         config.execution_api_url = opts.execution_api_url.parse()?;
         config.beacon_api_url = opts.beacon_api_url.parse()?;
