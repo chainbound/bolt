@@ -357,7 +357,6 @@ contract BoltManager is IBoltManager, Ownable {
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
         IBoltValidators.Validator memory validator = validators.getValidatorByPubkeyHash(pubkeyHash);
-
         address operator = validator.authorizedOperator;
 
         status.pubkeyHash = pubkeyHash;
