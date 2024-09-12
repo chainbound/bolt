@@ -21,3 +21,7 @@ jobs:
       - name: Run tests
         run: forge test --via-ir -vvv
         working-directory: bolt-contracts
+
+      - name: Run forge fmt
+        run: forge fmt --check
+        working-directory: bolt-contracts
