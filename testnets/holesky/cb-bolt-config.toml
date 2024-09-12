@@ -111,20 +111,17 @@ type = "commit"
 # Docker image of the module
 docker_image = "ghcr.io/chainbound/bolt-sidecar:v0.3.0-alpha-rc.1"
 
-env_file = ".cb.env"
-
 [modules.env]
 BOLT_SIDECAR_CHAIN = "holesky"
 
 BOLT_SIDECAR_CONSTRAINTS_API = "http://cb_pbs:18550"                                      # The address of the PBS module
-BOLT_SIDECAR_BEACON_API = "http://remotebeast:4400"
-BOLT_SIDECAR_EXECUTION_API = "http://remotebeast:4485"
-BOLT_SIDECAR_ENGINE_API = "http://remotebeast:4451"
-BOLT_SIDECAR_JWT_HEX = "89732cef77d7e9a20021ee8f419dbbb51bdf7f60586932c272ddef02e70cb755"
-BOLT_SIDECAR_BUILDER_PROXY_PORT = "18551"
-BOLT_SIDECAR_FEE_RECIPIENT = "0x0000000000000000000000000000000000000000"
-BOLT_SIDECAR_VALIDATOR_INDEXES = "1..2"
-
+BOLT_SIDECAR_BEACON_API = "http://100.85.200.41:4400"
+BOLT_SIDECAR_EXECUTION_API = "http://100.85.200.41:4485"
+BOLT_SIDECAR_ENGINE_API = "http://100.85.200.41:4451"                                     # The execution layer engine API endpoint
+BOLT_SIDECAR_JWT_HEX = "89732cef77d7e9a20021ee8f419dbbb51bdf7f60586932c272ddef02e70cb755" # The engine JWT
+BOLT_SIDECAR_BUILDER_PROXY_PORT = "18551"                                                 # The port on which the sidecar builder-API will listen on. This is what your beacon node should connect to.
+BOLT_SIDECAR_FEE_RECIPIENT = "0x0000000000000000000000000000000000000000"                 # The fee recipient
+BOLT_SIDECAR_VALIDATOR_INDEXES = "1..2"                                                   # The active validator indexes
 
 # Configuration for how metrics should be collected and scraped
 # OPTIONAL, skip metrics collection if missing

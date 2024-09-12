@@ -1,2 +1,5 @@
 *_dump.log
 target/
+logs/
+cb.docker-compose.yml
+.cb.env

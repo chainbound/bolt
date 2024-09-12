@@ -7,15 +7,15 @@ services:
       CB_CONFIG: /cb-config.toml
       CB_SIGNER_JWT: ${CB_JWT_BOLT}
       SIGNER_SERVER: cb_signer:20000
-      BOLT_SIDECAR_CONSTRAINTS_API: http://cb_pbs:18550
-      BOLT_SIDECAR_CHAIN: holesky
-      BOLT_SIDECAR_EXECUTION_API: http://remotebeast:4485
-      BOLT_SIDECAR_ENGINE_API: http://remotebeast:4451
-      BOLT_SIDECAR_BEACON_API: http://remotebeast:4400
+      BOLT_SIDECAR_ENGINE_API: http://100.85.200.41:4451
       BOLT_SIDECAR_FEE_RECIPIENT: '0x0000000000000000000000000000000000000000'
-      BOLT_SIDECAR_VALIDATOR_INDEXES: 1..2
       BOLT_SIDECAR_BUILDER_PROXY_PORT: '18551'
+      BOLT_SIDECAR_CHAIN: holesky
+      BOLT_SIDECAR_VALIDATOR_INDEXES: 1..2
       BOLT_SIDECAR_JWT_HEX: 89732cef77d7e9a20021ee8f419dbbb51bdf7f60586932c272ddef02e70cb755
+      BOLT_SIDECAR_EXECUTION_API: http://100.85.200.41:4485
+      BOLT_SIDECAR_CONSTRAINTS_API: http://cb_pbs:18550
+      BOLT_SIDECAR_BEACON_API: http://100.85.200.41:4400
       METRICS_SERVER: 10000
       USE_FILE_LOGS: true
       RUST_LOG: debug
@@ -28,7 +28,6 @@ services:
     - monitoring_network
     depends_on:
     - cb_signer
-    env_file: .cb.env
   cb_pbs:
     image: ghcr.io/chainbound/bolt-boost:v0.3.0-alpha-rc.1
     container_name: cb_pbs
