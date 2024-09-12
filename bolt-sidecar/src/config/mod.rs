@@ -37,8 +37,8 @@ pub struct Opts {
     /// URL for the beacon client
     #[clap(long, env = "BOLT_SIDECAR_BEACON_API")]
     pub(super) beacon_api_url: String,
-    /// URL for the Constraint sidecar client to use
-    #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_URL")]
+    /// URL for the constraints API
+    #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_API")]
     pub(super) constraints_url: String,
     /// Execution client API URL
     #[clap(long, env = "BOLT_SIDECAR_EXECUTION_API")]
