@@ -62,15 +62,10 @@ contract BoltManagerEigenLayerTest is Test {
     function _adminRoutine() internal {
         // PART 0: Admin setup -- Collateral whitelist
         vm.startPrank(admin);
-        manager.addWhitelistedEigenLayerCollateral(
-            address(eigenLayerDeployer.weth())
-        );
+        manager.addWhitelistedEigenLayerCollateral(address(eigenLayerDeployer.weth()));
         vm.stopPrank();
         assertEq(manager.getWhitelistedEigenLayerCollaterals().length, 1);
-        assertEq(
-            manager.getWhitelistedEigenLayerCollaterals()[0],
-            address(eigenLayerDeployer.weth())
-        );
+        assertEq(manager.getWhitelistedEigenLayerCollaterals()[0], address(eigenLayerDeployer.weth()));
     }
 
     function _eigenLayerOptInRoutine() internal {
@@ -82,38 +77,21 @@ contract BoltManagerEigenLayerTest is Test {
         // After this, I get back some shares that I can use at a later time for withdrawal
 
         vm.startPrank(staker);
-        eigenLayerDeployer.weth().approve(
-            address(eigenLayerDeployer.strategyManager()),
-            1 ether
+        eigenLayerDeployer.weth().approve(address(eigenLayerDeployer.strategyManager()), 1 ether);
+        uint256 shares = eigenLayerDeployer.strategyManager().depositIntoStrategy(
+            eigenLayerDeployer.wethStrat(), eigenLayerDeployer.weth(), 1 ether
         );
-        uint256 shares = eigenLayerDeployer
-            .strategyManager()
-            .depositIntoStrategy(
-                eigenLayerDeployer.wethStrat(),
-                eigenLayerDeployer.weth(),
-                1 ether
-            );
         vm.stopPrank();
-        assertEq(
-            eigenLayerDeployer.wethStrat().sharesToUnderlyingView(shares),
-            1 ether
-        );
+        assertEq(eigenLayerDeployer.wethStrat().sharesToUnderlyingView(shares), 1 ether);
 
         // 2. As a Operator, I register myself into EigenLayer using DelegationManager.registerAsOperator.
         // Note that this function doesn’t require specifying anything related to the service I’m going to provide.
         // However, a parameter describes who can delegate to me whether it can be anyone or a subset of stakers.
 
-        IDelegationManager.OperatorDetails
-            memory operatorDetails = IDelegationManager.OperatorDetails(
-                address(0),
-                address(0),
-                0
-            );
+        IDelegationManager.OperatorDetails memory operatorDetails =
+            IDelegationManager.OperatorDetails(address(0), address(0), 0);
         vm.startPrank(operator);
-        eigenLayerDeployer.delegationManager().registerAsOperator(
-            operatorDetails,
-            "https://boltprotocol.xyz"
-        );
+        eigenLayerDeployer.delegationManager().registerAsOperator(operatorDetails, "https://boltprotocol.xyz");
         vm.stopPrank();
 
         // 3. As a staker, I can start delegating funds to these operators using
@@ -121,22 +99,12 @@ contract BoltManagerEigenLayerTest is Test {
         // to delegate my funds
 
         // NOTE: this signature is not used since the operator allows funds delegated from anyone
-        ISignatureUtils.SignatureWithExpiry memory signature = ISignatureUtils
-            .SignatureWithExpiry(bytes(""), 0);
-        console.logAddress(
-            eigenLayerDeployer.delegationManager().delegatedTo(staker)
-        );
+        ISignatureUtils.SignatureWithExpiry memory signature = ISignatureUtils.SignatureWithExpiry(bytes(""), 0);
+        console.logAddress(eigenLayerDeployer.delegationManager().delegatedTo(staker));
         vm.startPrank(staker);
-        eigenLayerDeployer.delegationManager().delegateTo(
-            operator,
-            signature,
-            bytes32(0)
-        );
+        eigenLayerDeployer.delegationManager().delegateTo(operator, signature, bytes32(0));
         vm.stopPrank();
-        assertEq(
-            eigenLayerDeployer.delegationManager().delegatedTo(staker),
-            operator
-        );
+        assertEq(eigenLayerDeployer.delegationManager().delegatedTo(staker), operator);
 
         // 4. As an AVS developer I create an entrypoint contract.
         // Upon deploying the contract it is required to make a call to EL’s
@@ -159,37 +127,23 @@ contract BoltManagerEigenLayerTest is Test {
         // the operator is considered REGISTERED in a mapping avsOperatorStatus[msg.sender][operator].
 
         // Calculate the digest hash
-        bytes32 operatorRegistrationDigestHash = eigenLayerDeployer
-            .avsDirectory()
+        bytes32 operatorRegistrationDigestHash = eigenLayerDeployer.avsDirectory()
             .calculateOperatorAVSRegistrationDigestHash({
-                operator: operator,
-                avs: address(manager),
-                salt: bytes32(0),
-                expiry: UINT256_MAX
-            });
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            operatorSk,
-            operatorRegistrationDigestHash
-        );
+            operator: operator,
+            avs: address(manager),
+            salt: bytes32(0),
+            expiry: UINT256_MAX
+        });
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(operatorSk, operatorRegistrationDigestHash);
         bytes memory operatorRawSignature = abi.encodePacked(r, s, v);
-        ISignatureUtils.SignatureWithSaltAndExpiry
-            memory operatorSignature = ISignatureUtils
-                .SignatureWithSaltAndExpiry(
-                    operatorRawSignature,
-                    bytes32(0),
-                    UINT256_MAX
-                );
+        ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature =
+            ISignatureUtils.SignatureWithSaltAndExpiry(operatorRawSignature, bytes32(0), UINT256_MAX);
         vm.expectEmit(true, true, true, true);
         emit IAVSDirectory.OperatorAVSRegistrationStatusUpdated(
-            operator,
-            address(manager),
-            IAVSDirectory.OperatorAVSRegistrationStatus.REGISTERED
+            operator, address(manager), IAVSDirectory.OperatorAVSRegistrationStatus.REGISTERED
         );
         manager.registerEigenLayerOperatorToAVS(operator, operatorSignature);
-        assertEq(
-            manager.checkIfEigenLayerOperatorRegisteredToAVS(operator),
-            true
-        );
+        assertEq(manager.checkIfEigenLayerOperatorRegisteredToAVS(operator), true);
 
         // PART 2: Validator and proposer opt into BOLT manager
         //
@@ -201,54 +155,30 @@ contract BoltManagerEigenLayerTest is Test {
         vm.prank(validator);
         validators.registerValidatorUnsafe(validatorPubkey, staker, operator);
         assertEq(validators.getValidatorByPubkey(validatorPubkey).exists, true);
-        assertEq(
-            validators.getValidatorByPubkey(validatorPubkey).authorizedOperator,
-            operator
-        );
-        assertEq(
-            validators
-                .getValidatorByPubkey(validatorPubkey)
-                .authorizedCollateralProvider,
-            staker
-        );
+        assertEq(validators.getValidatorByPubkey(validatorPubkey).authorizedOperator, operator);
+        assertEq(validators.getValidatorByPubkey(validatorPubkey).authorizedCollateralProvider, staker);
 
         // 2. --- Operator and strategy registration into BoltManager (middleware) ---
 
         manager.registerEigenLayerOperator(operator);
         assertEq(manager.isEigenLayerOperatorEnabled(operator), true);
 
-        manager.registerEigenLayerStrategy(
-            address(eigenLayerDeployer.wethStrat())
-        );
-        assertEq(
-            manager.isEigenLayerStrategyEnabled(
-                address(eigenLayerDeployer.wethStrat())
-            ),
-            true
-        );
+        manager.registerEigenLayerStrategy(address(eigenLayerDeployer.wethStrat()));
+        assertEq(manager.isEigenLayerStrategyEnabled(address(eigenLayerDeployer.wethStrat())), true);
     }
 
     function test_deregisterEigenLayerOperatorFromAVS() public {
         _eigenLayerOptInRoutine();
         vm.prank(operator);
         manager.deregisterEigenLayerOperatorFromAVS();
-        assertEq(
-            manager.checkIfEigenLayerOperatorRegisteredToAVS(operator),
-            false
-        );
+        assertEq(manager.checkIfEigenLayerOperatorRegisteredToAVS(operator), false);
     }
 
     function test_getEigenLayerOperatorStake() public {
         _eigenLayerOptInRoutine();
 
-        uint256 amount = manager.getEigenLayerOperatorStake(
-            operator,
-            address(eigenLayerDeployer.weth())
-        );
-        uint256 totalStake = manager.getEigenLayerTotalStake(
-            2,
-            address(eigenLayerDeployer.weth())
-        );
+        uint256 amount = manager.getEigenLayerOperatorStake(operator, address(eigenLayerDeployer.weth()));
+        uint256 totalStake = manager.getEigenLayerTotalStake(2, address(eigenLayerDeployer.weth()));
         assertEq(amount, 1 ether);
         assertEq(totalStake, 1 ether);
     }
@@ -258,8 +188,7 @@ contract BoltManagerEigenLayerTest is Test {
 
         bytes32 pubkeyHash = _pubkeyHash(validatorPubkey);
 
-        BoltManager.ProposerStatus memory status = manager
-            .getEigenLayerProposerStatus(pubkeyHash);
+        BoltManager.ProposerStatus memory status = manager.getEigenLayerProposerStatus(pubkeyHash);
         assertEq(status.pubkeyHash, pubkeyHash);
         assertEq(status.operator, operator);
         assertEq(status.active, true);
@@ -284,8 +213,7 @@ contract BoltManagerEigenLayerTest is Test {
             validators.registerValidatorUnsafe(pubkey, staker, operator);
         }
 
-        BoltManager.ProposerStatus[] memory statuses = manager
-            .getEigenLayerProposersStatus(pubkeyHashes);
+        BoltManager.ProposerStatus[] memory statuses = manager.getEigenLayerProposersStatus(pubkeyHashes);
         assertEq(statuses.length, 10);
     }
 
@@ -300,8 +228,7 @@ contract BoltManagerEigenLayerTest is Test {
 
     function testGetWhitelistedCollaterals() public {
         _adminRoutine();
-        address[] memory collaterals = manager
-            .getWhitelistedEigenLayerCollaterals();
+        address[] memory collaterals = manager.getWhitelistedEigenLayerCollaterals();
         assertEq(collaterals.length, 1);
         assertEq(collaterals[0], address(eigenLayerDeployer.weth()));
     }
@@ -309,9 +236,7 @@ contract BoltManagerEigenLayerTest is Test {
     function testNonWhitelistedCollateral() public {
         _adminRoutine();
         vm.startPrank(admin);
-        manager.removeWhitelistedEigenLayerCollateral(
-            address(eigenLayerDeployer.weth())
-        );
+        manager.removeWhitelistedEigenLayerCollateral(address(eigenLayerDeployer.weth()));
         vm.stopPrank();
 
         address strat = address(eigenLayerDeployer.wethStrat());
