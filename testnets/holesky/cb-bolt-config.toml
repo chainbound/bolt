@@ -123,6 +123,8 @@ BOLT_SIDECAR_BUILDER_PROXY_PORT = "18551"                                       
 BOLT_SIDECAR_FEE_RECIPIENT = "0x0000000000000000000000000000000000000000"                 # The fee recipient
 BOLT_SIDECAR_VALIDATOR_INDEXES = "1..2"                                                   # The active validator indexes
 
+BOLT_SIDECAR_METRICS_PORT = "10000"
+
 # Configuration for how metrics should be collected and scraped
 # OPTIONAL, skip metrics collection if missing
 [metrics]
