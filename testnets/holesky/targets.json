@@ -22,5 +22,13 @@
     "labels": {
       "job": "signer"
     }
+  },
+  {
+    "targets": [
+      "cb_cadvisor:8080"
+    ],
+    "labels": {
+      "job": "cadvisor"
+    }
   }
 ]

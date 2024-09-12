@@ -142,7 +142,7 @@ prometheus_config = "./prometheus.yml"
 use_grafana = true
 # Whether to start cadvisor for system monitoring
 # OPTIONAL, DEFAULT: true
-use_cadvisor = false
+use_cadvisor = true
 
 # Configuration for how logs should be collected and stored
 # OPTIONAL, info to stdout if missing
