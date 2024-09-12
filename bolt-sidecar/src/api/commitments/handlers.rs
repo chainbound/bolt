@@ -52,7 +52,10 @@ pub async fn rpc_entrypoint(
 
             // Parse the inclusion request from the parameters
             let mut inclusion_request: InclusionRequest = serde_json::from_value(request_json)
-                .map_err(|e| RejectionError::ValidationFailed(e.to_string()))?;
+                .map_err(|e| RejectionError::ValidationFailed(e.to_string()))
+                .inspect_err(|e| error!("Failed to parse inclusion request: {:?}", e))?;
+
+            debug!(?inclusion_request, "New inclusion request");
 
             // Set the signature here for later processing
             inclusion_request.set_signature(signature);

@@ -26,7 +26,7 @@ use super::spec::{
     STATUS_PATH,
 };
 use crate::{
-    client::mevboost::MevBoostClient,
+    client::constraints_client::ConstraintsClient,
     primitives::{GetPayloadResponse, PayloadFetcher, SignedBuilderBid},
     telemetry::ApiMetrics,
 };
@@ -63,7 +63,7 @@ where
         Self { proxy_target, local_payload: Mutex::new(None), payload_fetcher }
     }
 
-    /// Gets the status. Just forwards the request to mev-boost and returns the status.
+    /// Gets the status. Just forwards the request to constraints client and returns the status.
     pub async fn status(State(server): State<Arc<BuilderProxyServer<T, P>>>) -> StatusCode {
         let start = std::time::Instant::now();
         debug!("Received status request");
@@ -71,7 +71,7 @@ where
         let status = match server.proxy_target.status().await {
             Ok(status) => status,
             Err(error) => {
-                error!(%error, "Failed to get status from mev-boost");
+                error!(%error, "Failed to get status from constraints client");
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
@@ -82,7 +82,7 @@ where
         status
     }
 
-    /// Registers the validators. Just forwards the request to mev-boost
+    /// Registers the validators. Just forwards the request to constraints client
     /// and returns the status.
     ///
     /// TODO: intercept this to register Bolt validators on-chain as well.
@@ -96,7 +96,7 @@ where
     }
 
     /// Gets the header. NOTE: converts this request to a get_header_with_proofs
-    /// request to the modified mev-boost.
+    /// request to the modified constraints client.
     ///
     /// In case of a builder or relay failure, we return the locally built block header
     /// and store the actual payload so we can return it later.
@@ -203,11 +203,11 @@ where
             .await
             .map(Json)
             .map_err(|e| {
-                error!(elapsed = ?start.elapsed(), error = %e, "Failed to get payload from mev-boost");
+                error!(elapsed = ?start.elapsed(), error = %e, "Failed to get payload from constraints client");
                 e
             })?;
 
-        info!(elapsed = ?start.elapsed(), "Returning payload from mev-boost");
+        info!(elapsed = ?start.elapsed(), "Returning payload from constraints client");
         ApiMetrics::increment_remote_blocks_proposed();
 
         Ok(payload)
@@ -217,8 +217,8 @@ where
 /// Configuration for the builder proxy.
 #[derive(Debug, Clone)]
 pub struct BuilderProxyConfig {
-    /// The URL of the target mev-boost server.
-    pub mevboost_url: Url,
+    /// The URL of the target constraints client server.
+    pub constraints_url: Url,
     /// The port on which the builder proxy should listen.
     pub server_port: u16,
 }
@@ -233,11 +233,11 @@ where
 {
     info!(
         port = config.server_port,
-        target = config.mevboost_url.to_string(),
+        target = config.constraints_url.to_string(),
         "Starting builder proxy..."
     );
 
-    let mev_boost = MevBoostClient::new(config.mevboost_url);
+    let mev_boost = ConstraintsClient::new(config.constraints_url);
     let server = Arc::new(BuilderProxyServer::new(mev_boost, payload_fetcher));
 
     let router = Router::new()

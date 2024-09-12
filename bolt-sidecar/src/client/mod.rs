@@ -1,5 +1,5 @@
 pub mod commit_boost;
-pub mod mevboost;
+pub mod constraints_client;
 pub mod pubsub;
 pub mod rpc;
 

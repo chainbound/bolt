@@ -69,8 +69,8 @@ metrics-exporter-prometheus = { version = "0.15.3", features = [
 ] }
 
 # commit-boost
-commit-boost = { git = "https://github.com/Commit-Boost/commit-boost-client" }
-cb-common = { git = "https://github.com/Commit-Boost/commit-boost-client" }
+commit-boost = { git = "https://github.com/Commit-Boost/commit-boost-client", rev = "45ce8f1"}
+cb-common = { git = "https://github.com/Commit-Boost/commit-boost-client", rev = "45ce8f1" }
 
 [dev-dependencies]
 alloy-node-bindings = "0.2.0"

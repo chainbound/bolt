@@ -326,7 +326,7 @@ impl<C: StateFetcher> ExecutionState<C> {
                     (0, U256::ZERO, 0),
                     |(nonce_diff_acc, balance_diff_acc, highest_slot), (slot, block_template)| {
                         let (nonce_diff, balance_diff, slot) = block_template
-                            .get_diff(&sender)
+                            .get_diff(sender)
                             .map(|(nonce, balance)| (nonce, balance, *slot))
                             .unwrap_or((0, U256::ZERO, 0));
 
@@ -345,11 +345,11 @@ impl<C: StateFetcher> ExecutionState<C> {
 
             trace!(?signer, nonce_diff, %balance_diff, "Applying diffs to account state");
 
-            let account_state = match self.account_state(&sender).copied() {
+            let account_state = match self.account_state(sender).copied() {
                 Some(account) => account,
                 None => {
                     // Fetch the account state from the client if it does not exist
-                    let account = match self.client.get_account_state(&sender, None).await {
+                    let account = match self.client.get_account_state(sender, None).await {
                         Ok(account) => account,
                         Err(err) => {
                             return Err(ValidationError::Internal(format!(
@@ -359,7 +359,7 @@ impl<C: StateFetcher> ExecutionState<C> {
                         }
                     };
 
-                    self.account_states.insert(sender, account);
+                    self.account_states.insert(*sender, account);
                     account
                 }
             };
