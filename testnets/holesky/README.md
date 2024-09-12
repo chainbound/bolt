@@ -65,6 +65,17 @@ This will run all modules in Docker containers.
 ### Bolt Sidecar
 WIP
 
+### Observability
+commit-boost comes with various observability tools, such as Prometheus, cadvisor, and Grafana. It also comes with some pre-built dashboards,
+which can be found in the `grafana` directory.
+
+To update these dashboards, run the following command:
+```bash
+./update-grafana.sh
+```
+
+In this directory, you can also find a Bolt dashboard, which will be launched alongside the other dashboards.
+
 ### Validators
 Validators must be configured to always prefer builder proposals over their own. Refer to client documentation for the specific configuration flags.
 **If this is not set, it could lead to commitment faults**.
