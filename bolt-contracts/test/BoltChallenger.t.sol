@@ -6,12 +6,14 @@ import {Test, console} from "forge-std/Test.sol";
 import {BoltChallenger} from "../src/contracts/BoltChallenger.sol";
 import {RLPReader} from "../src/lib/rlp/RLPReader.sol";
 import {RLPWriter} from "../src/lib/rlp/RLPWriter.sol";
+import {BytesUtils} from "../src/lib/BytesUtils.sol";
 import {SecureMerkleTrie} from "../src/lib/trie/SecureMerkleTrie.sol";
 import {MerkleTrie} from "../src/lib/trie/MerkleTrie.sol";
 
 contract BoltChallengerTest is Test {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
+    using BytesUtils for bytes;
 
     BoltChallenger boltChallenger;
 
@@ -102,13 +104,36 @@ contract BoltChallengerTest is Test {
         bytes32 txRootAtBlock = vm.parseJsonBytes32(file, ".root");
         uint256 txIndexInBlock = vm.parseJsonUint(file, ".index");
 
-        // TODO: fix inputs
-        (bool exists, bytes memory transactionRLP) =
-            SecureMerkleTrie.get(abi.encodePacked(txHash), txProof, txRootAtBlock);
+        bytes memory key = RLPWriter.writeUint(txIndexInBlock);
+
+        // Gotcha: SecureMerkleTrie.get expects the key to be hashed with keccak256
+        // but the transaction trie skips this step and uses the raw index as the key.
+        (bool exists, bytes memory transactionRLP) = MerkleTrie.get(key, txProof, txRootAtBlock);
 
         assertEq(exists, true);
+        assertEq(keccak256(transactionRLP), txHash);
 
-        RLPReader.RLPItem[] memory txFields = transactionRLP.toRLPItem().readList();
+        // First, we remove the Tx-type byte from the EIP-2718 envelope,
+        // then decode the transaction RLP into its fields.
+        bytes memory txEip1559 = transactionRLP.slice(1, transactionRLP.length - 1);
+        RLPReader.RLPItem[] memory txFields = txEip1559.toRLPItem().readList();
+        uint256 chainId = txFields[0].readUint256();
+        uint256 nonce = txFields[1].readUint256();
+        uint256 maxPriorityFeePerGas = txFields[2].readUint256();
+        uint256 maxFeePerGas = txFields[3].readUint256();
+        uint256 gasLimit = txFields[4].readUint256();
+        address to = txFields[5].readAddress();
+        uint256 value = txFields[6].readUint256();
+        bytes memory data = txFields[7].readBytes();
+
+        assertEq(chainId, 1);
+        assertEq(nonce, 4);
+        assertEq(maxPriorityFeePerGas, 1_329_961_284);
+        assertEq(maxFeePerGas, 8_696_356_057);
+        assertEq(gasLimit, 21_000);
+        assertEq(to, 0x45562Ea400fFD5FaEfeefD0336681852D214d5a5);
+        assertEq(value, 1_817_357_890_317_030);
+        assertEq(data.length, 0);
     }
 
     // Helper function to encode a list of bytes[] into an RLP list with each item RLP-encoded
