@@ -126,12 +126,8 @@ contract BoltManager is IBoltManager, Ownable {
         SYMBIOTIC_OPERATOR_NET_OPTIN = _symbioticOperatorNetOptIn;
         SYMBIOTIC_VAULT_REGISTRY = _symbioticVaultRegistry;
         EIGENLAYER_AVS_DIRECTORY = AVSDirectoryStorage(_eigenlayerAVSDirectory);
-        EIGENLAYER_DELEGATION_MANAGER = DelegationManagerStorage(
-            _eigenlayerDelegationManager
-        );
-        EIGENLAYER_STRATEGY_MANAGER = StrategyManagerStorage(
-            _eigenlayerStrategyManager
-        );
+        EIGENLAYER_DELEGATION_MANAGER = DelegationManagerStorage(_eigenlayerDelegationManager);
+        EIGENLAYER_STRATEGY_MANAGER = StrategyManagerStorage(_eigenlayerStrategyManager);
     }
 
     // ========= VIEW FUNCTIONS =========
@@ -144,7 +140,9 @@ contract BoltManager is IBoltManager, Ownable {
     }
 
     /// @notice Get the epoch at a given timestamp.
-    function getEpochAtTs(uint48 timestamp) public view returns (uint48 epoch) {
+    function getEpochAtTs(
+        uint48 timestamp
+    ) public view returns (uint48 epoch) {
         return (timestamp - START_TIMESTAMP) / EPOCH_DURATION;
     }
 
@@ -159,27 +157,17 @@ contract BoltManager is IBoltManager, Ownable {
     /// @param operator The operator address to check the authorization for.
     /// @param pubkeyHash The pubkey hash of the validator to check the authorization for.
     /// @return True if the operator is authorized, false otherwise.
-    function isOperatorAuthorizedForValidator(
-        address operator,
-        bytes32 pubkeyHash
-    ) public view returns (bool) {
+    function isOperatorAuthorizedForValidator(address operator, bytes32 pubkeyHash) public view returns (bool) {
         if (operator == address(0) || pubkeyHash == bytes32(0)) {
             revert InvalidQuery();
         }
 
-        return
-            validators
-                .getValidatorByPubkeyHash(pubkeyHash)
-                .authorizedOperator == operator;
+        return validators.getValidatorByPubkeyHash(pubkeyHash).authorizedOperator == operator;
     }
 
     /// @notice Get the list of collateral addresses that are whitelisted.
     /// @return collaterals The list of collateral addresses that are whitelisted.
-    function getWhitelistedSymbioticCollaterals()
-        public
-        view
-        returns (address[] memory collaterals)
-    {
+    function getWhitelistedSymbioticCollaterals() public view returns (address[] memory collaterals) {
         return whitelistedSymbioticCollaterals.values();
     }
 
@@ -194,11 +182,7 @@ contract BoltManager is IBoltManager, Ownable {
 
     /// @notice Get the list of EigenLayer strategies addresses that are allowed.
     /// @return strategies The list of strategies addresses that are allowed.
-    function getWhitelistedEigenLayerCollaterals()
-        public
-        view
-        returns (address[] memory strategies)
-    {
+    function getWhitelistedEigenLayerCollaterals() public view returns (address[] memory strategies) {
         return whitelistedEigenLayerCollaterals.values();
     }
 
@@ -249,7 +233,9 @@ contract BoltManager is IBoltManager, Ownable {
 
     /// @notice Allow an operator to signal opt-in to Bolt Protocol.
     /// @param operator The operator address to signal opt-in for.
-    function registerSymbioticOperator(address operator) public {
+    function registerSymbioticOperator(
+        address operator
+    ) public {
         if (symbioticOperators.contains(operator)) {
             revert AlreadyRegistered();
         }
@@ -258,12 +244,7 @@ contract BoltManager is IBoltManager, Ownable {
             revert NotOperator();
         }
 
-        if (
-            !IOptInService(SYMBIOTIC_OPERATOR_NET_OPTIN).isOptedIn(
-                operator,
-                BOLT_SYMBIOTIC_NETWORK
-            )
-        ) {
+        if (!IOptInService(SYMBIOTIC_OPERATOR_NET_OPTIN).isOptedIn(operator, BOLT_SYMBIOTIC_NETWORK)) {
             revert OperatorNotOptedIn();
         }
 
@@ -293,7 +274,9 @@ contract BoltManager is IBoltManager, Ownable {
 
     /// @notice Allow a vault to signal opt-in to Bolt Protocol.
     /// @param vault The vault address to signal opt-in for.
-    function registerSymbioticVault(address vault) public {
+    function registerSymbioticVault(
+        address vault
+    ) public {
         if (symbioticVaults.contains(vault)) {
             revert AlreadyRegistered();
         }
@@ -333,10 +316,10 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Check if a vault is currently enabled to work in Bolt Protocol.
     /// @param vault The vault address to check the enabled status for.
     /// @return True if the vault is enabled, false otherwise.
-    function isSymbioticVaultEnabled(address vault) public view returns (bool) {
-        (uint48 enabledTime, uint48 disabledTime) = symbioticVaults.getTimes(
-            vault
-        );
+    function isSymbioticVaultEnabled(
+        address vault
+    ) public view returns (bool) {
+        (uint48 enabledTime, uint48 disabledTime) = symbioticVaults.getTimes(vault);
         return enabledTime != 0 && disabledTime == 0;
     }
 
@@ -346,9 +329,7 @@ contract BoltManager is IBoltManager, Ownable {
     function isSymbioticOperatorEnabled(
         address operator
     ) public view returns (bool) {
-        (uint48 enabledTime, uint48 disabledTime) = symbioticOperators.getTimes(
-            operator
-        );
+        (uint48 enabledTime, uint48 disabledTime) = symbioticOperators.getTimes(operator);
         return enabledTime != 0 && disabledTime == 0;
     }
 
@@ -375,8 +356,7 @@ contract BoltManager is IBoltManager, Ownable {
         }
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
-        IBoltValidators.Validator memory validator = validators
-            .getValidatorByPubkeyHash(pubkeyHash);
+        IBoltValidators.Validator memory validator = validators.getValidatorByPubkeyHash(pubkeyHash);
 
         address operator = validator.authorizedOperator;
 
@@ -384,9 +364,7 @@ contract BoltManager is IBoltManager, Ownable {
         status.active = validator.exists;
         status.operator = operator;
 
-        (uint48 enabledTime, uint48 disabledTime) = symbioticOperators.getTimes(
-            operator
-        );
+        (uint48 enabledTime, uint48 disabledTime) = symbioticOperators.getTimes(operator);
         if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
             return status;
         }
@@ -395,29 +373,15 @@ contract BoltManager is IBoltManager, Ownable {
         status.amounts = new uint256[](symbioticVaults.length());
 
         for (uint256 i = 0; i < symbioticVaults.length(); ++i) {
-            (
-                address vault,
-                uint48 enabledVaultTime,
-                uint48 disabledVaultTime
-            ) = symbioticVaults.atWithTimes(i);
+            (address vault, uint48 enabledVaultTime, uint48 disabledVaultTime) = symbioticVaults.atWithTimes(i);
 
             address collateral = IVault(vault).collateral();
             status.collaterals[i] = collateral;
-            if (
-                !_wasEnabledAt(
-                    enabledVaultTime,
-                    disabledVaultTime,
-                    epochStartTs
-                )
-            ) {
+            if (!_wasEnabledAt(enabledVaultTime, disabledVaultTime, epochStartTs)) {
                 continue;
             }
 
-            status.amounts[i] = getSymbioticOperatorStakeAt(
-                operator,
-                collateral,
-                epochStartTs
-            );
+            status.amounts[i] = getSymbioticOperatorStakeAt(operator, collateral, epochStartTs);
         }
     }
 
@@ -425,10 +389,7 @@ contract BoltManager is IBoltManager, Ownable {
     /// @param operator The operator address to check the stake for.
     /// @param collateral The collateral address to check the stake for.
     /// @return amount The stake of the operator at the current timestamp, in collateral token.
-    function getSymbioticOperatorStake(
-        address operator,
-        address collateral
-    ) public view returns (uint256 amount) {
+    function getSymbioticOperatorStake(address operator, address collateral) public view returns (uint256 amount) {
         uint48 timestamp = Time.timestamp();
         return getSymbioticOperatorStakeAt(operator, collateral, timestamp);
     }
@@ -450,11 +411,7 @@ contract BoltManager is IBoltManager, Ownable {
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(timestamp));
 
         for (uint256 i = 0; i < symbioticVaults.length(); ++i) {
-            (
-                address vault,
-                uint48 enabledTime,
-                uint48 disabledTime
-            ) = symbioticVaults.atWithTimes(i);
+            (address vault, uint48 enabledTime, uint48 disabledTime) = symbioticVaults.atWithTimes(i);
 
             if (collateral != IVault(vault).collateral()) {
                 continue;
@@ -484,38 +441,26 @@ contract BoltManager is IBoltManager, Ownable {
     /// @param epoch The epoch to check the total stake for.
     /// @param collateral The collateral address to check the total stake for.
     /// @return totalStake The total stake of all operators at the given epoch, in collateral token.
-    function getSymbioticTotalStake(
-        uint48 epoch,
-        address collateral
-    ) public view returns (uint256 totalStake) {
+    function getSymbioticTotalStake(uint48 epoch, address collateral) public view returns (uint256 totalStake) {
         uint48 epochStartTs = getEpochStartTs(epoch);
 
         // for epoch older than SLASHING_WINDOW total stake can be invalidated
         if (
-            epochStartTs < SLASHING_WINDOW ||
-            epochStartTs < Time.timestamp() - SLASHING_WINDOW ||
-            epochStartTs > Time.timestamp()
+            epochStartTs < SLASHING_WINDOW || epochStartTs < Time.timestamp() - SLASHING_WINDOW
+                || epochStartTs > Time.timestamp()
         ) {
             revert InvalidQuery();
         }
 
         for (uint256 i; i < symbioticOperators.length(); ++i) {
-            (
-                address operator,
-                uint48 enabledTime,
-                uint48 disabledTime
-            ) = symbioticOperators.atWithTimes(i);
+            (address operator, uint48 enabledTime, uint48 disabledTime) = symbioticOperators.atWithTimes(i);
 
             // just skip operator if it was added after the target epoch or paused
             if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
                 continue;
             }
 
-            totalStake += getSymbioticOperatorStakeAt(
-                operator,
-                collateral,
-                epochStartTs
-            );
+            totalStake += getSymbioticOperatorStakeAt(operator, collateral, epochStartTs);
         }
     }
 
@@ -524,23 +469,14 @@ contract BoltManager is IBoltManager, Ownable {
     /// @param operator The operator address to slash.
     /// @param collateral The collateral address to slash.
     /// @param amount The amount of collateral to slash.
-    function slash(
-        uint48 timestamp,
-        address operator,
-        address collateral,
-        uint256 amount
-    ) public onlyOwner {
+    function slash(uint48 timestamp, address operator, address collateral, uint256 amount) public onlyOwner {
         // TODO: remove onlyOwner modifier and gate the slashing logic behind the BoltChallenger
         // fault proof mechanism to allow for permissionless slashing.
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(timestamp));
 
         for (uint256 i = 0; i < symbioticVaults.length(); ++i) {
-            (
-                address vault,
-                uint48 enabledTime,
-                uint48 disabledTime
-            ) = symbioticVaults.atWithTimes(i);
+            (address vault, uint48 enabledTime, uint48 disabledTime) = symbioticVaults.atWithTimes(i);
 
             if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
                 continue;
@@ -550,31 +486,18 @@ contract BoltManager is IBoltManager, Ownable {
                 continue;
             }
 
-            uint256 operatorStake = getSymbioticOperatorStakeAt(
-                operator,
-                collateral,
-                epochStartTs
-            );
+            uint256 operatorStake = getSymbioticOperatorStakeAt(operator, collateral, epochStartTs);
 
             if (amount > operatorStake) {
                 revert SlashAmountTooHigh();
             }
 
-            uint256 vaultStake = IBaseDelegator(IVault(vault).delegator())
-                .stakeAt(
-                    BOLT_SYMBIOTIC_NETWORK.subnetwork(0),
-                    operator,
-                    epochStartTs,
-                    new bytes(0)
-                );
+            uint256 vaultStake = IBaseDelegator(IVault(vault).delegator()).stakeAt(
+                BOLT_SYMBIOTIC_NETWORK.subnetwork(0), operator, epochStartTs, new bytes(0)
+            );
 
             // Slash the vault pro-rata.
-            _slashSymbioticVault(
-                epochStartTs,
-                vault,
-                operator,
-                (amount * vaultStake) / operatorStake
-            );
+            _slashSymbioticVault(epochStartTs, vault, operator, (amount * vaultStake) / operatorStake);
         }
     }
 
@@ -582,7 +505,9 @@ contract BoltManager is IBoltManager, Ownable {
 
     /// @notice Allow an operator to signal opt-in to Bolt Protocol.
     /// @param operator The operator address to signal opt-in for.
-    function registerEigenLayerOperator(address operator) public {
+    function registerEigenLayerOperator(
+        address operator
+    ) public {
         if (eigenLayerOperators.contains(operator)) {
             revert AlreadyRegistered();
         }
@@ -619,24 +544,18 @@ contract BoltManager is IBoltManager, Ownable {
         eigenLayerOperators.enable(msg.sender);
     }
 
-    function registerEigenLayerStrategy(address strategy) public {
+    function registerEigenLayerStrategy(
+        address strategy
+    ) public {
         if (eigenLayerStrategies.contains(strategy)) {
             revert AlreadyRegistered();
         }
 
-        if (
-            !EIGENLAYER_STRATEGY_MANAGER.strategyIsWhitelistedForDeposit(
-                IStrategy(strategy)
-            )
-        ) {
+        if (!EIGENLAYER_STRATEGY_MANAGER.strategyIsWhitelistedForDeposit(IStrategy(strategy))) {
             revert StrategyNotAllowed();
         }
 
-        if (
-            !isEigenLayerCollateralWhitelisted(
-                address(IStrategy(strategy).underlyingToken())
-            )
-        ) {
+        if (!isEigenLayerCollateralWhitelisted(address(IStrategy(strategy).underlyingToken()))) {
             revert CollateralNotWhitelisted();
         }
 
@@ -668,8 +587,7 @@ contract BoltManager is IBoltManager, Ownable {
     function isEigenLayerStrategyEnabled(
         address strategy
     ) public view returns (bool) {
-        (uint48 enabledTime, uint48 disabledTime) = eigenLayerStrategies
-            .getTimes(strategy);
+        (uint48 enabledTime, uint48 disabledTime) = eigenLayerStrategies.getTimes(strategy);
         return enabledTime != 0 && disabledTime == 0;
     }
 
@@ -679,8 +597,7 @@ contract BoltManager is IBoltManager, Ownable {
     function isEigenLayerOperatorEnabled(
         address operator
     ) public view returns (bool) {
-        (uint48 enabledTime, uint48 disabledTime) = eigenLayerOperators
-            .getTimes(operator);
+        (uint48 enabledTime, uint48 disabledTime) = eigenLayerOperators.getTimes(operator);
         return enabledTime != 0 && disabledTime == 0;
     }
 
@@ -707,8 +624,7 @@ contract BoltManager is IBoltManager, Ownable {
         }
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
-        IBoltValidators.Validator memory validator = validators
-            .getValidatorByPubkeyHash(pubkeyHash);
+        IBoltValidators.Validator memory validator = validators.getValidatorByPubkeyHash(pubkeyHash);
 
         address operator = validator.authorizedOperator;
 
@@ -716,8 +632,7 @@ contract BoltManager is IBoltManager, Ownable {
         status.active = validator.exists;
         status.operator = operator;
 
-        (uint48 enabledTime, uint48 disabledTime) = eigenLayerOperators
-            .getTimes(operator);
+        (uint48 enabledTime, uint48 disabledTime) = eigenLayerOperators.getTimes(operator);
         if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
             return status;
         }
@@ -726,28 +641,15 @@ contract BoltManager is IBoltManager, Ownable {
         status.amounts = new uint256[](eigenLayerStrategies.length());
 
         for (uint256 i = 0; i < eigenLayerStrategies.length(); ++i) {
-            (
-                address strategy,
-                uint48 enabledVaultTime,
-                uint48 disabledVaultTime
-            ) = eigenLayerStrategies.atWithTimes(i);
+            (address strategy, uint48 enabledVaultTime, uint48 disabledVaultTime) = eigenLayerStrategies.atWithTimes(i);
 
             address collateral = address(IStrategy(strategy).underlyingToken());
             status.collaterals[i] = collateral;
-            if (
-                !_wasEnabledAt(
-                    enabledVaultTime,
-                    disabledVaultTime,
-                    epochStartTs
-                )
-            ) {
+            if (!_wasEnabledAt(enabledVaultTime, disabledVaultTime, epochStartTs)) {
                 continue;
             }
 
-            status.amounts[i] = getEigenLayerOperatorStake(
-                operator,
-                collateral
-            );
+            status.amounts[i] = getEigenLayerOperatorStake(operator, collateral);
         }
     }
 
@@ -755,10 +657,7 @@ contract BoltManager is IBoltManager, Ownable {
     //  @param operator The operator address to get the stake for.
     //  @param strategies The list of strategies to get the stake for.
     //  @return tokenAmounts The amount of tokens delegated to the operator for each strategy.
-    function getEigenLayerOperatorStake(
-        address operator,
-        address collateral
-    ) public view returns (uint256 amount) {
+    function getEigenLayerOperatorStake(address operator, address collateral) public view returns (uint256 amount) {
         uint48 timestamp = Time.timestamp();
         return getEigenLayerOperatorStakeAt(operator, collateral, timestamp);
     }
@@ -783,11 +682,7 @@ contract BoltManager is IBoltManager, Ownable {
         IStrategy[] memory strategyMem = new IStrategy[](1);
 
         for (uint256 i = 0; i < eigenLayerStrategies.length(); i++) {
-            (
-                address strategy,
-                uint48 enabledTime,
-                uint48 disabledTime
-            ) = eigenLayerStrategies.atWithTimes(i);
+            (address strategy, uint48 enabledTime, uint48 disabledTime) = eigenLayerStrategies.atWithTimes(i);
 
             if (collateral != address(IStrategy(strategy).underlyingToken())) {
                 continue;
@@ -799,8 +694,7 @@ contract BoltManager is IBoltManager, Ownable {
 
             strategyMem[0] = IStrategy(strategy);
             // NOTE: order is preserved i.e., shares[i] corresponds to strategies[i]
-            uint256[] memory shares = EIGENLAYER_DELEGATION_MANAGER
-                .getOperatorShares(operator, strategyMem);
+            uint256[] memory shares = EIGENLAYER_DELEGATION_MANAGER.getOperatorShares(operator, strategyMem);
             amount += IStrategy(strategy).sharesToUnderlyingView(shares[0]);
         }
 
@@ -811,10 +705,7 @@ contract BoltManager is IBoltManager, Ownable {
     /// @param epoch The epoch to check the total stake for.
     /// @param collateral The collateral address to check the total stake for.
     /// @return totalStake The total stake of all operators at the given epoch, in collateral token.
-    function getEigenLayerTotalStake(
-        uint48 epoch,
-        address collateral
-    ) public view returns (uint256 totalStake) {
+    function getEigenLayerTotalStake(uint48 epoch, address collateral) public view returns (uint256 totalStake) {
         uint48 epochStartTs = getEpochStartTs(epoch);
 
         // for epoch older than SLASHING_WINDOW total stake can be invalidated
@@ -828,11 +719,7 @@ contract BoltManager is IBoltManager, Ownable {
         // }
 
         for (uint256 i; i < eigenLayerOperators.length(); ++i) {
-            (
-                address operator,
-                uint48 enabledTime,
-                uint48 disabledTime
-            ) = eigenLayerOperators.atWithTimes(i);
+            (address operator, uint48 enabledTime, uint48 disabledTime) = eigenLayerOperators.atWithTimes(i);
 
             // just skip operator if it was added after the target epoch or paused
             if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
@@ -852,20 +739,14 @@ contract BoltManager is IBoltManager, Ownable {
         address operator,
         ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature
     ) public {
-        EIGENLAYER_AVS_DIRECTORY.registerOperatorToAVS(
-            operator,
-            operatorSignature
-        );
+        EIGENLAYER_AVS_DIRECTORY.registerOperatorToAVS(operator, operatorSignature);
     }
 
     function checkIfEigenLayerOperatorRegisteredToAVS(
         address operator
     ) public view returns (bool registered) {
-        return
-            EIGENLAYER_AVS_DIRECTORY.avsOperatorStatus(
-                address(this),
-                operator
-            ) == IAVSDirectory.OperatorAVSRegistrationStatus.REGISTERED;
+        return EIGENLAYER_AVS_DIRECTORY.avsOperatorStatus(address(this), operator)
+            == IAVSDirectory.OperatorAVSRegistrationStatus.REGISTERED;
     }
 
     /// @notice Deregister an EigenLayer layer operator from working in Bolt Protocol.
@@ -890,45 +771,23 @@ contract BoltManager is IBoltManager, Ownable {
     /// @param disabledTime The disabled time of the map entry.
     /// @param timestamp The timestamp to check the map entry status at.
     /// @return True if the map entry was active at the given timestamp, false otherwise.
-    function _wasEnabledAt(
-        uint48 enabledTime,
-        uint48 disabledTime,
-        uint48 timestamp
-    ) private pure returns (bool) {
-        return
-            enabledTime != 0 &&
-            enabledTime <= timestamp &&
-            (disabledTime == 0 || disabledTime >= timestamp);
+    function _wasEnabledAt(uint48 enabledTime, uint48 disabledTime, uint48 timestamp) private pure returns (bool) {
+        return enabledTime != 0 && enabledTime <= timestamp && (disabledTime == 0 || disabledTime >= timestamp);
     }
 
     /// @notice Slash an operator for a given amount of collateral.
     /// @param timestamp The timestamp of the slash event.
     /// @param operator The operator address to slash.
     /// @param amount The amount of collateral to slash.
-    function _slashSymbioticVault(
-        uint48 timestamp,
-        address vault,
-        address operator,
-        uint256 amount
-    ) private {
+    function _slashSymbioticVault(uint48 timestamp, address vault, address operator, uint256 amount) private {
         address slasher = IVault(vault).slasher();
         uint256 slasherType = IEntity(slasher).TYPE();
 
         if (slasherType == INSTANT_SLASHER_TYPE) {
-            ISlasher(slasher).slash(
-                BOLT_SYMBIOTIC_NETWORK.subnetwork(0),
-                operator,
-                amount,
-                timestamp,
-                new bytes(0)
-            );
+            ISlasher(slasher).slash(BOLT_SYMBIOTIC_NETWORK.subnetwork(0), operator, amount, timestamp, new bytes(0));
         } else if (slasherType == VETO_SLASHER_TYPE) {
             IVetoSlasher(slasher).requestSlash(
-                BOLT_SYMBIOTIC_NETWORK.subnetwork(0),
-                operator,
-                amount,
-                timestamp,
-                new bytes(0)
+                BOLT_SYMBIOTIC_NETWORK.subnetwork(0), operator, amount, timestamp, new bytes(0)
             );
         } else {
             revert UnknownSlasherType();
