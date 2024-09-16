@@ -8,6 +8,7 @@ import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {SecureMerkleTrie} from "../lib/trie/SecureMerkleTrie.sol";
 import {MerkleTrie} from "../lib/trie/MerkleTrie.sol";
 import {RLPReader} from "../lib/rlp/RLPReader.sol";
+import {RLPWriter} from "../lib/rlp/RLPWriter.sol";
 import {BeaconChainUtils} from "../lib/BeaconChainUtils.sol";
 import {TransactionDecoder} from "../lib/TransactionDecoder.sol";
 import {IBoltChallenger} from "../interfaces/IBoltChallenger.sol";
@@ -15,9 +16,9 @@ import {IBoltChallenger} from "../interfaces/IBoltChallenger.sol";
 contract BoltChallenger is IBoltChallenger {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
-    using EnumerableSet for EnumerableSet.Bytes32Set;
     using TransactionDecoder for bytes;
     using TransactionDecoder for TransactionDecoder.Transaction;
+    using EnumerableSet for EnumerableSet.Bytes32Set;
 
     // ========= STORAGE =========
 
@@ -84,7 +85,7 @@ contract BoltChallenger is IBoltChallenger {
     /// @return challenge The challenge with the given ID.
     function getChallengeByID(
         bytes32 challengeID
-    ) external view returns (Challenge memory) {
+    ) public view returns (Challenge memory) {
         if (!challengeIDs.contains(challengeID)) {
             revert ChallengeDoesNotExist();
         }
@@ -106,7 +107,6 @@ contract BoltChallenger is IBoltChallenger {
             payable(msg.sender).transfer(msg.value - CHALLENGE_BOND);
         }
 
-        // Sanity check the slot number
         if (commitment.slot > BeaconChainUtils._getCurrentSlot() - BeaconChainUtils.FINALIZATION_DELAY_SLOTS) {
             // We cannot open challenges for slots that are not finalized yet.
             // This is admittedly a bit strict, since 64-slot deep reorgs are very unlikely.
@@ -139,11 +139,7 @@ contract BoltChallenger is IBoltChallenger {
 
     // ========= CHALLENGE RESOLUTION =========
 
-    function resolveRecentChallenge(
-        bytes32 challengeID,
-        bytes calldata blockHeaderRLP,
-        bytes calldata accountProof
-    ) public {
+    function resolveRecentChallenge(bytes32 challengeID, Proof calldata proof) public {
         // Check that the challenge exists
         if (!challengeIDs.contains(challengeID)) {
             revert ChallengeDoesNotExist();
@@ -154,20 +150,23 @@ contract BoltChallenger is IBoltChallenger {
             revert BlockIsTooOld();
         }
 
+        // Get the trusted block hash for the slot of the commitment to resolve the challenge
         bytes32 trustedBlockHash = blockhash(challenges[challengeID].commitment.slot);
-        _resolveChallenge(challengeID, trustedBlockHash, blockHeaderRLP, accountProof);
+
+        // Finally resolve the challenge with the trusted block hash and the provided proofs
+        _resolve(challengeID, trustedBlockHash, proof);
     }
 
-    function resolveChallenge(bytes32 challengeID, bytes calldata blockHeaderRLP, bytes calldata accountProof) public {
+    // Resolving a historical challenge requires acquiring a block hash from an alternative source
+    // from the EVM. This is because the BLOCKHASH opcode is limited to the most recent 256 blocks.
+    function resolveChallenge(bytes32 challengeID, Proof calldata proof) public {
         // unimplemented!();
     }
 
-    function _resolveChallenge(
-        bytes32 challengeID,
-        bytes32 trustedBlockHash,
-        bytes calldata blockHeaderRLP,
-        bytes calldata accountProof
-    ) internal {
+    /// @notice Resolve a challenge by providing proofs of the inclusion of the committed transaction.
+    /// @dev Challenges are WON if the proposer successfully defends the inclusion of the transaction,
+    /// and LOST if the challenger successfully demonstrates that the inclusion commitment was breached.
+    function _resolve(bytes32 challengeID, bytes32 trustedBlockHash, Proof calldata proof) internal {
         // The challenge is assumed to exist at this point, so we can safely access it.
         Challenge storage challenge = challenges[challengeID];
 
@@ -182,22 +181,24 @@ contract BoltChallenger is IBoltChallenger {
             return;
         }
 
-        // Verify the validity of the header against the trusted block hash
-        if (keccak256(blockHeaderRLP) != trustedBlockHash) {
+        // Verify the validity of the header against the trusted block hash.
+        if (keccak256(proof.blockHeaderRLP) != trustedBlockHash) {
             revert InvalidBlockHash();
         }
 
-        // Decode the block header fields
-        BlockHeaderData blockHeader = _decodeBlockHeaderRLP(blockHeaderRLP);
+        // Decode the RLP-encoded block header fields
+        BlockHeaderData memory blockHeader = _decodeBlockHeaderRLP(proof.blockHeaderRLP);
 
         // Recover the sender of the committed raw signed transaction. It will be the account to prove existence of.
-        // For this, we need to reconstruct the transaction preimage and signature from the committed signed transaction.
-        TransactionDecoder.Transaction memory decodedTx = challenge.commitment.signedTx.decodeRaw();
+        // For this, we need to reconstruct the transaction preimage and signature from the committed signed transaction:
+        // - Preimage = the keccak hash of the unsigned transaction object. This is the data that was signed.
+        // - Signature = the signature of the preimage, signed by the sender we want to recover.
+        TransactionDecoder.Transaction memory decodedTx = challenge.commitment.signedTx.decodeEnveloped();
         address accountToProve = ECDSA.recover(decodedTx.preimage(), decodedTx.signature());
 
         // Decode the account fields by checking the account proof against the state root of the block header
         (bool accountExists, bytes memory accountRLP) =
-            SecureMerkleTrie.get(abi.encodePacked(accountToProve), accountProof, blockHeader.stateRoot);
+            SecureMerkleTrie.get(abi.encodePacked(accountToProve), proof.accountMerkleProof, blockHeader.stateRoot);
 
         if (!accountExists) {
             revert AccountDoesNotExist();
@@ -217,21 +218,34 @@ contract BoltChallenger is IBoltChallenger {
             // already included transaction. TBD.
         }
 
-        // Check if the account had enough balance to pay for the worst-case base fee of the committed transaction
-        // (i.e., the base fee of the block corresponding to the committed slot number).
+        if (account.balance < blockHeader.baseFee * decodedTx.gasLimit) {
+            // The account does not have enough balance to pay for the worst-case base fee of the committed transaction.
+            // Consider the challenge won, as the proposer is not at fault. The bond will be transferred to the proposer.
+            // TODO: transfer challenge bond to proposer
+            challenge.status = ChallengeStatus.Won;
+        }
+
+        // The key in the transaction trie is the RLP-encoded index of the transaction in the block
+        bytes memory txLeaf = RLPWriter.writeUint(proof.txIndexInBlock);
 
         // Verify transaction inclusion proof
-        // Note: the transactions trie is built with raw indexes as leaves, without hashing them first.
-        // This denotes why we use `MerkleTrie.get` as opposed to `SecureMerkleTrie.get` here.
-        (bool txExists, bytes memory transactionRLP) = MerkleTrie.get(txLeaf, txProof, blockHeader.transactionsRoot);
+        // Note: the transactions trie is built with raw leaves, without hashing them first.
+        // This denotes why we use `MerkleTrie.get()` as opposed to `SecureMerkleTrie.get()` here.
+        (bool txExists, bytes memory txRLP) = MerkleTrie.get(txLeaf, proof.txMerkleProof, blockHeader.txRoot);
 
         if (!txExists) {
             revert TransactionNotIncluded();
         }
 
-        // Decode the transactionRLP and check if it matches the committed transaction
+        // Decode the txRLP and check if it matches the committed transaction
+        // TODO: q: is txRLP also envelope encoded? if not, this check will fail.
+        if (keccak256(challenge.commitment.signedTx) != keccak256(txRLP)) {
+            revert WrongTransactionHashProof();
+        }
 
         // If all checks pass, the challenge is considered won as the proposer defended with valid proofs.
+        challenge.status = ChallengeStatus.Won;
+        // TODO: transfer challenge bond to proposer
     }
 
     // ========= HELPERS =========
@@ -244,14 +258,14 @@ contract BoltChallenger is IBoltChallenger {
         RLPReader.RLPItem[] memory headerFields = headerRLP.toRLPItem().readList();
 
         blockHeader.stateRoot = headerFields[3].readBytes32();
-        blockHeader.transactionsRoot = headerFields[4].readBytes32();
+        blockHeader.txRoot = headerFields[4].readBytes32();
         blockHeader.blockNumber = headerFields[8].readUint256();
         blockHeader.timestamp = headerFields[11].readUint256();
         blockHeader.baseFee = headerFields[15].readUint256();
     }
 
     function _decodeAccountRLP(
-        bytes calldata accountRLP
+        bytes memory accountRLP
     ) internal pure returns (AccountData memory account) {
         RLPReader.RLPItem[] memory accountFields = accountRLP.toRLPItem().readList();
 
