@@ -2,9 +2,15 @@
 pragma solidity 0.8.25;
 
 interface IBoltChallenger {
+    enum ChallengeStatus {
+        Open,
+        Won,
+        Lost
+    }
+
     struct Challenge {
         uint48 openedAt;
-        bool resolved;
+        ChallengeStatus status;
         address challenger;
         address target;
         SignedCommitment commitment;
@@ -16,10 +22,25 @@ interface IBoltChallenger {
         bytes signature;
     }
 
+    struct BlockHeaderData {
+        bytes32 stateRoot;
+        bytes32 transactionsRoot;
+        uint256 blockNumber;
+        uint256 timestamp;
+        uint256 baseFee;
+    }
+
+    struct AccountData {
+        uint256 nonce;
+        uint256 balance;
+    }
+
     error SlotInTheFuture();
     error BlockIsNotFinalized();
     error InsufficientChallengeBond();
     error ChallengeAlreadyExists();
+    error ChallengeAlreadyResolved();
+    error ChallengeDoesNotExist();
     error BlockIsTooOld();
     error InvalidBlockHash();
     error AccountDoesNotExist();
