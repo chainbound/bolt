@@ -48,11 +48,10 @@ coordination of validators, operators, and vaults within the Bolt network.
 
 Key features include:
 
-1. Registration of Symbiotic Operators and Vaults
+1. Registration of Symbiotic Operators and Vaults / EigenLayer Operators and Strategies
 2. Whitelisting of collateral assets used to back commitments
 3. Retrieval of operator stake and proposer status from their pubkey
-4. Integration with Symbiotic
-5. (WIP) Integration with Eigenlayer
+4. Integration with Symbiotic/EigenLayer
 
 ### Symbiotic Integration guide for Staking Pools
 
@@ -85,7 +84,13 @@ The opt-in process requires the following steps:
 
 ### Eigenlayer Integration guides
 
-WIP
+As an operator/validator in the EigenLayer ecosystem you need to participate into the Bolt AVS following
+the usual procedure. After that, some additional steps are required:
+
+1. The validator that has delegated to you the stake needs to register into the `BoltValidators` contract
+   by calling the `BoltValidators.registerValidator` function.
+2. The operator needs to register into the `BoltManager` contract by calling the `BoltManager.registerEigenLayerOperator` function.
+3. Lastly, any entity needs to registrer the EigenLayer strategy used for restaking.
 
 ## Fault Proof Challenge and Slashing: `BoltChallenger`
 
