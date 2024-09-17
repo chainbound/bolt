@@ -61,7 +61,7 @@ on how to spin up a Vault and start receiving stake from your node operators.
 
 Opting into Bolt works as any other Symbiotic middleware integration. Here are the steps:
 
-1. Make sure your vault collateral is whitelisted in `BoltManager` by calling `isCollateralWhitelisted`.
+1. Make sure your vault collateral is whitelisted in `BoltManager` by calling `isSymbioticCollateralWhitelisted`.
 2. Register as a vault in `BoltManager` by calling `registerSymbioticVault`.
 3. Verify that your vault is active in `BoltManager` by calling `isSymbioticVaultEnabled`.
 4. Set the network limit for your vault in Symbiotic with `Vault.delegator().setNetworkLimit()`.
@@ -82,15 +82,16 @@ The opt-in process requires the following steps:
 5. get approved by the vault.
 6. start providing commitments with the stake provided by the vault.
 
-### Eigenlayer Integration guides
+### Eigenlayer Integration guides for Validators/Operators
 
 As an operator/validator in the EigenLayer ecosystem you need to participate into the Bolt AVS following
-the usual procedure. After that, some additional steps are required:
+the procedure described in the [EigenLayer docs](https://docs.eigenlayer.xyz/). After that, some additional steps are required:
 
-1. The validator that has delegated to you the stake needs to register into the `BoltValidators` contract
+1. Make sure your Strategy underlying collateral is whitelisted in `BoltManager` by calling `isEigenLayerCollateralWhitelisted`.
+2. The validator that has delegated stake to an operator needs to register into the `BoltValidators` contract
    by calling the `BoltValidators.registerValidator` function.
-2. The operator needs to register into the `BoltManager` contract by calling the `BoltManager.registerEigenLayerOperator` function.
-3. Lastly, any entity needs to registrer the EigenLayer strategy used for restaking.
+3. The operator needs to register into the `BoltManager` contract by calling the `BoltManager.registerEigenLayerOperator` function.
+4. Lastly, any entity needs to registrer the EigenLayer strategy used for restaking.
 
 ## Fault Proof Challenge and Slashing: `BoltChallenger`
 
