@@ -117,7 +117,8 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         // Reconstruct the commitment digest: `keccak( keccak(signed tx) || le_bytes(slot) )`
-        bytes32 commitmentID = keccak256(abi.encodePacked(keccak256(commitment.signedTx), abi.encodePacked(commitment.slot)));
+        bytes32 commitmentID =
+            keccak256(abi.encodePacked(keccak256(commitment.signedTx), abi.encodePacked(commitment.slot)));
 
         // Verify the commitment signature against the digest
         address commitmentSigner = ECDSA.recover(commitmentID, commitment.signature);
