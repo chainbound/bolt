@@ -17,9 +17,9 @@ interface IBoltChallenger {
     }
 
     struct SignedCommitment {
-        uint256 slot;
-        bytes signedTx;
+        uint64 slot;
         bytes signature;
+        bytes signedTx;
     }
 
     struct BlockHeaderData {
@@ -39,6 +39,7 @@ interface IBoltChallenger {
         bytes blockHeaderRLP;
         bytes accountMerkleProof;
         bytes txMerkleProof;
+        uint256 blockNumber;
         uint256 txIndexInBlock;
     }
 
@@ -53,6 +54,7 @@ interface IBoltChallenger {
     error AccountDoesNotExist();
     error TransactionNotIncluded();
     error WrongTransactionHashProof();
+    error InvalidBlockNumber();
 
     event ChallengeOpened(bytes32 indexed challengeId, address indexed challenger, address indexed target);
 

@@ -2,9 +2,6 @@
 pragma solidity 0.8.25;
 pragma experimental ABIEncoderV2;
 
-/* Library Imports */
-// import {BytesUtil} from "../BytesUtil.sol";
-
 /**
  * @title RLPWriter
  * @author Bakaoh (with modifications)

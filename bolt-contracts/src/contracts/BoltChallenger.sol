@@ -36,6 +36,9 @@ contract BoltChallenger is IBoltChallenger {
     /// @notice The maximum duration of a challenge to be considered valid.
     uint256 public constant MAX_CHALLENGE_DURATION = 7 days;
 
+    /// @notice The maximum number of blocks to look back for block hashes in the EVM.
+    uint256 public constant BLOCKHASH_EVM_LOOKBACK = 256;
+
     // ========= CONSTRUCTOR =========
 
     constructor() {}
@@ -113,8 +116,8 @@ contract BoltChallenger is IBoltChallenger {
             revert BlockIsNotFinalized();
         }
 
-        // Reconstruct the commitment digest: `signed tx || slot`
-        bytes32 commitmentID = keccak256(abi.encodePacked(commitment.signedTx, commitment.slot));
+        // Reconstruct the commitment digest: `keccak( keccak(signed tx) || le_bytes(slot) )`
+        bytes32 commitmentID = keccak256(abi.encodePacked(keccak256(commitment.signedTx), abi.encodePacked(commitment.slot)));
 
         // Verify the commitment signature against the digest
         address commitmentSigner = ECDSA.recover(commitmentID, commitment.signature);
@@ -145,20 +148,26 @@ contract BoltChallenger is IBoltChallenger {
             revert ChallengeDoesNotExist();
         }
 
-        // The visibility of the BLOCKHASH opcode is limited to the most recent 256 blocks.
-        if (challenges[challengeID].commitment.slot < BeaconChainUtils._getCurrentSlot() - 256) {
+        // The visibility of the BLOCKHASH opcode is limited to the 256 most recent blocks.
+        // For simplicity we restrict this to 256 slots even though 256 blocks would be more accurate.
+        if (challenges[challengeID].commitment.slot < BeaconChainUtils._getCurrentSlot() - BLOCKHASH_EVM_LOOKBACK) {
             revert BlockIsTooOld();
         }
 
-        // Get the trusted block hash for the slot of the commitment to resolve the challenge
-        bytes32 trustedBlockHash = blockhash(challenges[challengeID].commitment.slot);
+        // Check that the block number is within the EVM lookback window for block hashes
+        if (proof.blockNumber > block.number || proof.blockNumber < block.number - BLOCKHASH_EVM_LOOKBACK) {
+            revert InvalidBlockNumber();
+        }
+
+        // Get the trusted block hash for the block number in which the transaction was included.
+        bytes32 trustedBlockHash = blockhash(proof.blockNumber);
 
         // Finally resolve the challenge with the trusted block hash and the provided proofs
         _resolve(challengeID, trustedBlockHash, proof);
     }
 
     // Resolving a historical challenge requires acquiring a block hash from an alternative source
-    // from the EVM. This is because the BLOCKHASH opcode is limited to the most recent 256 blocks.
+    // from the EVM. This is because the BLOCKHASH opcode is limited to the 256 most recent blocks.
     function resolveChallenge(bytes32 challengeID, Proof calldata proof) public {
         // unimplemented!();
     }
