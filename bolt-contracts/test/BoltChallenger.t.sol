@@ -3,12 +3,17 @@ pragma solidity 0.8.25;
 
 import {Test, console} from "forge-std/Test.sol";
 
+import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+
 import {BoltChallenger} from "../src/contracts/BoltChallenger.sol";
+import {IBoltChallenger} from "../src/interfaces/IBoltChallenger.sol";
+
 import {RLPReader} from "../src/lib/rlp/RLPReader.sol";
 import {RLPWriter} from "../src/lib/rlp/RLPWriter.sol";
 import {BytesUtils} from "../src/lib/BytesUtils.sol";
-import {SecureMerkleTrie} from "../src/lib/trie/SecureMerkleTrie.sol";
 import {MerkleTrie} from "../src/lib/trie/MerkleTrie.sol";
+import {SecureMerkleTrie} from "../src/lib/trie/SecureMerkleTrie.sol";
+import {BeaconChainUtils} from "../src/lib/BeaconChainUtils.sol";
 
 contract BoltChallengerTest is Test {
     using RLPReader for bytes;
@@ -22,7 +27,14 @@ contract BoltChallengerTest is Test {
 
     function setUp() public {
         boltChallenger = new BoltChallenger();
+
+        vm.deal(challenger, 100 ether);
+        vm.deal(resolver, 100 ether);
+        vm.roll(12_456_789);
+        vm.warp(1_726_564_072);
     }
+
+    // =========== Proving data inclusion on-chain ===========
 
     function testProveHeaderData() public view {
         // Note: In prod, how we obtain the trusted block hash would depend on the context.
@@ -136,7 +148,70 @@ contract BoltChallengerTest is Test {
         assertEq(data.length, 0);
     }
 
-    // Helper function to encode a list of bytes[] into an RLP list with each item RLP-encoded
+    // =========== Verifying Signatures ===========
+
+    function testCommitmentDigestAndSignature() public view {
+        string memory file = vm.readFile("./test/testdata/bolt_commitment.json");
+        IBoltChallenger.SignedCommitment memory commitment = IBoltChallenger.SignedCommitment({
+            slot: uint64(vm.parseJsonUint(file, ".slot")),
+            signature: vm.parseJsonBytes(file, ".signature"),
+            signedTx: vm.parseJsonBytes(file, ".tx")
+        });
+
+        // Reconstruct the commitment digest: `keccak( keccak(signed tx) || le_bytes(slot) )`
+        bytes32 txHash = keccak256(commitment.signedTx);
+        bytes memory leSlot = _toLittleEndian(commitment.slot);
+        bytes32 commitmentID = keccak256(abi.encodePacked(txHash, leSlot));
+
+        assertEq(commitmentID, 0x52ecc7832625c3d107aaba5b55d4509b48cd9f4f7ce375d6696d09bbf3310525);
+        assertEq(commitment.signature.length, 65);
+
+        // Normalize v to 27 or 28
+        if (uint8(commitment.signature[64]) < 27) {
+            commitment.signature[64] = bytes1(uint8(commitment.signature[64]) + 0x1B);
+        }
+
+        // Verify the commitment signature against the digest
+        address commitmentSigner = ECDSA.recover(commitmentID, commitment.signature);
+        assertEq(commitmentSigner, 0x27083ED52464625660f3e30Aa5B9C20A30D7E110);
+    }
+
+    // =========== Opening a challenge ===========
+
+    function testOpenChallenge() public {
+        string memory file = vm.readFile("./test/testdata/bolt_commitment.json");
+        IBoltChallenger.SignedCommitment memory commitment = IBoltChallenger.SignedCommitment({
+            slot: uint64(vm.parseJsonUint(file, ".slot")),
+            signature: vm.parseJsonBytes(file, ".signature"),
+            signedTx: vm.parseJsonBytes(file, ".tx")
+        });
+
+        // Normalize v to 27 or 28
+        if (uint8(commitment.signature[64]) < 27) {
+            commitment.signature[64] = bytes1(uint8(commitment.signature[64]) + 0x1B);
+        }
+
+        // Open a challenge with the commitment
+        vm.prank(challenger);
+        boltChallenger.openChallenge(commitment);
+
+        // Check the challenge was opened
+        IBoltChallenger.Challenge[] memory challenges = boltChallenger.getAllChallenges();
+        assertEq(challenges.length, 1);
+
+        IBoltChallenger.Challenge memory challenge = challenges[0];
+        assertEq(challenge.openedAt, block.timestamp);
+        assertEq(uint256(challenge.status), 0);
+        assertEq(challenge.challenger, challenger);
+        assertEq(challenge.target, resolver);
+        assertEq(challenge.commitment.slot, commitment.slot);
+        assertEq(challenge.commitment.signature, commitment.signature);
+        assertEq(challenge.commitment.signedTx, commitment.signedTx);
+    }
+
+    // =========== Helper functions ===========
+
+    // Helper to encode a list of bytes[] into an RLP list with each item RLP-encoded
     function _RLPEncodeList(
         bytes[] memory _items
     ) internal pure returns (bytes memory) {
@@ -145,5 +220,14 @@ contract BoltChallengerTest is Test {
             encodedItems[i] = RLPWriter.writeBytes(_items[i]);
         }
         return RLPWriter.writeList(encodedItems);
+    }
+
+    // Helper to convert a u64 to a little-endian bytes
+    function _toLittleEndian(uint64 x) internal pure returns (bytes memory) {
+        bytes memory b = new bytes(8);
+        for (uint256 i = 0; i < 8; i++) {
+            b[i] = bytes1(uint8(x >> (8 * i)));
+        }
+        return b;
     }
 }
