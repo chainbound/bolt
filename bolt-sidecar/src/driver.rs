@@ -192,7 +192,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
 
         let start = Instant::now();
 
-        let validator_index = match self.consensus.validate_request(&request) {
+        let validator_pubkey = match self.consensus.validate_request(&request) {
             Ok(index) => index,
             Err(err) => {
                 error!(?err, "Consensus: failed to validate request");
@@ -220,7 +220,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
 
         // parse the request into constraints and sign them
         let slot = inclusion_request.slot;
-        let message = ConstraintsMessage::build(validator_index, inclusion_request);
+        let message = ConstraintsMessage::build(validator_pubkey, inclusion_request);
         let signed_constraints = match self.constraint_signer.sign(&message.digest()).await {
             Ok(signature) => SignedConstraints { message, signature },
             Err(err) => {

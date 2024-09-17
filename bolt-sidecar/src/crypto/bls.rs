@@ -31,8 +31,8 @@ pub trait SignableBLS {
     ///
     /// Note: The default implementation should be used where possible.
     fn verify(&self, signature: &Signature, pubkey: &BlsPublicKey) -> bool {
-        signature.verify(false, &self.digest(), BLS_DST_PREFIX, &[], pubkey, true)
-            == BLST_ERROR::BLST_SUCCESS
+        signature.verify(false, &self.digest(), BLS_DST_PREFIX, &[], pubkey, true) ==
+            BLST_ERROR::BLST_SUCCESS
     }
 }
 

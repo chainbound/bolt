@@ -723,7 +723,10 @@ mod tests {
 
         assert!(state.validate_request(&mut request).await.is_ok());
 
-        let message = ConstraintsMessage::build(0, request.as_inclusion_request().unwrap().clone());
+        let message = ConstraintsMessage::build(
+            Default::default(),
+            request.as_inclusion_request().unwrap().clone(),
+        );
         let signature = signer.sign(&message.digest()).await?;
         let signed_constraints = SignedConstraints { message, signature };
         state.add_constraint(10, signed_constraints);
@@ -838,7 +841,7 @@ mod tests {
         assert!(state.validate_request(&mut request).await.is_ok());
 
         let bls_signer = Signer::random();
-        let message = ConstraintsMessage::build(0, inclusion_request);
+        let message = ConstraintsMessage::build(Default::default(), inclusion_request);
         let signature = bls_signer.sign(&message.digest()).await.unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
@@ -886,7 +889,7 @@ mod tests {
         assert!(state.validate_request(&mut request).await.is_ok());
 
         let bls_signer = Signer::random();
-        let message = ConstraintsMessage::build(0, inclusion_request);
+        let message = ConstraintsMessage::build(Default::default(), inclusion_request);
         let signature = bls_signer.sign(&message.digest()).await.unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
@@ -932,7 +935,7 @@ mod tests {
         assert!(state.validate_request(&mut request).await.is_ok());
 
         let bls_signer = Signer::random();
-        let message = ConstraintsMessage::build(0, inclusion_request);
+        let message = ConstraintsMessage::build(Default::default(), inclusion_request);
         let signature = bls_signer.sign(&message.digest()).await.unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 

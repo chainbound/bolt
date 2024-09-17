@@ -4,7 +4,7 @@ use std::{
 };
 
 use beacon_api_client::{mainnet::Client, ProposerDuty};
-use ethereum_consensus::phase0::mainnet::SLOTS_PER_EPOCH;
+use ethereum_consensus::{crypto::PublicKey as BlsPublicKey, phase0::mainnet::SLOTS_PER_EPOCH};
 use tracing::debug;
 
 use super::CommitmentDeadline;
@@ -93,8 +93,12 @@ impl ConsensusState {
     /// 1. The target slot is one of our proposer slots. (TODO)
     /// 2. The request hasn't passed the slot deadline.
     ///
+    /// If the request is valid, it returns the validator public key for the slot.
     /// TODO: Integrate with the registry to check if we are registered.
-    pub fn validate_request(&self, request: &CommitmentRequest) -> Result<u64, ConsensusError> {
+    pub fn validate_request(
+        &self,
+        request: &CommitmentRequest,
+    ) -> Result<BlsPublicKey, ConsensusError> {
         let CommitmentRequest::Inclusion(req) = request;
 
         // Check if the slot is in the current epoch
@@ -110,9 +114,9 @@ impl ConsensusState {
         }
 
         // Find the validator index for the given slot
-        let validator_index = self.find_validator_index_for_slot(req.slot)?;
+        let validator_pubkey = self.find_validator_pubkey_for_slot(req.slot)?;
 
-        Ok(validator_index)
+        Ok(validator_pubkey)
     }
 
     /// Update the latest head and fetch the relevant data from the beacon chain.
@@ -155,16 +159,15 @@ impl ConsensusState {
         Ok(())
     }
 
-    /// Filters the proposer duties and returns the validator index for a given slot
-    /// if it doesn't exists then returns error.
-    fn find_validator_index_for_slot(&self, slot: u64) -> Result<u64, ConsensusError> {
+    /// Finds the validator public key for the given slot from the proposer duties.
+    fn find_validator_pubkey_for_slot(&self, slot: u64) -> Result<BlsPublicKey, ConsensusError> {
         self.epoch
             .proposer_duties
             .iter()
             .find(|&duty| {
                 duty.slot == slot && self.validator_indexes.contains(duty.validator_index as u64)
             })
-            .map(|duty| duty.validator_index as u64)
+            .map(|duty| duty.public_key.clone())
             .ok_or(ConsensusError::ValidatorNotFound)
     }
 }
@@ -202,12 +205,12 @@ mod tests {
         };
 
         // Test finding a valid slot
-        assert_eq!(state.find_validator_index_for_slot(1).unwrap(), 100);
-        assert_eq!(state.find_validator_index_for_slot(3).unwrap(), 102);
+        assert_eq!(state.find_validator_pubkey_for_slot(1).unwrap(), Default::default());
+        assert_eq!(state.find_validator_pubkey_for_slot(3).unwrap(), Default::default());
 
         // Test finding an invalid slot (not in proposer duties)
         assert!(matches!(
-            state.find_validator_index_for_slot(4),
+            state.find_validator_pubkey_for_slot(4),
             Err(ConsensusError::ValidatorNotFound)
         ));
     }
