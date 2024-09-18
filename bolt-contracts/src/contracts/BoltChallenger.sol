@@ -200,11 +200,8 @@ contract BoltChallenger is IBoltChallenger {
         BlockHeaderData memory blockHeader = _decodeBlockHeaderRLP(proof.blockHeaderRLP);
 
         // Recover the sender of the committed raw signed transaction. It will be the account to prove existence of.
-        // For this, we need to reconstruct the transaction preimage and signature from the committed signed transaction:
-        // - Preimage = the keccak hash of the unsigned transaction object. This is the data that was signed.
-        // - Signature = the signature of the preimage, signed by the sender we want to recover.
         TransactionDecoder.Transaction memory decodedTx = challenge.commitment.signedTx.decodeEnveloped();
-        address accountToProve = ECDSA.recover(decodedTx.preimage(), decodedTx.signature());
+        address accountToProve = decodedTx.recoverSender();
 
         // Decode the account fields by checking the account proof against the state root of the block header
         (bool accountExists, bytes memory accountRLP) =

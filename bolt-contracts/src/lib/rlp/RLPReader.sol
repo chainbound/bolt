@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
+// Credits: Optimism contributors.
+// Ref: https://github.com/ethereum-optimism/optimism/blob/05deae54595b0e6bdd33580de81cb9ad194898bc/packages/contracts-bedrock/src/libraries/rlp/RLPReader.sol
+
 /**
  * @title RLPReader
  * @dev Adapted from "RLPReader" by Hamdi Allam (hamdi.allam97@gmail.com).
