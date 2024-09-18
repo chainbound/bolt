@@ -7,11 +7,15 @@ import {RLPReader} from "./rlp/RLPReader.sol";
 import {RLPWriter} from "./rlp/RLPWriter.sol";
 import {BytesUtils} from "./BytesUtils.sol";
 
+/// @title TransactionDecoder
+/// @notice A library to decode Ethereum transactions in EIP-2718 format
+/// into a structured transaction object, and to recover the sender.
 library TransactionDecoder {
     using BytesUtils for bytes;
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
 
+    /// @notice The type of transaction
     enum TxType {
         Legacy,
         Eip2930,
@@ -19,9 +23,13 @@ library TransactionDecoder {
         Eip4844
     }
 
+    /// @notice A decoded transaction object
     struct Transaction {
         TxType txType;
         uint64 chainId;
+        // As Solidity doesn't have NULL values, we use this flag to differentiate between
+        // an explicit chainId of 0 and a missing chainID. The difference is important for 
+        // encoding unsigned eip-155 legacy transactions.
         bool isChainIdSet;
         uint256 nonce;
         uint256 gasPrice;
@@ -124,7 +132,7 @@ library TransactionDecoder {
     /// @return transaction The decoded transaction object
     function _decodeLegacy(
         bytes memory raw
-    ) internal pure returns (Transaction memory transaction) {
+    ) private pure returns (Transaction memory transaction) {
         transaction.txType = TxType.Legacy;
 
         // Legacy transactions don't have a type prefix, so we can decode directly
@@ -174,7 +182,7 @@ library TransactionDecoder {
     /// @return transaction The decoded transaction object
     function _decodeEip2930(
         bytes memory raw
-    ) internal pure returns (Transaction memory transaction) {
+    ) private pure returns (Transaction memory transaction) {
         transaction.txType = TxType.Eip2930;
 
         // Skip the first byte (transaction type)
@@ -217,7 +225,7 @@ library TransactionDecoder {
     /// @return transaction The decoded transaction object
     function _decodeEip1559(
         bytes memory raw
-    ) internal pure returns (Transaction memory transaction) {
+    ) private pure returns (Transaction memory transaction) {
         transaction.txType = TxType.Eip1559;
 
         // Skip the first byte (transaction type)
@@ -261,7 +269,7 @@ library TransactionDecoder {
     /// @return transaction The decoded transaction object
     function _decodeEip4844(
         bytes memory raw
-    ) internal pure returns (Transaction memory transaction) {
+    ) private pure returns (Transaction memory transaction) {
         transaction.txType = TxType.Eip4844;
 
         // Skip the first byte (transaction type)
@@ -308,9 +316,12 @@ library TransactionDecoder {
         transaction.sig = abi.encodePacked(r, s, v);
     }
 
+    /// @notice Helper to RLP-encode an unsigned legacy transaction
+    /// @param transaction The transaction object
+    /// @return unsignedTx The unsigned transaction bytes
     function _unsignedLegacy(
         Transaction memory transaction
-    ) internal pure returns (bytes memory unsignedTx) {
+    ) private pure returns (bytes memory unsignedTx) {
         uint64 chainId = 0;
         if (transaction.chainId != 0) {
             // A chainId was provided: if non-zero, we'll use EIP-155
@@ -349,9 +360,12 @@ library TransactionDecoder {
         unsignedTx = RLPWriter.writeList(fields);
     }
 
+    /// @notice Helper to RLP-encode an unsigned EIP-2930 transaction
+    /// @param transaction The transaction object
+    /// @return unsignedTx The unsigned transaction bytes
     function _unsignedEip2930(
         Transaction memory transaction
-    ) internal pure returns (bytes memory unsignedTx) {
+    ) private pure returns (bytes memory unsignedTx) {
         bytes[] memory fields = new bytes[](8);
 
         fields[0] = RLPWriter.writeUint(transaction.chainId);
@@ -372,9 +386,12 @@ library TransactionDecoder {
         unsignedTx = abi.encodePacked(uint8(TxType.Eip2930), RLPWriter.writeList(fields));
     }
 
+    /// @notice Helper to RLP-encode an unsigned EIP-1559 transaction
+    /// @param transaction The transaction object
+    /// @return unsignedTx The unsigned transaction bytes
     function _unsignedEip1559(
         Transaction memory transaction
-    ) internal pure returns (bytes memory unsignedTx) {
+    ) private pure returns (bytes memory unsignedTx) {
         bytes[] memory fields = new bytes[](9);
 
         fields[0] = RLPWriter.writeUint(transaction.chainId);
@@ -396,9 +413,12 @@ library TransactionDecoder {
         unsignedTx = abi.encodePacked(uint8(TxType.Eip1559), RLPWriter.writeList(fields));
     }
 
+    /// @notice Helper to RLP-encode an unsigned EIP-4844 transaction
+    /// @param transaction The transaction object
+    /// @return unsignedTx The unsigned transaction bytes
     function _unsignedEip4844(
         Transaction memory transaction
-    ) internal pure returns (bytes memory unsignedTx) {
+    ) private pure returns (bytes memory unsignedTx) {
         bytes[] memory fields = new bytes[](11);
 
         fields[0] = RLPWriter.writeUint(transaction.chainId);
