@@ -4,6 +4,7 @@ pragma solidity 0.8.25;
 import {Test, console} from "forge-std/Test.sol";
 
 import {TransactionDecoder} from "../src/lib/TransactionDecoder.sol";
+import {BytesUtils} from "../src/lib/BytesUtils.sol";
 
 // Use a contract to expose internal library functions
 contract DecoderImpl {
@@ -49,11 +50,15 @@ contract TransactionDecoderTest is Test {
         decoder = new DecoderImpl();
     }
 
-    function testDecodeTestCase() public view {
-        // TODO: add fuzzing based on test cases loaded from files
-        // vm.assume(id < TEST_CASE_COUNT);
+    function testDecodeAllTestCases() public view {
+        // Cycle through all test cases and run them one by one
+        for (uint8 i = 0; i < TEST_CASE_COUNT; i++) {
+            _decodeTestCase(i);
+        }
+    }
 
-        TestCase memory testCase = _readTestCase(0);
+    function _decodeTestCase(uint8 id) internal view {
+        TestCase memory testCase = _readTestCase(id);
 
         TransactionDecoder.Transaction memory decodedSignedLegacy = decoder.decodeEnveloped(testCase.signedLegacy);
         _assertTransaction(TransactionDecoder.TxType.Legacy, decodedSignedLegacy, testCase.transaction, false);
@@ -117,13 +122,13 @@ contract TransactionDecoderTest is Test {
             txType: TransactionDecoder.TxType.Legacy,
             chainId: uint64(uint256(vm.parseJsonUint(file, ".transaction.chainId"))),
             data: vm.parseJsonBytes(file, ".transaction.data"),
-            gasLimit: vm.parseJsonUint(file, ".transaction.gasLimit"),
+            gasLimit: _parseUintFromBytes(vm.parseJsonBytes(file, ".transaction.gasLimit")),
             gasPrice: vm.parseJsonUint(file, ".transaction.gasPrice"),
             maxFeePerGas: uint256(bytes32(vm.parseJsonBytes(file, ".transaction.maxFeePerGas"))),
             maxPriorityFeePerGas: uint256(bytes32(vm.parseJsonBytes(file, ".transaction.maxPriorityFeePerGas"))),
             nonce: vm.parseJsonUint(file, ".transaction.nonce"),
             to: vm.parseJsonAddress(file, ".transaction.to"),
-            value: vm.parseJsonUint(file, ".transaction.value"),
+            value: _parseUintFromBytes(vm.parseJsonBytes(file, ".transaction.value")),
             // Note: These fields aren't used in the test cases
             accessList: "", // TODO: add support for EIP-2930
             maxFeePerBlobGas: 0, // TODO: add support for EIP-4844
@@ -143,5 +148,9 @@ contract TransactionDecoderTest is Test {
             signedLondon: vm.parseJsonBytes(file, ".signedLondon"),
             transaction: transaction
         });
+    }
+
+    function _parseUintFromBytes(bytes memory data) internal view returns (uint256) {
+        return uint256(BytesUtils.toBytes32PadLeft(data));
     }
 }
