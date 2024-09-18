@@ -32,7 +32,7 @@ contract TransactionDecoderTest is Test {
 
     DecoderImpl decoder;
 
-    uint8 constant TEST_CASE_COUNT = 11;
+    uint8 constant TEST_CASE_COUNT = 20;
 
     struct TestCase {
         string name;
@@ -132,16 +132,17 @@ contract TransactionDecoderTest is Test {
         string memory file = vm.readFile(string.concat(base, vm.toString(uint256(id)), ".json"));
 
         TransactionDecoder.Transaction memory transaction = TransactionDecoder.Transaction({
-            chainId: uint64(uint256(vm.parseJsonUint(file, ".transaction.chainId"))),
+            chainId: uint64(_parseUintFromBytes(vm.parseJsonBytes(file, ".transaction.chainId"))),
             data: vm.parseJsonBytes(file, ".transaction.data"),
             gasLimit: _parseUintFromBytes(vm.parseJsonBytes(file, ".transaction.gasLimit")),
-            gasPrice: vm.parseJsonUint(file, ".transaction.gasPrice"),
+            gasPrice: _parseUintFromBytes(vm.parseJsonBytes(file, ".transaction.gasPrice")),
             maxFeePerGas: _parseUintFromBytes(vm.parseJsonBytes(file, ".transaction.maxFeePerGas")),
             maxPriorityFeePerGas: _parseUintFromBytes(vm.parseJsonBytes(file, ".transaction.maxPriorityFeePerGas")),
             nonce: vm.parseJsonUint(file, ".transaction.nonce"),
             to: vm.parseJsonAddress(file, ".transaction.to"),
             value: _parseUintFromBytes(vm.parseJsonBytes(file, ".transaction.value")),
-            // Note: These fields aren't used in the test cases so they can be skipped
+            // Note: These fields aren't present in the test cases so they can be skipped.
+            // These are tested indirectly by the signature and preimage checks.
             txType: TransactionDecoder.TxType.Legacy,
             accessList: new bytes[](0),
             maxFeePerBlobGas: 0, // TODO: add support for EIP-4844
