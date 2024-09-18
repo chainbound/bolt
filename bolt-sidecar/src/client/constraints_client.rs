@@ -229,7 +229,7 @@ impl ConstraintsApi for ConstraintsClient {
 mod tests {
     use reqwest::Url;
 
-    use crate::ConstraintsClient;
+    use super::ConstraintsClient;
 
     #[test]
     fn test_join_endpoints() {
