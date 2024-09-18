@@ -21,6 +21,7 @@ remappings = [
   "@relic/=lib/relic-sdk/packages/contracts",
   "@symbiotic/=lib/core/src/",
   "@eigenlayer/=lib/eigenlayer-contracts/",
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts",
 
   # Symbiotic remappings contexts
   "lib/core/:forge-std/=lib/core/lib/forge-std/src/",

@@ -28,7 +28,7 @@ library TransactionDecoder {
         TxType txType;
         uint64 chainId;
         // As Solidity doesn't have NULL values, we use this flag to differentiate between
-        // an explicit chainId of 0 and a missing chainID. The difference is important for 
+        // an explicit chainId of 0 and a missing chainID. The difference is important for
         // encoding unsigned eip-155 legacy transactions.
         bool isChainIdSet;
         uint256 nonce;
