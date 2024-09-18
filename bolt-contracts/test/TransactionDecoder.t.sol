@@ -170,7 +170,7 @@ contract TransactionDecoderTest is Test {
 
     function _parseUintFromBytes(
         bytes memory data
-    ) internal view returns (uint256) {
+    ) internal pure returns (uint256) {
         return uint256(BytesUtils.toBytes32PadLeft(data));
     }
 }
