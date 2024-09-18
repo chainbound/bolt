@@ -2,6 +2,9 @@
 pragma solidity 0.8.25;
 pragma experimental ABIEncoderV2;
 
+// Credits: Optimism contributors.
+// Ref: https://github.com/ethereum-optimism/optimism/blob/05deae54595b0e6bdd33580de81cb9ad194898bc/packages/contracts-bedrock/src/libraries/trie/SecureMerkleTrie.sol
+
 /* Library Imports */
 import {MerkleTrie} from "./MerkleTrie.sol";
 
