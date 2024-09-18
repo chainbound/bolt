@@ -22,6 +22,7 @@ library TransactionDecoder {
     struct Transaction {
         TxType txType;
         uint64 chainId;
+        bool isChainIdSet;
         uint256 nonce;
         uint256 gasPrice;
         uint256 maxPriorityFeePerGas;
@@ -153,11 +154,13 @@ library TransactionDecoder {
         if (r == 0 && s == 0) {
             // EIP-155 unsigned transaction
             transaction.chainId = v;
+            transaction.isChainIdSet = true;
         } else {
-            if (v > 35) {
+            if (v >= 35) {
                 // Compute the EIP-155 chain ID (or 0 for legacy)
                 transaction.chainId = (v - 35) / 2;
                 transaction.legacyV = v;
+                transaction.isChainIdSet = true;
             }
 
             // Compute the signature
@@ -320,7 +323,7 @@ library TransactionDecoder {
             }
         }
 
-        uint256 fieldsCount = 6 + (chainId != 0 ? 3 : 0);
+        uint256 fieldsCount = 6 + (transaction.isChainIdSet ? 3 : 0);
         bytes[] memory fields = new bytes[](fieldsCount);
 
         fields[0] = RLPWriter.writeUint(transaction.nonce);
@@ -330,8 +333,15 @@ library TransactionDecoder {
         fields[4] = RLPWriter.writeUint(transaction.value);
         fields[5] = RLPWriter.writeBytes(transaction.data);
 
-        if (chainId != 0) {
-            fields[6] = RLPWriter.writeUint(uint256(chainId));
+        if (transaction.isChainIdSet) {
+            if (transaction.chainId == 0) {
+                // Edge case: chainId is 0, but we still need to encode it
+                // as a single empty byte.
+                fields[6] = abi.encodePacked(bytes1(0));
+            } else {
+                fields[6] = RLPWriter.writeUint(chainId);
+            }
+
             fields[7] = RLPWriter.writeBytes(new bytes(0));
             fields[8] = RLPWriter.writeBytes(new bytes(0));
         }

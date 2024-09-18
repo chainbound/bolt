@@ -148,7 +148,9 @@ contract TransactionDecoderTest is Test {
             maxFeePerBlobGas: 0, // TODO: add support for EIP-4844
             blobVersionedHashes: new bytes[](0), // TODO: add support for EIP-4844
             sig: "",
-            legacyV: 0
+            // Note: these fields are just internal helpers for the decoder library.
+            legacyV: 0,
+            isChainIdSet: false
         });
 
         return TestCase({
