@@ -37,11 +37,7 @@ pub struct Opts {
     /// URL for the beacon client
     #[clap(long, env = "BOLT_SIDECAR_BEACON_API_URL")]
     pub(super) beacon_api_url: String,
-<<<<<<< HEAD
     /// URL for the Constraint sidecar client to use
-=======
-    /// URL for the MEV-Boost sidecar client to use
->>>>>>> b15f3a6 (chore(sidecar): rename to constraints client, remove digest)
     #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_URL")]
     pub(super) constraints_url: String,
     /// Execution client API URL
@@ -50,11 +46,7 @@ pub struct Opts {
     /// Execution client Engine API URL
     #[clap(long, env = "BOLT_SIDECAR_ENGINE_API_URL")]
     pub(super) engine_api_url: String,
-<<<<<<< HEAD
     /// Constraint proxy server port to use
-=======
-    /// MEV-Boost proxy server port to use
->>>>>>> b15f3a6 (chore(sidecar): rename to constraints client, remove digest)
     #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT")]
     pub(super) constraints_proxy_port: u16,
     /// Max number of commitments to accept per block
@@ -140,11 +132,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             rpc_port: DEFAULT_RPC_PORT,
-<<<<<<< HEAD
             constraints_proxy_port: DEFAULT_CONSTRAINTS_PROXY_PORT,
-=======
-            constraints_proxy_port: DEFAULT_MEV_BOOST_PROXY_PORT,
->>>>>>> b15f3a6 (chore(sidecar): rename to constraints client, remove digest)
             commit_boost_address: None,
             commit_boost_jwt_hex: None,
             constraints_url: "http://localhost:3030".parse().expect("Valid URL"),

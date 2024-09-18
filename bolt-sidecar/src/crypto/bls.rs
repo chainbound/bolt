@@ -16,22 +16,22 @@ pub type BLSSig = FixedBytes<96>;
 /// Trait for any types that can be signed and verified with BLS.
 /// This trait is used to abstract over the signing and verification of different types.
 pub trait SignableBLS {
-    /// Creates SSZ tree hash root of the object.
-    fn tree_hash_root(&self) -> [u8; 32];
+    /// Returns the digest of the object.
+    fn digest(&self) -> [u8; 32];
 
     /// Sign the object with the given key. Returns the signature.
     ///
     /// Note: The default implementation should be used where possible.
     #[allow(dead_code)]
     fn sign(&self, key: &BlsSecretKey) -> Signature {
-        sign_with_prefix(key, &self.tree_hash_root())
+        sign_with_prefix(key, &self.digest())
     }
 
     /// Verify the signature of the object with the given public key.
     ///
     /// Note: The default implementation should be used where possible.
     fn verify(&self, signature: &Signature, pubkey: &BlsPublicKey) -> bool {
-        signature.verify(false, &self.tree_hash_root(), BLS_DST_PREFIX, &[], pubkey, true) ==
+        signature.verify(false, &self.digest(), BLS_DST_PREFIX, &[], pubkey, true) ==
             BLST_ERROR::BLST_SUCCESS
     }
 }
@@ -120,7 +120,7 @@ mod tests {
         rng.fill(&mut data);
         let msg = TestSignableData { data };
 
-        let signature = SignerBLS::sign(&signer, &msg.tree_hash_root()).await.unwrap();
+        let signature = SignerBLS::sign(&signer, &msg.digest()).await.unwrap();
         let sig = blst::min_pk::Signature::from_bytes(signature.as_ref()).unwrap();
         assert!(signer.verify(&msg, &sig, &pubkey));
     }
