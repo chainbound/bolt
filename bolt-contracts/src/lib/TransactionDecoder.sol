@@ -30,9 +30,9 @@ library TransactionDecoder {
         address to;
         uint256 value;
         bytes data;
-        bytes accessList;
+        bytes[] accessList;
         uint256 maxFeePerBlobGas;
-        bytes blobVersionedHashes;
+        bytes[] blobVersionedHashes;
         bytes sig;
         uint64 legacyV;
     }
@@ -93,11 +93,13 @@ library TransactionDecoder {
         if (transaction.txType == TxType.Legacy) {
             unsignedTx = _unsignedLegacy(transaction);
         } else if (transaction.txType == TxType.Eip2930) {
-            // TODO: implement
+            unsignedTx = _unsignedEip2930(transaction);
         } else if (transaction.txType == TxType.Eip1559) {
-            // TODO: implement
+            unsignedTx = _unsignedEip1559(transaction);
         } else if (transaction.txType == TxType.Eip4844) {
-            // TODO: implement
+            unsignedTx = _unsignedEip4844(transaction);
+        } else {
+            revert UnsupportedTxType();
         }
     }
 
@@ -187,23 +189,24 @@ library TransactionDecoder {
         transaction.to = fields[4].readAddress();
         transaction.value = fields[5].readUint256();
         transaction.data = fields[6].readBytes();
-        transaction.accessList = fields[7].readBytes(); // maybe this is a bytes[] list? idk
+
+        RLPReader.RLPItem[] memory accessListItems = fields[7].readList();
+        transaction.accessList = new bytes[](accessListItems.length);
+        for (uint256 i = 0; i < accessListItems.length; i++) {
+            transaction.accessList[i] = accessListItems[i].readRawBytes();
+        }
 
         // EIP-2930 Unsigned transaction
         if (fields.length == 8) {
             return transaction;
         }
 
-        uint8 yParity = uint8(fields[8].readUint256());
-        if (yParity > 1) {
-            revert InvalidYParity();
-        }
+        uint8 v = uint8(fields[8].readUint256()) + 27;
+        bytes32 r = fields[9].readBytes32();
+        bytes32 s = fields[10].readBytes32();
 
-        transaction.sig = abi.encodePacked(
-            yParity,
-            fields[9].readBytes32(), // r
-            fields[10].readBytes32() // s
-        );
+        // compute the signature
+        transaction.sig = abi.encodePacked(r, s, v);
     }
 
     /// @notice Helper to decode an EIP-1559 (type 2) transaction
@@ -230,23 +233,24 @@ library TransactionDecoder {
         transaction.to = fields[5].readAddress();
         transaction.value = fields[6].readUint256();
         transaction.data = fields[7].readBytes();
-        transaction.accessList = fields[8].readBytes();
+
+        RLPReader.RLPItem[] memory accessListItems = fields[8].readList();
+        transaction.accessList = new bytes[](accessListItems.length);
+        for (uint256 i = 0; i < accessListItems.length; i++) {
+            transaction.accessList[i] = accessListItems[i].readRawBytes();
+        }
 
         if (fields.length == 9) {
             // EIP-1559 Unsigned transaction
             return transaction;
         }
 
-        uint8 yParity = uint8(fields[9].readUint256());
-        if (yParity > 1) {
-            revert InvalidYParity();
-        }
+        uint8 v = uint8(fields[9].readUint256()) + 27;
+        bytes32 r = fields[10].readBytes32();
+        bytes32 s = fields[11].readBytes32();
 
-        transaction.sig = abi.encodePacked(
-            yParity,
-            fields[10].readBytes32(), // r
-            fields[11].readBytes32() // s
-        );
+        // compute the signature
+        transaction.sig = abi.encodePacked(r, s, v);
     }
 
     /// @notice Helper to decode an EIP-4844 (type 3) transaction
@@ -273,25 +277,32 @@ library TransactionDecoder {
         transaction.to = fields[5].readAddress();
         transaction.value = fields[6].readUint256();
         transaction.data = fields[7].readBytes();
-        transaction.accessList = fields[8].readBytes();
+
+        RLPReader.RLPItem[] memory accessListItems = fields[8].readList();
+        transaction.accessList = new bytes[](accessListItems.length);
+        for (uint256 i = 0; i < accessListItems.length; i++) {
+            transaction.accessList[i] = accessListItems[i].readBytes();
+        }
+
         transaction.maxFeePerBlobGas = fields[9].readUint256();
-        transaction.blobVersionedHashes = fields[10].readBytes();
+
+        RLPReader.RLPItem[] memory blobVersionedHashesItems = fields[10].readList();
+        transaction.blobVersionedHashes = new bytes[](blobVersionedHashesItems.length);
+        for (uint256 i = 0; i < blobVersionedHashesItems.length; i++) {
+            transaction.blobVersionedHashes[i] = blobVersionedHashesItems[i].readBytes();
+        }
 
         if (fields.length == 11) {
             // Unsigned transaction
             return transaction;
         }
 
-        uint8 yParity = uint8(fields[11].readUint256());
-        if (yParity > 1) {
-            revert InvalidYParity();
-        }
+        uint8 v = uint8(fields[11].readUint256()) + 27;
+        bytes32 r = fields[12].readBytes32();
+        bytes32 s = fields[13].readBytes32();
 
-        transaction.sig = abi.encodePacked(
-            yParity,
-            fields[12].readBytes32(), // r
-            fields[13].readBytes32() // s
-        );
+        // compute the signature
+        transaction.sig = abi.encodePacked(r, s, v);
     }
 
     function _unsignedLegacy(
@@ -326,5 +337,79 @@ library TransactionDecoder {
         }
 
         unsignedTx = RLPWriter.writeList(fields);
+    }
+
+    function _unsignedEip2930(
+        Transaction memory transaction
+    ) internal pure returns (bytes memory unsignedTx) {
+        bytes[] memory fields = new bytes[](8);
+
+        fields[0] = RLPWriter.writeUint(transaction.chainId);
+        fields[1] = RLPWriter.writeUint(transaction.nonce);
+        fields[2] = RLPWriter.writeUint(transaction.gasPrice);
+        fields[3] = RLPWriter.writeUint(transaction.gasLimit);
+        fields[4] = RLPWriter.writeAddress(transaction.to);
+        fields[5] = RLPWriter.writeUint(transaction.value);
+        fields[6] = RLPWriter.writeBytes(transaction.data);
+
+        bytes[] memory accessList = new bytes[](transaction.accessList.length);
+        for (uint256 i = 0; i < transaction.accessList.length; i++) {
+            accessList[i] = transaction.accessList[i];
+        }
+        fields[7] = RLPWriter.writeList(accessList);
+
+        // EIP-2718 envelope
+        unsignedTx = abi.encodePacked(uint8(TxType.Eip2930), RLPWriter.writeList(fields));
+    }
+
+    function _unsignedEip1559(
+        Transaction memory transaction
+    ) internal pure returns (bytes memory unsignedTx) {
+        bytes[] memory fields = new bytes[](9);
+
+        fields[0] = RLPWriter.writeUint(transaction.chainId);
+        fields[1] = RLPWriter.writeUint(transaction.nonce);
+        fields[2] = RLPWriter.writeUint(transaction.maxPriorityFeePerGas);
+        fields[3] = RLPWriter.writeUint(transaction.maxFeePerGas);
+        fields[4] = RLPWriter.writeUint(transaction.gasLimit);
+        fields[5] = RLPWriter.writeAddress(transaction.to);
+        fields[6] = RLPWriter.writeUint(transaction.value);
+        fields[7] = RLPWriter.writeBytes(transaction.data);
+
+        bytes[] memory accessList = new bytes[](transaction.accessList.length);
+        for (uint256 i = 0; i < transaction.accessList.length; i++) {
+            accessList[i] = transaction.accessList[i];
+        }
+        fields[8] = RLPWriter.writeList(accessList);
+
+        // EIP-2718 envelope
+        unsignedTx = abi.encodePacked(uint8(TxType.Eip1559), RLPWriter.writeList(fields));
+    }
+
+    function _unsignedEip4844(
+        Transaction memory transaction
+    ) internal pure returns (bytes memory unsignedTx) {
+        bytes[] memory fields = new bytes[](11);
+
+        fields[0] = RLPWriter.writeUint(transaction.chainId);
+        fields[1] = RLPWriter.writeUint(transaction.nonce);
+        fields[2] = RLPWriter.writeUint(transaction.maxPriorityFeePerGas);
+        fields[3] = RLPWriter.writeUint(transaction.maxFeePerGas);
+        fields[4] = RLPWriter.writeUint(transaction.gasLimit);
+        fields[5] = RLPWriter.writeAddress(transaction.to);
+        fields[6] = RLPWriter.writeUint(transaction.value);
+        fields[7] = RLPWriter.writeBytes(transaction.data);
+
+        bytes[] memory accessList = new bytes[](transaction.accessList.length);
+        for (uint256 i = 0; i < transaction.accessList.length; i++) {
+            accessList[i] = transaction.accessList[i];
+        }
+        fields[8] = RLPWriter.writeList(accessList);
+
+        fields[9] = RLPWriter.writeUint(transaction.maxFeePerBlobGas);
+        fields[10] = RLPWriter.writeList(transaction.blobVersionedHashes);
+
+        // EIP-2718 envelope
+        unsignedTx = abi.encodePacked(uint8(TxType.Eip4844), RLPWriter.writeList(fields));
     }
 }
