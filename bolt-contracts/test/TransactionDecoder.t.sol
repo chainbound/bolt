@@ -6,7 +6,7 @@ import {Test, console} from "forge-std/Test.sol";
 import {TransactionDecoder} from "../src/lib/TransactionDecoder.sol";
 import {BytesUtils} from "../src/lib/BytesUtils.sol";
 
-// Use a contract to expose internal library functions
+// We use a contract to expose internal library functions
 contract DecoderImpl {
     function decodeEnveloped(
         bytes memory raw
@@ -32,8 +32,6 @@ contract TransactionDecoderTest is Test {
 
     DecoderImpl decoder;
 
-    uint8 constant TEST_CASE_COUNT = 20;
-
     struct TestCase {
         string name;
         uint256 privateKey;
@@ -41,10 +39,12 @@ contract TransactionDecoderTest is Test {
         bytes unsignedEip155;
         bytes unsignedBerlin;
         bytes unsignedLondon;
+        bytes unsignedCancun;
         bytes signedLegacy;
         bytes signedEip155;
         bytes signedBerlin;
         bytes signedLondon;
+        bytes signedCancun;
         TransactionDecoder.Transaction transaction;
     }
 
@@ -52,15 +52,20 @@ contract TransactionDecoderTest is Test {
         decoder = new DecoderImpl();
     }
 
-    function testDecodeAllTestCases() public view {
-        // Cycle through all test cases and run them one by one
-        for (uint8 i = 0; i < TEST_CASE_COUNT; i++) {
+    function testDecodeAllTestCases() public {
+        uint256 i = 0;
+        while (true) {
+            string memory path = _getTestCasePath(i);
+            if (!vm.isFile(path)) break;
+
+            // Cycle through all test cases and run them one by one
             _decodeTestCase(i);
+            i++;
         }
     }
 
     function _decodeTestCase(
-        uint8 id
+        uint256 id
     ) internal view {
         TestCase memory testCase = _readTestCase(id);
 
@@ -87,6 +92,21 @@ contract TransactionDecoderTest is Test {
         _assertTransaction(TransactionDecoder.TxType.Eip1559, decodedSignedLondon, testCase.transaction, true);
         assertEq(decodedSignedLondon.unsigned(), testCase.unsignedLondon);
         assertEq(decodedSignedLondon.recoverSender(), vm.addr(testCase.privateKey));
+
+        // Type 3 with blob fields
+        TransactionDecoder.Transaction memory decodedSignedCancun = decoder.decodeEnveloped(testCase.signedCancun);
+        _assertTransaction(TransactionDecoder.TxType.Eip4844, decodedSignedCancun, testCase.transaction, true);
+        assertEq(decodedSignedCancun.unsigned(), testCase.unsignedCancun);
+        assertEq(decodedSignedCancun.recoverSender(), vm.addr(testCase.privateKey));
+    }
+
+    // Helper to get the path of a test case file based on its index
+    function _getTestCasePath(
+        uint256 id
+    ) internal pure returns (string memory) {
+        // Location of the test cases on disk (relative to the project root)
+        // Example: ./test/testdata/transactions/random_10.json
+        return string.concat("./test/testdata/transactions/random_", vm.toString(id), ".json");
     }
 
     function _assertTransaction(
@@ -98,7 +118,7 @@ contract TransactionDecoderTest is Test {
         assertEq(uint8(decoded.txType), uint8(txType));
 
         if (!isEip155) {
-            // Note: Pre-EIP-155 transactions have a chainId of 0
+            // Pre-EIP-155 transactions have a chainId of 0
             assertEq(decoded.chainId, 0);
         } else {
             assertEq(decoded.chainId, expected.chainId);
@@ -115,7 +135,8 @@ contract TransactionDecoderTest is Test {
         }
 
         if (uint8(txType) >= 1) {
-            // TODO: add support for parsing EIP-2930. This is not strictly needed right now.
+            // We keep access lists as opaque bytes for now, because we simply re-encode
+            // them to obtain the unsigned transaction. So we can't compare them directly.
             // assertEq(decoded.accessList, expected.accessList);
         }
 
@@ -123,13 +144,20 @@ contract TransactionDecoderTest is Test {
             assertEq(decoded.maxFeePerGas, expected.maxFeePerGas);
             assertEq(decoded.maxPriorityFeePerGas, expected.maxPriorityFeePerGas);
         }
+
+        if (uint8(txType) == 3) {
+            assertEq(decoded.maxFeePerBlobGas, expected.maxFeePerBlobGas);
+            assertEq(decoded.blobVersionedHashes.length, expected.blobVersionedHashes.length);
+            for (uint256 i = 0; i < decoded.blobVersionedHashes.length; i++) {
+                assertEq(decoded.blobVersionedHashes[i], expected.blobVersionedHashes[i]);
+            }
+        }
     }
 
     function _readTestCase(
-        uint8 id
+        uint256 id
     ) public view returns (TestCase memory) {
-        string memory base = "./test/testdata/transactions/random_";
-        string memory file = vm.readFile(string.concat(base, vm.toString(uint256(id)), ".json"));
+        string memory file = vm.readFile(_getTestCasePath(id));
 
         TransactionDecoder.Transaction memory transaction = TransactionDecoder.Transaction({
             chainId: uint64(_parseUintFromBytes(vm.parseJsonBytes(file, ".transaction.chainId"))),
@@ -141,12 +169,14 @@ contract TransactionDecoderTest is Test {
             nonce: vm.parseJsonUint(file, ".transaction.nonce"),
             to: vm.parseJsonAddress(file, ".transaction.to"),
             value: _parseUintFromBytes(vm.parseJsonBytes(file, ".transaction.value")),
+            maxFeePerBlobGas: _parseUintFromBytes(vm.parseJsonBytes(file, ".transaction.maxFeePerBlobGas")),
+            blobVersionedHashes: vm.parseJsonBytes32Array(file, ".transaction.blobVersionedHashes"),
             // Note: These fields aren't present in the test cases so they can be skipped.
             // These are tested indirectly by the signature and preimage checks.
             txType: TransactionDecoder.TxType.Legacy,
             accessList: new bytes[](0),
-            maxFeePerBlobGas: 0, // TODO: add support for EIP-4844
-            blobVersionedHashes: new bytes[](0), // TODO: add support for EIP-4844
+            // Signature is checked by recovering the sender and comparing it to the pubkey
+            // derived from the private key in the test case.
             sig: "",
             // Note: these fields are just internal helpers for the decoder library.
             legacyV: 0,
@@ -160,17 +190,24 @@ contract TransactionDecoderTest is Test {
             unsignedEip155: vm.parseJsonBytes(file, ".unsignedEip155"),
             unsignedBerlin: vm.parseJsonBytes(file, ".unsignedBerlin"),
             unsignedLondon: vm.parseJsonBytes(file, ".unsignedLondon"),
+            unsignedCancun: vm.parseJsonBytes(file, ".unsignedCancun"),
             signedLegacy: vm.parseJsonBytes(file, ".signedLegacy"),
             signedEip155: vm.parseJsonBytes(file, ".signedEip155"),
             signedBerlin: vm.parseJsonBytes(file, ".signedBerlin"),
             signedLondon: vm.parseJsonBytes(file, ".signedLondon"),
+            signedCancun: vm.parseJsonBytes(file, ".signedCancun"),
             transaction: transaction
         });
     }
 
+    // Helper to parse an uint from bytes padded to the left
     function _parseUintFromBytes(
         bytes memory data
     ) internal pure returns (uint256) {
         return uint256(BytesUtils.toBytes32PadLeft(data));
     }
+
+    function _parseOpaqueAccessList(
+        bytes memory data
+    ) internal pure returns (bytes[] memory) {}
 }

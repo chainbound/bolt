@@ -41,7 +41,7 @@ library TransactionDecoder {
         bytes data;
         bytes[] accessList;
         uint256 maxFeePerBlobGas;
-        bytes[] blobVersionedHashes;
+        bytes32[] blobVersionedHashes;
         bytes sig;
         uint64 legacyV;
     }
@@ -292,15 +292,15 @@ library TransactionDecoder {
         RLPReader.RLPItem[] memory accessListItems = fields[8].readList();
         transaction.accessList = new bytes[](accessListItems.length);
         for (uint256 i = 0; i < accessListItems.length; i++) {
-            transaction.accessList[i] = accessListItems[i].readBytes();
+            transaction.accessList[i] = accessListItems[i].readRawBytes();
         }
 
         transaction.maxFeePerBlobGas = fields[9].readUint256();
 
         RLPReader.RLPItem[] memory blobVersionedHashesItems = fields[10].readList();
-        transaction.blobVersionedHashes = new bytes[](blobVersionedHashesItems.length);
+        transaction.blobVersionedHashes = new bytes32[](blobVersionedHashesItems.length);
         for (uint256 i = 0; i < blobVersionedHashesItems.length; i++) {
-            transaction.blobVersionedHashes[i] = blobVersionedHashesItems[i].readBytes();
+            transaction.blobVersionedHashes[i] = blobVersionedHashesItems[i].readBytes32();
         }
 
         if (fields.length == 11) {
@@ -437,7 +437,13 @@ library TransactionDecoder {
         fields[8] = RLPWriter.writeList(accessList);
 
         fields[9] = RLPWriter.writeUint(transaction.maxFeePerBlobGas);
-        fields[10] = RLPWriter.writeList(transaction.blobVersionedHashes);
+
+        bytes[] memory blobVersionedHashes = new bytes[](transaction.blobVersionedHashes.length);
+        for (uint256 i = 0; i < transaction.blobVersionedHashes.length; i++) {
+            // Decode bytes32 as uint256 (RLPWriter doesn't support bytes32 but they are equivalent)
+            blobVersionedHashes[i] = RLPWriter.writeUint(uint256(transaction.blobVersionedHashes[i]));
+        }
+        fields[10] = RLPWriter.writeList(blobVersionedHashes);
 
         // EIP-2718 envelope
         unsignedTx = abi.encodePacked(uint8(TxType.Eip4844), RLPWriter.writeList(fields));
