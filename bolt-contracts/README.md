@@ -84,14 +84,19 @@ The opt-in process requires the following steps:
 
 ### Eigenlayer Integration guides for Validators/Operators
 
-As an operator/validator in the EigenLayer ecosystem you need to participate into the Bolt AVS following
-the procedure described in the [EigenLayer docs](https://docs.eigenlayer.xyz/). After that, some additional steps are required:
+In the Bolt ecosystem, we assume that the staker and operator are controlled by the same entity: the proposer.
+This assumption comes from the fact that preconfirmation fees are paid directly to it using priority fees.
 
-1. Make sure your Strategy underlying collateral is whitelisted in `BoltManager` by calling `isEigenLayerCollateralWhitelisted`.
-2. The validator that has delegated stake to an operator needs to register into the `BoltValidators` contract
-   by calling the `BoltValidators.registerValidator` function.
-3. The operator needs to register into the `BoltManager` contract by calling the `BoltManager.registerEigenLayerOperator` function.
-4. Lastly, any entity needs to registrer the EigenLayer strategy used for restaking.
+To participate in the Bolt Actively Validated Service (AVS) via EigenLayer, follow the standard procedures outlined in the [EigenLayer documentation](https://docs.eigenlayer.xyz/). However, Bolt’s integration introduces some additional steps that differ from the classic AVS onboarding process:
+
+1. **Ensure Collateral is Whitelisted**: Verify that your underlying collateral strategy is whitelisted in the `BoltManager`
+   contract by calling the `isEigenLayerCollateralWhitelisted` function. Bolt requires specific collateral types to maintain compatibility and security within its system.
+2. **Register as a Validator**: Since you act as both validator and operator in Bolt, you need to register your validator in the `BoltValidators`
+   contract by invoking the `BoltValidators.registerValidator function`. This step is crucial for your validator to be recognized and to participate in Bolt’s protocol.
+3. **Register as an Operator**: Register yourself as an operator in the `BoltManager` contract by calling the
+   `BoltManager.registerEigenLayerOperator` function. This formalizes your role within the Bolt network and allows you to manage operations effectively.
+4. **Register the EigenLayer Strategy**: Finally, register the EigenLayer strategy you are using for restaking if it has not been done by someones else.
+   This ensures that your restaked assets are correctly integrated with Bolt’s system.
 
 ## Fault Proof Challenge and Slashing: `BoltChallenger`
 
