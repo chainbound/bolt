@@ -193,9 +193,9 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         // If the challenge has expired without being resolved, it is considered lost.
-        emit ChallengeLost(challengeID);
-        _transferFullBond(challenge.challenger);
         challenge.status = ChallengeStatus.Lost;
+        _transferFullBond(challenge.challenger);
+        emit ChallengeLost(challengeID);
     }
 
     /// @notice Resolve a challenge by providing proofs of the inclusion of the committed transaction.
@@ -214,9 +214,9 @@ contract BoltChallenger is IBoltChallenger {
 
         if (challenge.openedAt + MAX_CHALLENGE_DURATION < Time.timestamp()) {
             // If the challenge has expired without being resolved, it is considered lost.
-            emit ChallengeLost(challengeID);
-            _transferFullBond(challenge.challenger);
             challenge.status = ChallengeStatus.Lost;
+            _transferFullBond(challenge.challenger);
+            emit ChallengeLost(challengeID);
             return;
         }
 
@@ -246,10 +246,10 @@ contract BoltChallenger is IBoltChallenger {
             // The sender (accountToProve) has sent a transaction with a higher nonce than the committed
             // transaction, before the proposer could include it. Consider the challenge defended, as the
             // proposer is not at fault. The bond will be shared between the resolver and commitment signer.
-            emit ChallengeDefended(challengeID);
+            challenge.status = ChallengeStatus.Defended;
             _transferHalfBond(msg.sender);
             _transferHalfBond(challenge.target);
-            challenge.status = ChallengeStatus.Defended;
+            emit ChallengeDefended(challengeID);
             return;
         } else if (account.nonce < decodedTx.nonce) {
             // Q: is this a valid case? technically the proposer would be at fault for accepting a commitment of an
@@ -260,10 +260,10 @@ contract BoltChallenger is IBoltChallenger {
             // The account does not have enough balance to pay for the worst-case base fee of the committed transaction.
             // Consider the challenge defended, as the proposer is not at fault. The bond will be shared between the 
             // resolver and commitment signer.
-            emit ChallengeDefended(challengeID);
+            challenge.status = ChallengeStatus.Defended;
             _transferHalfBond(msg.sender);
             _transferHalfBond(challenge.target);
-            challenge.status = ChallengeStatus.Defended;
+            emit ChallengeDefended(challengeID);
             return;
         }
 
@@ -287,10 +287,10 @@ contract BoltChallenger is IBoltChallenger {
 
         // If all checks pass, the challenge is considered defended as the proposer defended with valid proofs.
         // The bond will be shared between the resolver and commitment signer.
-        emit ChallengeDefended(challengeID);
+        challenge.status = ChallengeStatus.Defended;
         _transferHalfBond(msg.sender);
         _transferHalfBond(challenge.target);
-        challenge.status = ChallengeStatus.Defended;
+        emit ChallengeDefended(challengeID);
     }
 
     // ========= HELPERS =========
