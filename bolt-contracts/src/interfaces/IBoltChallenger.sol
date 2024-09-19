@@ -4,7 +4,7 @@ pragma solidity 0.8.25;
 interface IBoltChallenger {
     enum ChallengeStatus {
         Open,
-        Won,
+        Defended,
         Lost
     }
 
@@ -55,8 +55,11 @@ interface IBoltChallenger {
     error TransactionNotIncluded();
     error WrongTransactionHashProof();
     error InvalidBlockNumber();
+    error BondTransferFailed();
 
     event ChallengeOpened(bytes32 indexed challengeId, address indexed challenger, address indexed target);
+    event ChallengeDefended(bytes32 indexed challengeId);
+    event ChallengeLost(bytes32 indexed challengeId);
 
     function getAllChallenges() external view returns (Challenge[] memory);
 

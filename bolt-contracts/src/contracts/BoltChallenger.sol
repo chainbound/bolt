@@ -98,7 +98,7 @@ contract BoltChallenger is IBoltChallenger {
 
     // ========= CHALLENGE CREATION =========
 
-    // Q: should we add a commit-reveal scheme to prevent frontrunning to steal bonds?
+    // Q: should we add a commit-reveal scheme to prevent frontrunning to steal slashing rewards?
     function openChallenge(
         SignedCommitment calldata commitment
     ) public payable {
@@ -173,9 +173,37 @@ contract BoltChallenger is IBoltChallenger {
         // unimplemented!();
     }
 
+    /// @notice Resolve a challenge that has expired without being resolved.
+    /// @dev This will result in the challenge being considered lost, without need to provide 
+    /// additional proofs of inclusion, as the time window has elapsed.
+    function resolveExpiredChallenge(bytes32 challengeID) public {
+        if (!challengeIDs.contains(challengeID)) {
+            revert ChallengeDoesNotExist();
+        }
+
+        // The challenge is assumed to exist at this point, so we can safely access it.
+        Challenge storage challenge = challenges[challengeID];
+
+        if (challenge.status != ChallengeStatus.Open) {
+            revert ChallengeAlreadyResolved();
+        }
+
+        if (challenge.openedAt + MAX_CHALLENGE_DURATION >= Time.timestamp()) {
+            revert ChallengeNotExpired();
+        }
+
+        // If the challenge has expired without being resolved, it is considered lost.
+        emit ChallengeLost(challengeID);
+        _transferFullBond(challenge.challenger);
+        challenge.status = ChallengeStatus.Lost;
+    }
+
     /// @notice Resolve a challenge by providing proofs of the inclusion of the committed transaction.
-    /// @dev Challenges are WON if the proposer successfully defends the inclusion of the transaction,
-    /// and LOST if the challenger successfully demonstrates that the inclusion commitment was breached.
+    /// @dev Challenges are DEFENDED if the resolver successfully defends the inclusion of the transaction,
+    /// and LOST if the challenger successfully demonstrates that the inclusion commitment was breached or
+    /// enough time has passed without proper resolution.
+    ///
+    /// q: should we also have a commit-reveal scheme for resolutions to avoid frontrunning to steal bonds?
     function _resolve(bytes32 challengeID, bytes32 trustedBlockHash, Proof calldata proof) internal {
         // The challenge is assumed to exist at this point, so we can safely access it.
         Challenge storage challenge = challenges[challengeID];
@@ -186,7 +214,8 @@ contract BoltChallenger is IBoltChallenger {
 
         if (challenge.openedAt + MAX_CHALLENGE_DURATION < Time.timestamp()) {
             // If the challenge has expired without being resolved, it is considered lost.
-            // TODO: transfer challenge bond back to the challenger
+            emit ChallengeLost(challengeID);
+            _transferFullBond(challenge.challenger);
             challenge.status = ChallengeStatus.Lost;
             return;
         }
@@ -215,10 +244,12 @@ contract BoltChallenger is IBoltChallenger {
 
         if (account.nonce > decodedTx.nonce) {
             // The sender (accountToProve) has sent a transaction with a higher nonce than the committed
-            // transaction, before the proposer could include it. Consider the challenge won, as the
-            // proposer is not at fault. The bond will be transferred to the proposer.
-            // TODO: transfer challenge bond to proposer
-            challenge.status = ChallengeStatus.Won;
+            // transaction, before the proposer could include it. Consider the challenge defended, as the
+            // proposer is not at fault. The bond will be shared between the resolver and commitment signer.
+            emit ChallengeDefended(challengeID);
+            _transferHalfBond(msg.sender);
+            _transferHalfBond(challenge.target);
+            challenge.status = ChallengeStatus.Defended;
             return;
         } else if (account.nonce < decodedTx.nonce) {
             // Q: is this a valid case? technically the proposer would be at fault for accepting a commitment of an
@@ -227,9 +258,13 @@ contract BoltChallenger is IBoltChallenger {
 
         if (account.balance < blockHeader.baseFee * decodedTx.gasLimit) {
             // The account does not have enough balance to pay for the worst-case base fee of the committed transaction.
-            // Consider the challenge won, as the proposer is not at fault. The bond will be transferred to the proposer.
-            // TODO: transfer challenge bond to proposer
-            challenge.status = ChallengeStatus.Won;
+            // Consider the challenge defended, as the proposer is not at fault. The bond will be shared between the 
+            // resolver and commitment signer.
+            emit ChallengeDefended(challengeID);
+            _transferHalfBond(msg.sender);
+            _transferHalfBond(challenge.target);
+            challenge.status = ChallengeStatus.Defended;
+            return;
         }
 
         // The key in the transaction trie is the RLP-encoded index of the transaction in the block
@@ -250,9 +285,12 @@ contract BoltChallenger is IBoltChallenger {
             revert WrongTransactionHashProof();
         }
 
-        // If all checks pass, the challenge is considered won as the proposer defended with valid proofs.
-        challenge.status = ChallengeStatus.Won;
-        // TODO: transfer challenge bond to proposer
+        // If all checks pass, the challenge is considered defended as the proposer defended with valid proofs.
+        // The bond will be shared between the resolver and commitment signer.
+        emit ChallengeDefended(challengeID);
+        _transferHalfBond(msg.sender);
+        _transferHalfBond(challenge.target);
+        challenge.status = ChallengeStatus.Defended;
     }
 
     // ========= HELPERS =========
@@ -278,5 +316,19 @@ contract BoltChallenger is IBoltChallenger {
 
         account.nonce = accountFields[0].readUint256();
         account.balance = accountFields[1].readUint256();
+    }
+
+    function _transferFullBond(address recipient) internal {
+        (bool success, ) = payable(recipient).call{value: CHALLENGE_BOND}("");
+        if (!success) {
+            revert BondTransferFailed();
+        }
+    }
+
+    function _transferHalfBond(address recipient) internal {
+        (bool success, ) = payable(recipient).call{value: CHALLENGE_BOND / 2}("");
+        if (!success) {
+            revert BondTransferFailed();
+        }
     }
 }
