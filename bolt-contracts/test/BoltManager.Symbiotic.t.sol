@@ -152,11 +152,11 @@ contract BoltManagerTest is Test {
             networkAdmin,
             address(operatorRegistry),
             address(operatorNetworkOptInService),
-            address(vaultFactory),
-            address(0),
-            address(0),
-            address(0)
+            address(vaultFactory)
         );
+        // address(0),
+        // address(0),
+        // address(0)
 
         // --- Whitelist collateral in BoltManager ---
         vm.prank(admin);
