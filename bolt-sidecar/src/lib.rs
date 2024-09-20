@@ -13,7 +13,8 @@ pub use api::{
 
 mod client;
 pub use client::{
-    commit_boost::CommitBoostSigner, mevboost::MevBoostClient, rpc::RpcClient, BeaconClient,
+    commit_boost::CommitBoostSigner, constraints_client::ConstraintsClient, rpc::RpcClient,
+    BeaconClient,
 };
 
 /// Telemetry and metrics utilities

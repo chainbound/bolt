@@ -16,8 +16,7 @@ pub type BLSSig = FixedBytes<96>;
 /// Trait for any types that can be signed and verified with BLS.
 /// This trait is used to abstract over the signing and verification of different types.
 pub trait SignableBLS {
-    /// Create a digest of the object that can be signed.
-    /// This API doesn't enforce a specific hash or encoding method.
+    /// Returns the digest of the object.
     fn digest(&self) -> [u8; 32];
 
     /// Sign the object with the given key. Returns the signature.
@@ -32,8 +31,8 @@ pub trait SignableBLS {
     ///
     /// Note: The default implementation should be used where possible.
     fn verify(&self, signature: &Signature, pubkey: &BlsPublicKey) -> bool {
-        signature.verify(false, &self.digest(), BLS_DST_PREFIX, &[], pubkey, true) ==
-            BLST_ERROR::BLST_SUCCESS
+        signature.verify(false, &self.digest(), BLS_DST_PREFIX, &[], pubkey, true)
+            == BLST_ERROR::BLST_SUCCESS
     }
 }
 

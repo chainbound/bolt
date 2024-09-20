@@ -1,8 +1,14 @@
-use alloy::primitives::{keccak256, Address};
+use alloy::{
+    primitives::keccak256,
+    signers::k256::sha2::{Digest, Sha256},
+};
 use secp256k1::Message;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use crate::crypto::{bls::BLSSig, ecdsa::SignableECDSA, SignableBLS};
+use crate::{
+    crypto::{bls::BLSSig, ecdsa::SignableECDSA, SignableBLS},
+    primitives::{deserialize_txs, serialize_txs},
+};
 
 use super::{FullTransaction, InclusionRequest};
 
@@ -15,7 +21,7 @@ impl SignableECDSA for ConstraintsMessage {
 
         let mut constraint_bytes = Vec::new();
         for constraint in &self.constraints {
-            constraint_bytes.extend_from_slice(&constraint.as_bytes());
+            constraint_bytes.extend_from_slice(&constraint.envelope_encoded().0);
         }
         data.extend_from_slice(&constraint_bytes);
 
@@ -30,7 +36,7 @@ pub type BatchedSignedConstraints = Vec<SignedConstraints>;
 
 /// A container for a list of constraints and the signature of the proposer sidecar.
 ///
-/// Reference: https://chainbound.github.io/bolt-docs/api/builder-api#ethv1builderconstraints
+/// Reference: https://chainbound.github.io/bolt-docs/api/builder#constraints
 #[derive(Serialize, Default, Debug, Clone, PartialEq)]
 pub struct SignedConstraints {
     /// The constraints that need to be signed.
@@ -41,72 +47,109 @@ pub struct SignedConstraints {
 
 /// A message that contains the constraints that need to be signed by the proposer sidecar.
 ///
-/// Reference: https://chainbound.github.io/bolt-docs/api/builder-api#ethv1builderconstraints
-#[derive(Serialize, Debug, Clone, PartialEq, Default)]
+/// Reference: https://chainbound.github.io/bolt-docs/api/builder#constraints
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct ConstraintsMessage {
     /// The validator index of the proposer sidecar.
     pub validator_index: u64,
     /// The consensus slot at which the constraints are valid
     pub slot: u64,
+    /// Indicates whether these constraints are only valid on the top of the block.
+    /// NOTE: Per slot, only 1 top-of-block bundle is valid.
+    pub top: bool,
     /// The constraints that need to be signed.
-    pub constraints: Vec<Constraint>,
+    #[serde(deserialize_with = "deserialize_txs", serialize_with = "serialize_txs")]
+    pub constraints: Vec<FullTransaction>,
 }
 
 impl ConstraintsMessage {
     /// Builds a constraints message from an inclusion request and metadata
     pub fn build(validator_index: u64, request: InclusionRequest) -> Self {
-        let constraints =
-            request.txs.into_iter().map(|tx| Constraint::from_transaction(tx, None)).collect();
+        let constraints = request.txs;
 
-        Self { validator_index, slot: request.slot, constraints }
+        Self { validator_index, slot: request.slot, top: false, constraints }
     }
 }
 
 impl SignableBLS for ConstraintsMessage {
     fn digest(&self) -> [u8; 32] {
-        let mut data = Vec::new();
-        data.extend_from_slice(&self.validator_index.to_le_bytes());
-        data.extend_from_slice(&self.slot.to_le_bytes());
+        let mut hasher = Sha256::new();
+        hasher.update(self.validator_index.to_le_bytes());
+        hasher.update(self.slot.to_le_bytes());
+        hasher.update((self.top as u8).to_le_bytes());
 
-        let mut constraint_bytes = Vec::new();
         for constraint in &self.constraints {
-            constraint_bytes.extend_from_slice(&constraint.as_bytes());
+            hasher.update(constraint.hash());
         }
-        data.extend_from_slice(&constraint_bytes);
 
-        // Compute the Keccak-256 hash and return the 32-byte array directly
-        keccak256(data).0
+        hasher.finalize().into()
     }
 }
 
-/// A general constraint on block building.
-///
-/// Reference: https://chainbound.github.io/bolt-docs/api/builder-api#ethv1builderconstraints
-#[derive(Serialize, Debug, Clone, PartialEq)]
-pub struct Constraint {
-    /// The optional index at which the transaction needs to be included in the block
-    pub index: Option<u64>,
-    /// The transaction to be included in the block, in hex format
-    #[serde(rename(serialize = "tx"))]
-    pub(crate) transaction: FullTransaction,
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rand::{rngs::ThreadRng, Rng};
 
-impl Constraint {
-    /// Builds a constraint from a transaction, with an optional index
-    pub fn from_transaction(transaction: FullTransaction, index: Option<u64>) -> Self {
-        Self { transaction, index }
+    fn random_u64(rng: &mut ThreadRng) -> u64 {
+        rng.gen_range(0..u64::MAX)
     }
 
-    /// Converts the constraint to a byte representation useful for signing
-    /// TODO: remove if we go with SSZ
-    pub fn as_bytes(&self) -> Vec<u8> {
-        let mut data = Vec::new();
-        self.transaction.encode_enveloped(&mut data);
-        data.extend_from_slice(&self.index.unwrap_or(0).to_le_bytes());
-        data
+    fn random_constraints(count: usize) -> Vec<FullTransaction> {
+        // Random inclusion request
+        let json_req = r#"{
+            "slot": 10,
+            "txs": ["0x02f86c870c72dd9d5e883e4d0183408f2382520894d2e2adf7177b7a8afddbc12d1634cf23ea1a71020180c001a08556dcfea479b34675db3fe08e29486fe719c2b22f6b0c1741ecbbdce4575cc6a01cd48009ccafd6b9f1290bbe2ceea268f94101d1d322c787018423ebcbc87ab4"]
+        }"#;
+
+        let req: InclusionRequest = serde_json::from_str(json_req).unwrap();
+
+        (0..count).map(|_| req.txs.first().unwrap().clone()).collect()
     }
 
-    pub fn sender(&self) -> Address {
-        self.transaction.sender().expect("Recovered sender")
+    #[test]
+    fn test_bls_digest() {
+        let mut rng = rand::thread_rng();
+
+        // Generate random values for the `ConstraintsMessage` fields
+        let validator_index = random_u64(&mut rng);
+        let slot = random_u64(&mut rng);
+        let top = false;
+        let constraints = random_constraints(1); // Generate 'n' random constraints
+
+        // Create a random `ConstraintsMessage`
+        let mut message = ConstraintsMessage { validator_index, slot, top, constraints };
+        message.validator_index = 0;
+        message.slot = 0;
+        message.top = false;
+
+        // Compute tree hash root
+        let digest = SignableBLS::digest(&message);
+
+        // Verify that the tree hash root is a valid 32-byte array
+        assert_eq!(digest.len(), 32, "Digest should be 32 bytes long");
+    }
+
+    #[test]
+    fn test_serialize_deserialize_roundtrip() {
+        let mut rng = rand::thread_rng();
+
+        // Generate random values for the `ConstraintsMessage` fields
+        let validator_index = random_u64(&mut rng);
+        let slot = random_u64(&mut rng);
+        let top = false;
+        let constraints = random_constraints(2); // Generate 'n' random constraints
+
+        // Create a random `ConstraintsMessage`
+        let message = ConstraintsMessage { validator_index, slot, top, constraints };
+
+        // Serialize the `ConstraintsMessage` to JSON
+        let json = serde_json::to_string(&message).unwrap();
+
+        // Deserialize the JSON back to a `ConstraintsMessage`
+        let deserialized_message: ConstraintsMessage = serde_json::from_str(&json).unwrap();
+
+        // Verify that the deserialized message is equal to the original message
+        assert_eq!(message, deserialized_message);
     }
 }

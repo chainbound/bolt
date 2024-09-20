@@ -9,7 +9,10 @@ use ethereum_consensus::{
 };
 use serde::{Deserialize, Serialize, Serializer};
 
-use crate::primitives::{BatchedSignedConstraints, GetPayloadResponse, SignedBuilderBid};
+use crate::primitives::{
+    BatchedSignedConstraints, GetPayloadResponse, SignedBuilderBid, SignedDelegation,
+    SignedRevocation,
+};
 
 use super::builder::GetHeaderParams;
 
@@ -22,7 +25,11 @@ pub const GET_HEADER_PATH: &str = "/eth/v1/builder/header/:slot/:parent_hash/:pu
 /// The path to the builder API get payload endpoint.
 pub const GET_PAYLOAD_PATH: &str = "/eth/v1/builder/blinded_blocks";
 /// The path to the constraints API submit constraints endpoint.
-pub const CONSTRAINTS_PATH: &str = "/eth/v1/builder/constraints";
+pub const SUBMIT_CONSTRAINTS_PATH: &str = "/constraints/v1/builder/constraints";
+/// The path to the constraints API delegate endpoint.
+pub const DELEGATE_PATH: &str = "/constraints/v1/builder/delegate";
+/// The path to the constraints API revoke endpoint.
+pub const REVOKE_PATH: &str = "/constraints/v1/builder/revoke";
 
 /// A response object for errors.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,6 +59,10 @@ pub enum BuilderApiError {
     FailedGettingPayload(ErrorResponse),
     #[error("Failed submitting constraints: {0:?}")]
     FailedSubmittingConstraints(ErrorResponse),
+    #[error("Failed to delegate constraint submission rights: {0:?}")]
+    FailedDelegating(ErrorResponse),
+    #[error("Failed to revoke constraint submission rights: {0:?}")]
+    FailedRevoking(ErrorResponse),
     #[error("Failed to fetch local payload for slot {0}")]
     FailedToFetchLocalPayload(u64),
     #[error("Axum error: {0:?}")]
@@ -83,6 +94,12 @@ impl IntoResponse for BuilderApiError {
                 (StatusCode::from_u16(error.code).unwrap(), Json(error)).into_response()
             }
             BuilderApiError::FailedSubmittingConstraints(error) => {
+                (StatusCode::from_u16(error.code).unwrap(), Json(error)).into_response()
+            }
+            BuilderApiError::FailedDelegating(error) => {
+                (StatusCode::from_u16(error.code).unwrap(), Json(error)).into_response()
+            }
+            BuilderApiError::FailedRevoking(error) => {
                 (StatusCode::from_u16(error.code).unwrap(), Json(error)).into_response()
             }
             BuilderApiError::AxumError(err) => {
@@ -142,15 +159,21 @@ pub trait BuilderApi {
 #[async_trait::async_trait]
 /// Implements the constraints API as defines in <https://chainbound.github.io/bolt-docs/api/builder-api>
 pub trait ConstraintsApi: BuilderApi {
-    /// Implements: <https://chainbound.github.io/bolt-docs/api/builder-api#ethv1builderconstraints>
+    /// Implements: <https://chainbound.github.io/bolt-docs/api/builder#constraints>
     async fn submit_constraints(
         &self,
         constraints: &BatchedSignedConstraints,
     ) -> Result<(), BuilderApiError>;
 
-    /// Implements: <https://chainbound.github.io/bolt-docs/api/builder-api#ethv1builderheader_with_proofsslotparent_hashpubkey>
+    /// Implements: <https://chainbound.github.io/bolt-docs/api/builder#get_header_with_proofs>
     async fn get_header_with_proofs(
         &self,
         params: GetHeaderParams,
     ) -> Result<VersionedValue<SignedBuilderBid>, BuilderApiError>;
+
+    /// Implements: <https://chainbound.github.io/bolt-docs/api/builder#delegate>
+    async fn delegate(&self, signed_data: SignedDelegation) -> Result<(), BuilderApiError>;
+
+    /// Implements: <https://chainbound.github.io/bolt-docs/api/builder#revoke>
+    async fn revoke(&self, signed_data: SignedRevocation) -> Result<(), BuilderApiError>;
 }

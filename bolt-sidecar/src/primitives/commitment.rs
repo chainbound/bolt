@@ -3,7 +3,10 @@ use std::str::FromStr;
 
 use alloy::primitives::{keccak256, Address, Signature, B256};
 
-use crate::crypto::SignerECDSA;
+use crate::{
+    crypto::SignerECDSA,
+    primitives::{deserialize_txs, serialize_txs},
+};
 
 use super::{FullTransaction, SignatureError, TransactionExt};
 
@@ -78,6 +81,7 @@ pub struct InclusionRequest {
     /// The consensus slot number at which the transaction should be included.
     pub slot: u64,
     /// The transaction to be included.
+    #[serde(deserialize_with = "deserialize_txs", serialize_with = "serialize_txs")]
     pub txs: Vec<FullTransaction>,
     /// The signature over the "slot" and "tx" fields by the user.
     /// A valid signature is the only proof that the user actually requested

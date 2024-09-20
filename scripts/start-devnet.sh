@@ -16,10 +16,11 @@ while ! curl -s -X POST --data '{"jsonrpc":"2.0","method":"eth_blockNumber","par
 	sleep 1
 done
 
+# TODO: re-add after new registry, challenger and staking contracts are available
 # deploy the contracts
-(
-	cd ./bolt-contracts || exit
-	forge build # make sure the contracts are compiled before deploying
-	forge script script/DeployOnDevnet.s.sol --broadcast --rpc-url "$RPC" --private-key "$PK"
-)
-echo "Contracts deployed!"
+# (
+# 	cd ./bolt-contracts || exit
+# 	forge build # make sure the contracts are compiled before deploying
+# 	forge script script/DeployOnDevnet.s.sol --broadcast --rpc-url "$RPC" --private-key "$PK"
+# )
+# echo "Contracts deployed!"
