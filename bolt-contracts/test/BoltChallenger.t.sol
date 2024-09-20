@@ -25,11 +25,9 @@ contract BoltChallengerExt is BoltChallenger {
         _resolve(_challengeID, _trustedBlockHash, _proof);
     }
 
-    function _decodeBlockHeaderRLPExt(bytes calldata _blockHeaderRLP)
-        external
-        pure
-        returns (IBoltChallenger.BlockHeaderData memory)
-    {
+    function _decodeBlockHeaderRLPExt(
+        bytes calldata _blockHeaderRLP
+    ) external pure returns (IBoltChallenger.BlockHeaderData memory) {
         return _decodeBlockHeaderRLP(_blockHeaderRLP);
     }
 }
@@ -45,7 +43,7 @@ contract BoltChallengerTest is Test {
 
     address challenger = makeAddr("challenger");
     address resolver = makeAddr("resolver");
-    
+
     address target;
     uint256 targetPK;
 
@@ -270,7 +268,10 @@ contract BoltChallengerTest is Test {
 
     // =========== Resolving a challenge ===========
 
-    function testResolveChallengeFull() public {
+    function testResolveChallengeFullDefense() public {
+        // Prove the full defense of a challenge: the block header, account proof, and tx proof 
+        // are all valid and the proposer has included the transaction in their slot.
+
         IBoltChallenger.SignedCommitment memory commitment = _createRecentBoltCommitment();
 
         // Open a challenge
@@ -345,10 +346,7 @@ contract BoltChallengerTest is Test {
     }
 
     // Helper to compute the commitment ID
-    function _computeCommitmentID(
-        bytes memory signedTx,
-        uint64 slot
-    ) internal pure returns (bytes32) {
+    function _computeCommitmentID(bytes memory signedTx, uint64 slot) internal pure returns (bytes32) {
         bytes32 txHash = keccak256(signedTx);
         bytes memory leSlot = _toLittleEndian(slot);
         return keccak256(abi.encodePacked(txHash, leSlot));
