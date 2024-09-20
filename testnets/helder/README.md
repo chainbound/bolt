@@ -3,9 +3,9 @@
 - Original Helder devnet document: [Helder Testnet](https://www.notion.so/ETH-CC-Testnet-Helder-fdc109a513cb44a68fe70f7038f2690b?pvs=21)
 - Explorer: https://dora.helder-devnets.xyz/
 - EL RPC: https://rpc.helder-devnets.xyz/
-- Bootnode:  https://bn.bootnode.helder-devnets.xyz/
+- Bootnode: https://bn.bootnode.helder-devnets.xyz/
 - Config repos: https://github.com/Commit-Boost/helder-devnets
-- Bolt relay info: http://helder-relay.bolt.chainbound.io:9060
+- Bolt relay info: http://135.181.191.125:9060/
 
 ## Components
 
@@ -19,7 +19,7 @@ The components that need to run to test Bolt on a devnet are:
 - **Bolt relay**
 - **Bolt builder**
 
-We will run an instance of the Bolt relay and Bolt builder, and can run the Bolt sidecar and modified mev-boost if required. Schematic: 
+We will run an instance of the Bolt relay and Bolt builder, and can run the Bolt sidecar and modified mev-boost if required. Schematic:
 
 ![Untitled](./image.png)
 
@@ -66,10 +66,12 @@ geth init --datadir=$DATADIR --state.scheme=hash $DEVNET_PATH/genesis.json \
 > [!IMPORTANT]  
 > The beacon node’s `builder-api` should point to the Bolt sidecar API to activate Bolt! It MUST also have
 > the following flags enabled:
+>
 > ```
 > --always-prefer-builder-payload
 > --builder-fallback-disable-checks
 > ```
+>
 > These flags ensure that no local payload is produced that does not respect the commitments made.
 
 Lighthouse:
@@ -199,6 +201,8 @@ forge install
 # The ECDSA private key of your Bolt operator
 export PRIVATE_KEY="0x..."
 # The Bolt RPC address (public)
+# WARNING: this needs to map to the Bolt sidecar RPC port - what we call "BOLT_RPC_PORT" in the above section.
+# This must be publicly accessible (e.g. no localhost or 0.0.0.0)!
 export RPC_ADDR="http://x.x.x.x:8000"
 # Your validators
 export VALIDATOR_INDEXES="1,2,3,4"
