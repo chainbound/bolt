@@ -5,9 +5,10 @@ import {Script, console} from "forge-std/Script.sol";
 
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
+import {BoltEigenLayerMiddleware} from "../src/contracts/BoltEigenLayerMiddleware.sol";
 
 /// @notice Script to deploy the BoltManager and BoltValidators contracts.
-contract DeployBoltManager is Script {
+contract DeployBolt is Script {
     function run(
         address symbioticNetwork,
         address symbioticOperatorRegistry,
@@ -30,12 +31,18 @@ contract DeployBoltManager is Script {
             symbioticNetwork,
             symbioticOperatorRegistry,
             symbioticOperatorNetOptIn,
-            symbioticVaultRegistry,
+            symbioticVaultRegistry
+        );
+        console.log("BoltManager deployed at", address(manager));
+
+        BoltEigenLayerMiddleware eigenLayerMiddleware = new BoltEigenLayerMiddleware(
+            address(sender),
+            address(validators),
             eigenlayerAVSDirectory,
             eigenlayerDelegationManager,
             eigenlayerStrategyManager
         );
-        console.log("BoltManager deployed at", address(manager));
+        console.log("BoltEigenLayerMiddleware deployed at", address(eigenLayerMiddleware));
 
         vm.stopBroadcast();
     }
