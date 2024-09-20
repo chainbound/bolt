@@ -82,32 +82,65 @@ The opt-in process requires the following steps:
 5. get approved by the vault.
 6. start providing commitments with the stake provided by the vault.
 
-### EigenLayer Integration Guide for Bolt Validators and Operators
+### EigenLayer Integration Guide for Node Operators and Solo Stakers
 
-In the Bolt ecosystem, the integration process slightly varies depending on whether you are part of a **staking pool** or you are a **solo staker**.
-Below, we outline the steps for both scenarios and highlight the differences.
+To participate in the Bolt Actively Validated Service (AVS) via EigenLayer you
+need to be either a Node Operator (NO) in a staking pool or a solo staker.
+This is because preconfirmations fees are paid directly to Ethereum block
+proposers by using the priority fees of the transactions.
 
-**For Staking Pools**
+Following EigenLayer's terminology, in the context of the Bolt AVS the "Operator" is an
+Ethereum address owned by an Ethereum block proposer.
 
-To participate in the Bolt Actively Validated Service (AVS) via EigenLayer as part of a staking pool,
-follow the standard procedures outlined in the [EigenLayer documentation](https://docs.eigenlayer.xyz/).
-In particular, the validators will need to point to a common Node Operator.
-However, Bolt’s integration introduces some additional steps that differ from the classic AVS onboarding process:
+Next, you need to follow the standard procedure outlined in the
+[EigenLayer documentation](https://docs.eigenlayer.xyz/) to opt into EigenLayer. Let's go through the steps:
 
-1. **Ensure Collateral is Whitelisted**: Verify that your underlying collateral strategy is whitelisted in the `BoltManager`
-   contract by calling the `isEigenLayerCollateralWhitelisted` function. Bolt requires specific collateral types to maintain compatibility and security within its system.
-2. **Register the Validators**: in Bolt, you need to register your validator in the `BoltValidators`
-   contract by invoking the `BoltValidators.registerValidator function`. This step is crucial for your validator to be recognized and to participate in Bolt’s protocol.
-3. **Register as an Operator**: Register yourself as an operator in the `BoltManager` contract by calling the
-   `BoltManager.registerEigenLayerOperator` function. This formalizes your role within the Bolt network and allows you to manage operations effectively.
-4. **Register the EigenLayer Strategy**: Finally, register the EigenLayer strategy you are using for restaking if it has not been done by someones else.
+1. As an Operator, you register into EigenLayer using [`DelegationManager.registerAsOperator`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/mainnet/src/contracts/core/DelegationManager.sol#L107-L119).
+
+2. As an Ethereum block proposer offering precofirmations you need some collateral in
+   order to be economically credible. In order to do that, some entities known as a "stakers"
+   need to deposit some Liquid Staking Tokens (LSTs) into an appropriate "Strategy"
+   associated to the LST via the [`StrategyManager.depositIntoStrategy`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/mainnet/src/contracts/core/StrategyManager.sol#L105-L110).
+   Such entities can be any party that is affiliated with you
+   and wants to delegate its funds, aware that you're the entity receiving rewards.
+   Note that only whitelist collaterals exposed by the `BoltManager` contract can be actually used.
+
+3. After the stakers have deposited their collateral into a strategy they need
+   to choose you as their operator. To do that, they need to call the function
+   [`DelegationManager.delegateTo`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/mainnet/src/contracts/core/DelegationManager.sol#L154-L163).
+
+4. As an Operator you finally opt into the Bolt AVS by interacting with the `BoltEigenLayerMiddleware`.
+   This consists in calling the function `BoltEigenLayerMiddleware.registerOperatorToAVS`.
+   The payload is a signature whose digest consists of:
+
+   1. your operator address
+   2. the `BoltEigenLayerMiddleware` contract address
+   3. a salt
+   4. an expiry 2.
+
+   The contract will then forward the call to the [`AVSDirectory.registerOperatorToAVS`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/mainnet/src/contracts/core/AVSDirectory.sol#L64-L108)
+   with the `msg.sender` set to the Bolt AVS contract. Upon successful verification of the signature,
+   the operator is considered `REGISTERED` in a mapping `avsOperatorStatus[msg.sender][operator]`.
+
+Lastly, you need to interact with both the `BoltValidators` and `BoltEigenLayerMiddleware`
+contract. This is needed for internal functioning of the AVS and to make RPCs aware that you are a
+registered operator and so that they can forward you preconfirmation requests.
+
+The steps required are the following:
+
+1. Register all the validator public keys you want to use with Bolt via the `BoltValidators.registerValidator`.
+   If you for example a Node Operator and you own more than one validator public key,
+   you can use the more gas-efficient `BoltValidators.batchRegisterValidators` function.
+   The `authorizedOperator` argument must be the same Ethereum address used for
+   opting into EigenLayer as an Operator.
+
+2. Register the same Operator address in the `BoltManager` contract by calling
+   the `BoltManager.registerEigenLayerOperator` function. This formalizes your role within the Bolt network
+   and allows you to manage operations effectively, such as pausing or resuming
+   your service.
+
+3. Register the EigenLayer strategy you are using for restaking _if it has not been done by someone else already_.
    This ensures that your restaked assets are correctly integrated with Bolt’s system.
-
-**For Solo Stakers**
-
-In the case of solo stakers, **the staker and operator are controlled by the same entity**, known as the proposer.
-This assumption is made because preconfirmation fees are paid directly to the proposer using priority fees.
-Having both roles unified simplifies fee distribution and aligns incentives.
 
 ## Fault Proof Challenge and Slashing: `BoltChallenger`
 
