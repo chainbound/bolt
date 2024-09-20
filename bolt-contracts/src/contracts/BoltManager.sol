@@ -59,6 +59,10 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Set of EigenLayer collaterals addresses that are allowed.
     EnumerableSet.AddressSet private whitelistedEigenLayerCollaterals;
 
+    /// @notice Set of restaking protocols supported. Each address corresponds to the
+    /// associated Bolt Middleware contract.
+    EnumerableSet.AddressSet private restakingProtocols;
+
     // ========= IMMUTABLES =========
 
     /// @notice Address of the Bolt network in Symbiotic Protocol.
@@ -196,6 +200,22 @@ contract BoltManager is IBoltManager, Ownable {
     }
 
     // ========= ADMIN FUNCTIONS =========
+
+    /// @notice Add a restaking protocol into Bolt
+    /// @param protocolMiddleware The address of the restaking protocol Bolt middleware
+    function addRestakingProtocol(
+        IBoltMiddleware protocolMiddleware
+    ) public onlyOwner {
+        restakingProtocols.add(address(protocolMiddleware));
+    }
+
+    /// @notice Remove a restaking protocol from Bolt
+    /// @param protocolMiddleware The address of the restaking protocol Bolt middleware
+    function removeRestakingProtocol(
+        IBoltMiddleware protocolMiddleware
+    ) public onlyOwner {
+        restakingProtocols.remove(address(protocolMiddleware));
+    }
 
     /// @notice Add a collateral address to the whitelist.
     /// @param collateral The collateral address to add to the whitelist.
