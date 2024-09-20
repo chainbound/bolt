@@ -14,6 +14,8 @@ interface IBoltMiddleware {
     error CollateralNotWhitelisted();
     error NotAllowed();
 
+    function nameHash() external view returns (bytes32);
+
     function getEpochStartTs(
         uint48 epoch
     ) external view returns (uint48);

@@ -72,6 +72,8 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     /// @notice Duration of the slashing window in seconds.
     uint48 public constant SLASHING_WINDOW = 7 days;
 
+    bytes32 public constant NAME_HASH = keccak256("EIGENLAYER");
+
     // ========= CONSTRUCTOR =========
 
     /// @notice Constructor for the BoltManager contract.
@@ -92,6 +94,11 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     }
 
     // ========= VIEW FUNCTIONS =========
+
+    /// @notice Get the name hash of the restaking protocol.
+    function nameHash() public pure returns (bytes32) {
+        return NAME_HASH;
+    }
 
     /// @notice Get the start timestamp of an epoch.
     function getEpochStartTs(
