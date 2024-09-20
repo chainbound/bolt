@@ -117,8 +117,7 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         // Reconstruct the commitment digest: `keccak( keccak(signed tx) || le_bytes(slot) )`
-        bytes32 commitmentID =
-            keccak256(abi.encodePacked(keccak256(commitment.signedTx), abi.encodePacked(commitment.slot)));
+        bytes32 commitmentID = _computeCommitmentID(commitment);
 
         // Verify the commitment signature against the digest
         address commitmentSigner = ECDSA.recover(commitmentID, commitment.signature);
@@ -131,6 +130,7 @@ contract BoltChallenger is IBoltChallenger {
         // Add the challenge to the set of challenges
         challengeIDs.add(commitmentID);
         challenges[commitmentID] = Challenge({
+            id: commitmentID,
             openedAt: Time.timestamp(),
             status: ChallengeStatus.Open,
             challenger: msg.sender,
@@ -174,9 +174,11 @@ contract BoltChallenger is IBoltChallenger {
     }
 
     /// @notice Resolve a challenge that has expired without being resolved.
-    /// @dev This will result in the challenge being considered lost, without need to provide 
+    /// @dev This will result in the challenge being considered lost, without need to provide
     /// additional proofs of inclusion, as the time window has elapsed.
-    function resolveExpiredChallenge(bytes32 challengeID) public {
+    function resolveExpiredChallenge(
+        bytes32 challengeID
+    ) public {
         if (!challengeIDs.contains(challengeID)) {
             revert ChallengeDoesNotExist();
         }
@@ -228,13 +230,14 @@ contract BoltChallenger is IBoltChallenger {
         // Decode the RLP-encoded block header fields
         BlockHeaderData memory blockHeader = _decodeBlockHeaderRLP(proof.blockHeaderRLP);
 
-        // Recover the sender of the committed raw signed transaction. It will be the account to prove existence of.
+        // Decode the committed raw signed transaction. Its sender will be the account to prove existence of.
         TransactionDecoder.Transaction memory decodedTx = challenge.commitment.signedTx.decodeEnveloped();
-        address accountToProve = decodedTx.recoverSender();
 
-        // Decode the account fields by checking the account proof against the state root of the block header
-        (bool accountExists, bytes memory accountRLP) =
-            SecureMerkleTrie.get(abi.encodePacked(accountToProve), proof.accountMerkleProof, blockHeader.stateRoot);
+        // Decode the account fields by checking the account proof against the state root of the block header.
+        // The key in the account trie is the account pubkey (address) which we can recover from the signed tx.
+        (bool accountExists, bytes memory accountRLP) = SecureMerkleTrie.get(
+            abi.encodePacked(decodedTx.recoverSender()), proof.accountMerkleProof, blockHeader.stateRoot
+        );
 
         if (!accountExists) {
             revert AccountDoesNotExist();
@@ -243,7 +246,7 @@ contract BoltChallenger is IBoltChallenger {
         AccountData memory account = _decodeAccountRLP(accountRLP);
 
         if (account.nonce > decodedTx.nonce) {
-            // The sender (accountToProve) has sent a transaction with a higher nonce than the committed
+            // The transaction recovered sender has sent a transaction with a higher nonce than the committed
             // transaction, before the proposer could include it. Consider the challenge defended, as the
             // proposer is not at fault. The bond will be shared between the resolver and commitment signer.
             challenge.status = ChallengeStatus.Defended;
@@ -258,7 +261,7 @@ contract BoltChallenger is IBoltChallenger {
 
         if (account.balance < blockHeader.baseFee * decodedTx.gasLimit) {
             // The account does not have enough balance to pay for the worst-case base fee of the committed transaction.
-            // Consider the challenge defended, as the proposer is not at fault. The bond will be shared between the 
+            // Consider the challenge defended, as the proposer is not at fault. The bond will be shared between the
             // resolver and commitment signer.
             challenge.status = ChallengeStatus.Defended;
             _transferHalfBond(msg.sender);
@@ -295,6 +298,15 @@ contract BoltChallenger is IBoltChallenger {
 
     // ========= HELPERS =========
 
+    /// @notice Compute the commitment ID for a given signed commitment.
+    /// @param commitment The signed commitment to compute the ID for.
+    /// @return commitmentID The computed commitment ID.
+    function _computeCommitmentID(
+        SignedCommitment calldata commitment
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(keccak256(commitment.signedTx), abi.encodePacked(commitment.slot)));
+    }
+
     /// @notice Decode the block header fields from an RLP-encoded block header.
     /// @param headerRLP The RLP-encoded block header to decode
     function _decodeBlockHeaderRLP(
@@ -309,6 +321,9 @@ contract BoltChallenger is IBoltChallenger {
         blockHeader.baseFee = headerFields[15].readUint256();
     }
 
+    /// @notice Decode the account fields from an RLP-encoded account.
+    /// @param accountRLP The RLP-encoded account to decode
+    /// @return account The decoded account data.
     function _decodeAccountRLP(
         bytes memory accountRLP
     ) internal pure returns (AccountData memory account) {
@@ -318,15 +333,23 @@ contract BoltChallenger is IBoltChallenger {
         account.balance = accountFields[1].readUint256();
     }
 
-    function _transferFullBond(address recipient) internal {
-        (bool success, ) = payable(recipient).call{value: CHALLENGE_BOND}("");
+    /// @notice Transfer the full challenge bond to a recipient.
+    /// @param recipient The address to transfer the bond to.
+    function _transferFullBond(
+        address recipient
+    ) internal {
+        (bool success,) = payable(recipient).call{value: CHALLENGE_BOND}("");
         if (!success) {
             revert BondTransferFailed();
         }
     }
 
-    function _transferHalfBond(address recipient) internal {
-        (bool success, ) = payable(recipient).call{value: CHALLENGE_BOND / 2}("");
+    /// @notice Transfer half of the challenge bond to a recipient.
+    /// @param recipient The address to transfer half of the bond to.
+    function _transferHalfBond(
+        address recipient
+    ) internal {
+        (bool success,) = payable(recipient).call{value: CHALLENGE_BOND / 2}("");
         if (!success) {
             revert BondTransferFailed();
         }
