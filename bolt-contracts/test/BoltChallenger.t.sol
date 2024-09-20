@@ -269,7 +269,7 @@ contract BoltChallengerTest is Test {
     // =========== Resolving a challenge ===========
 
     function testResolveChallengeFullDefense() public {
-        // Prove the full defense of a challenge: the block header, account proof, and tx proof 
+        // Prove the full defense of a challenge: the block header, account proof, and tx proof
         // are all valid and the proposer has included the transaction in their slot.
 
         IBoltChallenger.SignedCommitment memory commitment = _createRecentBoltCommitment();
