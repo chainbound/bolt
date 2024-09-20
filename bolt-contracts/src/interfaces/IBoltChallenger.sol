@@ -9,6 +9,7 @@ interface IBoltChallenger {
     }
 
     struct Challenge {
+        bytes32 id;
         uint48 openedAt;
         ChallengeStatus status;
         address challenger;
@@ -56,6 +57,7 @@ interface IBoltChallenger {
     error WrongTransactionHashProof();
     error InvalidBlockNumber();
     error BondTransferFailed();
+    error ChallengeNotExpired();
 
     event ChallengeOpened(bytes32 indexed challengeId, address indexed challenger, address indexed target);
     event ChallengeDefended(bytes32 indexed challengeId);
