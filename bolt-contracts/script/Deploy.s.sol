@@ -30,11 +30,7 @@ contract DeployBolt is Script {
         console.log("BoltManager deployed at", address(manager));
 
         BoltEigenLayerMiddleware eigenLayerMiddleware = new BoltEigenLayerMiddleware(
-            sender,
-            address(validators),
-            eigenlayerAVSDirectory,
-            eigenlayerDelegationManager,
-            eigenlayerStrategyManager
+            sender, address(validators), eigenlayerAVSDirectory, eigenlayerDelegationManager, eigenlayerStrategyManager
         );
         console.log("BoltEigenLayerMiddleware deployed at", address(eigenLayerMiddleware));
         BoltSymbioticMiddleware symbioticMiddleware = new BoltSymbioticMiddleware(
@@ -45,6 +41,7 @@ contract DeployBolt is Script {
             symbioticOperatorNetOptIn,
             symbioticVaultRegistry
         );
+        console.log("BoltSymbioticMiddleware deployed at", address(eigenLayerMiddleware));
         vm.stopBroadcast();
     }
 }
