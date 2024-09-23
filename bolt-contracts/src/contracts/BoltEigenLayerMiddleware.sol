@@ -60,24 +60,22 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
 
     // ========= CONSTANTS =========
 
-    /// @notice Slasher that can instantly slash operators without veto.
-    uint256 public constant INSTANT_SLASHER_TYPE = 0;
-
-    /// @notice Slasher that can request a veto before actually slashing operators.
-    uint256 public constant VETO_SLASHER_TYPE = 1;
-
     /// @notice Duration of an epoch in seconds.
     uint48 public constant EPOCH_DURATION = 1 days;
 
     /// @notice Duration of the slashing window in seconds.
     uint48 public constant SLASHING_WINDOW = 7 days;
 
+    /// @notice Name hash of the restaking protocol for identifying the instance of `IBoltMiddleware`.
     bytes32 public constant NAME_HASH = keccak256("EIGENLAYER");
 
     // ========= CONSTRUCTOR =========
 
     /// @notice Constructor for the BoltManager contract.
     /// @param _validators The address of the validators registry.
+    /// @param _eigenlayerAVSDirectory The address of the EigenLayer AVS Directory contract.
+    /// @param _eigenlayerDelegationManager The address of the EigenLayer Delegation Manager contract.
+    /// @param _eigenlayerStrategyManager The address of the EigenLayer Strategy Manager.
     constructor(
         address _owner,
         address _validators,
@@ -209,6 +207,8 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
         operators.enable(msg.sender);
     }
 
+    /// @notice Register a strategy to work in Bolt Protocol.
+    /// @param strategy The EigenLayer strategy address
     function registerStrategy(
         address strategy
     ) public {
@@ -319,9 +319,9 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     }
 
     /// @notice Get the amount of tokens delegated to an operator across the allowed strategies.
-    //  @param operator The operator address to get the stake for.
-    //  @param strategies The list of strategies to get the stake for.
-    //  @return tokenAmounts The amount of tokens delegated to the operator for each strategy.
+    /// @param operator The operator address to get the stake for.
+    /// @param collateral The collateral address to get the stake for.
+    /// @return amount The amount of tokens delegated to the operator of the specified collateral.
     function getOperatorStake(address operator, address collateral) public view returns (uint256 amount) {
         uint48 timestamp = Time.timestamp();
         return getOperatorStakeAt(operator, collateral, timestamp);
