@@ -13,7 +13,7 @@ interface IBoltChallenger {
         uint48 openedAt;
         ChallengeStatus status;
         address challenger;
-        address target;
+        address commitmentSigner;
         SignedCommitment commitment;
     }
 
@@ -59,7 +59,7 @@ interface IBoltChallenger {
     error BondTransferFailed();
     error ChallengeNotExpired();
 
-    event ChallengeOpened(bytes32 indexed challengeId, address indexed challenger, address indexed target);
+    event ChallengeOpened(bytes32 indexed challengeId, address indexed challenger, address indexed commitmentSigner);
     event ChallengeDefended(bytes32 indexed challengeId);
     event ChallengeLost(bytes32 indexed challengeId);
 
