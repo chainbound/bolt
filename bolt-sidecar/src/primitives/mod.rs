@@ -426,8 +426,8 @@ pub struct SignedDelegation {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DelegationMessage {
-    pub validator_index: u64,
-    pub pubkey: BlsPublicKey,
+    pub validator_pubkey: BlsPublicKey,
+    pub delegatee_pubkey: BlsPublicKey,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -438,6 +438,6 @@ pub struct SignedRevocation {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct RevocationMessage {
-    pub validator_index: u64,
-    pub pubkey: BlsPublicKey,
+    pub validator_pubkey: BlsPublicKey,
+    pub delegatee_pubkey: BlsPublicKey,
 }
