@@ -48,10 +48,12 @@ coordination of validators, operators, and vaults within the Bolt network.
 
 Key features include:
 
-1. Registration of Symbiotic Operators and Vaults / EigenLayer Operators and Strategies
-2. Whitelisting of collateral assets used to back commitments
-3. Retrieval of operator stake and proposer status from their pubkey
-4. Integration with Symbiotic/EigenLayer
+1. Retrieval of operator stake and proposer status from their pubkey
+2. Integration with Symbiotic
+3. Integration with Eigenlayer
+
+Specific functionalities about the restaking protocols are handled inside
+the `IBoltMiddleware` contracts, such as `BotSymbioticMiddleware` and `BoltEigenlayerMiddleware`.
 
 ### Symbiotic Integration guide for Staking Pools
 
@@ -61,9 +63,9 @@ on how to spin up a Vault and start receiving stake from your node operators.
 
 Opting into Bolt works as any other Symbiotic middleware integration. Here are the steps:
 
-1. Make sure your vault collateral is whitelisted in `BoltManager` by calling `isSymbioticCollateralWhitelisted`.
-2. Register as a vault in `BoltManager` by calling `registerSymbioticVault`.
-3. Verify that your vault is active in `BoltManager` by calling `isSymbioticVaultEnabled`.
+1. Make sure your vault collateral is whitelisted in `BoltSymbioticMiddleware` by calling `isCollateralWhitelisted`.
+2. Register as a vault in `BoltSymbioticMiddleware` by calling `registerVault`.
+3. Verify that your vault is active in `BoltSymbioticMiddleware` by calling `isVaultEnabled`.
 4. Set the network limit for your vault in Symbiotic with `Vault.delegator().setNetworkLimit()`.
 5. You can now start approving operators that opt in to your vault directly in Symbiotic.
 6. When you assign shares to operators, they are able to provide commitments on behalf of your collateral.
@@ -78,7 +80,7 @@ The opt-in process requires the following steps:
 1. register in Symbiotic with `OperatorRegistry.registerOperator()`.
 2. opt-in to the Bolt network with `OperatorNetworkOptInService.optIn(networkAddress)`.
 3. opt-in to any vault with `OperatorVaultOptInService.optIn(vaultAddress)`.
-4. register in Bolt with `BoltManager.registerSymbioticOperator(operatorAddress)`.
+4. register in Bolt with `BoltSymbioticMiddleware.registerOperator(operatorAddress)`.
 5. get approved by the vault.
 6. start providing commitments with the stake provided by the vault.
 
