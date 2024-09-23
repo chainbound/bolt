@@ -206,7 +206,7 @@ contract BoltChallengerTest is Test {
         assertEq(challenge.openedAt, block.timestamp);
         assertEq(uint256(challenge.status), 0);
         assertEq(challenge.challenger, challenger);
-        assertEq(challenge.target, 0x71f7D1B81E297816cf6691B2396060Ede49eFA5e);
+        assertEq(challenge.commitmentSigner, 0x71f7D1B81E297816cf6691B2396060Ede49eFA5e);
         assertEq(challenge.commitment.slot, commitment.slot);
         assertEq(challenge.commitment.signature, commitment.signature);
         assertEq(challenge.commitment.signedTx, commitment.signedTx);
