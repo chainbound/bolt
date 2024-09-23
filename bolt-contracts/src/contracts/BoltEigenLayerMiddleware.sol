@@ -93,11 +93,6 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
 
     // ========= VIEW FUNCTIONS =========
 
-    /// @notice Get the name hash of the restaking protocol.
-    function nameHash() public pure returns (bytes32) {
-        return NAME_HASH;
-    }
-
     /// @notice Get the start timestamp of an epoch.
     function getEpochStartTs(
         uint48 epoch
