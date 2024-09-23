@@ -84,26 +84,33 @@ The opt-in process requires the following steps:
 
 ### EigenLayer Integration Guide for Node Operators and Solo Stakers
 
-To participate in the Bolt Actively Validated Service (AVS) via EigenLayer you
-need to be either a Node Operator (NO) in a staking pool or a solo staker.
-This is because preconfirmations fees are paid directly to Ethereum block
-proposers by using the priority fees of the transactions.
+Participants in the Bolt Actively Validated Service (AVS) via EigenLayer can be
+be either a Node Operator (NO) in a staking pool or a solo staker.
+This is because preconfirmations fees are paid directly to
+Ethereum validators by using the priority fees of the transactions.
+Without loss of generality, we will assume the reader of this guide is a Node Operator,
+since the same steps apply to solo stakers.
 
-Following EigenLayer's terminology, in the context of the Bolt AVS the "Operator" is an
-Ethereum address owned by an Ethereum block proposer.
+> [!NOTE]
+> Following EigenLayer's terminology, in the context of the Bolt AVS the "Operator" is an
+> Ethereum address owned by an Ethereum validator.
 
 Next, you need to follow the standard procedure outlined in the
 [EigenLayer documentation](https://docs.eigenlayer.xyz/) to opt into EigenLayer. Let's go through the steps:
 
 1. As an Operator, you register into EigenLayer using [`DelegationManager.registerAsOperator`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/mainnet/src/contracts/core/DelegationManager.sol#L107-L119).
 
-2. As an Ethereum block proposer offering precofirmations you need some collateral in
+2. As an Ethereum validator offering precofirmations a NO needs some collateral in
    order to be economically credible. In order to do that, some entities known as a "stakers"
-   need to deposit some Liquid Staking Tokens (LSTs) into an appropriate "Strategy"
-   associated to the LST via the [`StrategyManager.depositIntoStrategy`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/mainnet/src/contracts/core/StrategyManager.sol#L105-L110).
-   Such entities can be any party that is affiliated with you
-   and wants to delegate its funds, aware that you're the entity receiving rewards.
-   Note that only whitelist collaterals exposed by the `BoltManager` contract can be actually used.
+   need to deposit whitelisted Liquid Staking Tokens (LSTs)
+   into an appropriate "Strategy" associated to the LST via the
+   [`StrategyManager.depositIntoStrategy`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/mainnet/src/contracts/core/StrategyManager.sol#L105-L110),
+   so that the Operator has a `min_amount` (TBD) of collateral associated to it.
+   Whitelisted LSTs are exposed by the `BoltEigenLayerMiddleware` contract
+   in the `getWhitelistedCollaterals` function.
+   Note that NOs and stakers can be two different entities
+   _but there is fully trusted relationship as stakers will be slashed if a NO misbehaves_.
+   As such, it is expected this will lead only NOs themselves to be the sole stakers.
 
 3. After the stakers have deposited their collateral into a strategy they need
    to choose you as their operator. To do that, they need to call the function
@@ -122,20 +129,20 @@ Next, you need to follow the standard procedure outlined in the
    with the `msg.sender` set to the Bolt AVS contract. Upon successful verification of the signature,
    the operator is considered `REGISTERED` in a mapping `avsOperatorStatus[msg.sender][operator]`.
 
-Lastly, you need to interact with both the `BoltValidators` and `BoltEigenLayerMiddleware`
+Lastly, a NO needs to interact with both the `BoltValidators` and `BoltEigenLayerMiddleware`
 contract. This is needed for internal functioning of the AVS and to make RPCs aware that you are a
 registered operator and so that they can forward you preconfirmation requests.
 
 The steps required are the following:
 
 1. Register all the validator public keys you want to use with Bolt via the `BoltValidators.registerValidator`.
-   If you for example a Node Operator and you own more than one validator public key,
+   If you own more than one validator public key,
    you can use the more gas-efficient `BoltValidators.batchRegisterValidators` function.
    The `authorizedOperator` argument must be the same Ethereum address used for
    opting into EigenLayer as an Operator.
 
-2. Register the same Operator address in the `BoltManager` contract by calling
-   the `BoltManager.registerEigenLayerOperator` function. This formalizes your role within the Bolt network
+2. Register the same Operator address in the `BoltEigenLayerMiddleware` contract by calling
+   the `BoltEigenLayerMiddleware.registerOperator` function. This formalizes your role within the Bolt network
    and allows you to manage operations effectively, such as pausing or resuming
    your service.
 
