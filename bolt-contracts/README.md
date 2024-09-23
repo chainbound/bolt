@@ -53,7 +53,7 @@ Key features include:
 3. Integration with Eigenlayer
 
 Specific functionalities about the restaking protocols are handled inside
-the `IBoltMiddleware` contracts, such as `BotSymbioticMiddleware` and `BoltEigenlayerMiddleware`.
+the `IBoltMiddleware` contracts, such as `BoltSymbioticMiddleware` and `BoltEigenlayerMiddleware`.
 
 ### Symbiotic Integration guide for Staking Pools
 
