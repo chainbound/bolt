@@ -73,7 +73,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
 
     // ========= CONSTRUCTOR =========
 
-    /// @notice Constructor for the BoltManager contract.
+    /// @notice Constructor for the BoltEigenLayerMiddleware contract.
     /// @param _validators The address of the validators registry.
     /// @param _eigenlayerAVSDirectory The address of the EigenLayer AVS Directory contract.
     /// @param _eigenlayerDelegationManager The address of the EigenLayer Delegation Manager contract.
@@ -404,6 +404,8 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
         AVS_DIRECTORY.registerOperatorToAVS(operator, operatorSignature);
     }
 
+    /// @notice Check if an operator is registered to work in Bolt Protocol AVS by
+    /// looking up the AVS Directory contract.
     function checkIfOperatorRegisteredToAVS(
         address operator
     ) public view returns (bool registered) {

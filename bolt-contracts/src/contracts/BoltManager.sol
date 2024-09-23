@@ -91,6 +91,11 @@ contract BoltManager is IBoltManager, Ownable {
         return validators.getValidatorByPubkeyHash(pubkeyHash).authorizedOperator == operator;
     }
 
+    /// @notice Returns the addresses of the middleware contracts of restaking protocols supported by Bolt.
+    function getSupportedRestakingProtocols() public view returns (address[] memory middlewares) {
+        return restakingProtocols.values();
+    }
+
     // ========= ADMIN FUNCTIONS =========
 
     /// @notice Add a restaking protocol into Bolt

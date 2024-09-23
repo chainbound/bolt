@@ -83,7 +83,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
 
     // ========= CONSTRUCTOR =========
 
-    /// @notice Constructor for the BoltManager contract.
+    /// @notice Constructor for the BoltSymbioticMiddleware contract.
     /// @param _validators The address of the validators registry.
     /// @param _symbioticNetwork The address of the Symbiotic network.
     /// @param _symbioticOperatorRegistry The address of the Symbiotic operator registry.
