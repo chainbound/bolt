@@ -129,7 +129,7 @@ contract BoltManagerEigenLayerTest is Test {
         bytes32 operatorRegistrationDigestHash = eigenLayerDeployer.avsDirectory()
             .calculateOperatorAVSRegistrationDigestHash({
             operator: operator,
-            avs: address(manager),
+            avs: address(middleware),
             salt: bytes32(0),
             expiry: UINT256_MAX
         });
@@ -139,7 +139,7 @@ contract BoltManagerEigenLayerTest is Test {
             ISignatureUtils.SignatureWithSaltAndExpiry(operatorRawSignature, bytes32(0), UINT256_MAX);
         vm.expectEmit(true, true, true, true);
         emit IAVSDirectory.OperatorAVSRegistrationStatusUpdated(
-            operator, address(manager), IAVSDirectory.OperatorAVSRegistrationStatus.REGISTERED
+            operator, address(middleware), IAVSDirectory.OperatorAVSRegistrationStatus.REGISTERED
         );
         middleware.registerOperatorToAVS(operator, operatorSignature);
         assertEq(middleware.checkIfOperatorRegisteredToAVS(operator), true);
