@@ -110,9 +110,9 @@ contract BoltChallenger is IBoltChallenger {
             payable(msg.sender).transfer(msg.value - CHALLENGE_BOND);
         }
 
-        if (commitment.slot > BeaconChainUtils._getCurrentSlot() - BeaconChainUtils.FINALIZATION_DELAY_SLOTS) {
-            // We cannot open challenges for slots that are not finalized yet.
-            // This is admittedly a bit strict, since 64-slot deep reorgs are very unlikely.
+        if (commitment.slot > BeaconChainUtils._getCurrentSlot() - BeaconChainUtils.JUSTIFICATION_DELAY_SLOTS) {
+            // We cannot open challenges for slots that are not finalized by Ethereum consensus yet.
+            // This is admittedly a bit strict, since 32-slot deep reorgs are very unlikely.
             revert BlockIsNotFinalized();
         }
 

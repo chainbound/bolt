@@ -166,7 +166,18 @@ is emitted, and any arbitrator has a time window to submit a valid response to s
 ### Dispute resolution
 
 The dispute resolution process is one-shot and requires the arbitrator to submit all necessary evidence
-of the validator's correct behaviour within the challenge time window. The inputs are as follows:
+of the validator's correct behaviour within the challenge time window.
+
+The arbitrator is _anyone_ who can submit a valid response to the challenge. It doesn't have to be the
+validator themselves. There is however one limitation: the time window for submitting a response must be
+respected in the following way:
+
+- Start: the target block must be justified by LMD-GHOST: a minimum of 32 slots must have passed
+- End: depending on the EVM block hash oracle:
+  a. If using the `BLOCKHASH` EVM opcode, the window is limited to 256 blocks (roughly 1 hour)
+  b. If using the [EIP-2935](https://eips.ethereum.org/EIPS/eip-2935) historical oracle, the window is limited to 8192 blocks (roughly 1 day)
+
+The inputs to the resolution process are as follows:
 
 1. The ID of the challenge to respond to: this is emitted in the `ChallengeOpened` event and is unique.
 2. The [inclusion proofs](https://github.com/chainbound/bolt/blob/6c0f1b696cfe3de7e7e3830ac28c369c6ddf271e/bolt-contracts/src/interfaces/IBoltChallenger.sol#L39), consisting of the following components:
