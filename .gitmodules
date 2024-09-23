@@ -4,9 +4,6 @@
 [submodule "bolt-contracts/lib/openzeppelin-contracts"]
 	path = bolt-contracts/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
-[submodule "bolt-contracts/lib/relic-sdk"]
-	path = bolt-contracts/lib/relic-sdk
-	url = https://github.com/Relic-Protocol/relic-sdk
 [submodule "bolt-contracts/lib/core"]
 	path = bolt-contracts/lib/core
 	url = https://github.com/symbioticfi/core
