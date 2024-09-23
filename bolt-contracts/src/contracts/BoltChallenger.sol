@@ -134,7 +134,7 @@ contract BoltChallenger is IBoltChallenger {
             openedAt: Time.timestamp(),
             status: ChallengeStatus.Open,
             challenger: msg.sender,
-            target: commitmentSigner,
+            commitmentSigner: commitmentSigner,
             commitment: commitment
         });
 
@@ -251,7 +251,7 @@ contract BoltChallenger is IBoltChallenger {
             // proposer is not at fault. The bond will be shared between the resolver and commitment signer.
             challenge.status = ChallengeStatus.Defended;
             _transferHalfBond(msg.sender);
-            _transferHalfBond(challenge.target);
+            _transferHalfBond(challenge.commitmentSigner);
             emit ChallengeDefended(challengeID);
             return;
         } else if (account.nonce < decodedTx.nonce) {
@@ -265,7 +265,7 @@ contract BoltChallenger is IBoltChallenger {
             // resolver and commitment signer.
             challenge.status = ChallengeStatus.Defended;
             _transferHalfBond(msg.sender);
-            _transferHalfBond(challenge.target);
+            _transferHalfBond(challenge.commitmentSigner);
             emit ChallengeDefended(challengeID);
             return;
         }
@@ -292,7 +292,7 @@ contract BoltChallenger is IBoltChallenger {
         // The bond will be shared between the resolver and commitment signer.
         challenge.status = ChallengeStatus.Defended;
         _transferHalfBond(msg.sender);
-        _transferHalfBond(challenge.target);
+        _transferHalfBond(challenge.commitmentSigner);
         emit ChallengeDefended(challengeID);
     }
 
