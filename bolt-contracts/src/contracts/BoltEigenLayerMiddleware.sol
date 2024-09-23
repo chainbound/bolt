@@ -26,9 +26,6 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
 
-    error StrategyNotAllowed();
-    error OperatorNotRegisteredToAVS();
-
     // ========= STORAGE =========
 
     /// @notice Validators registry, where validators are registered via their
@@ -68,6 +65,11 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
 
     /// @notice Name hash of the restaking protocol for identifying the instance of `IBoltMiddleware`.
     bytes32 public constant NAME_HASH = keccak256("EIGENLAYER");
+
+    // ========= ERRORS =========
+
+    error StrategyNotAllowed();
+    error OperatorNotRegisteredToAVS();
 
     // ========= CONSTRUCTOR =========
 
