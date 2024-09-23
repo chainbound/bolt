@@ -151,7 +151,50 @@ The steps required are the following:
 
 ## Fault Proof Challenge and Slashing: `BoltChallenger`
 
-WIP
+The [`BoltChallenger`](./src/contracts/BoltChallenger.sol) contract is the component responsible
+for handling fault attribution in the case of a validator failing to meet their commitments.
+
+In short, the challenger contract allows any user to challenge a validator's commitment by opening
+a dispute with the following inputs:
+
+1. The signed commitment made by the validator
+2. An ETH bond to cover the cost of the dispute and disincentivize frivolous challenges
+
+The entrypoint is the `openChallenge` function. Once a challenge is opened, a `ChallengeOpened` event
+is emitted, and any arbitrator has a time window to submit a valid response to settle the dispute.
+
+### Dispute resolution
+
+The dispute resolution process is one-shot and requires the arbitrator to submit all necessary evidence
+of the validator's correct behaviour within the challenge time window. The inputs are as follows:
+
+1. The ID of the challenge to respond to: this is emitted in the `ChallengeOpened` event and is unique.
+2. The [inclusion proofs](https://github.com/chainbound/bolt/blob/6c0f1b696cfe3de7e7e3830ac28c369c6ddf271e/bolt-contracts/src/interfaces/IBoltChallenger.sol#L39), consisting of the following components:
+   a. the block number of the block containing the included transaction
+   b. the RLP-encoded block header of the block containing the included transaction
+   c. the account merkle proof of the sender of the included transaction
+   d. the transaction merkle proof of the included transaction against the header's transaction root
+   e. the transaction index in the block of the included transaction
+
+If the arbitrator submits a valid response that satisfies the requirements for the challenge, the
+challenge is considered DEFENDED and the challenger's bond is slashed to cover the cost of the dispute
+and to incentivize speedy resolution.
+
+If no arbitrators respond successfully within the challenge time window, the challenge is considered
+LOST and the `BoltChallenger` will keep track of this information for future reference.
+
+### Slashing of validators
+
+If a challenge is LOST (as per the above definition), the validator's stake should be slashed to cover
+the cost of a missed commitment. This is done by calling the `slash` function on the correct staking adapter
+and reading into the `BoltChallenger` contract to trustlessly determine if the challenge was lost.
+
+In practice, slashing behaviour is abstracted behind any staking adapter – an example is Symbiotic's `VetoSlasher`
+which will receive a request to slash a validator's stake and will have a last opportunity to veto
+the slashing request before it is executed on-chain.
+
+Subscribing to lost challenges from the `BoltChallenger` is a trustless way to determine if a slashing request
+is valid according to Bolt Protocol rules.
 
 ## Testing
 
