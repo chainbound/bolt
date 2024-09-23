@@ -47,9 +47,6 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Duration of an epoch in seconds.
     uint48 public constant EPOCH_DURATION = 1 days;
 
-    /// @notice Duration of the slashing window in seconds.
-    uint48 public constant SLASHING_WINDOW = 7 days;
-
     // ========= CONSTRUCTOR =========
 
     /// @notice Constructor for the BoltManager contract.
