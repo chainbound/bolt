@@ -33,10 +33,10 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     IBoltValidators public validators;
 
     /// @notice Set of Symbiotic operator addresses that have opted in to Bolt Protocol.
-    EnumerableMap.AddressToUintMap private symbioticOperators;
+    EnumerableMap.AddressToUintMap private operators;
 
     /// @notice Set of Symbiotic protocol vaults that are used in Bolt Protocol.
-    EnumerableMap.AddressToUintMap private symbioticVaults;
+    EnumerableMap.AddressToUintMap private vaults;
 
     /// @notice Set of Symbiotic collateral addresses that are whitelisted.
     EnumerableSet.AddressSet private whitelistedCollaterals;
@@ -47,13 +47,13 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     address public immutable BOLT_SYMBIOTIC_NETWORK;
 
     /// @notice Address of the Symbiotic Operator Registry contract.
-    address public immutable SYMBIOTIC_OPERATOR_REGISTRY;
+    address public immutable OPERATOR_REGISTRY;
 
     /// @notice Address of the Symbiotic Vault Registry contract.
-    address public immutable SYMBIOTIC_VAULT_REGISTRY;
+    address public immutable VAULT_REGISTRY;
 
     /// @notice Address of the Symbiotic Operator Network Opt-In contract.
-    address public immutable SYMBIOTIC_OPERATOR_NET_OPTIN;
+    address public immutable OPERATOR_NET_OPTIN;
 
     /// @notice Start timestamp of the first epoch.
     uint48 public immutable START_TIMESTAMP;
@@ -100,9 +100,9 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
         START_TIMESTAMP = Time.timestamp();
 
         BOLT_SYMBIOTIC_NETWORK = _symbioticNetwork;
-        SYMBIOTIC_OPERATOR_REGISTRY = _symbioticOperatorRegistry;
-        SYMBIOTIC_OPERATOR_NET_OPTIN = _symbioticOperatorNetOptIn;
-        SYMBIOTIC_VAULT_REGISTRY = _symbioticVaultRegistry;
+        OPERATOR_REGISTRY = _symbioticOperatorRegistry;
+        OPERATOR_NET_OPTIN = _symbioticOperatorNetOptIn;
+        VAULT_REGISTRY = _symbioticVaultRegistry;
     }
 
     // ========= VIEW FUNCTIONS =========
@@ -180,40 +180,40 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     function registerOperator(
         address operator
     ) public {
-        if (symbioticOperators.contains(operator)) {
+        if (operators.contains(operator)) {
             revert AlreadyRegistered();
         }
 
-        if (!IRegistry(SYMBIOTIC_OPERATOR_REGISTRY).isEntity(operator)) {
+        if (!IRegistry(OPERATOR_REGISTRY).isEntity(operator)) {
             revert NotOperator();
         }
 
-        if (!IOptInService(SYMBIOTIC_OPERATOR_NET_OPTIN).isOptedIn(operator, BOLT_SYMBIOTIC_NETWORK)) {
+        if (!IOptInService(OPERATOR_NET_OPTIN).isOptedIn(operator, BOLT_SYMBIOTIC_NETWORK)) {
             revert OperatorNotOptedIn();
         }
 
-        symbioticOperators.add(operator);
-        symbioticOperators.enable(operator);
+        operators.add(operator);
+        operators.enable(operator);
     }
 
     /// @notice Allow an operator to signal indefinite opt-out from Bolt Protocol.
     /// @dev Pausing activity does not prevent the operator from being slashable for
     /// the current network epoch until the end of the slashing window.
     function pauseOperator() public {
-        if (!symbioticOperators.contains(msg.sender)) {
+        if (!operators.contains(msg.sender)) {
             revert NotRegistered();
         }
 
-        symbioticOperators.disable(msg.sender);
+        operators.disable(msg.sender);
     }
 
     /// @notice Allow a disabled operator to signal opt-in to Bolt Protocol.
     function unpauseOperator() public {
-        if (!symbioticOperators.contains(msg.sender)) {
+        if (!operators.contains(msg.sender)) {
             revert NotRegistered();
         }
 
-        symbioticOperators.enable(msg.sender);
+        operators.enable(msg.sender);
     }
 
     /// @notice Allow a vault to signal opt-in to Bolt Protocol.
@@ -221,11 +221,11 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     function registerVault(
         address vault
     ) public {
-        if (symbioticVaults.contains(vault)) {
+        if (vaults.contains(vault)) {
             revert AlreadyRegistered();
         }
 
-        if (!IRegistry(SYMBIOTIC_VAULT_REGISTRY).isEntity(vault)) {
+        if (!IRegistry(VAULT_REGISTRY).isEntity(vault)) {
             revert NotVault();
         }
 
@@ -235,26 +235,26 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
 
         // TODO: check slashing conditions and veto duration
 
-        symbioticVaults.add(vault);
-        symbioticVaults.enable(vault);
+        vaults.add(vault);
+        vaults.enable(vault);
     }
 
     /// @notice Allow a vault to signal indefinite opt-out from Bolt Protocol.
     function pauseVault() public {
-        if (!symbioticVaults.contains(msg.sender)) {
+        if (!vaults.contains(msg.sender)) {
             revert NotRegistered();
         }
 
-        symbioticVaults.disable(msg.sender);
+        vaults.disable(msg.sender);
     }
 
     /// @notice Allow a disabled vault to signal opt-in to Bolt Protocol.
     function unpauseVault() public {
-        if (!symbioticVaults.contains(msg.sender)) {
+        if (!vaults.contains(msg.sender)) {
             revert NotRegistered();
         }
 
-        symbioticVaults.enable(msg.sender);
+        vaults.enable(msg.sender);
     }
 
     /// @notice Check if a vault is currently enabled to work in Bolt Protocol.
@@ -263,7 +263,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     function isVaultEnabled(
         address vault
     ) public view returns (bool) {
-        (uint48 enabledTime, uint48 disabledTime) = symbioticVaults.getTimes(vault);
+        (uint48 enabledTime, uint48 disabledTime) = vaults.getTimes(vault);
         return enabledTime != 0 && disabledTime == 0;
     }
 
@@ -273,7 +273,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     function isOperatorEnabled(
         address operator
     ) public view returns (bool) {
-        (uint48 enabledTime, uint48 disabledTime) = symbioticOperators.getTimes(operator);
+        (uint48 enabledTime, uint48 disabledTime) = operators.getTimes(operator);
         return enabledTime != 0 && disabledTime == 0;
     }
 
@@ -307,16 +307,16 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
         status.active = validator.exists;
         status.operator = operator;
 
-        (uint48 enabledTime, uint48 disabledTime) = symbioticOperators.getTimes(operator);
+        (uint48 enabledTime, uint48 disabledTime) = operators.getTimes(operator);
         if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
             return status;
         }
 
-        status.collaterals = new address[](symbioticVaults.length());
-        status.amounts = new uint256[](symbioticVaults.length());
+        status.collaterals = new address[](vaults.length());
+        status.amounts = new uint256[](vaults.length());
 
-        for (uint256 i = 0; i < symbioticVaults.length(); ++i) {
-            (address vault, uint48 enabledVaultTime, uint48 disabledVaultTime) = symbioticVaults.atWithTimes(i);
+        for (uint256 i = 0; i < vaults.length(); ++i) {
+            (address vault, uint48 enabledVaultTime, uint48 disabledVaultTime) = vaults.atWithTimes(i);
 
             address collateral = IVault(vault).collateral();
             status.collaterals[i] = collateral;
@@ -353,8 +353,8 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(timestamp));
 
-        for (uint256 i = 0; i < symbioticVaults.length(); ++i) {
-            (address vault, uint48 enabledTime, uint48 disabledTime) = symbioticVaults.atWithTimes(i);
+        for (uint256 i = 0; i < vaults.length(); ++i) {
+            (address vault, uint48 enabledTime, uint48 disabledTime) = vaults.atWithTimes(i);
 
             if (collateral != IVault(vault).collateral()) {
                 continue;
@@ -395,8 +395,8 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
             revert InvalidQuery();
         }
 
-        for (uint256 i; i < symbioticOperators.length(); ++i) {
-            (address operator, uint48 enabledTime, uint48 disabledTime) = symbioticOperators.atWithTimes(i);
+        for (uint256 i; i < operators.length(); ++i) {
+            (address operator, uint48 enabledTime, uint48 disabledTime) = operators.atWithTimes(i);
 
             // just skip operator if it was added after the target epoch or paused
             if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
@@ -418,8 +418,8 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(timestamp));
 
-        for (uint256 i = 0; i < symbioticVaults.length(); ++i) {
-            (address vault, uint48 enabledTime, uint48 disabledTime) = symbioticVaults.atWithTimes(i);
+        for (uint256 i = 0; i < vaults.length(); ++i) {
+            (address vault, uint48 enabledTime, uint48 disabledTime) = vaults.atWithTimes(i);
 
             if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
                 continue;
