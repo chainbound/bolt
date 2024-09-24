@@ -20,6 +20,14 @@ interface IBoltValidators {
         bool exists;
     }
 
+    struct ProposerStatus {
+        bytes32 pubkeyHash;
+        bool active;
+        address operator;
+        address[] collaterals;
+        uint256[] amounts;
+    }
+
     error InvalidBLSSignature();
     error InvalidAuthorizedCollateralProvider();
     error InvalidAuthorizedOperator();

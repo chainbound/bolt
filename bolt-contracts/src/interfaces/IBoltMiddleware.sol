@@ -3,7 +3,6 @@ pragma solidity 0.8.25;
 
 import {BLS12381} from "../lib/bls/BLS12381.sol";
 import {IBoltValidators} from "./IBoltValidators.sol";
-import {IBoltManager} from "./IBoltManager.sol";
 
 interface IBoltMiddleware {
     error InvalidQuery();
@@ -54,11 +53,11 @@ interface IBoltMiddleware {
 
     function getProposersStatus(
         bytes32[] memory pubkeyHashes
-    ) external view returns (IBoltManager.ProposerStatus[] memory);
+    ) external view returns (IBoltValidators.ProposerStatus[] memory);
 
     function getProposerStatus(
         bytes32 pubkeyHash
-    ) external view returns (IBoltManager.ProposerStatus memory);
+    ) external view returns (IBoltValidators.ProposerStatus memory);
 
     function isOperatorAuthorizedForValidator(address operator, bytes32 pubkeyHash) external view returns (bool);
 

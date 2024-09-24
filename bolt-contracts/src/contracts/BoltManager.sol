@@ -18,14 +18,17 @@ import {IEntity} from "@symbiotic/interfaces/common/IEntity.sol";
 
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
-import {IBoltManager} from "../interfaces/IBoltManager.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
 
-contract BoltManager is IBoltManager, Ownable {
+contract BoltManager is Ownable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
     using Subnetwork for address;
+
+    // ========= ERRORS =========
+
+    error InvalidQuery();
 
     // ========= STORAGE =========
 
@@ -37,45 +40,15 @@ contract BoltManager is IBoltManager, Ownable {
     /// associated Bolt Middleware contract.
     EnumerableSet.AddressSet private restakingProtocols;
 
-    // ========= IMMUTABLES =========
-
-    /// @notice Start timestamp of the first epoch.
-    uint48 public immutable START_TIMESTAMP;
-
-    // ========= CONSTANTS =========
-
-    /// @notice Duration of an epoch in seconds.
-    uint48 public constant EPOCH_DURATION = 1 days;
-
     // ========= CONSTRUCTOR =========
 
     /// @notice Constructor for the BoltManager contract.
     /// @param _validators The address of the validators registry.
     constructor(address _owner, address _validators) Ownable(_owner) {
         validators = IBoltValidators(_validators);
-        START_TIMESTAMP = Time.timestamp();
     }
 
     // ========= VIEW FUNCTIONS =========
-
-    /// @notice Get the start timestamp of an epoch.
-    function getEpochStartTs(
-        uint48 epoch
-    ) public view returns (uint48 timestamp) {
-        return START_TIMESTAMP + epoch * EPOCH_DURATION;
-    }
-
-    /// @notice Get the epoch at a given timestamp.
-    function getEpochAtTs(
-        uint48 timestamp
-    ) public view returns (uint48 epoch) {
-        return (timestamp - START_TIMESTAMP) / EPOCH_DURATION;
-    }
-
-    /// @notice Get the current epoch.
-    function getCurrentEpoch() public view returns (uint48 epoch) {
-        return getEpochAtTs(Time.timestamp());
-    }
 
     /// @notice Check if an operator address is authorized to work for a validator,
     /// given the validator's pubkey hash. This function performs a lookup in the
@@ -112,16 +85,5 @@ contract BoltManager is IBoltManager, Ownable {
         IBoltMiddleware protocolMiddleware
     ) public onlyOwner {
         restakingProtocols.remove(address(protocolMiddleware));
-    }
-
-    // ========= HELPER FUNCTIONS =========
-
-    /// @notice Check if a map entry was active at a given timestamp.
-    /// @param enabledTime The enabled time of the map entry.
-    /// @param disabledTime The disabled time of the map entry.
-    /// @param timestamp The timestamp to check the map entry status at.
-    /// @return True if the map entry was active at the given timestamp, false otherwise.
-    function _wasEnabledAt(uint48 enabledTime, uint48 disabledTime, uint48 timestamp) private pure returns (bool) {
-        return enabledTime != 0 && enabledTime <= timestamp && (disabledTime == 0 || disabledTime >= timestamp);
     }
 }

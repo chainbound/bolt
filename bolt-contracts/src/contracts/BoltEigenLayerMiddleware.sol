@@ -10,7 +10,6 @@ import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.so
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
-import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
 import {IStrategyManager} from "@eigenlayer/src/contracts/interfaces/IStrategyManager.sol";
 import {IAVSDirectory} from "@eigenlayer/src/contracts/interfaces/IAVSDirectory.sol";
@@ -268,8 +267,8 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     /// @return statuses The statuses of the proposers, including their operator and active stake.
     function getProposersStatus(
         bytes32[] memory pubkeyHashes
-    ) public view returns (IBoltManager.ProposerStatus[] memory statuses) {
-        statuses = new IBoltManager.ProposerStatus[](pubkeyHashes.length);
+    ) public view returns (IBoltValidators.ProposerStatus[] memory statuses) {
+        statuses = new IBoltValidators.ProposerStatus[](pubkeyHashes.length);
         for (uint256 i = 0; i < pubkeyHashes.length; ++i) {
             statuses[i] = getProposerStatus(pubkeyHashes[i]);
         }
@@ -280,7 +279,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     /// @return status The status of the proposer, including their operator and active stake.
     function getProposerStatus(
         bytes32 pubkeyHash
-    ) public view returns (IBoltManager.ProposerStatus memory status) {
+    ) public view returns (IBoltValidators.ProposerStatus memory status) {
         if (pubkeyHash == bytes32(0)) {
             revert InvalidQuery();
         }

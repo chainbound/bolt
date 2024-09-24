@@ -20,7 +20,6 @@ import {IMigratablesFactory} from "@symbiotic/interfaces/common/IMigratablesFact
 import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
 import {SimpleCollateral} from "@symbiotic/../test/mocks/SimpleCollateral.sol";
 
-import {IBoltManager} from "../src/interfaces/IBoltManager.sol";
 import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
 import {IBoltMiddleware} from "../src/interfaces/IBoltMiddleware.sol";
 
@@ -308,7 +307,7 @@ contract BoltManagerTest is Test {
         vm.warp(block.timestamp + EPOCH_DURATION * 2 + 1);
         assertEq(vault.currentEpoch(), 2);
 
-        BoltManager.ProposerStatus memory status = middleware.getProposerStatus(pubkeyHash);
+        IBoltValidators.ProposerStatus memory status = middleware.getProposerStatus(pubkeyHash);
         assertEq(status.pubkeyHash, pubkeyHash);
         assertEq(status.operator, operator);
         assertEq(status.active, true);
@@ -336,7 +335,7 @@ contract BoltManagerTest is Test {
         vm.warp(block.timestamp + EPOCH_DURATION * 2 + 1);
         assertEq(vault.currentEpoch(), 2);
 
-        BoltManager.ProposerStatus[] memory statuses = middleware.getProposersStatus(pubkeyHashes);
+        IBoltValidators.ProposerStatus[] memory statuses = middleware.getProposersStatus(pubkeyHashes);
         assertEq(statuses.length, 10);
     }
 

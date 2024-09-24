@@ -18,7 +18,6 @@ import {IEntity} from "@symbiotic/interfaces/common/IEntity.sol";
 
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
-import {IBoltManager} from "../interfaces/IBoltManager.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
 
 contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
@@ -283,8 +282,8 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     /// @return statuses The statuses of the proposers, including their operator and active stake.
     function getProposersStatus(
         bytes32[] memory pubkeyHashes
-    ) public view returns (IBoltManager.ProposerStatus[] memory statuses) {
-        statuses = new IBoltManager.ProposerStatus[](pubkeyHashes.length);
+    ) public view returns (IBoltValidators.ProposerStatus[] memory statuses) {
+        statuses = new IBoltValidators.ProposerStatus[](pubkeyHashes.length);
         for (uint256 i = 0; i < pubkeyHashes.length; ++i) {
             statuses[i] = getProposerStatus(pubkeyHashes[i]);
         }
@@ -295,7 +294,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     /// @return status The status of the proposer, including their operator and active stake.
     function getProposerStatus(
         bytes32 pubkeyHash
-    ) public view returns (IBoltManager.ProposerStatus memory status) {
+    ) public view returns (IBoltValidators.ProposerStatus memory status) {
         if (pubkeyHash == bytes32(0)) {
             revert InvalidQuery();
         }

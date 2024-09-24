@@ -7,7 +7,7 @@ import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
 import {BoltEigenLayerMiddleware} from "../src/contracts/BoltEigenLayerMiddleware.sol";
 import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
-import {IBoltManager} from "../src/interfaces/IBoltManager.sol";
+import {IBoltMiddleware} from "../src/interfaces/IBoltMiddleware.sol";
 
 import {AVSDirectoryStorage} from "@eigenlayer/src/contracts/core/AVSDirectoryStorage.sol";
 import {DelegationManagerStorage} from "@eigenlayer/src/contracts/core/DelegationManagerStorage.sol";
@@ -187,7 +187,7 @@ contract BoltManagerEigenLayerTest is Test {
 
         bytes32 pubkeyHash = _pubkeyHash(validatorPubkey);
 
-        BoltManager.ProposerStatus memory status = middleware.getProposerStatus(pubkeyHash);
+        IBoltValidators.ProposerStatus memory status = middleware.getProposerStatus(pubkeyHash);
         assertEq(status.pubkeyHash, pubkeyHash);
         assertEq(status.operator, operator);
         assertEq(status.active, true);
@@ -212,7 +212,7 @@ contract BoltManagerEigenLayerTest is Test {
             validators.registerValidatorUnsafe(pubkey, staker, operator);
         }
 
-        BoltManager.ProposerStatus[] memory statuses = middleware.getProposersStatus(pubkeyHashes);
+        IBoltValidators.ProposerStatus[] memory statuses = middleware.getProposersStatus(pubkeyHashes);
         assertEq(statuses.length, 10);
     }
 
@@ -240,7 +240,7 @@ contract BoltManagerEigenLayerTest is Test {
 
         address strat = address(eigenLayerDeployer.wethStrat());
         vm.startPrank(admin);
-        vm.expectRevert(IBoltManager.CollateralNotWhitelisted.selector);
+        vm.expectRevert(IBoltMiddleware.CollateralNotWhitelisted.selector);
         middleware.registerStrategy(strat);
         vm.stopPrank();
     }
