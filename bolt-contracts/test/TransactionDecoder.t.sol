@@ -49,6 +49,7 @@ contract TransactionDecoderTest is Test {
     }
 
     function setUp() public {
+        vm.pauseGasMetering();
         decoder = new DecoderImpl();
     }
 
@@ -62,6 +63,15 @@ contract TransactionDecoderTest is Test {
             _decodeTestCase(i);
             i++;
         }
+    }
+
+    function testDecodeGasUsage() public {
+        // Decode a single transaction to measure gas usage
+        bytes memory encoded = _readTestCase(0).signedLondon;
+
+        vm.resumeGasMetering();
+        decoder.decodeEnveloped(encoded);
+        vm.pauseGasMetering();
     }
 
     function _decodeTestCase(

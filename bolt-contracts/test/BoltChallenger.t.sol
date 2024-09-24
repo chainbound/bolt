@@ -48,6 +48,7 @@ contract BoltChallengerTest is Test {
     uint256 targetPK;
 
     function setUp() public {
+        vm.pauseGasMetering();
         (target, targetPK) = makeAddrAndKey("target");
 
         boltChallenger = new BoltChallengerExt();
@@ -60,7 +61,7 @@ contract BoltChallengerTest is Test {
 
     // =========== Proving data inclusion on-chain ===========
 
-    function testProveHeaderData() public view {
+    function testProveHeaderData() public {
         // Note: In prod, how we obtain the trusted block hash would depend on the context.
         // For recent blocks, we can simply use the blockhash function in the EVM.
         bytes32 trustedBlockHash = 0x0fc7c840f5b4b451e99dc8adb0d475eab2ac7d36278d9601d7f4b2dd05e8022f;
@@ -72,7 +73,9 @@ contract BoltChallengerTest is Test {
         assertEq(keccak256(headerRLP), trustedBlockHash);
 
         // RLP decode the header
+        vm.resumeGasMetering();
         IBoltChallenger.BlockHeaderData memory header = boltChallenger._decodeBlockHeaderRLPExt(headerRLP);
+        vm.pauseGasMetering();
 
         assertEq(header.stateRoot, 0x214389f55a96edbd4d5295a17ada4dbc68a3b276145bf824b060635f9905cefc);
         assertEq(header.txRoot, 0x87bb9183296ce9e3b7a3246f6d3a778b99a5d7daaba2174750707407c7297365);
@@ -81,7 +84,7 @@ contract BoltChallengerTest is Test {
         assertEq(header.baseFee, 21_575_309_588);
     }
 
-    function testProveAccountData() public view {
+    function testProveAccountData() public {
         // The account we want to prove
         address accountToProve = 0x0D9f5045B604bA0c050b5eb06D0b25d01c525Ea5;
 
@@ -104,8 +107,10 @@ contract BoltChallengerTest is Test {
         }
         assertEq(keccak256(proof[0].encoded), stateRootAtBlock, "Roots should match");
 
+        vm.resumeGasMetering();
         (bool exists, bytes memory accountRLP) =
             SecureMerkleTrie.get(abi.encodePacked(accountToProve), accountProof, stateRootAtBlock);
+        vm.pauseGasMetering();
         assertEq(exists, true);
 
         // decode the account RLP into nonce and balance
@@ -117,7 +122,7 @@ contract BoltChallengerTest is Test {
         assertEq(balance, 136_481_368_234_605_997);
     }
 
-    function testProveTransactionInclusion() public view {
+    function testProveTransactionInclusion() public {
         // The transaction we want to prove inclusion of
         bytes32 txHash = 0x9ec2c56ca36e445a46bc77ca77510f0ef21795d00834269f3752cbd29d63ba1f;
 
@@ -132,9 +137,11 @@ contract BoltChallengerTest is Test {
 
         bytes memory key = RLPWriter.writeUint(txIndexInBlock);
 
+        vm.resumeGasMetering();
         // Gotcha: SecureMerkleTrie.get expects the key to be hashed with keccak256
         // but the transaction trie skips this step and uses the raw index as the key.
         (bool exists, bytes memory transactionRLP) = MerkleTrie.get(key, txProof, txRootAtBlock);
+        vm.pauseGasMetering();
 
         assertEq(exists, true);
         assertEq(keccak256(transactionRLP), txHash);
@@ -155,7 +162,7 @@ contract BoltChallengerTest is Test {
 
     // =========== Verifying Signatures ===========
 
-    function testCommitmentDigestAndSignature() public view {
+    function testCommitmentDigestAndSignature() public {
         IBoltChallenger.SignedCommitment memory commitment = _parseTestCommitment();
 
         // Reconstruct the commitment digest: `keccak( keccak(signed tx) || le_bytes(slot) )`
@@ -165,11 +172,13 @@ contract BoltChallengerTest is Test {
         assertEq(commitment.signature.length, 65);
 
         // Verify the commitment signature against the digest
+        vm.resumeGasMetering();
         address commitmentSigner = ECDSA.recover(commitmentID, commitment.signature);
         assertEq(commitmentSigner, 0x27083ED52464625660f3e30Aa5B9C20A30D7E110);
+        vm.pauseGasMetering();
     }
 
-    function testCommitmentSignature() public view {
+    function testCommitmentSignature() public {
         bytes memory signedTx = vm.parseJsonBytes(vm.readFile("./test/testdata/signed_tx.json"), ".raw");
         uint64 slot = 20_728_344;
 
@@ -181,8 +190,10 @@ contract BoltChallengerTest is Test {
         bytes memory commitmentSignature = abi.encodePacked(r, s, v);
 
         // Verify the commitment signature against the digest
+        vm.resumeGasMetering();
         address commitmentSigner = ECDSA.recover(commitmentID, commitmentSignature);
         assertEq(commitmentSigner, target);
+        vm.pauseGasMetering();
     }
 
     // =========== Opening a challenge ===========
@@ -193,8 +204,10 @@ contract BoltChallengerTest is Test {
         assertEq(challenger.balance, 100 ether);
 
         // Open a challenge with the commitment
+        vm.resumeGasMetering();
         vm.prank(challenger);
         boltChallenger.openChallenge{value: 1 ether}(commitment);
+        vm.pauseGasMetering();
 
         assertEq(challenger.balance, 99 ether);
 
@@ -216,17 +229,21 @@ contract BoltChallengerTest is Test {
         IBoltChallenger.SignedCommitment memory commitment = _parseTestCommitment();
 
         // Open a challenge with insufficient bond
+        vm.resumeGasMetering();
         vm.prank(challenger);
         vm.expectRevert(IBoltChallenger.InsufficientChallengeBond.selector);
         boltChallenger.openChallenge{value: 0.1 ether}(commitment);
+        vm.pauseGasMetering();
     }
 
     function testOpenChallengeWithLargebond() public {
         IBoltChallenger.SignedCommitment memory commitment = _parseTestCommitment();
 
         // Open a challenge with a large bond, making sure that the rest is refunded
+        vm.resumeGasMetering();
         vm.prank(challenger);
         boltChallenger.openChallenge{value: 50 ether}(commitment);
+        vm.pauseGasMetering();
 
         assertEq(challenger.balance, 99 ether);
     }
@@ -239,9 +256,11 @@ contract BoltChallengerTest is Test {
         boltChallenger.openChallenge{value: 1 ether}(commitment);
 
         // Try to open the same challenge again
+        vm.resumeGasMetering();
         vm.prank(challenger);
         vm.expectRevert(IBoltChallenger.ChallengeAlreadyExists.selector);
         boltChallenger.openChallenge{value: 1 ether}(commitment);
+        vm.pauseGasMetering();
     }
 
     function testOpenChallengeWithSlotInTheFuture() public {
@@ -249,9 +268,11 @@ contract BoltChallengerTest is Test {
         commitment.slot = uint64(BeaconChainUtils._getCurrentSlot()) + 10;
 
         // Open a challenge with a slot in the future
+        vm.resumeGasMetering();
         vm.prank(challenger);
         vm.expectRevert(IBoltChallenger.BlockIsNotFinalized.selector);
         boltChallenger.openChallenge{value: 1 ether}(commitment);
+        vm.pauseGasMetering();
     }
 
     function testOpenChallengeInvalidSignature() public {
@@ -261,9 +282,11 @@ contract BoltChallengerTest is Test {
         commitment.signature[0] = bytes1(uint8(commitment.signature[0]) + 5);
 
         // Open a challenge with an invalid signature
+        vm.resumeGasMetering();
         vm.prank(challenger);
         vm.expectRevert(ECDSA.ECDSAInvalidSignature.selector);
         boltChallenger.openChallenge{value: 1 ether}(commitment);
+        vm.pauseGasMetering();
     }
 
     // =========== Resolving a challenge ===========
@@ -302,8 +325,10 @@ contract BoltChallengerTest is Test {
         bytes32 trustedBlockHash = 0x0fc7c840f5b4b451e99dc8adb0d475eab2ac7d36278d9601d7f4b2dd05e8022f;
 
         // Resolve the challenge
+        vm.resumeGasMetering();
         vm.prank(resolver);
         boltChallenger._resolveExt(challengeID, trustedBlockHash, proof);
+        vm.pauseGasMetering();
 
         // Check the challenge was resolved
         IBoltChallenger.Challenge memory challenge = boltChallenger.getAllChallenges()[0];
