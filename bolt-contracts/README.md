@@ -84,18 +84,17 @@ The opt-in process requires the following steps:
 
 ### EigenLayer Integration Guide for Node Operators and Solo Stakers
 
-Participants in the Bolt Actively Validated Service (AVS) via EigenLayer can be
-be either a Node Operator (NO) in a staking pool or a solo staker.
-This is because preconfirmations fees are paid directly to
-Ethereum validators by using the priority fees of the transactions.
-Without loss of generality, we will assume the reader of this guide is a Node Operator,
-since the same steps apply to solo stakers.
-
 > [!NOTE]
-> Following EigenLayer's terminology, in the context of the Bolt AVS the "Operator" is an
-> Ethereum address owned by an Ethereum validator.
+> Without loss of generality, we will assume the reader of this guide is a Node
+> Operator (NO), since the same steps apply to solo stakers.
 
-Next, you need to follow the standard procedure outlined in the
+As a Node Operator you will be an ["Operator"](https://docs.eigenlayer.xyz/eigenlayer/overview/key-terms)
+in the Bolt AVS built on top of EigenLayer. This requires 
+running an Ethereum validator and the Bolt sidecar in order issue
+preconfirmations.
+
+The Operator will be represented by an Ethereum address that needs
+to follow the standard procedure outlined in the
 [EigenLayer documentation](https://docs.eigenlayer.xyz/) to opt into EigenLayer. Let's go through the steps:
 
 1. As an Operator, you register into EigenLayer using [`DelegationManager.registerAsOperator`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/mainnet/src/contracts/core/DelegationManager.sol#L107-L119).
@@ -110,7 +109,6 @@ Next, you need to follow the standard procedure outlined in the
    in the `getWhitelistedCollaterals` function.
    Note that NOs and stakers can be two different entities
    _but there is fully trusted relationship as stakers will be slashed if a NO misbehaves_.
-   As such, it is expected this will lead only NOs themselves to be the sole stakers.
 
 3. After the stakers have deposited their collateral into a strategy they need
    to choose you as their operator. To do that, they need to call the function
