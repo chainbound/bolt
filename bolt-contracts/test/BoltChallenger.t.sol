@@ -179,7 +179,7 @@ contract BoltChallengerTest is Test {
     }
 
     function testCommitmentSignature() public {
-        bytes memory signedTx = vm.parseJsonBytes(vm.readFile("./test/testdata/signed_tx.json"), ".raw");
+        bytes memory signedTx = vm.parseJsonBytes(vm.readFile("./test/testdata/signed_tx_20785012_1.json"), ".raw");
         uint64 slot = 20_728_344;
 
         // Reconstruct the commitment digest
@@ -298,11 +298,12 @@ contract BoltChallengerTest is Test {
     // =========== Resolving a challenge ===========
 
     function testResolveChallengeFullDefenseSingleTx() public {
-        // Prove the full defense of a challenge: the block header, account proof, and tx proof
+        // Prove the full defense of a challenge: the block headers, account proof, and tx proofs
         // are all valid and the proposer has included the transaction in their slot.
 
+        uint256 inclusionBlockNumber = 20_785_012;
         IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
-        commitments[0] = _createRecentBoltCommitment();
+        commitments[0] = _createRecentBoltCommitment(inclusionBlockNumber, 1);
 
         // Open a challenge
         vm.prank(challenger);
@@ -325,7 +326,7 @@ contract BoltChallengerTest is Test {
         txIndexesInBlock[0] = vm.parseJsonUint(txProof, ".index");
 
         IBoltChallenger.Proof memory proof = IBoltChallenger.Proof({
-            inclusionBlockNumber: 20_785_012,
+            inclusionBlockNumber: inclusionBlockNumber,
             previousBlockHeaderRLP: vm.parseJsonBytes(rawPreviousHeader, ".result"),
             inclusionBlockHeaderRLP: vm.parseJsonBytes(rawInclusionHeader, ".result"),
             accountMerkleProof: _RLPEncodeList(vm.parseJsonBytesArray(ethProof, ".result.accountProof")),
@@ -350,14 +351,84 @@ contract BoltChallengerTest is Test {
         assertEq(uint256(challenge.status), uint256(IBoltChallenger.ChallengeStatus.Defended));
     }
 
+    function testResolveChallengeFullDefenseStackedTxs() public {
+        // Prove the full defense of a challenge: the block headers, account proof, and tx proofs
+        // are all valid and the proposer has included the transaction in their slot.
+        // This time, the proposer has committed to multiple transactions in their slot.
+
+        uint256 inclusionBlockNumber = 20_817_618;
+        IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](3);
+        commitments[0] = _createRecentBoltCommitment(inclusionBlockNumber, 1);
+        commitments[1] = _createRecentBoltCommitment(inclusionBlockNumber, 2);
+        commitments[2] = _createRecentBoltCommitment(inclusionBlockNumber, 3);
+
+        // Open a challenge
+        vm.prank(challenger);
+        boltChallenger.openChallenge{value: 1 ether}(commitments);
+
+        // Get the challenge ID
+        IBoltChallenger.Challenge[] memory challenges = boltChallenger.getAllChallenges();
+        assertEq(challenges.length, 1);
+        bytes32 challengeID = challenges[0].id;
+
+        string memory rawPreviousHeader = vm.readFile("./test/testdata/header_20817617.json");
+        string memory rawInclusionHeader = vm.readFile("./test/testdata/header_20817618.json");
+        string memory ethProof = vm.readFile("./test/testdata/eth_proof_20817617.json");
+        string memory txProof1 = vm.readFile("./test/testdata/tx_mpt_proof_20817618_1.json");
+        string memory txProof2 = vm.readFile("./test/testdata/tx_mpt_proof_20817618_2.json");
+        string memory txProof3 = vm.readFile("./test/testdata/tx_mpt_proof_20817618_3.json");
+
+        bytes[] memory txProofs = new bytes[](3);
+        txProofs[0] = _RLPEncodeList(vm.parseJsonBytesArray(txProof1, ".proof"));
+        txProofs[1] = _RLPEncodeList(vm.parseJsonBytesArray(txProof2, ".proof"));
+        txProofs[2] = _RLPEncodeList(vm.parseJsonBytesArray(txProof3, ".proof"));
+
+        uint256[] memory txIndexesInBlock = new uint256[](3);
+        txIndexesInBlock[0] = vm.parseJsonUint(txProof1, ".index");
+        txIndexesInBlock[1] = vm.parseJsonUint(txProof2, ".index");
+        txIndexesInBlock[2] = vm.parseJsonUint(txProof3, ".index");
+
+        IBoltChallenger.Proof memory proof = IBoltChallenger.Proof({
+            inclusionBlockNumber: inclusionBlockNumber,
+            previousBlockHeaderRLP: vm.parseJsonBytes(rawPreviousHeader, ".result"),
+            inclusionBlockHeaderRLP: vm.parseJsonBytes(rawInclusionHeader, ".result"),
+            accountMerkleProof: _RLPEncodeList(vm.parseJsonBytesArray(ethProof, ".result.accountProof")),
+            txMerkleProofs: txProofs,
+            txIndexesInBlock: txIndexesInBlock
+        });
+
+        // check that the inclusion block transactions root matches the root in the tx proof data.
+        bytes32 inclusionTxRoot = boltChallenger._decodeBlockHeaderRLPExt(proof.inclusionBlockHeaderRLP).txRoot;
+        assertEq(inclusionTxRoot, vm.parseJsonBytes32(txProof1, ".root"));
+
+        // block hash of https://etherscan.io/block/20817617
+        bytes32 trustedPreviousBlockHash = 0xb410d12f92ed268b184c1e6523b7d3fea5fcd0ba3f9bc6c6cb9a7e5b1523d225;
+
+        // Resolve the challenge
+        vm.resumeGasMetering();
+        vm.prank(resolver);
+        boltChallenger._resolveExt(challengeID, trustedPreviousBlockHash, proof);
+        vm.pauseGasMetering();
+
+        // Check the challenge was resolved
+        IBoltChallenger.Challenge memory challenge = boltChallenger.getAllChallenges()[0];
+        assertEq(uint256(challenge.status), uint256(IBoltChallenger.ChallengeStatus.Defended));
+    }
+
     // =========== Helper functions ===========
 
     // Helper to create a test commitment with a recent slot, valid for a recent challenge
-    function _createRecentBoltCommitment() internal view returns (IBoltChallenger.SignedCommitment memory commitment) {
-        commitment.signedTx = vm.parseJsonBytes(vm.readFile("./test/testdata/signed_tx.json"), ".raw");
-        assertEq(commitment.signedTx.decodeEnveloped().recoverSender(), 0x0D9f5045B604bA0c050b5eb06D0b25d01c525Ea5);
+    function _createRecentBoltCommitment(
+        uint256 blockNumber,
+        uint256 id
+    ) internal view returns (IBoltChallenger.SignedCommitment memory commitment) {
+        // pattern: ./test/testdata/signed_tx_{blockNumber}_{id}.json
+        string memory base = "./test/testdata/signed_tx_";
+        string memory extension = string.concat(vm.toString(blockNumber), "_", vm.toString(id), ".json");
+        string memory path = string.concat(base, extension);
+        commitment.signedTx = vm.parseJsonBytes(vm.readFile(path), ".raw");
 
-        // pick a recent slot
+        // pick a recent slot, 100 slots behind the current slot
         commitment.slot = uint64(BeaconChainUtils._getCurrentSlot() - 100);
 
         // sign the new commitment with the target's private key
