@@ -11,7 +11,6 @@ import (
 	"math"
 	"net/http"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
@@ -26,7 +25,7 @@ var errHTTPErrorResponse = errors.New("HTTP error response")
 
 func DecodeConstraints(constraints *common.SignedConstraints) (types.HashToConstraintDecoded, error) {
 	decodedConstraints := make(types.HashToConstraintDecoded)
-	for _, tx := range constraints.Message.Constraints {
+	for _, tx := range constraints.Message.Transactions {
 		decoded := new(types.Transaction)
 		if err := decoded.UnmarshalBinary([]byte(*tx)); err != nil {
 			return nil, err
@@ -141,19 +140,6 @@ func SendHTTPRequest(ctx context.Context, client http.Client, method, url string
 	return resp.StatusCode, nil
 }
 
-// EmitBoltDemoEvent sends a message to the web demo backend to log an event.
-// This is only used for demo purposes and should be removed in production.
-func EmitBoltDemoEvent(message string) {
-	event := strings.NewReader(fmt.Sprintf("{ \"message\": \"BOLT-BUILDER: %s\"}", message))
-	eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
-	if err != nil {
-		log.Error("Failed to send web demo event: ", err)
-	}
-	if eventRes != nil {
-		defer eventRes.Body.Close()
-	}
-}
-
 func CalculateMerkleMultiProofs(
 	payloadTransactions types.Transactions,
 	HashToConstraintDecoded types.HashToConstraintDecoded,
@@ -183,37 +169,36 @@ func CalculateMerkleMultiProofs(
 	// to output the leaf correctly. This is also never documented in fastssz. -__-
 	rootNode.Hash()
 
-	// using our gen index formula: 2 * 2^21 + preconfIndex
+	// using our gen index formula: 2 * 2^21 + constraintIndex
 	baseGeneralizedIndex := int(math.Pow(float64(2), float64(21)))
 	generalizedIndexes := make([]int, len(constraints))
 	transactionHashes := make([]common.Hash, len(constraints))
 
 	for i, constraint := range constraints {
 		tx := constraint
-		// get the index of the preconfirmed transaction in the block
-		preconfIndex := slices.IndexFunc(payloadTransactions, func(payloadTx *types.Transaction) bool { return payloadTx.Hash() == tx.Hash() })
-		if preconfIndex == -1 {
-			log.Error(fmt.Sprintf("Preconfirmed transaction %s not found in block", tx.Hash()))
+		// get the index of the committed transaction in the block
+		committedIndex := slices.IndexFunc(payloadTransactions, func(payloadTx *types.Transaction) bool { return payloadTx.Hash() == tx.Hash() })
+		if committedIndex == -1 {
+			log.Error(fmt.Sprintf("Committed transaction %s not found in block", tx.Hash()))
 			log.Error(fmt.Sprintf("block has %v transactions", len(payloadTransactions)))
 			continue
 		}
 
-		generalizedIndex := baseGeneralizedIndex + preconfIndex
+		generalizedIndex := baseGeneralizedIndex + committedIndex
 		generalizedIndexes[i] = generalizedIndex
 		transactionHashes[i] = tx.Hash()
 	}
 
-	log.Info(fmt.Sprintf("[BOLT]: Calculating merkle multiproof for %d preconfirmed transaction",
-		len(constraints)))
+	log.Info(fmt.Sprintf("[BOLT]: Calculating merkle multiproof for %d committed transactions", len(constraints)))
 
 	timeStart := time.Now()
 	multiProof, err := rootNode.ProveMulti(generalizedIndexes)
 	if err != nil {
-		return nil, nil, fmt.Errorf("could not calculate merkle multiproof for %d preconf: %w", len(constraints), err)
+		return nil, nil, fmt.Errorf("could not calculate merkle multiproof for %d transactions: %w", len(constraints), err)
 	}
 
 	timeForProofs := time.Since(timeStart)
-	log.Info(fmt.Sprintf("[BOLT]: Calculated merkle multiproof for %d preconf in %s", len(constraints), timeForProofs))
+	log.Info(fmt.Sprintf("[BOLT]: Calculated merkle multiproof for %d transactions in %s", len(constraints), timeForProofs))
 
 	inclusionProof = common.InclusionProofFromMultiProof(multiProof)
 	inclusionProof.TransactionHashes = transactionHashes

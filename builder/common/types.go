@@ -551,7 +551,7 @@ func (p *InclusionProof) String() string {
 }
 
 // A wrapper struct over `builderSpec.VersionedSubmitBlockRequest`
-// to include preconfirmation proofs
+// to include constraint inclusion proofs
 type VersionedSubmitBlockRequestWithProofs struct {
 	Inner  *builderSpec.VersionedSubmitBlockRequest `json:"inner"`
 	Proofs *InclusionProof                          `json:"proofs"`

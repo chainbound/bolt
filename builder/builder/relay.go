@@ -185,7 +185,7 @@ func (r *RemoteRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, 
 }
 
 func (r *RemoteRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequestWithProofs, _ ValidatorData) error {
-	log.Info("submitting block with proofs to remote relay", "endpoint", r.config.Endpoint)
+	log.Info("submitting block with constraint inclusion proofs to remote relay", "endpoint", r.config.Endpoint)
 	endpoint := r.config.Endpoint + "/relay/v1/builder/blocks_with_proofs"
 	if r.cancellationsEnabled {
 		endpoint = endpoint + "?cancellations=1"
@@ -194,15 +194,12 @@ func (r *RemoteRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequ
 	var code int
 	var err error
 	if r.config.SszEnabled {
-		panic("ssz not supported for preconfs proofs yet")
+		panic("ssz not supported for constraint proofs yet")
 	} else {
-
-		// BOLT: send event to web demo
 		if len(msg.Proofs.TransactionHashes) > 0 {
 			number, _ := msg.Inner.BlockNumber()
 			message := fmt.Sprintf("sending block %d with proofs to relay (path: %s)", number, "/relay/v1/builder/blocks_with_proofs")
 			log.Info(message)
-			EmitBoltDemoEvent(message)
 		}
 
 		switch msg.Inner.Version {
