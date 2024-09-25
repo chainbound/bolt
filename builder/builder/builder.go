@@ -366,8 +366,6 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error
 				continue
 			}
 
-			EmitBoltDemoEvent(fmt.Sprintf("Received constraint from relay for slot %d, stored in cache (path: %s)", constraint.Message.Slot, SubscribeConstraintsPath))
-
 			// For every constraint, we need to check if it has already been seen for the associated slot
 			slotConstraints, _ := b.constraintsCache.Get(constraint.Message.Slot)
 			if len(slotConstraints) == 0 {
@@ -383,9 +381,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error
 
 			// Update the slot constraints in the cache
 			b.constraintsCache.Put(constraint.Message.Slot, slotConstraints)
-
 		}
-
 	}
 
 	return nil
@@ -396,7 +392,7 @@ func (b *Builder) Stop() error {
 	return nil
 }
 
-// BOLT: modify to calculate merkle inclusion proofs for preconfirmed transactions
+// BOLT: modify to calculate merkle inclusion proofs for committed transactions
 func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 	executableData := engine.BlockToExecutableData(opts.Block, opts.BlockValue, opts.BlobSidecars)
 	var dataVersion spec.DataVersion
@@ -433,7 +429,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 		return err
 	}
 
-	var versionedBlockRequestWithPreconfsProofs *common.VersionedSubmitBlockRequestWithProofs
+	var versionedBlockRequestWithConstraintProofs *common.VersionedSubmitBlockRequestWithProofs
 
 	// BOLT: fetch constraints from the cache, which is automatically updated by the SSE subscription
 	constraints, _ := b.constraintsCache.Get(opts.PayloadAttributes.Slot)
@@ -442,21 +438,15 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 	if len(constraints) > 0 {
 		message := fmt.Sprintf("sealing block %d with %d constraints", opts.Block.Number(), len(constraints))
 		log.Info(message)
-		EmitBoltDemoEvent(message)
 
-		timeStart := time.Now()
 		inclusionProof, _, err := CalculateMerkleMultiProofs(opts.Block.Transactions(), constraints)
-		timeForProofs := time.Since(timeStart)
 
 		if err != nil {
 			log.Error("[BOLT]: could not calculate merkle multiproofs", "err", err)
 			return err
 		}
 
-		// BOLT: send event to web demo
-		EmitBoltDemoEvent(fmt.Sprintf("created merkle multiproof of %d constraint(s) for block %d in %v", len(constraints), opts.Block.Number(), timeForProofs))
-
-		versionedBlockRequestWithPreconfsProofs = &common.VersionedSubmitBlockRequestWithProofs{
+		versionedBlockRequestWithConstraintProofs = &common.VersionedSubmitBlockRequestWithProofs{
 			Inner:  versionedBlockRequest,
 			Proofs: inclusionProof,
 		}
@@ -475,13 +465,13 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 			log.Error("could not validate block", "version", dataVersion.String(), "err", err)
 		}
 	} else {
-		// NOTE: we can ignore preconfs for `processBuiltBlock`
+		// NOTE: we can ignore constraints for `processBuiltBlock`
 		go b.processBuiltBlock(opts.Block, opts.BlockValue, opts.OrdersClosedAt, opts.SealedAt, opts.CommitedBundles, opts.AllBundles, opts.UsedSbundles, &blockBidMsg)
-		if versionedBlockRequestWithPreconfsProofs != nil {
-			log.Info(fmt.Sprintf("[BOLT]: Sending sealed block to relay %s", versionedBlockRequestWithPreconfsProofs))
-			err = b.relay.SubmitBlockWithProofs(versionedBlockRequestWithPreconfsProofs, opts.ValidatorData)
+		if versionedBlockRequestWithConstraintProofs != nil {
+			log.Info(fmt.Sprintf("[BOLT]: Sending sealed block to relay %s", versionedBlockRequestWithConstraintProofs))
+			err = b.relay.SubmitBlockWithProofs(versionedBlockRequestWithConstraintProofs, opts.ValidatorData)
 		} else if len(constraints) == 0 {
-			// If versionedBlockRequestWithPreconfsProofs is nil and no constraints, then we don't have proofs to send
+			// If versionedBlockRequestWithConstraintsProofs is nil and no constraints, then we don't have proofs to send
 			err = b.relay.SubmitBlock(versionedBlockRequest, opts.ValidatorData)
 		} else {
 			log.Warn(fmt.Sprintf("[BOLT]: Could not send sealed block this time because we have %d constraints but no proofs", len(constraints)))
