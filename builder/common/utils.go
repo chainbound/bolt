@@ -31,6 +31,13 @@ func Filter[T any](slice *[]*T, predicate func(el *T) bool) {
 	}
 }
 
+func Last[T any](slice []*T) *T {
+	if len(slice) == 0 {
+		return nil
+	}
+	return slice[len(slice)-1]
+}
+
 func Pop[T any](slice *[]*T) *T {
 	if slice == nil || len(*slice) == 0 {
 		return nil
