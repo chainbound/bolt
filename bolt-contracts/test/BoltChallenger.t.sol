@@ -224,14 +224,14 @@ contract BoltChallengerTest is Test {
         assertEq(challenge.targetSlot, commitments[0].slot);
     }
 
-    function testOpenChallengeWithInsufficientBond() public {
+    function testOpenChallengeWithIncorrectBond() public {
         IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
         commitments[0] = _parseTestCommitment();
 
         // Open a challenge with insufficient bond
         vm.resumeGasMetering();
         vm.prank(challenger);
-        vm.expectRevert(IBoltChallenger.InsufficientChallengeBond.selector);
+        vm.expectRevert(IBoltChallenger.IncorrectChallengeBond.selector);
         boltChallenger.openChallenge{value: 0.1 ether}(commitments);
         vm.pauseGasMetering();
     }
@@ -243,10 +243,11 @@ contract BoltChallengerTest is Test {
         // Open a challenge with a large bond, making sure that the rest is refunded
         vm.resumeGasMetering();
         vm.prank(challenger);
+        vm.expectRevert(IBoltChallenger.IncorrectChallengeBond.selector);
         boltChallenger.openChallenge{value: 50 ether}(commitments);
         vm.pauseGasMetering();
 
-        assertEq(challenger.balance, 99 ether);
+        assertEq(challenger.balance, 100 ether);
     }
 
     function testOpenAlreadyExistingChallenge() public {
