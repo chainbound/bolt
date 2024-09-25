@@ -21,7 +21,7 @@ impl SignableECDSA for ConstraintsMessage {
         data.extend_from_slice(&self.slot.to_le_bytes());
 
         let mut constraint_bytes = Vec::new();
-        for constraint in &self.constraints {
+        for constraint in &self.transactions {
             constraint_bytes.extend_from_slice(&constraint.envelope_encoded().0);
         }
         data.extend_from_slice(&constraint_bytes);
@@ -60,15 +60,15 @@ pub struct ConstraintsMessage {
     pub top: bool,
     /// The constraints that need to be signed.
     #[serde(deserialize_with = "deserialize_txs", serialize_with = "serialize_txs")]
-    pub constraints: Vec<FullTransaction>,
+    pub transactions: Vec<FullTransaction>,
 }
 
 impl ConstraintsMessage {
     /// Builds a constraints message from an inclusion request and metadata
     pub fn build(pubkey: BlsPublicKey, request: InclusionRequest) -> Self {
-        let constraints = request.txs;
+        let transactions = request.txs;
 
-        Self { pubkey, slot: request.slot, top: false, constraints }
+        Self { pubkey, slot: request.slot, top: false, transactions }
     }
 }
 
@@ -79,7 +79,7 @@ impl SignableBLS for ConstraintsMessage {
         hasher.update(self.slot.to_le_bytes());
         hasher.update((self.top as u8).to_le_bytes());
 
-        for constraint in &self.constraints {
+        for constraint in &self.transactions {
             hasher.update(constraint.hash());
         }
 
@@ -114,10 +114,10 @@ mod tests {
         let pubkey = BlsPublicKey::default();
         let slot = 0;
         let top = false;
-        let constraints = random_constraints(1); // Generate 'n' random constraints
+        let transactions = random_constraints(1); // Generate 'n' random constraints
 
         // Create a random `ConstraintsMessage`
-        let message = ConstraintsMessage { pubkey, slot, top, constraints };
+        let message = ConstraintsMessage { pubkey, slot, top, transactions };
 
         // Compute tree hash root
         let digest = SignableBLS::digest(&message);
@@ -134,10 +134,10 @@ mod tests {
         let pubkey = BlsPublicKey::default();
         let slot = random_u64(&mut rng);
         let top = false;
-        let constraints = random_constraints(2); // Generate 'n' random constraints
+        let transactions = random_constraints(2); // Generate 'n' random constraints
 
         // Create a random `ConstraintsMessage`
-        let message = ConstraintsMessage { pubkey, slot, top, constraints };
+        let message = ConstraintsMessage { pubkey, slot, top, transactions };
 
         // Serialize the `ConstraintsMessage` to JSON
         let json = serde_json::to_string(&message).unwrap();

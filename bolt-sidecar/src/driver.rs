@@ -231,7 +231,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         };
 
         // Track the number of transactions preconfirmed considering their type
-        signed_constraints.message.constraints.iter().for_each(|full_tx| {
+        signed_constraints.message.transactions.iter().for_each(|full_tx| {
             ApiMetrics::increment_transactions_preconfirmed(full_tx.tx_type());
         });
         self.execution.add_constraint(slot, signed_constraints);

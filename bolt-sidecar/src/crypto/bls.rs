@@ -157,14 +157,10 @@ mod tests {
             delegatee_pubkey: PublicKey::try_from(delegatee_pk.to_bytes().as_slice()).expect("Failed to convert delegatee public key"),
         };
 
-        let delegation_bytes = serde_json::to_vec(&delegation_msg).unwrap();
-        let temp = delegation_bytes.as_slice();
-        let mut data = [0u8; 32];
-        data.copy_from_slice(&temp[..32]);
-        let msg = TestSignableData { data };
+        let digest = SignableBLS::digest(&delegation_msg);
 
         // Sign the Delegation message
-        let delegation_signature = SignerBLS::sign(&signer, &msg.digest()).await.unwrap();
+        let delegation_signature = SignerBLS::sign(&signer, &digest).await.unwrap();
 
         // Create SignedDelegation
         let signed_delegation = SignedDelegation {
@@ -181,14 +177,10 @@ mod tests {
             delegatee_pubkey: PublicKey::try_from(delegatee_pk.to_bytes().as_slice()).expect("Failed to convert delegatee public key"),
         };
 
-        let revocation_bytes = serde_json::to_vec(&revocation_msg).unwrap();
-        let temp = revocation_bytes.as_slice();
-        let mut data = [0u8; 32];
-        data.copy_from_slice(&temp[..32]);
-        let msg = TestSignableData { data };
+        let digest = SignableBLS::digest(&revocation_msg);
 
         // Sign the Revocation message
-        let revocation_signature = SignerBLS::sign(&signer, &msg.digest()).await.unwrap();
+        let revocation_signature = SignerBLS::sign(&signer, &digest).await.unwrap();
 
         // Create SignedRevocation
         let signed_revocation = SignedRevocation {
@@ -199,23 +191,20 @@ mod tests {
         // Output SignedRevocation
         println!("{}", serde_json::to_string_pretty(&signed_revocation).unwrap());
 
-        let constraints = random_constraints(2);
+        let transactions = random_constraints(2);
 
         // Prepare a ConstraintsMessage
         let constraints_msg = ConstraintsMessage {
             pubkey: PublicKey::try_from(pk.to_bytes().as_slice()).expect("Failed to convert validator public key"),
-            slot: 1,
-            top: true,
-            constraints,
+            slot: 2,
+            top: false,
+            transactions,
         };
 
-        let constraints_bytes = serde_json::to_vec(&constraints_msg).unwrap();
-        let temp = constraints_bytes.as_slice();
-        let mut data = [0u8; 32];
-        data.copy_from_slice(&temp[..32]);
+        let digest = SignableBLS::digest(&constraints_msg);
 
         // Sign the ConstraintsMessage
-        let constraints_signature = SignerBLS::sign(&signer, &data).await.unwrap();
+        let constraints_signature = SignerBLS::sign(&signer, &digest).await.unwrap();
 
         // Create SignedConstraints
         let signed_constraints = SignedConstraints {
