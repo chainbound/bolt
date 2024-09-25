@@ -603,35 +603,24 @@ type SignedConstraintsList = []*SignedConstraints
 
 // Reference: https://chainbound.github.io/bolt-docs/api/builder
 type SignedConstraints struct {
-	Message   ConstraintMessage   `json:"message"`
+	Message   ConstraintsMessage  `json:"message"`
 	Signature phase0.BLSSignature `json:"signature"`
 }
 
 // Reference: https://chainbound.github.io/bolt-docs/api/builder
-type ConstraintMessage struct {
-	Constraints    []*HexBytes `json:"constraints"`
-	ValidatorIndex uint64      `json:"validator_index"`
-	Slot           uint64      `json:"slot"`
-	Top            bool        `json:"top"`
+type ConstraintsMessage struct {
+	Pubkey       uint64      `json:"pubkey"`
+	Slot         uint64      `json:"slot"`
+	Top          bool        `json:"top"`
+	Transactions []*HexBytes `json:"transactions"`
 }
 
-// Reference: https://chainbound.github.io/bolt-docs/api/builder-api
-// type Constraint struct {
-// 	Index *uint64  `json:"index"`
-// 	Tx    HexBytes `json:"tx"`
-// }
-
-// ConstraintSubscriptionAuth is the struct the builder signs over to authenticate
-// when subscribing to SSE constraint events from the relay
-type ConstraintSubscriptionAuth struct {
-	PublicKey phase0.BLSPubKey `json:"publicKey"`
-	Slot      uint64           `json:"slot"`
+type SignedDelegation struct {
+	Message   Delegation          `json:"message"`
+	Signature phase0.BLSSignature `json:"signature"`
 }
 
-func (c *ConstraintSubscriptionAuth) String() string {
-	buf, err := json.Marshal(c)
-	if err != nil {
-		return fmt.Sprintf("failed to marshal ConstraintSubscriptionAuth: %v", err)
-	}
-	return string(buf)
+type Delegation struct {
+	ValidatorPubkey phase0.BLSPubKey `json:"validator_pubkey"`
+	DelegateePubkey phase0.BLSPubKey `json:"delegatee_pubkey"`
 }
