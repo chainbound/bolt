@@ -11,10 +11,14 @@ import (
 
 type (
 	HashToConstraintDecoded = map[common.Hash]*Transaction
+	TransactionEcRecovered  = struct {
+		Transaction *Transaction
+		Sender      common.Address
+	}
 )
 
 // ParseConstraintsDecoded receives a map of constraints and returns
-// - a slice of constraints sorted by nonce and hash
+// - a slice of constraints sorted by nonce descending and hash descending
 // - the total gas required by the constraints
 // - the total blob gas required by the constraints
 func ParseConstraintsDecoded(constraints HashToConstraintDecoded) ([]*Transaction, uint64, uint64) {
@@ -36,9 +40,9 @@ func ParseConstraintsDecoded(constraints HashToConstraintDecoded) ([]*Transactio
 		jNonce := constraintsOrdered[j].Nonce()
 		// Sort by hash
 		if iNonce == jNonce {
-			return constraintsOrdered[i].Hash().Cmp(constraintsOrdered[j].Hash()) < 0
+			return constraintsOrdered[i].Hash().Cmp(constraintsOrdered[j].Hash()) > 0 // descending
 		}
-		return iNonce < jNonce
+		return iNonce > jNonce // descending
 	})
 
 	return constraintsOrdered, constraintsTotalGasLeft, constraintsTotalBlobGasLeft
