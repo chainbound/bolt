@@ -31,7 +31,7 @@ contract BoltChallenger is IBoltChallenger {
     // ========= CONSTANTS =========
 
     /// @notice The challenge bond required to open a challenge.
-    uint256 public constant COMMITMENT_BOND = 1 ether;
+    uint256 public constant CHALLENGE_BOND = 1 ether;
 
     /// @notice The maximum duration of a challenge to be considered valid.
     uint256 public constant MAX_CHALLENGE_DURATION = 7 days;
@@ -108,13 +108,9 @@ contract BoltChallenger is IBoltChallenger {
             revert EmptyCommitments();
         }
 
-        // Check that the challenge bond is sufficient
-        uint256 expectedBond = COMMITMENT_BOND * commitments.length;
-        if (msg.value < expectedBond) {
-            revert InsufficientChallengeBond();
-        } else if (msg.value > expectedBond) {
-            // Refund the excess value, if any
-            payable(msg.sender).transfer(msg.value - expectedBond);
+        // Check that the attached bond amount is correct
+        if (msg.value != CHALLENGE_BOND) {
+            revert IncorrectChallengeBond();
         }
 
         uint256 targetSlot = commitments[0].slot;
@@ -184,6 +180,11 @@ contract BoltChallenger is IBoltChallenger {
 
     // ========= CHALLENGE RESOLUTION =========
 
+    /// @notice Resolve a challenge by providing proofs of the inclusion of the committed transactions.
+    /// @dev Challenges are DEFENDED if the resolver successfully defends the inclusion of the transactions.
+    /// In the event of no valid defense in the challenge time window, the challenge is considered BREACHED.
+    /// @param challengeID The ID of the challenge to resolve.
+    /// @param proof The proof data to resolve the challenge.
     function resolveChallenge(bytes32 challengeID, Proof calldata proof) public {
         // Check that the challenge exists
         if (!challengeIDs.contains(challengeID)) {
@@ -197,10 +198,9 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         // Check that the previous block is within the EVM lookback window for block hashes.
-        if (
-            (proof.inclusionBlockNumber - 1) > block.number
-                || (proof.inclusionBlockNumber - 1) < block.number - BLOCKHASH_EVM_LOOKBACK
-        ) {
+        // Clearly, if the previous block is available, the inclusion one will be too.
+        uint256 previousBlockNumber = proof.inclusionBlockNumber - 1;
+        if (previousBlockNumber > block.number || previousBlockNumber < block.number - BLOCKHASH_EVM_LOOKBACK) {
             revert InvalidBlockNumber();
         }
 
@@ -265,16 +265,15 @@ contract BoltChallenger is IBoltChallenger {
             return;
         }
 
-        // Check theintegrity of the proofs
-        if (
-            proof.txMerkleProofs.length != challenge.committedTxs.length
-                || proof.txIndexesInBlock.length != challenge.committedTxs.length
-        ) {
+        // Check the integrity of the proof data
+        uint256 committedTxsCount = challenge.committedTxs.length;
+        if (proof.txMerkleProofs.length != committedTxsCount || proof.txIndexesInBlock.length != committedTxsCount) {
             revert InvalidProofsLength();
         }
 
         // Check the integrity of the trusted block hash
-        if (keccak256(proof.previousBlockHeaderRLP) != trustedPreviousBlockHash) {
+        bytes32 previousBlockHash = keccak256(proof.previousBlockHeaderRLP);
+        if (previousBlockHash != trustedPreviousBlockHash) {
             revert InvalidBlockHash();
         }
 
@@ -292,7 +291,7 @@ contract BoltChallenger is IBoltChallenger {
         BlockHeaderData memory inclusionBlockHeader = _decodeBlockHeaderRLP(proof.inclusionBlockHeaderRLP);
 
         // Check that the inclusion block is a child of the previous block
-        if (inclusionBlockHeader.parentHash != keccak256(proof.previousBlockHeaderRLP)) {
+        if (inclusionBlockHeader.parentHash != previousBlockHash) {
             revert InvalidParentBlockHash();
         }
 
@@ -311,7 +310,7 @@ contract BoltChallenger is IBoltChallenger {
 
         // Loop through each committed transaction and verify its inclusion in the block
         // along with the sender's balance and nonce (starting from the account state at the top of the block).
-        for (uint256 i = 0; i < challenge.committedTxs.length; i++) {
+        for (uint256 i = 0; i < committedTxsCount; i++) {
             TransactionData memory committedTx = challenge.committedTxs[i];
 
             if (account.nonce > committedTx.nonce) {
@@ -338,10 +337,11 @@ contract BoltChallenger is IBoltChallenger {
             }
 
             // Over/Underflow is checked in the previous if statements.
-            // This is the same logic applied by the Bolt Sidecar's off-chain checks
-            // before deciding to sign a new commitment.
-            account.nonce++;
+            //
+            // Note: This is the same logic applied by the Bolt Sidecar's off-chain checks
+            // before deciding to sign a new commitment for a particular account.
             account.balance -= inclusionBlockHeader.baseFee * committedTx.gasLimit;
+            account.nonce++;
 
             // The key in the transaction trie is the RLP-encoded index of the transaction in the block
             bytes memory txLeaf = RLPWriter.writeUint(proof.txIndexesInBlock[i]);
@@ -446,7 +446,7 @@ contract BoltChallenger is IBoltChallenger {
     function _transferFullBond(
         address recipient
     ) internal {
-        (bool success,) = payable(recipient).call{value: COMMITMENT_BOND}("");
+        (bool success,) = payable(recipient).call{value: CHALLENGE_BOND}("");
         if (!success) {
             revert BondTransferFailed();
         }
@@ -457,7 +457,7 @@ contract BoltChallenger is IBoltChallenger {
     function _transferHalfBond(
         address recipient
     ) internal {
-        (bool success,) = payable(recipient).call{value: COMMITMENT_BOND / 2}("");
+        (bool success,) = payable(recipient).call{value: CHALLENGE_BOND / 2}("");
         if (!success) {
             revert BondTransferFailed();
         }

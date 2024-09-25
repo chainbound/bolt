@@ -67,7 +67,7 @@ interface IBoltChallenger {
 
     error SlotInTheFuture();
     error BlockIsNotFinalized();
-    error InsufficientChallengeBond();
+    error IncorrectChallengeBond();
     error ChallengeAlreadyExists();
     error ChallengeAlreadyResolved();
     error ChallengeDoesNotExist();
