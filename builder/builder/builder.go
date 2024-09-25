@@ -53,7 +53,8 @@ const (
 )
 
 const (
-	SubscribeConstraintsPath = "/relay/v1/builder/constraints"
+	GetConstraintsPath       = "/relay/v1/builder/constraints"
+	SubscribeConstraintsPath = "/relay/v1/builder/constraints_stream"
 )
 
 type PubkeyHex string
