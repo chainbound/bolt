@@ -102,11 +102,10 @@ fn sign_with_prefix(key: &BlsSecretKey, data: &[u8]) -> Signature {
 #[cfg(test)]
 mod tests {
     use crate::{
-        crypto::bls::{SignableBLS, Signer, SignerBLS}, primitives::{ConstraintsMessage, DelegationMessage, FullTransaction, InclusionRequest, RevocationMessage, SignedConstraints, SignedDelegation, SignedRevocation}, test_util::{test_bls_secret_key, TestSignableData}
+        crypto::bls::{SignableBLS, Signer, SignerBLS},
+        test_util::{test_bls_secret_key, TestSignableData},
     };
 
-    use blst::min_pk::SecretKey;
-    use ethereum_consensus::crypto::{PublicKey, Signature};
     use rand::Rng;
 
     #[tokio::test]
@@ -124,95 +123,5 @@ mod tests {
         let signature = SignerBLS::sign(&signer, &msg.digest()).await.unwrap();
         let sig = blst::min_pk::Signature::from_bytes(signature.as_ref()).unwrap();
         assert!(signer.verify(&msg, &sig, &pubkey));
-    }
-
-    fn random_constraints(count: usize) -> Vec<FullTransaction> {
-        // Random inclusion request
-        let json_req = r#"{
-            "slot": 10,
-            "txs": ["0x02f86c870c72dd9d5e883e4d0183408f2382520894d2e2adf7177b7a8afddbc12d1634cf23ea1a71020180c001a08556dcfea479b34675db3fe08e29486fe719c2b22f6b0c1741ecbbdce4575cc6a01cd48009ccafd6b9f1290bbe2ceea268f94101d1d322c787018423ebcbc87ab4"]
-        }"#;
-
-        let req: InclusionRequest = serde_json::from_str(json_req).unwrap();
-
-        (0..count).map(|_| req.txs.first().unwrap().clone()).collect()
-    }
-
-    #[tokio::test]
-    async fn generate_test_data() {
-        let sk = test_bls_secret_key();
-        let pk = sk.sk_to_pk();
-        let signer = Signer::new(sk);
-
-        println!("Validator Public Key: {}", hex::encode(pk.to_bytes()));
-
-        // Generate a delegatee's BLS secret key and public key
-        let delegatee_ikm: [u8; 32] = rand::thread_rng().gen();
-        let delegatee_sk = SecretKey::key_gen(&delegatee_ikm, &[]).expect("Failed to generate delegatee secret key");
-        let delegatee_pk = delegatee_sk.sk_to_pk();
-
-        // Prepare a Delegation message
-        let delegation_msg = DelegationMessage {
-            validator_pubkey: PublicKey::try_from(pk.to_bytes().as_slice()).expect("Failed to convert validator public key"),
-            delegatee_pubkey: PublicKey::try_from(delegatee_pk.to_bytes().as_slice()).expect("Failed to convert delegatee public key"),
-        };
-
-        let digest = SignableBLS::digest(&delegation_msg);
-
-        // Sign the Delegation message
-        let delegation_signature = SignerBLS::sign(&signer, &digest).await.unwrap();
-
-        // Create SignedDelegation
-        let signed_delegation = SignedDelegation {
-            message: delegation_msg,
-            signature: Signature::try_from(delegation_signature.as_ref()).expect("Failed to convert delegation signature"),
-        };
-
-        // Output SignedDelegation
-        println!("{}", serde_json::to_string_pretty(&signed_delegation).unwrap());
-
-        // Prepare a revocation message
-        let revocation_msg = RevocationMessage {
-            validator_pubkey: PublicKey::try_from(pk.to_bytes().as_slice()).expect("Failed to convert validator public key"),
-            delegatee_pubkey: PublicKey::try_from(delegatee_pk.to_bytes().as_slice()).expect("Failed to convert delegatee public key"),
-        };
-
-        let digest = SignableBLS::digest(&revocation_msg);
-
-        // Sign the Revocation message
-        let revocation_signature = SignerBLS::sign(&signer, &digest).await.unwrap();
-
-        // Create SignedRevocation
-        let signed_revocation = SignedRevocation {
-            message: revocation_msg,
-            signature: Signature::try_from(revocation_signature.as_ref()).expect("Failed to convert revocation signature"),
-        };
-
-        // Output SignedRevocation
-        println!("{}", serde_json::to_string_pretty(&signed_revocation).unwrap());
-
-        let transactions = random_constraints(2);
-
-        // Prepare a ConstraintsMessage
-        let constraints_msg = ConstraintsMessage {
-            pubkey: PublicKey::try_from(pk.to_bytes().as_slice()).expect("Failed to convert validator public key"),
-            slot: 2,
-            top: false,
-            transactions,
-        };
-
-        let digest = SignableBLS::digest(&constraints_msg);
-
-        // Sign the ConstraintsMessage
-        let constraints_signature = SignerBLS::sign(&signer, &digest).await.unwrap();
-
-        // Create SignedConstraints
-        let signed_constraints = SignedConstraints {
-            message: constraints_msg,
-            signature: constraints_signature,
-        };
-
-        // Output SignedConstraints
-        println!("{}", serde_json::to_string_pretty(&signed_constraints).unwrap());
     }
 }

@@ -79,8 +79,8 @@ impl SignableBLS for ConstraintsMessage {
         hasher.update(self.slot.to_le_bytes());
         hasher.update((self.top as u8).to_le_bytes());
 
-        for constraint in &self.transactions {
-            hasher.update(constraint.hash());
+        for tx in &self.transactions {
+            hasher.update(tx.hash());
         }
 
         hasher.finalize().into()

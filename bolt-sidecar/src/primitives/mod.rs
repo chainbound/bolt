@@ -8,7 +8,7 @@ use std::{
 
 use alloy::{
     primitives::{Address, U256},
-    signers::k256::sha2::{Digest, Sha256}
+    signers::k256::sha2::{Digest, Sha256},
 };
 use ethereum_consensus::{
     crypto::KzgCommitment,
@@ -440,7 +440,7 @@ impl SignableBLS for DelegationMessage {
         let mut hasher = Sha256::new();
         hasher.update(&self.validator_pubkey.to_vec());
         hasher.update(&self.delegatee_pubkey.to_vec());
-        
+
         hasher.finalize().into()
     }
 }
@@ -462,7 +462,7 @@ impl SignableBLS for RevocationMessage {
         let mut hasher = Sha256::new();
         hasher.update(&self.validator_pubkey.to_vec());
         hasher.update(&self.delegatee_pubkey.to_vec());
-        
+
         hasher.finalize().into()
     }
 }
