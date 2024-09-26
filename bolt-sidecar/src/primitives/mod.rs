@@ -6,7 +6,10 @@ use std::{
     sync::{atomic::AtomicU64, Arc},
 };
 
-use alloy::primitives::{Address, U256};
+use alloy::{
+    primitives::{Address, U256},
+    signers::k256::sha2::{Digest, Sha256},
+};
 use ethereum_consensus::{
     crypto::KzgCommitment,
     deneb::{
@@ -35,6 +38,8 @@ pub use commitment::{CommitmentRequest, InclusionRequest};
 pub mod constraint;
 pub use constraint::{BatchedSignedConstraints, ConstraintsMessage, SignedConstraints};
 use tracing::{error, info};
+
+use crate::crypto::SignableBLS;
 
 /// An alias for a Beacon Chain slot number
 pub type Slot = u64;
@@ -430,6 +435,16 @@ pub struct DelegationMessage {
     pub delegatee_pubkey: BlsPublicKey,
 }
 
+impl SignableBLS for DelegationMessage {
+    fn digest(&self) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update(&self.validator_pubkey.to_vec());
+        hasher.update(&self.delegatee_pubkey.to_vec());
+
+        hasher.finalize().into()
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct SignedRevocation {
     pub message: RevocationMessage,
@@ -440,4 +455,14 @@ pub struct SignedRevocation {
 pub struct RevocationMessage {
     pub validator_pubkey: BlsPublicKey,
     pub delegatee_pubkey: BlsPublicKey,
+}
+
+impl SignableBLS for RevocationMessage {
+    fn digest(&self) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update(&self.validator_pubkey.to_vec());
+        hasher.update(&self.delegatee_pubkey.to_vec());
+
+        hasher.finalize().into()
+    }
 }
