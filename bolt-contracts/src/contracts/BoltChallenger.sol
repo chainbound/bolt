@@ -113,6 +113,14 @@ contract BoltChallenger is IBoltChallenger {
             revert IncorrectChallengeBond();
         }
 
+        // Compute the unique challenge ID, based on the signatures of the provided commitments
+        bytes32 challengeID = _computeChallengeID(commitments);
+
+        // Check that a challenge for this commitment bundle does not already exist
+        if (challengeIDs.contains(challengeID)) {
+            revert ChallengeAlreadyExists();
+        }
+
         uint256 targetSlot = commitments[0].slot;
         if (targetSlot > BeaconChainUtils._getCurrentSlot() - BeaconChainUtils.JUSTIFICATION_DELAY_SLOTS) {
             // We cannot open challenges for slots that are not finalized by Ethereum consensus yet.
@@ -155,14 +163,6 @@ contract BoltChallenger is IBoltChallenger {
             }
         }
 
-        // Build the challenge ID: `keccak( keccak(signed tx 1) || keccak(signed tx 2) || ... || le_bytes(slot) )`
-        bytes32 challengeID = _computeChallengeID(commitments);
-
-        // Check that a challenge for this commitment bundle does not already exist
-        if (challengeIDs.contains(challengeID)) {
-            revert ChallengeAlreadyExists();
-        }
-
         // Add the challenge to the set of challenges
         challengeIDs.add(challengeID);
         challenges[challengeID] = Challenge({
@@ -182,10 +182,11 @@ contract BoltChallenger is IBoltChallenger {
 
     /// @notice Resolve a challenge by providing proofs of the inclusion of the committed transactions.
     /// @dev Challenges are DEFENDED if the resolver successfully defends the inclusion of the transactions.
-    /// In the event of no valid defense in the challenge time window, the challenge is considered BREACHED.
+    /// In the event of no valid defense in the challenge time window, the challenge is considered BREACHED
+    /// and anyone can call `resolveExpiredChallenge()` to settle the challenge.
     /// @param challengeID The ID of the challenge to resolve.
     /// @param proof The proof data to resolve the challenge.
-    function resolveChallenge(bytes32 challengeID, Proof calldata proof) public {
+    function resolveOpenChallenge(bytes32 challengeID, Proof calldata proof) public {
         // Check that the challenge exists
         if (!challengeIDs.contains(challengeID)) {
             revert ChallengeDoesNotExist();
@@ -233,9 +234,7 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         // If the challenge has expired without being resolved, it is considered breached.
-        challenge.status = ChallengeStatus.Breached;
-        _transferFullBond(challenge.challenger);
-        emit ChallengeBreached(challengeID);
+        _settleChallengeResolution(ChallengeStatus.Breached, challenge);
     }
 
     /// @notice Resolve a challenge by providing proofs of the inclusion of the committed transactions.
@@ -257,12 +256,8 @@ contract BoltChallenger is IBoltChallenger {
 
         if (challenge.openedAt + MAX_CHALLENGE_DURATION < Time.timestamp()) {
             // If the challenge has expired without being resolved, it is considered breached.
-            // It's cheaper to call `resolveExpiredChallenge()` directly in this case, but this
-            // case should still be handled here for consistency.
-            challenge.status = ChallengeStatus.Breached;
-            _transferFullBond(challenge.challenger);
-            emit ChallengeBreached(challengeID);
-            return;
+            // This should be handled by calling the `resolveExpiredChallenge()` function instead.
+            revert ChallengeExpired();
         }
 
         // Check the integrity of the proof data
@@ -316,23 +311,15 @@ contract BoltChallenger is IBoltChallenger {
             if (account.nonce > committedTx.nonce) {
                 // The tx sender (aka "challenge.commitmentReceiver") has sent a transaction with a higher nonce
                 // than the committed transaction, before the proposer could include it. Consider the challenge
-                // defended, as the proposer is not at fault. The bond will be shared between the resolver and
-                // commitment signer.
-                challenge.status = ChallengeStatus.Defended;
-                _transferHalfBond(msg.sender);
-                _transferHalfBond(challenge.commitmentSigner);
-                emit ChallengeDefended(challengeID);
+                // defended, as the proposer is not at fault.
+                _settleChallengeResolution(ChallengeStatus.Defended, challenge);
                 return;
             }
 
             if (account.balance < inclusionBlockHeader.baseFee * committedTx.gasLimit) {
                 // The tx sender account doesn't have enough balance to pay for the worst-case baseFee of the committed
-                // transaction. Consider the challenge defended, as the proposer is not at fault. The bond will be
-                // shared between the resolver and commitment signer.
-                challenge.status = ChallengeStatus.Defended;
-                _transferHalfBond(msg.sender);
-                _transferHalfBond(challenge.commitmentSigner);
-                emit ChallengeDefended(challengeID);
+                // transaction. Consider the challenge defended, as the proposer is not at fault.
+                _settleChallengeResolution(ChallengeStatus.Defended, challenge);
                 return;
             }
 
@@ -364,14 +351,31 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         // If all checks pass, the challenge is considered DEFENDED as the proposer provided valid proofs.
-        // The bond will be shared between the resolver and commitment signer.
-        challenge.status = ChallengeStatus.Defended;
-        _transferHalfBond(msg.sender);
-        _transferHalfBond(challenge.commitmentSigner);
-        emit ChallengeDefended(challengeID);
+        _settleChallengeResolution(ChallengeStatus.Defended, challenge);
     }
 
     // ========= HELPERS =========
+
+    /// @notice Settle the resolution of a challenge based on the outcome.
+    /// @dev The outcome must be either DEFENDED or BREACHED.
+    /// @param outcome The outcome of the challenge resolution.
+    /// @param challenge The challenge to settle the resolution for.
+    function _settleChallengeResolution(ChallengeStatus outcome, Challenge storage challenge) internal {
+        if (outcome == ChallengeStatus.Defended) {
+            // If the challenge is considered DEFENDED, the proposer has provided valid proofs.
+            // The bond will be shared between the resolver and commitment signer.
+            challenge.status = ChallengeStatus.Defended;
+            _transferHalfBond(msg.sender);
+            _transferHalfBond(challenge.commitmentSigner);
+            emit ChallengeDefended(challenge.id);
+        } else if (outcome == ChallengeStatus.Breached) {
+            // If the challenge is considered BREACHED, the proposer has failed to provide valid proofs.
+            // The bond will be transferred back to the challenger in full.
+            challenge.status = ChallengeStatus.Breached;
+            _transferFullBond(challenge.challenger);
+            emit ChallengeBreached(challenge.id);
+        }
+    }
 
     /// @notice Recover the commitment data from a signed commitment.
     /// @param commitment The signed commitment to recover the data from.
@@ -392,17 +396,18 @@ contract BoltChallenger is IBoltChallenger {
     }
 
     /// @notice Compute the challenge ID for a given set of signed commitments.
+    /// @dev Formula: `keccak( keccak(signature_1) || keccak(signature_2) || ... )`
     /// @param commitments The signed commitments to compute the ID for.
     /// @return challengeID The computed challenge ID.
     function _computeChallengeID(
         SignedCommitment[] calldata commitments
     ) internal pure returns (bytes32) {
-        bytes32[] memory txHashes = new bytes32[](commitments.length);
+        bytes32[] memory signatures = new bytes32[](commitments.length);
         for (uint256 i = 0; i < commitments.length; i++) {
-            txHashes[i] = keccak256(commitments[i].signedTx);
+            signatures[i] = keccak256(commitments[i].signature);
         }
 
-        return keccak256(abi.encodePacked(txHashes, abi.encodePacked(commitments[0].slot)));
+        return keccak256(abi.encodePacked(signatures));
     }
 
     /// @notice Compute the commitment ID for a given signed commitment.

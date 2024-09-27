@@ -448,6 +448,55 @@ contract BoltChallengerTest is Test {
         assertEq(uint256(challenge.status), uint256(IBoltChallenger.ChallengeStatus.Defended));
     }
 
+    function testResolveExpiredChallenge() public {
+        IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
+        commitments[0] = _parseTestCommitment();
+
+        // Open a challenge with the commitment
+        vm.resumeGasMetering();
+        vm.prank(challenger);
+        boltChallenger.openChallenge{value: 1 ether}(commitments);
+        vm.pauseGasMetering();
+
+        // Check the challenge was opened
+        IBoltChallenger.Challenge[] memory challenges = boltChallenger.getAllChallenges();
+        assertEq(challenges.length, 1);
+
+        // Warp time to make the challenge expire
+        vm.warp(block.timestamp + 2 weeks);
+
+        // Try to resolve the challenge
+        vm.prank(resolver);
+        boltChallenger.resolveExpiredChallenge(challenges[0].id);
+
+        // Check the challenge was resolved
+        IBoltChallenger.Challenge memory challenge = boltChallenger.getAllChallenges()[0];
+        assertEq(uint256(challenge.status), uint256(IBoltChallenger.ChallengeStatus.Breached));
+    }
+
+    function testCannotResolveChallengeBeforeExpiration() public {
+        IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
+        commitments[0] = _parseTestCommitment();
+
+        // Open a challenge with the commitment
+        vm.resumeGasMetering();
+        vm.prank(challenger);
+        boltChallenger.openChallenge{value: 1 ether}(commitments);
+        vm.pauseGasMetering();
+
+        // Check the challenge was opened
+        IBoltChallenger.Challenge[] memory challenges = boltChallenger.getAllChallenges();
+        assertEq(challenges.length, 1);
+        bytes32 id = challenges[0].id;
+
+        // Try to resolve the challenge before it expires
+        vm.resumeGasMetering();
+        vm.prank(resolver);
+        vm.expectRevert(IBoltChallenger.ChallengeNotExpired.selector);
+        boltChallenger.resolveExpiredChallenge(id);
+        vm.pauseGasMetering();
+    }
+
     // =========== Helper functions ===========
 
     // Helper to create a test commitment with a recent slot, valid for a recent challenge
