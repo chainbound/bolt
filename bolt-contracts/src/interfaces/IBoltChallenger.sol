@@ -80,6 +80,7 @@ interface IBoltChallenger {
     error InvalidBlockNumber();
     error BondTransferFailed();
     error ChallengeNotExpired();
+    error ChallengeExpired();
     error EmptyCommitments();
     error UnexpectedMixedSenders();
     error UnexpectedMixedSlots();
@@ -107,5 +108,5 @@ interface IBoltChallenger {
         bytes32 challengeID
     ) external;
 
-    function resolveChallenge(bytes32 challengeID, Proof calldata proof) external;
+    function resolveOpenChallenge(bytes32 challengeID, Proof calldata proof) external;
 }
