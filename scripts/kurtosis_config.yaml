@@ -23,6 +23,7 @@ mev_type: full
 mev_params:
   mev_builder_cl_image: sigp/lighthouse:latest
   # Bolt-specific images:
+  helix_relay_image: ghcr.io/chainbound/helix:0.1.0
   mev_relay_image: ghcr.io/chainbound/bolt-relay:0.1.0
   mev_builder_image: ghcr.io/chainbound/bolt-builder:0.1.0
   mev_boost_image: ghcr.io/chainbound/bolt-mev-boost:0.1.0
