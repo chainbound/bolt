@@ -126,7 +126,8 @@ contract BoltChallengerTest is Test {
         // The transaction we want to prove inclusion of
         bytes32 txHash = 0x9ec2c56ca36e445a46bc77ca77510f0ef21795d00834269f3752cbd29d63ba1f;
 
-        // MPT proof, obtained with the `eth-trie-proof` CLI tool
+        // MPT proof, obtained with the `trie-proofs` CLI tool from HerodotusDev
+        // ref: <https://github.com/HerodotusDev/trie-proofs>
         string memory file = vm.readFile("./test/testdata/tx_mpt_proof_20785012.json");
         bytes[] memory txProofJson = vm.parseJsonBytesArray(file, ".proof");
         bytes memory txProof = _RLPEncodeList(txProofJson);
@@ -163,6 +164,8 @@ contract BoltChallengerTest is Test {
     // =========== Verifying Signatures ===========
 
     function testCommitmentDigestAndSignature() public {
+        // The test commitment has been created in the Bolt sidecar using the Rust
+        // methods to compute the digest() and recover the signer from the signature.
         IBoltChallenger.SignedCommitment memory commitment = _parseTestCommitment();
 
         // Reconstruct the commitment digest: `keccak( keccak(signed tx) || le_bytes(slot) )`
@@ -220,7 +223,7 @@ contract BoltChallengerTest is Test {
         assertEq(challenge.openedAt, block.timestamp);
         assertEq(uint256(challenge.status), 0);
         assertEq(challenge.challenger, challenger);
-        assertEq(challenge.commitmentSigner, 0x71f7D1B81E297816cf6691B2396060Ede49eFA5e);
+        assertEq(challenge.commitmentSigner, 0x27083ED52464625660f3e30Aa5B9C20A30D7E110);
         assertEq(challenge.targetSlot, commitments[0].slot);
     }
 
@@ -374,7 +377,8 @@ contract BoltChallengerTest is Test {
 
         // Sanity check signers of the commitments: they should all be the same
         for (uint256 i = 0; i < commitments.length; i++) {
-            address signer = ECDSA.recover(_computeCommitmentID(commitments[i].signedTx, commitments[i].slot), commitments[i].signature);
+            bytes32 cid = _computeCommitmentID(commitments[i].signedTx, commitments[i].slot);
+            address signer = ECDSA.recover(cid, commitments[i].signature);
             assertEq(signer, target);
         }
 
@@ -452,6 +456,11 @@ contract BoltChallengerTest is Test {
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(targetPK, commitmentID);
         commitment.signature = abi.encodePacked(r, s, v);
 
+        // Normalize v to 27 or 28
+        if (uint8(commitment.signature[64]) < 27) {
+            commitment.signature[64] = bytes1(uint8(commitment.signature[64]) + 0x1B);
+        }
+
         // Sanity check
         assertEq(ECDSA.recover(commitmentID, commitment.signature), target);
 
@@ -477,9 +486,7 @@ contract BoltChallengerTest is Test {
 
     // Helper to compute the commitment ID
     function _computeCommitmentID(bytes memory signedTx, uint64 slot) internal pure returns (bytes32) {
-        bytes32 txHash = keccak256(signedTx);
-        bytes memory leSlot = _toLittleEndian(slot);
-        return keccak256(abi.encodePacked(txHash, leSlot));
+        return keccak256(abi.encodePacked(keccak256(signedTx), _toLittleEndian(slot)));
     }
 
     // Helper to encode a list of bytes[] into an RLP list with each item RLP-encoded

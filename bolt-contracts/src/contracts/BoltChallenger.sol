@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import {console} from "forge-std/Test.sol";
-
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
@@ -128,11 +126,6 @@ contract BoltChallenger is IBoltChallenger {
         (address txSender, address commitmentSigner, TransactionData memory firstTransactionData) =
             _recoverCommitmentData(commitments[0]);
 
-        console.log("first");
-        console.log(txSender);
-        console.log(commitmentSigner);
-        console.logBytes32(firstTransactionData.txHash);
-
         transactionsData[0] = firstTransactionData;
 
         for (uint256 i = 1; i < commitments.length; i++) {
@@ -140,11 +133,6 @@ contract BoltChallenger is IBoltChallenger {
                 _recoverCommitmentData(commitments[i]);
 
             transactionsData[i] = otherTransactionData;
-
-            console.log("other");
-            console.log(otherTxSender);
-            console.log(otherCommitmentSigner);
-            console.logBytes32(otherTransactionData.txHash);
 
             // check that all commitments are for the same slot
             if (commitments[i].slot != targetSlot) {
@@ -423,7 +411,20 @@ contract BoltChallenger is IBoltChallenger {
     function _computeCommitmentID(
         SignedCommitment calldata commitment
     ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(keccak256(commitment.signedTx), abi.encodePacked(commitment.slot)));
+        return keccak256(abi.encodePacked(keccak256(commitment.signedTx), _toLittleEndian(commitment.slot)));
+    }
+
+    /// @notice Helper to convert a u64 to a little-endian bytes
+    /// @param x The u64 to convert
+    /// @return b The little-endian bytes
+    function _toLittleEndian(
+        uint64 x
+    ) internal pure returns (bytes memory) {
+        bytes memory b = new bytes(8);
+        for (uint256 i = 0; i < 8; i++) {
+            b[i] = bytes1(uint8(x >> (8 * i)));
+        }
+        return b;
     }
 
     /// @notice Decode the block header fields from an RLP-encoded block header.
