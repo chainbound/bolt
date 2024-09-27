@@ -364,10 +364,12 @@ contract BoltChallengerTest is Test {
         // Check out https://etherscan.io/block/20817618
 
         uint256 inclusionBlockNumber = 20_817_618;
-        IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](3);
+        IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](5);
         commitments[0] = _createRecentBoltCommitment(inclusionBlockNumber, 1);
         commitments[1] = _createRecentBoltCommitment(inclusionBlockNumber, 2);
         commitments[2] = _createRecentBoltCommitment(inclusionBlockNumber, 3);
+        commitments[3] = _createRecentBoltCommitment(inclusionBlockNumber, 4);
+        commitments[4] = _createRecentBoltCommitment(inclusionBlockNumber, 5);
 
         // Sanity check senders of the transactions: they should all be the same
         for (uint256 i = 0; i < commitments.length; i++) {
@@ -391,22 +393,33 @@ contract BoltChallengerTest is Test {
         assertEq(challenges.length, 1);
         bytes32 challengeID = challenges[0].id;
 
+        // headers
         string memory rawPreviousHeader = vm.readFile("./test/testdata/header_20817617.json");
         string memory rawInclusionHeader = vm.readFile("./test/testdata/header_20817618.json");
+
+        // account
         string memory ethProof = vm.readFile("./test/testdata/eth_proof_20817617.json");
+
+        // transactions
         string memory txProof1 = vm.readFile("./test/testdata/tx_mpt_proof_20817618_1.json");
         string memory txProof2 = vm.readFile("./test/testdata/tx_mpt_proof_20817618_2.json");
         string memory txProof3 = vm.readFile("./test/testdata/tx_mpt_proof_20817618_3.json");
+        string memory txProof4 = vm.readFile("./test/testdata/tx_mpt_proof_20817618_4.json");
+        string memory txProof5 = vm.readFile("./test/testdata/tx_mpt_proof_20817618_5.json");
 
-        bytes[] memory txProofs = new bytes[](3);
+        bytes[] memory txProofs = new bytes[](5);
         txProofs[0] = _RLPEncodeList(vm.parseJsonBytesArray(txProof1, ".proof"));
         txProofs[1] = _RLPEncodeList(vm.parseJsonBytesArray(txProof2, ".proof"));
         txProofs[2] = _RLPEncodeList(vm.parseJsonBytesArray(txProof3, ".proof"));
+        txProofs[3] = _RLPEncodeList(vm.parseJsonBytesArray(txProof4, ".proof"));
+        txProofs[4] = _RLPEncodeList(vm.parseJsonBytesArray(txProof5, ".proof"));
 
-        uint256[] memory txIndexesInBlock = new uint256[](3);
+        uint256[] memory txIndexesInBlock = new uint256[](5);
         txIndexesInBlock[0] = vm.parseJsonUint(txProof1, ".index");
         txIndexesInBlock[1] = vm.parseJsonUint(txProof2, ".index");
         txIndexesInBlock[2] = vm.parseJsonUint(txProof3, ".index");
+        txIndexesInBlock[3] = vm.parseJsonUint(txProof4, ".index");
+        txIndexesInBlock[4] = vm.parseJsonUint(txProof5, ".index");
 
         IBoltChallenger.Proof memory proof = IBoltChallenger.Proof({
             inclusionBlockNumber: inclusionBlockNumber,
