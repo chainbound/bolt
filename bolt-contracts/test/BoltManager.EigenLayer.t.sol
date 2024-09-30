@@ -5,8 +5,9 @@ import {Test, console} from "forge-std/Test.sol";
 
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
+import {BoltEigenLayerMiddleware} from "../src/contracts/BoltEigenLayerMiddleware.sol";
 import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
-import {IBoltManager} from "../src/interfaces/IBoltManager.sol";
+import {IBoltMiddleware} from "../src/interfaces/IBoltMiddleware.sol";
 
 import {AVSDirectoryStorage} from "@eigenlayer/src/contracts/core/AVSDirectoryStorage.sol";
 import {DelegationManagerStorage} from "@eigenlayer/src/contracts/core/DelegationManagerStorage.sol";
@@ -25,6 +26,7 @@ contract BoltManagerEigenLayerTest is Test {
 
     BoltValidators public validators;
     BoltManager public manager;
+    BoltEigenLayerMiddleware public middleware;
     EigenLayerDeployer public eigenLayerDeployer;
 
     address staker = makeAddr("staker");
@@ -46,13 +48,10 @@ contract BoltManagerEigenLayerTest is Test {
 
         // Deploy Bolt contracts
         validators = new BoltValidators(admin);
-        manager = new BoltManager(
-            admin,
-            address(validators),
-            address(0),
-            address(0),
-            address(0),
-            address(0),
+        manager = new BoltManager(admin, address(validators));
+        middleware = new BoltEigenLayerMiddleware(
+            address(admin),
+            address(manager),
             address(eigenLayerDeployer.avsDirectory()),
             address(eigenLayerDeployer.delegationManager()),
             address(eigenLayerDeployer.strategyManager())
@@ -62,10 +61,10 @@ contract BoltManagerEigenLayerTest is Test {
     function _adminRoutine() internal {
         // PART 0: Admin setup -- Collateral whitelist
         vm.startPrank(admin);
-        manager.addWhitelistedEigenLayerCollateral(address(eigenLayerDeployer.weth()));
+        middleware.addWhitelistedCollateral(address(eigenLayerDeployer.weth()));
         vm.stopPrank();
-        assertEq(manager.getWhitelistedEigenLayerCollaterals().length, 1);
-        assertEq(manager.getWhitelistedEigenLayerCollaterals()[0], address(eigenLayerDeployer.weth()));
+        assertEq(middleware.getWhitelistedCollaterals().length, 1);
+        assertEq(middleware.getWhitelistedCollaterals()[0], address(eigenLayerDeployer.weth()));
     }
 
     function _eigenLayerOptInRoutine() internal {
@@ -113,7 +112,7 @@ contract BoltManagerEigenLayerTest is Test {
         // Note that msg.sender which is the ServiceManager contract is used to identify the AVS itself
 
         vm.prank(admin);
-        manager.updateEigenLayerAVSMetadataURI("https://boltprotocol.xyz");
+        middleware.updateAVSMetadataURI("https://boltprotocol.xyz");
 
         // 5. As a operator, I can now opt-in into an AVS by interacting with the ServiceManager.
         // Two steps happen:
@@ -130,7 +129,7 @@ contract BoltManagerEigenLayerTest is Test {
         bytes32 operatorRegistrationDigestHash = eigenLayerDeployer.avsDirectory()
             .calculateOperatorAVSRegistrationDigestHash({
             operator: operator,
-            avs: address(manager),
+            avs: address(middleware),
             salt: bytes32(0),
             expiry: UINT256_MAX
         });
@@ -140,10 +139,10 @@ contract BoltManagerEigenLayerTest is Test {
             ISignatureUtils.SignatureWithSaltAndExpiry(operatorRawSignature, bytes32(0), UINT256_MAX);
         vm.expectEmit(true, true, true, true);
         emit IAVSDirectory.OperatorAVSRegistrationStatusUpdated(
-            operator, address(manager), IAVSDirectory.OperatorAVSRegistrationStatus.REGISTERED
+            operator, address(middleware), IAVSDirectory.OperatorAVSRegistrationStatus.REGISTERED
         );
-        manager.registerEigenLayerOperatorToAVS(operator, operatorSignature);
-        assertEq(manager.checkIfEigenLayerOperatorRegisteredToAVS(operator), true);
+        middleware.registerOperatorToAVS(operator, operatorSignature);
+        assertEq(middleware.checkIfOperatorRegisteredToAVS(operator), true);
 
         // PART 2: Validator and proposer opt into BOLT manager
         //
@@ -160,25 +159,25 @@ contract BoltManagerEigenLayerTest is Test {
 
         // 2. --- Operator and strategy registration into BoltManager (middleware) ---
 
-        manager.registerEigenLayerOperator(operator);
-        assertEq(manager.isEigenLayerOperatorEnabled(operator), true);
+        middleware.registerOperator(operator);
+        assertEq(middleware.isOperatorEnabled(operator), true);
 
-        manager.registerEigenLayerStrategy(address(eigenLayerDeployer.wethStrat()));
-        assertEq(manager.isEigenLayerStrategyEnabled(address(eigenLayerDeployer.wethStrat())), true);
+        middleware.registerStrategy(address(eigenLayerDeployer.wethStrat()));
+        assertEq(middleware.isStrategyEnabled(address(eigenLayerDeployer.wethStrat())), true);
     }
 
     function test_deregisterEigenLayerOperatorFromAVS() public {
         _eigenLayerOptInRoutine();
         vm.prank(operator);
-        manager.deregisterEigenLayerOperatorFromAVS();
-        assertEq(manager.checkIfEigenLayerOperatorRegisteredToAVS(operator), false);
+        middleware.deregisterOperatorFromAVS();
+        assertEq(middleware.checkIfOperatorRegisteredToAVS(operator), false);
     }
 
     function test_getEigenLayerOperatorStake() public {
         _eigenLayerOptInRoutine();
 
-        uint256 amount = manager.getEigenLayerOperatorStake(operator, address(eigenLayerDeployer.weth()));
-        uint256 totalStake = manager.getEigenLayerTotalStake(2, address(eigenLayerDeployer.weth()));
+        uint256 amount = middleware.getOperatorStake(operator, address(eigenLayerDeployer.weth()));
+        uint256 totalStake = middleware.getTotalStake(2, address(eigenLayerDeployer.weth()));
         assertEq(amount, 1 ether);
         assertEq(totalStake, 1 ether);
     }
@@ -188,7 +187,7 @@ contract BoltManagerEigenLayerTest is Test {
 
         bytes32 pubkeyHash = _pubkeyHash(validatorPubkey);
 
-        BoltManager.ProposerStatus memory status = manager.getEigenLayerProposerStatus(pubkeyHash);
+        IBoltValidators.ProposerStatus memory status = middleware.getProposerStatus(pubkeyHash);
         assertEq(status.pubkeyHash, pubkeyHash);
         assertEq(status.operator, operator);
         assertEq(status.active, true);
@@ -213,7 +212,7 @@ contract BoltManagerEigenLayerTest is Test {
             validators.registerValidatorUnsafe(pubkey, staker, operator);
         }
 
-        BoltManager.ProposerStatus[] memory statuses = manager.getEigenLayerProposersStatus(pubkeyHashes);
+        IBoltValidators.ProposerStatus[] memory statuses = middleware.getProposersStatus(pubkeyHashes);
         assertEq(statuses.length, 10);
     }
 
@@ -223,12 +222,12 @@ contract BoltManagerEigenLayerTest is Test {
         bytes32 pubkeyHash = bytes32(uint256(1));
 
         vm.expectRevert(IBoltValidators.ValidatorDoesNotExist.selector);
-        manager.getEigenLayerProposerStatus(pubkeyHash);
+        middleware.getProposerStatus(pubkeyHash);
     }
 
     function testGetWhitelistedCollaterals() public {
         _adminRoutine();
-        address[] memory collaterals = manager.getWhitelistedEigenLayerCollaterals();
+        address[] memory collaterals = middleware.getWhitelistedCollaterals();
         assertEq(collaterals.length, 1);
         assertEq(collaterals[0], address(eigenLayerDeployer.weth()));
     }
@@ -236,13 +235,13 @@ contract BoltManagerEigenLayerTest is Test {
     function testNonWhitelistedCollateral() public {
         _adminRoutine();
         vm.startPrank(admin);
-        manager.removeWhitelistedEigenLayerCollateral(address(eigenLayerDeployer.weth()));
+        middleware.removeWhitelistedCollateral(address(eigenLayerDeployer.weth()));
         vm.stopPrank();
 
         address strat = address(eigenLayerDeployer.wethStrat());
         vm.startPrank(admin);
-        vm.expectRevert(IBoltManager.CollateralNotWhitelisted.selector);
-        manager.registerEigenLayerStrategy(strat);
+        vm.expectRevert(IBoltMiddleware.CollateralNotWhitelisted.selector);
+        middleware.registerStrategy(strat);
         vm.stopPrank();
     }
 

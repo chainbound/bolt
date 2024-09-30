@@ -5,9 +5,11 @@ import {Script, console} from "forge-std/Script.sol";
 
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
+import {BoltEigenLayerMiddleware} from "../src/contracts/BoltEigenLayerMiddleware.sol";
+import {BoltSymbioticMiddleware} from "../src/contracts/BoltSymbioticMiddleware.sol";
 
 /// @notice Script to deploy the BoltManager and BoltValidators contracts.
-contract DeployBoltManager is Script {
+contract DeployBolt is Script {
     function run(
         address symbioticNetwork,
         address symbioticOperatorRegistry,
@@ -24,19 +26,22 @@ contract DeployBoltManager is Script {
         BoltValidators validators = new BoltValidators(sender);
         console.log("BoltValidators deployed at", address(validators));
 
-        BoltManager manager = new BoltManager(
-            address(sender),
+        BoltManager manager = new BoltManager(sender, address(validators));
+        console.log("BoltManager deployed at", address(manager));
+
+        BoltEigenLayerMiddleware eigenLayerMiddleware = new BoltEigenLayerMiddleware(
+            sender, address(validators), eigenlayerAVSDirectory, eigenlayerDelegationManager, eigenlayerStrategyManager
+        );
+        console.log("BoltEigenLayerMiddleware deployed at", address(eigenLayerMiddleware));
+        BoltSymbioticMiddleware symbioticMiddleware = new BoltSymbioticMiddleware(
+            sender,
             address(validators),
             symbioticNetwork,
             symbioticOperatorRegistry,
             symbioticOperatorNetOptIn,
-            symbioticVaultRegistry,
-            eigenlayerAVSDirectory,
-            eigenlayerDelegationManager,
-            eigenlayerStrategyManager
+            symbioticVaultRegistry
         );
-        console.log("BoltManager deployed at", address(manager));
-
+        console.log("BoltSymbioticMiddleware deployed at", address(eigenLayerMiddleware));
         vm.stopBroadcast();
     }
 }

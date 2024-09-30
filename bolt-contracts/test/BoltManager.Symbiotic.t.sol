@@ -20,10 +20,12 @@ import {IMigratablesFactory} from "@symbiotic/interfaces/common/IMigratablesFact
 import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
 import {SimpleCollateral} from "@symbiotic/../test/mocks/SimpleCollateral.sol";
 
-import {IBoltManager} from "../src/interfaces/IBoltManager.sol";
 import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
+import {IBoltMiddleware} from "../src/interfaces/IBoltMiddleware.sol";
+
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
+import {BoltSymbioticMiddleware} from "../src/contracts/BoltSymbioticMiddleware.sol";
 import {BLS12381} from "../src/lib/bls/BLS12381.sol";
 
 import {SymbioticSetupFixture} from "./fixtures/SymbioticSetup.f.sol";
@@ -37,6 +39,7 @@ contract BoltManagerTest is Test {
 
     BoltValidators public validators;
     BoltManager public manager;
+    BoltSymbioticMiddleware public middleware;
 
     IVaultFactory public vaultFactory;
     IDelegatorFactory public delegatorFactory;
@@ -146,21 +149,20 @@ contract BoltManagerTest is Test {
         // --- Deploy Bolt contracts ---
 
         validators = new BoltValidators(admin);
-        manager = new BoltManager(
+        manager = new BoltManager(admin, address(validators));
+
+        middleware = new BoltSymbioticMiddleware(
             admin,
-            address(validators),
+            address(manager),
             networkAdmin,
             address(operatorRegistry),
             address(operatorNetworkOptInService),
-            address(vaultFactory),
-            address(0),
-            address(0),
-            address(0)
+            address(vaultFactory)
         );
 
-        // --- Whitelist collateral in BoltManager ---
+        // --- Whitelist collateral in BoltSymbioticMiddleware ---
         vm.prank(admin);
-        manager.addWhitelistedSymbioticCollateral(address(collateral));
+        middleware.addWhitelistedCollateral(address(collateral));
     }
 
     /// @notice Internal helper to register Symbiotic contracts and opt-in operators and vaults.
@@ -172,7 +174,7 @@ contract BoltManagerTest is Test {
         networkRegistry.registerNetwork();
 
         vm.prank(networkAdmin);
-        networkMiddlewareService.setMiddleware(address(manager));
+        networkMiddlewareService.setMiddleware(address(middleware));
 
         // --- Register Validator in BoltValidators ---
 
@@ -201,11 +203,11 @@ contract BoltManagerTest is Test {
 
         // --- Register Vault and Operator in BoltManager (middleware) ---
 
-        manager.registerSymbioticVault(address(vault));
-        assertEq(manager.isSymbioticVaultEnabled(address(vault)), true);
+        middleware.registerVault(address(vault));
+        assertEq(middleware.isVaultEnabled(address(vault)), true);
 
-        manager.registerSymbioticOperator(operator);
-        assertEq(manager.isSymbioticOperatorEnabled(operator), true);
+        middleware.registerOperator(operator);
+        assertEq(middleware.isOperatorEnabled(operator), true);
 
         // --- Set the stake limit for the Vault ---
 
@@ -249,10 +251,10 @@ contract BoltManagerTest is Test {
         // initial state
         uint256 shares = networkRestakeDelegator.totalOperatorNetworkShares(subnetwork);
         uint256 stakeFromDelegator = networkRestakeDelegator.stake(subnetwork, operator);
-        uint256 stakeFromManager = manager.getSymbioticOperatorStake(operator, address(collateral));
+        uint256 stakeFromMiddleware = middleware.getOperatorStake(operator, address(collateral));
         assertEq(shares, 0);
-        assertEq(stakeFromManager, stakeFromDelegator);
-        assertEq(stakeFromManager, 0);
+        assertEq(stakeFromMiddleware, stakeFromDelegator);
+        assertEq(stakeFromMiddleware, 0);
 
         vm.warp(block.timestamp + EPOCH_DURATION + 1);
         assertEq(vault.currentEpoch(), 1);
@@ -279,14 +281,14 @@ contract BoltManagerTest is Test {
         assertEq(vault.currentEpoch(), 2);
 
         // it takes 2 epochs to activate the stake
-        assertEq(manager.getSymbioticTotalStake(0, address(collateral)), 0);
-        assertEq(manager.getSymbioticTotalStake(1, address(collateral)), 0);
-        assertEq(manager.getSymbioticTotalStake(2, address(collateral)), 1 ether);
+        assertEq(middleware.getTotalStake(0, address(collateral)), 0);
+        assertEq(middleware.getTotalStake(1, address(collateral)), 0);
+        assertEq(middleware.getTotalStake(2, address(collateral)), 1 ether);
 
         stakeFromDelegator = networkRestakeDelegator.stake(subnetwork, operator);
-        stakeFromManager = manager.getSymbioticOperatorStake(operator, address(collateral));
-        assertEq(stakeFromDelegator, stakeFromManager);
-        assertEq(stakeFromManager, 1 ether);
+        stakeFromMiddleware = middleware.getOperatorStake(operator, address(collateral));
+        assertEq(stakeFromDelegator, stakeFromMiddleware);
+        assertEq(stakeFromMiddleware, 1 ether);
     }
 
     function testGetProposerStatus() public {
@@ -305,7 +307,7 @@ contract BoltManagerTest is Test {
         vm.warp(block.timestamp + EPOCH_DURATION * 2 + 1);
         assertEq(vault.currentEpoch(), 2);
 
-        BoltManager.ProposerStatus memory status = manager.getSymbioticProposerStatus(pubkeyHash);
+        IBoltValidators.ProposerStatus memory status = middleware.getProposerStatus(pubkeyHash);
         assertEq(status.pubkeyHash, pubkeyHash);
         assertEq(status.operator, operator);
         assertEq(status.active, true);
@@ -333,7 +335,7 @@ contract BoltManagerTest is Test {
         vm.warp(block.timestamp + EPOCH_DURATION * 2 + 1);
         assertEq(vault.currentEpoch(), 2);
 
-        BoltManager.ProposerStatus[] memory statuses = manager.getSymbioticProposersStatus(pubkeyHashes);
+        IBoltValidators.ProposerStatus[] memory statuses = middleware.getProposersStatus(pubkeyHashes);
         assertEq(statuses.length, 10);
     }
 
@@ -343,21 +345,21 @@ contract BoltManagerTest is Test {
         bytes32 pubkeyHash = bytes32(uint256(1));
 
         vm.expectRevert(IBoltValidators.ValidatorDoesNotExist.selector);
-        manager.getSymbioticProposerStatus(pubkeyHash);
+        middleware.getProposerStatus(pubkeyHash);
     }
 
     function testGetWhitelistedCollaterals() public view {
-        address[] memory collaterals = manager.getWhitelistedSymbioticCollaterals();
+        address[] memory collaterals = middleware.getWhitelistedCollaterals();
         assertEq(collaterals.length, 1);
         assertEq(collaterals[0], address(collateral));
     }
 
     function testNonWhitelistedCollateral() public {
         vm.prank(admin);
-        manager.removeWhitelistedSymbioticCollateral(address(collateral));
+        middleware.removeWhitelistedCollateral(address(collateral));
 
         vm.prank(vaultAdmin);
-        vm.expectRevert(IBoltManager.CollateralNotWhitelisted.selector);
-        manager.registerSymbioticVault(address(vault));
+        vm.expectRevert(IBoltMiddleware.CollateralNotWhitelisted.selector);
+        middleware.registerVault(address(vault));
     }
 }
