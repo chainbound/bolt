@@ -143,11 +143,24 @@ impl InclusionRequest {
         true
     }
 
-    pub fn validate_priority_fee(&self) -> bool {
+    pub fn validate_max_priority_fee(&self) -> bool {
         for tx in &self.txs {
             if tx
                 .max_priority_fee_per_gas()
                 .is_some_and(|max_priority_fee| max_priority_fee > tx.max_fee_per_gas())
+            {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    pub fn validate_min_priority_fee(&self, min_priority_fee: u128) -> bool {
+        for tx in &self.txs {
+            if tx
+                .max_priority_fee_per_gas()
+                .is_some_and(|max_priority_fee| max_priority_fee < min_priority_fee)
             {
                 return false;
             }

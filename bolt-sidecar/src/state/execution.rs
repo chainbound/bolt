@@ -21,8 +21,7 @@ use super::fetcher::StateFetcher;
 
 /// Possible commitment validation errors.
 ///
-/// NOTE: unfortuntately it cannot implement `Clone` due to `BlobTransactionValidationError`
-/// not implementing it
+/// NOTE: `Clone` not implementable due to `BlobTransactionValidationError`
 #[derive(Debug, Error)]
 pub enum ValidationError {
     /// The transaction fee is too low to cover the maximum base fee.
@@ -55,6 +54,9 @@ pub enum ValidationError {
     /// Max priority fee per gas is greater than max fee per gas.
     #[error("Max priority fee per gas is greater than max fee per gas")]
     MaxPriorityFeePerGasTooHigh,
+    /// Max priority fee per gas is less than min priority fee.
+    #[error("Max priority fee per gas is less than min priority fee")]
+    MaxPriorityFeePerGasTooLow,
     /// The sender does not have enough balance to pay for the transaction.
     #[error("Not enough balance to pay for value + maximum fee")]
     InsufficientBalance,
@@ -103,6 +105,7 @@ impl ValidationError {
             ValidationError::GasLimitTooHigh => "gas_limit_too_high",
             ValidationError::TransactionSizeTooHigh => "transaction_size_too_high",
             ValidationError::MaxPriorityFeePerGasTooHigh => "max_priority_fee_per_gas_too_high",
+            ValidationError::MaxPriorityFeePerGasTooLow => "max_priority_fee_per_gas_too_low",
             ValidationError::InsufficientBalance => "insufficient_balance",
             ValidationError::Eip4844Limit => "eip4844_limit",
             ValidationError::SlotTooLow(_) => "slot_too_low",
@@ -276,9 +279,15 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::GasLimitTooHigh);
         }
 
-        // Ensure max_priority_fee_per_gas is less than max_fee_per_gas
-        if !req.validate_priority_fee() {
+        // Ensure max_priority_fee_per_gas is less than max_fee_per_gas and
+        // greater than or equal to min_priority_fee
+        if !req.validate_max_priority_fee() {
             return Err(ValidationError::MaxPriorityFeePerGasTooHigh);
+        }
+
+        // Ensure max_priority_fee_per_gas is greater than or equal to min_priority_fee
+        if !req.validate_min_priority_fee(self.limits.min_priority_fee.get() as u128) {
+            return Err(ValidationError::MaxPriorityFeePerGasTooLow);
         }
 
         // Check if the max_fee_per_gas would cover the maximum possible basefee.
@@ -785,9 +794,10 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits: Limits = Limits {
+        let limits = Limits {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
+            min_priority_fee: NonZero::new(2).unwrap(),
         };
         let mut state = ExecutionState::new(client.clone(), limits).await?;
 
@@ -805,6 +815,41 @@ mod tests {
         assert!(matches!(
             state.validate_request(&mut request).await,
             Err(ValidationError::MaxCommittedGasReachedForSlot(_, 5_000_000))
+        ));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_invalid_inclusion_request_min_priority_fee() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let limits = Limits {
+            max_commitments_per_slot: NonZero::new(10).unwrap(),
+            max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
+            min_priority_fee: NonZero::new(10).unwrap(),
+        };
+
+        let mut state = ExecutionState::new(client.clone(), limits).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        // Create a transaction with a max priority fee that is too low
+        let tx = default_test_transaction(*sender, None).with_max_priority_fee_per_gas(5);
+
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
+
+        assert!(matches!(
+            state.validate_request(&mut request).await,
+            Err(ValidationError::MaxPriorityFeePerGasTooLow)
         ));
 
         Ok(())
@@ -916,6 +961,7 @@ mod tests {
         let limits: Limits = Limits {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
+            min_priority_fee: NonZero::new(2).unwrap(),
         };
         let mut state = ExecutionState::new(client.clone(), limits).await?;
 

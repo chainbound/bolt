@@ -55,6 +55,9 @@ pub struct Opts {
     /// Max committed gas per slot
     #[clap(long, env = "BOLT_SIDECAR_MAX_COMMITTED_GAS")]
     pub(super) max_committed_gas: Option<NonZero<u64>>,
+    /// Min priority fee to accept for a commitment
+    #[clap(long, env = "BOLT_SIDECAR_MIN_PRIORITY_FEE")]
+    pub(super) min_priority_fee: Option<NonZero<u64>>,
     /// Validator indexes of connected validators that the sidecar
     /// should accept commitments on behalf of. Accepted values:
     /// - a comma-separated list of indexes (e.g. "1,2,3,4")
@@ -158,6 +161,9 @@ pub struct Limits {
     /// Maximum number of commitments to accept per block
     pub max_commitments_per_slot: NonZero<usize>,
     pub max_committed_gas_per_slot: NonZero<u64>,
+
+    /// Minimum priority fee to accept for a commitment
+    pub min_priority_fee: NonZero<u64>,
 }
 
 impl Default for Limits {
@@ -165,6 +171,7 @@ impl Default for Limits {
         Self {
             max_commitments_per_slot: NonZero::new(128).expect("Valid non-zero"),
             max_committed_gas_per_slot: NonZero::new(10_000_000).expect("Valid non-zero"),
+            min_priority_fee: NonZero::new(2).expect("Valid non-zero"),
         }
     }
 }
@@ -193,6 +200,10 @@ impl TryFrom<Opts> for Config {
 
         if let Some(max_committed_gas) = opts.max_committed_gas {
             config.limits.max_committed_gas_per_slot = max_committed_gas;
+        }
+
+        if let Some(min_priority_fee) = opts.min_priority_fee {
+            config.limits.min_priority_fee = min_priority_fee;
         }
 
         if let Some(commit_boost_url) = &opts.signing.commit_boost_url {
