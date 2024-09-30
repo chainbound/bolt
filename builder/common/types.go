@@ -553,42 +553,43 @@ func (p *InclusionProof) String() string {
 // A wrapper struct over `builderSpec.VersionedSubmitBlockRequest`
 // to include constraint inclusion proofs
 type VersionedSubmitBlockRequestWithProofs struct {
-	Inner  *builderSpec.VersionedSubmitBlockRequest `json:"inner"`
-	Proofs *InclusionProof                          `json:"proofs"`
+	Proofs *InclusionProof `json:"proofs"`
+	*builderSpec.VersionedSubmitBlockRequest
 }
 
 // this is necessary, because the mev-boost-relay deserialization doesn't expect a "Version" and "Data" wrapper object
 // for deserialization. Instead, it tries to decode the object into the "Deneb" version first and if that fails, it tries
 // the "Capella" version. This is a workaround to make the deserialization work.
+// TODO: this does not work, proofs are not serialized
 func (v *VersionedSubmitBlockRequestWithProofs) MarshalJSON() ([]byte, error) {
-	switch v.Inner.Version {
+	switch v.Version {
 	case consensusSpec.DataVersionBellatrix:
 		return json.Marshal(struct {
-			Inner  *bellatrix.SubmitBlockRequest `json:"inner"`
-			Proofs *InclusionProof               `json:"proofs"`
+			Proofs *InclusionProof
+			*bellatrix.SubmitBlockRequest
 		}{
-			Inner:  v.Inner.Bellatrix,
-			Proofs: v.Proofs,
+			SubmitBlockRequest: v.Bellatrix,
+			Proofs:             v.Proofs,
 		})
 	case consensusSpec.DataVersionCapella:
 		return json.Marshal(struct {
-			Inner  *capella.SubmitBlockRequest `json:"inner"`
-			Proofs *InclusionProof             `json:"proofs"`
+			Proofs *InclusionProof `json:"proofs"`
+			*capella.SubmitBlockRequest
 		}{
-			Inner:  v.Inner.Capella,
-			Proofs: v.Proofs,
+			SubmitBlockRequest: v.Capella,
+			Proofs:             v.Proofs,
 		})
 	case consensusSpec.DataVersionDeneb:
 		return json.Marshal(struct {
-			Inner  *deneb.SubmitBlockRequest `json:"inner"`
-			Proofs *InclusionProof           `json:"proofs"`
+			Proofs *InclusionProof `json:"proofs"`
+			*deneb.SubmitBlockRequest
 		}{
-			Inner:  v.Inner.Deneb,
-			Proofs: v.Proofs,
+			SubmitBlockRequest: v.Deneb,
+			Proofs:             v.Proofs,
 		})
 	}
 
-	return nil, fmt.Errorf("unknown data version %d", v.Inner.Version)
+	return nil, fmt.Errorf("unknown data version %d", v.Version)
 }
 
 func (v *VersionedSubmitBlockRequestWithProofs) String() string {

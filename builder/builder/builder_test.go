@@ -300,8 +300,16 @@ func TestBlockWithConstraints(t *testing.T) {
 		Value:                &uint256.Int{0x0a},
 	}
 	copy(expectedMessage.BlockHash[:], hexutil.MustDecode("0x3cce5d0f5c9a7e188e79c35168256e91bec2d98a1140f6701da6ed3c98ea9d04")[:])
-	require.NotNil(t, testRelay.submittedMsgWithProofs.Inner.Bellatrix)
-	require.Equal(t, expectedMessage, *testRelay.submittedMsgWithProofs.Inner.Bellatrix.Message)
+	require.NotNil(t, testRelay.submittedMsgWithProofs.Bellatrix)
+
+	fmt.Printf("%#v\n", testRelay.submittedMsgWithProofs)
+	fmt.Println()
+	fmt.Println()
+	// fmt.Printf("%+v\n", testRelay.submittedMsgWithProofs.Proofs)
+	if s, err := testRelay.submittedMsgWithProofs.MarshalJSON(); err == nil {
+		fmt.Println(string(s))
+	}
+	require.Equal(t, expectedMessage, *testRelay.submittedMsgWithProofs.Bellatrix.Message)
 
 	expectedExecutionPayload := bellatrix.ExecutionPayload{
 		ParentHash:    [32]byte(testExecutableData.ParentHash),
@@ -320,12 +328,12 @@ func TestBlockWithConstraints(t *testing.T) {
 		Transactions:  []bellatrix.Transaction{constraintTxByte, constraintTxWithBlobByte},
 	}
 
-	require.Equal(t, expectedExecutionPayload, *testRelay.submittedMsgWithProofs.Inner.Bellatrix.ExecutionPayload)
+	require.Equal(t, expectedExecutionPayload, *testRelay.submittedMsgWithProofs.Bellatrix.ExecutionPayload)
 
 	expectedSignature, err := utils.HexToSignature("0x97db0496dcfd04ed444b87b6fc1c9e3339a0d35f7c01825ac353812601a72e7e35ef94899a9b03f4d23102214701255805efd0f6552073791ea1c3e10003ae435952f8305f6b89e58d4442ced149d3c33a486f5a390b4b8047e6ea4176059755")
 
 	require.NoError(t, err)
-	require.Equal(t, expectedSignature, testRelay.submittedMsgWithProofs.Inner.Bellatrix.Signature)
+	require.Equal(t, expectedSignature, testRelay.submittedMsgWithProofs.Bellatrix.Signature)
 
 	require.Equal(t, uint64(25), testRelay.requestedSlot)
 
