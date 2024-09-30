@@ -38,7 +38,7 @@ inspect:
 
 # show the logs for the bolt devnet relay
 relay-logs:
-    @id=$(docker ps -n 100 | grep mev-relay-api | awk -F' ' '{print $1}') && \
+    @id=$(docker ps -n 100 | grep helix-relay | awk -F' ' '{print $1}') && \
     docker logs -f $id
 
 # show the logs for the bolt devnet builder
