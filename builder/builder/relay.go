@@ -197,12 +197,12 @@ func (r *RemoteRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequ
 		panic("ssz not supported for constraint proofs yet")
 	} else {
 		if len(msg.Proofs.TransactionHashes) > 0 {
-			number, _ := msg.Inner.BlockNumber()
+			number, _ := msg.BlockNumber()
 			message := fmt.Sprintf("sending block %d with proofs to relay (path: %s)", number, "/relay/v1/builder/blocks_with_proofs")
 			log.Info(message)
 		}
 
-		switch msg.Inner.Version {
+		switch msg.Version {
 		case spec.DataVersionBellatrix:
 			code, err = SendHTTPRequest(context.TODO(), *http.DefaultClient, http.MethodPost, endpoint, msg, nil)
 		case spec.DataVersionCapella:
@@ -210,7 +210,7 @@ func (r *RemoteRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequ
 		case spec.DataVersionDeneb:
 			code, err = SendHTTPRequest(context.TODO(), *http.DefaultClient, http.MethodPost, endpoint, msg, nil)
 		default:
-			return fmt.Errorf("unknown data version %d", msg.Inner.Version)
+			return fmt.Errorf("unknown data version %d", msg.Version)
 		}
 	}
 

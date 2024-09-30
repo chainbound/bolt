@@ -447,8 +447,8 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 		}
 
 		versionedBlockRequestWithConstraintProofs = &common.VersionedSubmitBlockRequestWithProofs{
-			Inner:  versionedBlockRequest,
-			Proofs: inclusionProof,
+			VersionedSubmitBlockRequest: versionedBlockRequest,
+			Proofs:                      inclusionProof,
 		}
 	}
 
