@@ -10,7 +10,7 @@ import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.so
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
-import {BoltManager} from "./BoltManager.sol";
+import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
 import {IStrategyManager} from "@eigenlayer/src/contracts/interfaces/IStrategyManager.sol";
 import {IAVSDirectory} from "@eigenlayer/src/contracts/interfaces/IAVSDirectory.sol";
@@ -30,7 +30,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
 
     /// @notice Validators registry, where validators are registered via their
     /// BLS pubkey and are assigned a sequence number.
-    BoltManager public boltManager;
+    IBoltManager public boltManager;
 
     /// @notice Set of EigenLayer operators addresses that have opted in to Bolt Protocol.
     EnumerableMap.AddressToUintMap private operators;
@@ -85,7 +85,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
         address _eigenlayerDelegationManager,
         address _eigenlayerStrategyManager
     ) Ownable(_owner) {
-        boltManager = BoltManager(_boltManager);
+        boltManager = IBoltManager(_boltManager);
         START_TIMESTAMP = Time.timestamp();
 
         AVS_DIRECTORY = AVSDirectoryStorage(_eigenlayerAVSDirectory);

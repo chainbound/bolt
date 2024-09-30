@@ -19,16 +19,13 @@ import {IEntity} from "@symbiotic/interfaces/common/IEntity.sol";
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
+import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
-contract BoltManager is Ownable {
+contract BoltManager is IBoltManager, Ownable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
     using Subnetwork for address;
-
-    // ========= ERRORS =========
-
-    error InvalidQuery();
 
     // ========= STORAGE =========
 

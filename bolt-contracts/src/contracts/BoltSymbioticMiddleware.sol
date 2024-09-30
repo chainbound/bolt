@@ -19,7 +19,7 @@ import {IEntity} from "@symbiotic/interfaces/common/IEntity.sol";
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
-import {BoltManager} from "./BoltManager.sol";
+import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
 contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -31,7 +31,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
 
     /// @notice Validators registry, where validators are registered via their
     /// BLS pubkey and are assigned a sequence number.
-    BoltManager public boltManager;
+    IBoltManager public boltManager;
 
     /// @notice Set of Symbiotic operator addresses that have opted in to Bolt Protocol.
     EnumerableMap.AddressToUintMap private operators;
@@ -97,7 +97,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
         address _symbioticOperatorNetOptIn,
         address _symbioticVaultRegistry
     ) Ownable(_owner) {
-        boltManager = BoltManager(_boltManager);
+        boltManager = IBoltManager(_boltManager);
         START_TIMESTAMP = Time.timestamp();
 
         BOLT_SYMBIOTIC_NETWORK = _symbioticNetwork;
