@@ -28,6 +28,11 @@ pub const DEFAULT_RPC_PORT: u16 = 8000;
 /// Default port for the Constraints proxy server.
 pub const DEFAULT_CONSTRAINTS_PROXY_PORT: u16 = 18551;
 
+// Default limit values
+pub const DEFAULT_MAX_COMMITMENTS: usize = 128;
+pub const DEFAULT_MAX_COMMITTED_GAS: u64 = 10_000_000;
+pub const DEFAULT_MIN_PRIORITY_FEE: u128 = 2;
+
 /// Command-line options for the Bolt sidecar
 #[derive(Parser, Debug)]
 pub struct Opts {
@@ -57,7 +62,7 @@ pub struct Opts {
     pub(super) max_committed_gas: Option<NonZero<u64>>,
     /// Min priority fee to accept for a commitment
     #[clap(long, env = "BOLT_SIDECAR_MIN_PRIORITY_FEE")]
-    pub(super) min_priority_fee: Option<NonZero<u64>>,
+    pub(super) min_priority_fee: Option<NonZero<u128>>,
     /// Validator indexes of connected validators that the sidecar
     /// should accept commitments on behalf of. Accepted values:
     /// - a comma-separated list of indexes (e.g. "1,2,3,4")
@@ -163,15 +168,17 @@ pub struct Limits {
     pub max_committed_gas_per_slot: NonZero<u64>,
 
     /// Minimum priority fee to accept for a commitment
-    pub min_priority_fee: NonZero<u64>,
+    pub min_priority_fee: NonZero<u128>,
 }
 
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            max_commitments_per_slot: NonZero::new(128).expect("Valid non-zero"),
-            max_committed_gas_per_slot: NonZero::new(10_000_000).expect("Valid non-zero"),
-            min_priority_fee: NonZero::new(2).expect("Valid non-zero"),
+            max_commitments_per_slot: NonZero::new(DEFAULT_MAX_COMMITMENTS)
+                .expect("Valid non-zero"),
+            max_committed_gas_per_slot: NonZero::new(DEFAULT_MAX_COMMITTED_GAS)
+                .expect("Valid non-zero"),
+            min_priority_fee: NonZero::new(DEFAULT_MIN_PRIORITY_FEE).expect("Valid non-zero"),
         }
     }
 }

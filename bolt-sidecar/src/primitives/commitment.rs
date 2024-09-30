@@ -145,10 +145,9 @@ impl InclusionRequest {
 
     pub fn validate_max_priority_fee(&self) -> bool {
         for tx in &self.txs {
-            if tx
-                .max_priority_fee_per_gas()
-                .is_some_and(|max_priority_fee| max_priority_fee > tx.max_fee_per_gas())
-            {
+            let gas_price = tx.as_legacy().map(|tx| tx.gas_price).unwrap_or(0);
+            let max_priority_fee = tx.max_priority_fee_per_gas().unwrap_or(0);
+            if max_priority_fee + gas_price > tx.max_fee_per_gas() {
                 return false;
             }
         }
@@ -158,10 +157,9 @@ impl InclusionRequest {
 
     pub fn validate_min_priority_fee(&self, min_priority_fee: u128) -> bool {
         for tx in &self.txs {
-            if tx
-                .max_priority_fee_per_gas()
-                .is_some_and(|max_priority_fee| max_priority_fee < min_priority_fee)
-            {
+            let gas_price = tx.as_legacy().map(|tx| tx.gas_price).unwrap_or(0);
+            let max_priority_fee = tx.max_priority_fee_per_gas().unwrap_or(0);
+            if max_priority_fee + gas_price < min_priority_fee {
                 return false;
             }
         }
