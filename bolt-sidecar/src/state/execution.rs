@@ -279,8 +279,7 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::GasLimitTooHigh);
         }
 
-        // Ensure max_priority_fee_per_gas is less than max_fee_per_gas and
-        // greater than or equal to min_priority_fee
+        // Ensure max_priority_fee_per_gas is less than max_fee_per_gas
         if !req.validate_max_priority_fee() {
             return Err(ValidationError::MaxPriorityFeePerGasTooHigh);
         }
