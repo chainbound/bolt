@@ -153,7 +153,7 @@ contract BoltManagerTest is Test {
 
         middleware = new BoltSymbioticMiddleware(
             admin,
-            address(validators),
+            address(manager),
             networkAdmin,
             address(operatorRegistry),
             address(operatorNetworkOptInService),

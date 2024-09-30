@@ -19,6 +19,7 @@ import {IEntity} from "@symbiotic/interfaces/common/IEntity.sol";
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
+import {BoltManager} from "./BoltManager.sol";
 
 contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -30,7 +31,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
 
     /// @notice Validators registry, where validators are registered via their
     /// BLS pubkey and are assigned a sequence number.
-    IBoltValidators public validators;
+    BoltManager public boltManager;
 
     /// @notice Set of Symbiotic operator addresses that have opted in to Bolt Protocol.
     EnumerableMap.AddressToUintMap private operators;
@@ -83,20 +84,20 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     // ========= CONSTRUCTOR =========
 
     /// @notice Constructor for the BoltSymbioticMiddleware contract.
-    /// @param _validators The address of the validators registry.
+    /// @param _boltManager The address of the Bolt Manager contract.
     /// @param _symbioticNetwork The address of the Symbiotic network.
     /// @param _symbioticOperatorRegistry The address of the Symbiotic operator registry.
     /// @param _symbioticOperatorNetOptIn The address of the Symbiotic operator network opt-in contract.
     /// @param _symbioticVaultRegistry The address of the Symbiotic vault registry.
     constructor(
         address _owner,
-        address _validators,
+        address _boltManager,
         address _symbioticNetwork,
         address _symbioticOperatorRegistry,
         address _symbioticOperatorNetOptIn,
         address _symbioticVaultRegistry
     ) Ownable(_owner) {
-        validators = IBoltValidators(_validators);
+        boltManager = BoltManager(_boltManager);
         START_TIMESTAMP = Time.timestamp();
 
         BOLT_SYMBIOTIC_NETWORK = _symbioticNetwork;
@@ -137,7 +138,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
             revert InvalidQuery();
         }
 
-        return validators.getValidatorByPubkeyHash(pubkeyHash).authorizedOperator == operator;
+        return boltManager.validators().getValidatorByPubkeyHash(pubkeyHash).authorizedOperator == operator;
     }
 
     /// @notice Get the list of collateral addresses that are whitelisted.
@@ -300,7 +301,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
         }
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
-        IBoltValidators.Validator memory validator = validators.getValidatorByPubkeyHash(pubkeyHash);
+        IBoltValidators.Validator memory validator = boltManager.validators().getValidatorByPubkeyHash(pubkeyHash);
         address operator = validator.authorizedOperator;
 
         status.pubkeyHash = pubkeyHash;

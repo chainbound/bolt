@@ -10,6 +10,7 @@ import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.so
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
+import {BoltManager} from "./BoltManager.sol";
 
 import {IStrategyManager} from "@eigenlayer/src/contracts/interfaces/IStrategyManager.sol";
 import {IAVSDirectory} from "@eigenlayer/src/contracts/interfaces/IAVSDirectory.sol";
@@ -29,7 +30,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
 
     /// @notice Validators registry, where validators are registered via their
     /// BLS pubkey and are assigned a sequence number.
-    IBoltValidators public validators;
+    BoltManager public boltManager;
 
     /// @notice Set of EigenLayer operators addresses that have opted in to Bolt Protocol.
     EnumerableMap.AddressToUintMap private operators;
@@ -73,18 +74,18 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     // ========= CONSTRUCTOR =========
 
     /// @notice Constructor for the BoltEigenLayerMiddleware contract.
-    /// @param _validators The address of the validators registry.
+    /// @param _boltManager The address of the Bolt Manager contract.
     /// @param _eigenlayerAVSDirectory The address of the EigenLayer AVS Directory contract.
     /// @param _eigenlayerDelegationManager The address of the EigenLayer Delegation Manager contract.
     /// @param _eigenlayerStrategyManager The address of the EigenLayer Strategy Manager.
     constructor(
         address _owner,
-        address _validators,
+        address _boltManager,
         address _eigenlayerAVSDirectory,
         address _eigenlayerDelegationManager,
         address _eigenlayerStrategyManager
     ) Ownable(_owner) {
-        validators = IBoltValidators(_validators);
+        boltManager = BoltManager(_boltManager);
         START_TIMESTAMP = Time.timestamp();
 
         AVS_DIRECTORY = AVSDirectoryStorage(_eigenlayerAVSDirectory);
@@ -124,7 +125,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
             revert InvalidQuery();
         }
 
-        return validators.getValidatorByPubkeyHash(pubkeyHash).authorizedOperator == operator;
+        return boltManager.validators().getValidatorByPubkeyHash(pubkeyHash).authorizedOperator == operator;
     }
 
     /// @notice Get the list of EigenLayer strategies addresses that are allowed.
@@ -285,7 +286,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
         }
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
-        IBoltValidators.Validator memory validator = validators.getValidatorByPubkeyHash(pubkeyHash);
+        IBoltValidators.Validator memory validator = boltManager.validators().getValidatorByPubkeyHash(pubkeyHash);
 
         address operator = validator.authorizedOperator;
 
