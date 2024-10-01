@@ -77,6 +77,8 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     }
 
     /// @notice Get a validator by its BLS public key
+    /// @param pubkey BLS public key of the validator
+    /// @return Validator memory Validator struct
     function getValidatorByPubkey(
         BLS12381.G1Point calldata pubkey
     ) public view returns (Validator memory) {
@@ -110,49 +112,54 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
 
     /// @notice Register a single Validator and authorize a Collateral Provider and Operator for it
     /// @dev This function allows anyone to register a single Validator. We do not perform any checks.
+    /// @param pubkey BLS public key for the Validator to be registered
+    /// @param maxCommittedGasLimit The maximum gas that the Validator can commit for preconfirmations
+    /// @param authorizedOperator The address of the authorized operator
     function registerValidatorUnsafe(
         BLS12381.G1Point calldata pubkey,
-        address authorizedCollateralProvider,
+        uint128 maxCommittedGasLimit,
         address authorizedOperator
     ) public {
         if (!ALLOW_UNSAFE_REGISTRATION) {
             revert UnsafeRegistrationNotAllowed();
         }
 
-        _registerValidator(pubkey, nextValidatorSequenceNumber, authorizedCollateralProvider, authorizedOperator);
+        _registerValidator(pubkey, nextValidatorSequenceNumber, maxCommittedGasLimit, authorizedOperator);
     }
 
     /// @notice Register a single Validator and authorize a Collateral Provider and Operator for it
     /// @dev This function allows anyone to register a single Validator. We perform an important check:
     /// The owner of the Validator (controller) must have signed the message with its BLS private key.
+    ///
+    /// Message format: `chainId || controller || sequenceNumber`
     /// @param pubkey BLS public key for the Validator to be registered
     /// @param signature BLS signature of the registration message for the Validator
-    /// @param authorizedCollateralProvider The address of the authorized collateral provider
+    /// @param maxCommittedGasLimit The maximum gas that the Validator can commit for preconfirmations
     /// @param authorizedOperator The address of the authorized operator
     function registerValidator(
         BLS12381.G1Point calldata pubkey,
         BLS12381.G2Point calldata signature,
-        address authorizedCollateralProvider,
+        uint128 maxCommittedGasLimit,
         address authorizedOperator
     ) public {
         bytes memory message = abi.encodePacked(block.chainid, msg.sender, nextValidatorSequenceNumber);
         if (!_verifySignature(message, signature, pubkey)) {
-            revert InvalidAuthorizedCollateralProvider();
+            revert InvalidBLSSignature();
         }
 
-        _registerValidator(pubkey, nextValidatorSequenceNumber, authorizedCollateralProvider, authorizedOperator);
+        _registerValidator(pubkey, nextValidatorSequenceNumber, maxCommittedGasLimit, authorizedOperator);
     }
 
     /// @notice Register a batch of Validators and authorize a Collateral Provider and Operator for them
     /// @dev This function allows anyone to register a list of Validators.
     /// @param pubkeys List of BLS public keys for the Validators to be registered
     /// @param signature BLS aggregated signature of the registration message for this batch of Validators
-    /// @param authorizedCollateralProvider The address of the authorized collateral provider
+    /// @param maxCommittedGasLimit The maximum gas that the Validator can commit for preconfirmations
     /// @param authorizedOperator The address of the authorized operator
     function batchRegisterValidators(
         BLS12381.G1Point[] calldata pubkeys,
         BLS12381.G2Point calldata signature,
-        address authorizedCollateralProvider,
+        uint128 maxCommittedGasLimit,
         address authorizedOperator
     ) public {
         uint256 validatorsCount = pubkeys.length;
@@ -176,7 +183,7 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
         // Register the validators and authorize the Collateral Provider and Operator for them
         for (uint256 i = 0; i < validatorsCount; i++) {
             _registerValidator(
-                pubkeys[i], expectedValidatorSequenceNumbers[i], authorizedCollateralProvider, authorizedOperator
+                pubkeys[i], expectedValidatorSequenceNumbers[i], maxCommittedGasLimit, authorizedOperator
             );
         }
     }
@@ -184,11 +191,11 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     /// @notice Register a batch of Validators and authorize a Collateral Provider and Operator for them
     /// @dev This function allows anyone to register a list of Validators.
     /// @param pubkeys List of BLS public keys for the Validators to be registered
-    /// @param authorizedCollateralProvider The address of the authorized collateral provider
+    /// @param maxCommittedGasLimit The maximum gas that the Validator can commit for preconfirmations
     /// @param authorizedOperator The address of the authorized operator
     function batchRegisterValidatorsUnsafe(
         BLS12381.G1Point[] calldata pubkeys,
-        address authorizedCollateralProvider,
+        uint128 maxCommittedGasLimit,
         address authorizedOperator
     ) public {
         if (!ALLOW_UNSAFE_REGISTRATION) {
@@ -204,9 +211,29 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
         // Register the validators and authorize the Collateral Provider and Operator for them
         for (uint256 i = 0; i < validatorsCount; i++) {
             _registerValidator(
-                pubkeys[i], expectedValidatorSequenceNumbers[i], authorizedCollateralProvider, authorizedOperator
+                pubkeys[i], expectedValidatorSequenceNumbers[i], maxCommittedGasLimit, authorizedOperator
             );
         }
+    }
+
+    // ========= UPDATE FUNCTIONS =========
+
+    /// @notice Update the maximum gas limit that a validator can commit for preconfirmations
+    /// @dev Only the `controller` of the validator can update this value.
+    /// @param pubkeyHash The hash of the BLS public key of the validator
+    /// @param maxCommittedGasLimit The new maximum gas limit
+    function updateMaxCommittedGasLimit(bytes32 pubkeyHash, uint128 maxCommittedGasLimit) public {
+        Validator storage validator = VALIDATORS[pubkeyHash];
+
+        if (!validator.exists) {
+            revert ValidatorDoesNotExist();
+        }
+
+        if (msg.sender != validator.controller) {
+            revert UnauthorizedCaller();
+        }
+
+        validator.maxCommittedGasLimit = maxCommittedGasLimit;
     }
 
     // ========= HELPERS =========
@@ -214,17 +241,14 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     /// @notice Internal helper to add a validator to the registry
     /// @param pubkey BLS public key of the validator
     /// @param sequenceNumber Sequence number of the validator
-    /// @param authorizedCollateralProvider Address of the authorized collateral provider
+    /// @param maxCommittedGasLimit The maximum gas that the Validator can commit for preconfirmations
     /// @param authorizedOperator Address of the authorized operator
     function _registerValidator(
         BLS12381.G1Point calldata pubkey,
         uint64 sequenceNumber,
-        address authorizedCollateralProvider,
+        uint128 maxCommittedGasLimit,
         address authorizedOperator
     ) internal {
-        if (authorizedCollateralProvider == address(0)) {
-            revert InvalidAuthorizedCollateralProvider();
-        }
         if (authorizedOperator == address(0)) {
             revert InvalidAuthorizedOperator();
         }
@@ -238,7 +262,7 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
 
         Validator memory newValidator = Validator({
             sequenceNumber: sequenceNumber,
-            authorizedCollateralProvider: authorizedCollateralProvider,
+            maxCommittedGasLimit: maxCommittedGasLimit,
             authorizedOperator: authorizedOperator,
             controller: msg.sender,
             exists: true

@@ -27,6 +27,8 @@ contract BoltManagerEigenLayerTest is Test {
     BoltManager public manager;
     EigenLayerDeployer public eigenLayerDeployer;
 
+    uint128 public constant PRECONF_MAX_GAS_LIMIT = 5_000_000;
+
     address staker = makeAddr("staker");
     address validator = makeAddr("validator");
     BLS12381.G1Point validatorPubkey = BLS12381.generatorG1();
@@ -153,10 +155,9 @@ contract BoltManagerEigenLayerTest is Test {
         validatorPubkey = BLS12381.generatorG1();
 
         vm.prank(validator);
-        validators.registerValidatorUnsafe(validatorPubkey, staker, operator);
+        validators.registerValidatorUnsafe(validatorPubkey, PRECONF_MAX_GAS_LIMIT, operator);
         assertEq(validators.getValidatorByPubkey(validatorPubkey).exists, true);
         assertEq(validators.getValidatorByPubkey(validatorPubkey).authorizedOperator, operator);
-        assertEq(validators.getValidatorByPubkey(validatorPubkey).authorizedCollateralProvider, staker);
 
         // 2. --- Operator and strategy registration into BoltManager (middleware) ---
 
@@ -210,7 +211,7 @@ contract BoltManagerEigenLayerTest is Test {
             pubkey.y[0] = pubkey.y[0] + i + 2;
 
             pubkeyHashes[i] = _pubkeyHash(pubkey);
-            validators.registerValidatorUnsafe(pubkey, staker, operator);
+            validators.registerValidatorUnsafe(pubkey, PRECONF_MAX_GAS_LIMIT, operator);
         }
 
         BoltManager.ProposerStatus[] memory statuses = manager.getEigenLayerProposersStatus(pubkeyHashes);

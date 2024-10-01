@@ -35,6 +35,8 @@ contract BoltManagerTest is Test {
     uint48 public constant EPOCH_DURATION = 1 days;
     uint48 public constant SLASHING_WINDOW = 7 days;
 
+    uint128 public constant PRECONF_MAX_GAS_LIMIT = 5_000_000;
+
     BoltValidators public validators;
     BoltManager public manager;
 
@@ -180,10 +182,9 @@ contract BoltManagerTest is Test {
         BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
 
         vm.prank(validator);
-        validators.registerValidatorUnsafe(pubkey, provider, operator);
+        validators.registerValidatorUnsafe(pubkey, PRECONF_MAX_GAS_LIMIT, operator);
         assertEq(validators.getValidatorByPubkey(pubkey).exists, true);
         assertEq(validators.getValidatorByPubkey(pubkey).authorizedOperator, operator);
-        assertEq(validators.getValidatorByPubkey(pubkey).authorizedCollateralProvider, provider);
 
         // --- Register Operator in Symbiotic, opt-in network and vault ---
 
@@ -327,7 +328,7 @@ contract BoltManagerTest is Test {
             pubkey.y[0] = pubkey.y[0] + i + 2;
 
             pubkeyHashes[i] = _pubkeyHash(pubkey);
-            validators.registerValidatorUnsafe(pubkey, provider, operator);
+            validators.registerValidatorUnsafe(pubkey, PRECONF_MAX_GAS_LIMIT, operator);
         }
 
         vm.warp(block.timestamp + EPOCH_DURATION * 2 + 1);
