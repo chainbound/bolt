@@ -1,5 +1,6 @@
 network_params:
   seconds_per_slot: 2 # 2 seconds are the minimum for testing
+  genesis_delay: 0 # Apparently it seems needed to avoid timestamp issues on Helix
 tx_spammer_params:
   tx_spammer_extra_args: ["--slot-time=1", "--accounts=10", "--txcount=1"]
 
