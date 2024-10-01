@@ -32,11 +32,12 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"golang.org/x/crypto/sha3"
 
-	"github.com/attestantio/go-builder-client/api/bellatrix"
-	"github.com/attestantio/go-builder-client/api/capella"
-	"github.com/attestantio/go-builder-client/api/deneb"
+	v1 "github.com/attestantio/go-builder-client/api/v1"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	consensusSpec "github.com/attestantio/go-eth2-client/spec"
+	bellatrixSpec "github.com/attestantio/go-eth2-client/spec/bellatrix"
+	capellaSpec "github.com/attestantio/go-eth2-client/spec/capella"
+	denebSpec "github.com/attestantio/go-eth2-client/spec/deneb"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	fastSsz "github.com/ferranbt/fastssz"
 )
@@ -553,39 +554,53 @@ func (p *InclusionProof) String() string {
 // A wrapper struct over `builderSpec.VersionedSubmitBlockRequest`
 // to include constraint inclusion proofs
 type VersionedSubmitBlockRequestWithProofs struct {
-	Proofs *InclusionProof `json:"proofs"`
+	Proofs *InclusionProof
 	*builderSpec.VersionedSubmitBlockRequest
 }
 
 // this is necessary, because the mev-boost-relay deserialization doesn't expect a "Version" and "Data" wrapper object
 // for deserialization. Instead, it tries to decode the object into the "Deneb" version first and if that fails, it tries
 // the "Capella" version. This is a workaround to make the deserialization work.
-// TODO: this does not work, proofs are not serialized
+//
+// NOTE(bolt): struct embedding of the VersionedSubmitBlockRequest is not possible for some reason because it causes the json
+// encoding to omit the `proofs` field. Embedding all of the fields directly does the job.
 func (v *VersionedSubmitBlockRequestWithProofs) MarshalJSON() ([]byte, error) {
 	switch v.Version {
 	case consensusSpec.DataVersionBellatrix:
 		return json.Marshal(struct {
-			Proofs *InclusionProof
-			*bellatrix.SubmitBlockRequest
+			Message          *v1.BidTrace                    `json:"message"`
+			ExecutionPayload *bellatrixSpec.ExecutionPayload `json:"execution_payload"`
+			Signature        phase0.BLSSignature             `json:"signature"`
+			Proofs           *InclusionProof                 `json:"proofs"`
 		}{
-			SubmitBlockRequest: v.Bellatrix,
-			Proofs:             v.Proofs,
+			Message:          v.Bellatrix.Message,
+			ExecutionPayload: v.Bellatrix.ExecutionPayload,
+			Signature:        v.Bellatrix.Signature,
+			Proofs:           v.Proofs,
 		})
 	case consensusSpec.DataVersionCapella:
 		return json.Marshal(struct {
-			Proofs *InclusionProof `json:"proofs"`
-			*capella.SubmitBlockRequest
+			Message          *v1.BidTrace                  `json:"message"`
+			ExecutionPayload *capellaSpec.ExecutionPayload `json:"execution_payload"`
+			Signature        phase0.BLSSignature           `json:"signature"`
+			Proofs           *InclusionProof               `json:"proofs"`
 		}{
-			SubmitBlockRequest: v.Capella,
-			Proofs:             v.Proofs,
+			Message:          v.Capella.Message,
+			ExecutionPayload: v.Capella.ExecutionPayload,
+			Signature:        v.Capella.Signature,
+			Proofs:           v.Proofs,
 		})
 	case consensusSpec.DataVersionDeneb:
 		return json.Marshal(struct {
-			Proofs *InclusionProof `json:"proofs"`
-			*deneb.SubmitBlockRequest
+			Message          *v1.BidTrace                `json:"message"`
+			ExecutionPayload *denebSpec.ExecutionPayload `json:"execution_payload"`
+			Signature        phase0.BLSSignature         `json:"signature"`
+			Proofs           *InclusionProof             `json:"proofs"`
 		}{
-			SubmitBlockRequest: v.Deneb,
-			Proofs:             v.Proofs,
+			Message:          v.Deneb.Message,
+			ExecutionPayload: v.Deneb.ExecutionPayload,
+			Signature:        v.Deneb.Signature,
+			Proofs:           v.Proofs,
 		})
 	}
 
