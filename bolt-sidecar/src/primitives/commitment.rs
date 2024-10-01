@@ -166,10 +166,14 @@ impl InclusionRequest {
     pub fn validate_min_priority_fee(&self, max_base_fee: u128, min_priority_fee: u128) -> bool {
         for tx in &self.txs {
             let gas_price = tx.as_legacy().map(|tx| tx.gas_price).unwrap_or(0);
-            let gas_price = if max_base_fee >= gas_price { 0 } else { gas_price - max_base_fee };
+            let gas_price = if max_base_fee >= gas_price {
+                0
+            } else {
+                (gas_price - max_base_fee) / GWEI_TO_WEI as u128
+            };
             let max_priority_fee = tx.max_priority_fee_per_gas().unwrap_or(0);
 
-            if max_priority_fee + gas_price < GWEI_TO_WEI as u128 * min_priority_fee {
+            if gas_price + max_priority_fee < min_priority_fee {
                 return false;
             }
         }
