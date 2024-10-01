@@ -167,7 +167,7 @@ pub struct Limits {
     pub max_commitments_per_slot: NonZero<usize>,
     pub max_committed_gas_per_slot: NonZero<u64>,
 
-    /// Minimum priority fee to accept for a commitment
+    /// Minimum priority fee to accept for a commitment in gwei
     pub min_priority_fee: NonZero<u128>,
 }
 

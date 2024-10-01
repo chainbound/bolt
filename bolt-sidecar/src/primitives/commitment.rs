@@ -1,7 +1,10 @@
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::str::FromStr;
 
-use alloy::primitives::{keccak256, Address, Signature, B256};
+use alloy::{
+    consensus::constants::GWEI_TO_WEI,
+    primitives::{keccak256, Address, Signature, B256},
+};
 
 use crate::{
     crypto::SignerECDSA,
@@ -143,6 +146,8 @@ impl InclusionRequest {
         true
     }
 
+    /// Validates the priority fee against the max fee per gas.
+    /// Returns true if the fee is less than or equal to the max fee per gas, false otherwise.
     pub fn validate_max_priority_fee(&self) -> bool {
         for tx in &self.txs {
             let gas_price = tx.as_legacy().map(|tx| tx.gas_price).unwrap_or(0);
@@ -155,11 +160,16 @@ impl InclusionRequest {
         true
     }
 
-    pub fn validate_min_priority_fee(&self, min_priority_fee: u128) -> bool {
+    /// Validates the priority fee against a minimum priority fee.
+    /// Returns true if the fee is greater than or equal to the set min priority fee, false
+    /// otherwise.
+    pub fn validate_min_priority_fee(&self, max_base_fee: u128, min_priority_fee: u128) -> bool {
         for tx in &self.txs {
             let gas_price = tx.as_legacy().map(|tx| tx.gas_price).unwrap_or(0);
+            let gas_price = if max_base_fee >= gas_price { 0 } else { gas_price - max_base_fee };
             let max_priority_fee = tx.max_priority_fee_per_gas().unwrap_or(0);
-            if max_priority_fee + gas_price < min_priority_fee {
+
+            if max_priority_fee + gas_price < GWEI_TO_WEI as u128 * min_priority_fee {
                 return false;
             }
         }

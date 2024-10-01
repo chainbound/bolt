@@ -284,17 +284,17 @@ impl<C: StateFetcher> ExecutionState<C> {
             return Err(ValidationError::MaxPriorityFeePerGasTooHigh);
         }
 
-        // Ensure max_priority_fee_per_gas is greater than or equal to min_priority_fee
-        if !req.validate_min_priority_fee(self.limits.min_priority_fee.get()) {
-            return Err(ValidationError::MaxPriorityFeePerGasTooLow);
-        }
-
         // Check if the max_fee_per_gas would cover the maximum possible basefee.
         let slot_diff = target_slot.saturating_sub(self.slot);
 
         // Calculate the max possible basefee given the slot diff
         let max_basefee = calculate_max_basefee(self.basefee, slot_diff)
             .ok_or(ValidationError::MaxBaseFeeCalcOverflow)?;
+
+        // Ensure max_priority_fee_per_gas is greater than or equal to min_priority_fee
+        if !req.validate_min_priority_fee(max_basefee, self.limits.min_priority_fee.get()) {
+            return Err(ValidationError::MaxPriorityFeePerGasTooLow);
+        }
 
         debug!(%slot_diff, basefee = self.basefee, %max_basefee, "Validating basefee");
 
@@ -821,7 +821,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_valid_inclusion_request_legacy_tx() -> eyre::Result<()> {
+    async fn test_invalid_inclusion_request_legacy_tx() -> eyre::Result<()> {
         let _ = tracing_subscriber::fmt::try_init();
 
         let anvil = launch_anvil();
@@ -830,7 +830,7 @@ mod tests {
         let limits = Limits {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
-            min_priority_fee: NonZero::new(15).unwrap(),
+            min_priority_fee: NonZero::new(10).unwrap(),
         };
 
         let mut state = ExecutionState::new(client.clone(), limits).await?;
@@ -845,13 +845,14 @@ mod tests {
         // Create a legacy transaction with a max priority fee that is too low
         let tx = default_test_transaction(*sender, None)
             .transaction_type(LEGACY_TX_TYPE_ID)
-            .with_gas_price(10)
-            .with_max_priority_fee_per_gas(5);
+            .with_gas_price(10000000000); // Value is in wei = 10 gwei
 
         info!(?tx, "Transaction");
 
         let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
+        // The request fails because the max base fee is also taken into account which decreases the
+        // final sum less than the min priority fee
         assert!(matches!(
             state.validate_request(&mut request).await,
             Err(ValidationError::MaxPriorityFeePerGasTooLow)
