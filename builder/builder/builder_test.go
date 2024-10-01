@@ -302,13 +302,6 @@ func TestBlockWithConstraints(t *testing.T) {
 	copy(expectedMessage.BlockHash[:], hexutil.MustDecode("0x3cce5d0f5c9a7e188e79c35168256e91bec2d98a1140f6701da6ed3c98ea9d04")[:])
 	require.NotNil(t, testRelay.submittedMsgWithProofs.Bellatrix)
 
-	fmt.Printf("%#v\n", testRelay.submittedMsgWithProofs)
-	fmt.Println()
-	fmt.Println()
-	// fmt.Printf("%+v\n", testRelay.submittedMsgWithProofs.Proofs)
-	if s, err := testRelay.submittedMsgWithProofs.MarshalJSON(); err == nil {
-		fmt.Println(string(s))
-	}
 	require.Equal(t, expectedMessage, *testRelay.submittedMsgWithProofs.Bellatrix.Message)
 
 	expectedExecutionPayload := bellatrix.ExecutionPayload{
