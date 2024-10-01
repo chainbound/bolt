@@ -148,9 +148,23 @@ impl InclusionRequest {
     /// Returns true if the fee is less than or equal to the max fee per gas, false otherwise.
     pub fn validate_max_priority_fee(&self) -> bool {
         for tx in &self.txs {
-            let gas_price = tx.as_legacy().map(|tx| tx.gas_price).unwrap_or(0);
-            let max_priority_fee = tx.max_priority_fee_per_gas().unwrap_or(0);
-            if max_priority_fee + gas_price > tx.max_fee_per_gas() {
+            // Calculate the effective fee depending on the transaction type
+            let effective_fee = match tx.tx_type() {
+                TxType::Legacy | TxType::Eip2930 => {
+                    match tx.tx_type() {
+                        // Retrieve the gas price depending on the transaction type
+                        TxType::Legacy => tx.as_legacy().map(|tx| tx.gas_price),
+                        TxType::Eip2930 => tx.as_eip2930().map(|tx| tx.gas_price),
+                        _ => None,
+                    }
+                    .unwrap_or(0)
+                }
+                // For EIP-1559 (or any other), the effective priority fee is the max priority fee
+                // per gas
+                _ => tx.max_priority_fee_per_gas().unwrap_or(0),
+            };
+
+            if effective_fee > tx.max_fee_per_gas() {
                 return false;
             }
         }
