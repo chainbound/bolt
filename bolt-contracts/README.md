@@ -174,18 +174,18 @@ respected in the following way:
 
 - Start: the target block must be justified by LMD-GHOST: a minimum of 32 slots must have passed
 - End: depending on the EVM block hash oracle:
-  a. If using the `BLOCKHASH` EVM opcode, the window is limited to 256 blocks (roughly 1 hour)
-  b. If using the [EIP-2935](https://eips.ethereum.org/EIPS/eip-2935) historical oracle, the window is limited to 8192 blocks (roughly 1 day)
+  - . If using the `BLOCKHASH` EVM opcode, the window is limited to 256 blocks (roughly 1 hour)
+  - . If using the [EIP-2935](https://eips.ethereum.org/EIPS/eip-2935) historical oracle, the window is limited to 8192 blocks (roughly 1 day)
 
 The inputs to the resolution process are as follows:
 
 1. The ID of the challenge to respond to: this is emitted in the `ChallengeOpened` event and is unique.
 2. The [inclusion proofs](https://github.com/chainbound/bolt/blob/6c0f1b696cfe3de7e7e3830ac28c369c6ddf271e/bolt-contracts/src/interfaces/IBoltChallenger.sol#L39), consisting of the following components:
-   a. the block number of the block containing the included transaction
-   b. the RLP-encoded block header of the block containing the included transaction
-   c. the account merkle proof of the sender of the included transaction
-   d. the transaction merkle proof of the included transaction against the header's transaction root
-   e. the transaction index in the block of the included transaction
+   - the block number of the block containing the included transaction
+   - the RLP-encoded block header of the block containing the included transaction
+   - the account merkle proof of the sender of the included transaction
+   - the transaction merkle proof of the included transaction against the header's transaction root
+   - the transaction index in the block of the included transaction
 
 If the arbitrator submits a valid response that satisfies the requirements for the challenge, the
 challenge is considered DEFENDED and the challenger's bond is slashed to cover the cost of the dispute
