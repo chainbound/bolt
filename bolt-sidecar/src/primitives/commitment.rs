@@ -163,7 +163,6 @@ impl InclusionRequest {
     /// priority fee, `false` otherwise.
     pub fn validate_min_priority_fee(&self, max_base_fee: u128, min_priority_fee: u128) -> bool {
         for tx in &self.txs {
-
             // Calculate the effective priority fee depending on the transaction type
             let effective_priority_fee = match tx.tx_type() {
                 TxType::Legacy | TxType::Eip2930 => {
@@ -176,10 +175,12 @@ impl InclusionRequest {
                     .unwrap_or(0);
 
                     // Compute the priority fee by subtracting the base fee from the gas price.
-                    // If the gas price is less than or equal to the base fee, the priority fee is 0.
+                    // If the gas price is less than or equal to the base fee, the priority fee is
+                    // 0.
                     gas_price.saturating_sub(max_base_fee)
                 }
-                // For EIP-1559 (or any other), the effective priority fee is the max priority fee per gas
+                // For EIP-1559 (or any other), the effective priority fee is the max priority fee
+                // per gas
                 _ => tx.max_priority_fee_per_gas().unwrap_or(0),
             };
 
