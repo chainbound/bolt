@@ -70,6 +70,10 @@ func (r *testRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockReques
 	return r.sbError
 }
 
+func (r *testRelay) GetDelegationsForSlot(nextSlot uint64) (common.SignedDelegations, error) {
+	return common.SignedDelegations{}, nil
+}
+
 func (r *testRelay) GetValidatorForSlot(nextSlot uint64) (ValidatorData, error) {
 	r.requestedSlot = nextSlot
 	return r.gvsVd, r.gvsErr
