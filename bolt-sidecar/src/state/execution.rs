@@ -291,16 +291,16 @@ impl<C: StateFetcher> ExecutionState<C> {
         let max_basefee = calculate_max_basefee(self.basefee, slot_diff)
             .ok_or(ValidationError::MaxBaseFeeCalcOverflow)?;
 
-        // Ensure max_priority_fee_per_gas is greater than or equal to min_priority_fee
-        if !req.validate_min_priority_fee(max_basefee, self.limits.min_priority_fee.get()) {
-            return Err(ValidationError::MaxPriorityFeePerGasTooLow);
-        }
-
         debug!(%slot_diff, basefee = self.basefee, %max_basefee, "Validating basefee");
 
         // Validate the base fee
         if !req.validate_basefee(max_basefee) {
             return Err(ValidationError::BaseFeeTooLow(max_basefee));
+        }
+
+        // Ensure max_priority_fee_per_gas is greater than or equal to min_priority_fee
+        if !req.validate_min_priority_fee(max_basefee, self.limits.min_priority_fee.get()) {
+            return Err(ValidationError::MaxPriorityFeePerGasTooLow);
         }
 
         if target_slot < self.slot {
@@ -761,7 +761,13 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let limits = Limits {
+            max_commitments_per_slot: NonZero::new(10).unwrap(),
+            max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
+            min_priority_fee: NonZero::new(200000000).unwrap(), // 0.2 gwei
+        };
+
+        let mut state = ExecutionState::new(client.clone(), limits).await?;
 
         let basefee = state.basefee();
 
@@ -797,7 +803,7 @@ mod tests {
         let limits = Limits {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
-            min_priority_fee: NonZero::new(2).unwrap(),
+            min_priority_fee: NonZero::new(2000000000).unwrap(),
         };
         let mut state = ExecutionState::new(client.clone(), limits).await?;
 
@@ -830,7 +836,7 @@ mod tests {
         let limits = Limits {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
-            min_priority_fee: NonZero::new(10).unwrap(),
+            min_priority_fee: NonZero::new(10000000000).unwrap(),
         };
 
         let mut state = ExecutionState::new(client.clone(), limits).await?;
@@ -871,7 +877,7 @@ mod tests {
         let limits = Limits {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
-            min_priority_fee: NonZero::new(10).unwrap(),
+            min_priority_fee: NonZero::new(2000000000).unwrap(),
         };
 
         let mut state = ExecutionState::new(client.clone(), limits).await?;
@@ -1002,7 +1008,7 @@ mod tests {
         let limits: Limits = Limits {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
-            min_priority_fee: NonZero::new(2).unwrap(),
+            min_priority_fee: NonZero::new(1000000000).unwrap(),
         };
         let mut state = ExecutionState::new(client.clone(), limits).await?;
 

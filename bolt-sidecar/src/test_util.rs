@@ -112,7 +112,7 @@ pub(crate) fn default_test_transaction(sender: Address, nonce: Option<u64>) -> T
         .with_nonce(nonce.unwrap_or(0))
         .with_value(U256::from(100))
         .with_gas_limit(21_000)
-        .with_max_priority_fee_per_gas(1_000_000_000)
+        .with_max_priority_fee_per_gas(1_000_000_000) // 1 gwei
         .with_max_fee_per_gas(20_000_000_000)
 }
 

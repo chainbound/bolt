@@ -1,10 +1,8 @@
+use reth_primitives::TxType;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::str::FromStr;
 
-use alloy::{
-    consensus::constants::GWEI_TO_WEI,
-    primitives::{keccak256, Address, Signature, B256},
-};
+use alloy::primitives::{keccak256, Address, Signature, B256};
 
 use crate::{
     crypto::SignerECDSA,
@@ -161,23 +159,37 @@ impl InclusionRequest {
     }
 
     /// Validates the priority fee against a minimum priority fee.
-    /// Returns true if the fee is greater than or equal to the set min priority fee, false
-    /// otherwise.
+    /// Returns `true` if the "effective priority fee" is greater than or equal to the set minimum
+    /// priority fee, `false` otherwise.
     pub fn validate_min_priority_fee(&self, max_base_fee: u128, min_priority_fee: u128) -> bool {
         for tx in &self.txs {
-            let gas_price = tx.as_legacy().map(|tx| tx.gas_price).unwrap_or(0);
-            let gas_price = if max_base_fee >= gas_price {
-                0
-            } else {
-                (gas_price - max_base_fee) / GWEI_TO_WEI as u128
-            };
-            let max_priority_fee = tx.max_priority_fee_per_gas().unwrap_or(0);
 
-            if gas_price + max_priority_fee < min_priority_fee {
+            // Calculate the effective priority fee depending on the transaction type
+            let effective_priority_fee = match tx.tx_type() {
+                TxType::Legacy | TxType::Eip2930 => {
+                    let gas_price = match tx.tx_type() {
+                        // Retrieve the gas price depending on the transaction type
+                        TxType::Legacy => tx.as_legacy().map(|tx| tx.gas_price),
+                        TxType::Eip2930 => tx.as_eip2930().map(|tx| tx.gas_price),
+                        _ => None,
+                    }
+                    .unwrap_or(0);
+
+                    // Compute the priority fee by subtracting the base fee from the gas price.
+                    // If the gas price is less than or equal to the base fee, the priority fee is 0.
+                    gas_price.saturating_sub(max_base_fee)
+                }
+                // For EIP-1559 (or any other), the effective priority fee is the max priority fee per gas
+                _ => tx.max_priority_fee_per_gas().unwrap_or(0),
+            };
+
+            // Check if the computed priority fee is less than the required minimum
+            if effective_priority_fee < min_priority_fee {
                 return false;
             }
         }
 
+        // If all transactions meet the minimum priority fee, return true
         true
     }
 
