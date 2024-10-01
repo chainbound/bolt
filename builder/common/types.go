@@ -631,6 +631,9 @@ type ConstraintsMessage struct {
 	Transactions []*HexBytes `json:"transactions"`
 }
 
+// List of signed delegations
+type SignedDelegations = []*SignedDelegation
+
 type SignedDelegation struct {
 	Message   Delegation          `json:"message"`
 	Signature phase0.BLSSignature `json:"signature"`

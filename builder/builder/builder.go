@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -68,6 +69,7 @@ type ValidatorData struct {
 type IRelay interface {
 	SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, vd ValidatorData) error
 	SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequestWithProofs, vd ValidatorData) error
+	GetDelegationsForSlot(nextSlot uint64) (common.SignedDelegations, error)
 	GetValidatorForSlot(nextSlot uint64) (ValidatorData, error)
 	Config() RelayConfig
 	Start() error
@@ -101,10 +103,11 @@ type Builder struct {
 	limiter                       *rate.Limiter
 	submissionOffsetFromEndOfSlot time.Duration
 
-	slotMu        sync.Mutex
-	slotAttrs     types.BuilderPayloadAttributes
-	slotCtx       context.Context
-	slotCtxCancel context.CancelFunc
+	slotMu                sync.Mutex
+	slotConstraintsPubkey phase0.BLSPubKey // The pubkey of the authorized constraints signer
+	slotAttrs             types.BuilderPayloadAttributes
+	slotCtx               context.Context
+	slotCtxCancel         context.CancelFunc
 
 	stop chan struct{}
 }
@@ -561,6 +564,18 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 		return fmt.Errorf("could not get validator while submitting block for slot %d - %w", attrs.Slot, err)
 	}
 
+	// BOLT: TODO:
+	// - get delegation for the slot in attrs (the next slot)
+	// - save the delegation if it exists
+
+	// By default, the proposer key is the constraint signer key
+	pubkey, err := hex.DecodeString(string(vd.Pubkey))
+	if err != nil {
+		log.Error("could not parse pubkey", "pubkey", vd.Pubkey, "err", err)
+	}
+
+	constraintsPubkey := phase0.BLSPubKey(pubkey)
+
 	parentBlock := b.eth.GetBlockByHash(attrs.HeadHash)
 	if parentBlock == nil {
 		return fmt.Errorf("parent block hash not found in block tree given head block hash %s", attrs.HeadHash)
@@ -592,6 +607,7 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 
 	slotCtx, slotCtxCancel := context.WithTimeout(context.Background(), 12*time.Second)
 	b.slotAttrs = *attrs
+	b.slotConstraintsPubkey = constraintsPubkey
 	b.slotCtx = slotCtx
 	b.slotCtxCancel = slotCtxCancel
 

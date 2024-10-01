@@ -129,6 +129,28 @@ func (r *RemoteRelay) GetValidatorForSlot(nextSlot uint64) (ValidatorData, error
 	return ValidatorData{}, ErrValidatorNotFound
 }
 
+func (r *RemoteRelay) GetDelegationsForSlot(nextSlot uint64) (common.SignedDelegations, error) {
+	log.Info("Getting delegations for slot", "slot", nextSlot, "endpoint", r.config.Endpoint)
+	endpoint := r.config.Endpoint + fmt.Sprintf("/relay/v1/builder/delegations?slot=%d", nextSlot)
+
+	if r.config.SszEnabled {
+		panic("ssz not supported")
+	}
+
+	var dst common.SignedDelegations
+	code, err := SendHTTPRequest(context.TODO(), *http.DefaultClient, http.MethodGet, endpoint, nil, &dst)
+	if err != nil {
+		return nil, fmt.Errorf("error sending http request block with proofs to relay %s. err: %w", r.config.Endpoint, err)
+	}
+
+	if code > 299 {
+		return nil, fmt.Errorf("non-ok response code %d from relay", code)
+	}
+
+	return dst, nil
+
+}
+
 func (r *RemoteRelay) Start() error {
 	return nil
 }
