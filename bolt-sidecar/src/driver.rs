@@ -220,21 +220,23 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
 
         // parse the request into constraints and sign them
         let slot = inclusion_request.slot;
-        let message = ConstraintsMessage::build(validator_pubkey, inclusion_request);
-        let signed_constraints = match self.constraint_signer.sign(&message.digest()).await {
-            Ok(signature) => SignedConstraints { message, signature },
-            Err(err) => {
-                error!(?err, "Failed to sign constraints");
-                let _ = response.send(Err(CommitmentError::Internal));
-                return;
-            }
-        };
 
-        // Track the number of transactions preconfirmed considering their type
-        signed_constraints.message.transactions.iter().for_each(|full_tx| {
-            ApiMetrics::increment_transactions_preconfirmed(full_tx.tx_type());
-        });
-        self.execution.add_constraint(slot, signed_constraints);
+        for tx in inclusion_request.txs {
+            let tx_type = tx.tx_type();
+            let message = ConstraintsMessage::from_transaction(validator_pubkey.clone(), slot, tx);
+
+            let signed_constraints = match self.constraint_signer.sign(&message.digest()).await {
+                Ok(signature) => SignedConstraints { message, signature },
+                Err(err) => {
+                    error!(?err, "Failed to sign constraints");
+                    let _ = response.send(Err(CommitmentError::Internal));
+                    return;
+                }
+            };
+
+            ApiMetrics::increment_transactions_preconfirmed(tx_type);
+            self.execution.add_constraint(slot, signed_constraints);
+        }
 
         // Create a commitment by signing the request
         match request.commit_and_sign(&self.commitment_signer).await {
