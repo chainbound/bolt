@@ -502,7 +502,7 @@ func generateMockConstraintsForSlot(slot uint64) common.SignedConstraintsList {
 	return common.SignedConstraintsList{
 		&common.SignedConstraints{
 			Message: common.ConstraintsMessage{
-				Transactions: []*common.HexBytes{rawTx}, Pubkey: 0, Slot: slot,
+				Transactions: []*common.HexBytes{rawTx}, Pubkey: phase0.BLSPubKey{}, Slot: slot,
 			}, Signature: phase0.BLSSignature{},
 		},
 	}

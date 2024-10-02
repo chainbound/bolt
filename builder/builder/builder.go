@@ -362,6 +362,15 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error
 		}
 
 		for _, constraint := range constraintsSigned {
+			// Check if the signature is valid against any of the authorized pubkeys
+			for _, pubkey := range b.slotConstraintsPubkeys {
+				valid, err := constraint.VerifySignature(pubkey)
+				if err != nil || !valid {
+					log.Error("Failed to verify constraint signature", "err", err)
+					continue
+				}
+			}
+
 			decodedConstraints, err := DecodeConstraints(constraint)
 			if err != nil {
 				log.Error("Failed to decode constraint: ", err)
@@ -573,7 +582,6 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 	if err != nil {
 		log.Error("could not parse pubkey", "pubkey", vd.Pubkey, "err", err)
 	}
-
 	constraintsPubkeys := []phase0.BLSPubKey{pubkey}
 
 	// BOLT: get delegations for the slot
@@ -583,6 +591,7 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 	}
 
 	if len(delegations) > 0 {
+		// If there are delegations, reset the constraintsPubkeys (i.e. remove the validator key as authorized)
 		constraintsPubkeys = make([]phase0.BLSPubKey, 0, len(delegations))
 		for _, delegation := range delegations {
 			// Verify signature against the public key
@@ -592,6 +601,7 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 				continue
 			}
 
+			// If signature is valid, add the pubkey to the list of authorized constraint pubkeys
 			constraintsPubkeys = append(constraintsPubkeys, delegation.Message.DelegateePubkey)
 		}
 	}
