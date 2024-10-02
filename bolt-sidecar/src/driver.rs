@@ -221,6 +221,9 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         // parse the request into constraints and sign them
         let slot = inclusion_request.slot;
 
+        // NOTE: we iterate over the transactions in the request and generate a signed constraint for each one. This is because
+        // the transactions in the commitment request are not supposed to be treated as a relative-ordering bundle, but a batch
+        // with no ordering guarantees.
         for tx in inclusion_request.txs {
             let tx_type = tx.tx_type();
             let message = ConstraintsMessage::from_transaction(validator_pubkey.clone(), slot, tx);
