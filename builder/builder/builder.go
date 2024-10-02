@@ -362,6 +362,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error
 		}
 
 		for _, constraint := range constraintsSigned {
+			oneValidSignature := false
 			// Check if the signature is valid against any of the authorized pubkeys
 			for _, pubkey := range b.slotConstraintsPubkeys {
 				valid, err := constraint.VerifySignature(pubkey)
@@ -369,6 +370,13 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error
 					log.Error("Failed to verify constraint signature", "err", err)
 					continue
 				}
+
+				oneValidSignature = true
+			}
+
+			// If there is no valid signature, continue with the next constraint
+			if !oneValidSignature {
+				continue
 			}
 
 			decodedConstraints, err := DecodeConstraints(constraint)
