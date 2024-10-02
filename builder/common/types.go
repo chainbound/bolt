@@ -18,6 +18,7 @@ package common
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"database/sql/driver"
 	"encoding/hex"
 	"encoding/json"
@@ -30,6 +31,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/flashbots/go-boost-utils/bls"
 	"golang.org/x/crypto/sha3"
 
 	v1 "github.com/attestantio/go-builder-client/api/v1"
@@ -637,6 +639,24 @@ type SignedDelegations = []*SignedDelegation
 type SignedDelegation struct {
 	Message   Delegation          `json:"message"`
 	Signature phase0.BLSSignature `json:"signature"`
+}
+
+// VerifySignature verifies the signature of a signed delegation. IMPORTANT: it uses the COMMIT_BOOST_DOMAIN
+// as the signing domain: [109, 109, 111, 67]
+func (d *SignedDelegation) VerifySignature(pubkey phase0.BLSPubKey) (bool, error) {
+	hasher := sha256.New()
+	// NOTE: ignoring errors here
+	hasher.Write(d.Message.ValidatorPubkey[:])
+	hasher.Write(d.Message.DelegateePubkey[:])
+
+	hash := hasher.Sum(nil)
+	signingData := phase0.SigningData{ObjectRoot: phase0.Root(hash), Domain: phase0.Domain([]byte{109, 109, 111, 67})}
+	root, err := signingData.HashTreeRoot()
+	if err != nil {
+		return false, err
+	}
+
+	return bls.VerifySignatureBytes(root[:], d.Signature[:], pubkey[:])
 }
 
 type Delegation struct {
