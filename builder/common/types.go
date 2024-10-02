@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"database/sql/driver"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -625,12 +626,47 @@ type SignedConstraints struct {
 	Signature phase0.BLSSignature `json:"signature"`
 }
 
+func (c *SignedConstraints) Digest() []byte {
+	hasher := sha256.New()
+	// NOTE: ignoring errors here
+	slotBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(slotBytes, c.Message.Slot)
+
+	var top byte
+	if c.Message.Top {
+		top = 1
+	} else {
+		top = 0
+	}
+
+	hasher.Write(c.Message.Pubkey[:])
+	hasher.Write(slotBytes)
+	hasher.Write([]byte{top})
+
+	for _, tx := range c.Message.Transactions {
+		txHash := sha256.Sum256(*tx)
+		hasher.Write(txHash[:])
+	}
+
+	return hasher.Sum(nil)
+}
+
+func (c *SignedConstraints) VerifySignature(pubkey phase0.BLSPubKey) (bool, error) {
+	signingData := phase0.SigningData{ObjectRoot: phase0.Root(c.Digest()), Domain: phase0.Domain([]byte{109, 109, 111, 67})}
+	root, err := signingData.HashTreeRoot()
+	if err != nil {
+		return false, err
+	}
+
+	return bls.VerifySignatureBytes(root[:], c.Signature[:], pubkey[:])
+}
+
 // Reference: https://chainbound.github.io/bolt-docs/api/builder
 type ConstraintsMessage struct {
-	Pubkey       uint64      `json:"pubkey"`
-	Slot         uint64      `json:"slot"`
-	Top          bool        `json:"top"`
-	Transactions []*HexBytes `json:"transactions"`
+	Pubkey       phase0.BLSPubKey `json:"pubkey"`
+	Slot         uint64           `json:"slot"`
+	Top          bool             `json:"top"`
+	Transactions []*HexBytes      `json:"transactions"`
 }
 
 // List of signed delegations
@@ -641,16 +677,18 @@ type SignedDelegation struct {
 	Signature phase0.BLSSignature `json:"signature"`
 }
 
-// VerifySignature verifies the signature of a signed delegation. IMPORTANT: it uses the COMMIT_BOOST_DOMAIN
-// as the signing domain: [109, 109, 111, 67]
-func (d *SignedDelegation) VerifySignature(pubkey phase0.BLSPubKey) (bool, error) {
+func (d *SignedDelegation) Digest() []byte {
 	hasher := sha256.New()
 	// NOTE: ignoring errors here
 	hasher.Write(d.Message.ValidatorPubkey[:])
 	hasher.Write(d.Message.DelegateePubkey[:])
+	return hasher.Sum(nil)
+}
 
-	hash := hasher.Sum(nil)
-	signingData := phase0.SigningData{ObjectRoot: phase0.Root(hash), Domain: phase0.Domain([]byte{109, 109, 111, 67})}
+// VerifySignature verifies the signature of a signed delegation. IMPORTANT: it uses the COMMIT_BOOST_DOMAIN
+// as the signing domain: [109, 109, 111, 67]
+func (d *SignedDelegation) VerifySignature(pubkey phase0.BLSPubKey) (bool, error) {
+	signingData := phase0.SigningData{ObjectRoot: phase0.Root(d.Digest()), Domain: phase0.Domain([]byte{109, 109, 111, 67})}
 	root, err := signingData.HashTreeRoot()
 	if err != nil {
 		return false, err
