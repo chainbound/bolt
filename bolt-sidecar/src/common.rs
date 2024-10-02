@@ -9,7 +9,7 @@ use crate::{
 /// The version of the Bolt sidecar binary.
 pub const CARGO_PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Calculates the max_basefee `slot_diff` blocks in the future given a current basefee (in gwei).
+/// Calculates the max_basefee `slot_diff` blocks in the future given a current basefee (in wei).
 /// Returns None if an overflow would occur.
 /// Cfr. https://github.com/flashbots/ethers-provider-flashbots-bundle/blob/7ddaf2c9d7662bef400151e0bfc89f5b13e72b4c/src/index.ts#L308
 pub fn calculate_max_basefee(current: u128, block_diff: u64) -> Option<u128> {

@@ -28,6 +28,11 @@ pub const DEFAULT_RPC_PORT: u16 = 8000;
 /// Default port for the Constraints proxy server.
 pub const DEFAULT_CONSTRAINTS_PROXY_PORT: u16 = 18551;
 
+// Default limit values
+pub const DEFAULT_MAX_COMMITMENTS: usize = 128;
+pub const DEFAULT_MAX_COMMITTED_GAS: u64 = 10_000_000;
+pub const DEFAULT_MIN_PRIORITY_FEE: u128 = 1000000000; // 1 Gwei
+
 /// Command-line options for the Bolt sidecar
 #[derive(Parser, Debug)]
 pub struct Opts {
@@ -55,6 +60,9 @@ pub struct Opts {
     /// Max committed gas per slot
     #[clap(long, env = "BOLT_SIDECAR_MAX_COMMITTED_GAS")]
     pub(super) max_committed_gas: Option<NonZero<u64>>,
+    /// Min priority fee to accept for a commitment
+    #[clap(long, env = "BOLT_SIDECAR_MIN_PRIORITY_FEE")]
+    pub(super) min_priority_fee: Option<NonZero<u128>>,
     /// Validator indexes of connected validators that the sidecar
     /// should accept commitments on behalf of. Accepted values:
     /// - a comma-separated list of indexes (e.g. "1,2,3,4")
@@ -158,13 +166,19 @@ pub struct Limits {
     /// Maximum number of commitments to accept per block
     pub max_commitments_per_slot: NonZero<usize>,
     pub max_committed_gas_per_slot: NonZero<u64>,
+
+    /// Minimum priority fee to accept for a commitment in wei
+    pub min_priority_fee: NonZero<u128>,
 }
 
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            max_commitments_per_slot: NonZero::new(128).expect("Valid non-zero"),
-            max_committed_gas_per_slot: NonZero::new(10_000_000).expect("Valid non-zero"),
+            max_commitments_per_slot: NonZero::new(DEFAULT_MAX_COMMITMENTS)
+                .expect("Valid non-zero"),
+            max_committed_gas_per_slot: NonZero::new(DEFAULT_MAX_COMMITTED_GAS)
+                .expect("Valid non-zero"),
+            min_priority_fee: NonZero::new(DEFAULT_MIN_PRIORITY_FEE).expect("Valid non-zero"),
         }
     }
 }
@@ -193,6 +207,10 @@ impl TryFrom<Opts> for Config {
 
         if let Some(max_committed_gas) = opts.max_committed_gas {
             config.limits.max_committed_gas_per_slot = max_committed_gas;
+        }
+
+        if let Some(min_priority_fee) = opts.min_priority_fee {
+            config.limits.min_priority_fee = min_priority_fee;
         }
 
         if let Some(commit_boost_url) = &opts.signing.commit_boost_url {
