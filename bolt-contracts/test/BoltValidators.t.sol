@@ -12,6 +12,8 @@ contract BoltValidatorsTest is Test {
 
     BoltValidators public validators;
 
+    uint128 public constant PRECONF_MAX_GAS_LIMIT = 5_000_000;
+
     address admin = makeAddr("admin");
     address provider = makeAddr("provider");
     address operator = makeAddr("operator");
@@ -26,11 +28,11 @@ contract BoltValidatorsTest is Test {
         BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
 
         vm.prank(validator);
-        validators.registerValidatorUnsafe(pubkey, provider, operator);
+        validators.registerValidatorUnsafe(pubkey, 1_000_000, operator);
 
         BoltValidators.Validator memory registered = validators.getValidatorByPubkey(pubkey);
         assertEq(registered.exists, true);
-        assertEq(registered.authorizedCollateralProvider, provider);
+        assertEq(registered.maxCommittedGasLimit, 1_000_000);
         assertEq(registered.authorizedOperator, operator);
         assertEq(registered.controller, validator);
     }
@@ -39,11 +41,11 @@ contract BoltValidatorsTest is Test {
         BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
 
         vm.prank(validator);
-        validators.registerValidatorUnsafe(pubkey, provider, operator);
+        validators.registerValidatorUnsafe(pubkey, PRECONF_MAX_GAS_LIMIT, operator);
 
         vm.prank(validator);
         vm.expectRevert(IBoltValidators.ValidatorAlreadyExists.selector);
-        validators.registerValidatorUnsafe(pubkey, provider, operator);
+        validators.registerValidatorUnsafe(pubkey, PRECONF_MAX_GAS_LIMIT, operator);
     }
 
     function testUnsafeRegistrationWhenNotAllowed() public {
@@ -54,15 +56,7 @@ contract BoltValidatorsTest is Test {
 
         vm.prank(validator);
         vm.expectRevert(IBoltValidators.UnsafeRegistrationNotAllowed.selector);
-        validators.registerValidatorUnsafe(pubkey, provider, operator);
-    }
-
-    function testUnsafeRegistrationInvalidCollateralProvider() public {
-        BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
-
-        vm.prank(validator);
-        vm.expectRevert(IBoltValidators.InvalidAuthorizedCollateralProvider.selector);
-        validators.registerValidatorUnsafe(pubkey, address(0), operator);
+        validators.registerValidatorUnsafe(pubkey, PRECONF_MAX_GAS_LIMIT, operator);
     }
 
     function testUnsafeRegistrationInvalidOperator() public {
@@ -70,6 +64,6 @@ contract BoltValidatorsTest is Test {
 
         vm.prank(validator);
         vm.expectRevert(IBoltValidators.InvalidAuthorizedOperator.selector);
-        validators.registerValidatorUnsafe(pubkey, provider, address(0));
+        validators.registerValidatorUnsafe(pubkey, PRECONF_MAX_GAS_LIMIT, address(0));
     }
 }
