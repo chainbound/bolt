@@ -103,11 +103,11 @@ type Builder struct {
 	limiter                       *rate.Limiter
 	submissionOffsetFromEndOfSlot time.Duration
 
-	slotMu                sync.Mutex
-	slotConstraintsPubkey phase0.BLSPubKey // The pubkey of the authorized constraints signer
-	slotAttrs             types.BuilderPayloadAttributes
-	slotCtx               context.Context
-	slotCtxCancel         context.CancelFunc
+	slotMu                 sync.Mutex
+	slotConstraintsPubkeys []phase0.BLSPubKey // The pubkey of the authorized constraints signer
+	slotAttrs              types.BuilderPayloadAttributes
+	slotCtx                context.Context
+	slotCtxCancel          context.CancelFunc
 
 	stop chan struct{}
 }
@@ -564,9 +564,10 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 		return fmt.Errorf("could not get validator while submitting block for slot %d - %w", attrs.Slot, err)
 	}
 
-	// BOLT: TODO:
-	// - get delegation for the slot in attrs (the next slot)
-	// - save the delegation if it exists
+	proposerPubkey, err := utils.HexToPubkey(string(vd.Pubkey))
+	if err != nil {
+		return fmt.Errorf("could not parse pubkey (%s) - %w", vd.Pubkey, err)
+	}
 
 	// By default, the proposer key is the constraint signer key
 	pubkey, err := hex.DecodeString(string(vd.Pubkey))
@@ -574,7 +575,24 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 		log.Error("could not parse pubkey", "pubkey", vd.Pubkey, "err", err)
 	}
 
-	constraintsPubkey := phase0.BLSPubKey(pubkey)
+	constraintsPubkeys := []phase0.BLSPubKey{phase0.BLSPubKey(pubkey)}
+
+	// BOLT: get delegations for the slot
+	delegations, err := b.relay.GetDelegationsForSlot(attrs.Slot)
+	if err != nil {
+		log.Error("could not get delegations for slot, using default validator key", "slot", attrs.Slot, "err", err)
+	}
+
+	if len(delegations) > 0 {
+		constraintsPubkeys = make([]phase0.BLSPubKey, 0, len(delegations))
+		for _, delegation := range delegations {
+			constraintsPubkeys = append(constraintsPubkeys, delegation.Message.DelegateePubkey)
+		}
+	}
+
+	// BOLT: TODO:
+	// - get delegation for the slot in attrs (the next slot)
+	// - save the delegation if it exists
 
 	parentBlock := b.eth.GetBlockByHash(attrs.HeadHash)
 	if parentBlock == nil {
@@ -583,11 +601,6 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 
 	attrs.SuggestedFeeRecipient = [20]byte(vd.FeeRecipient)
 	attrs.GasLimit = core.CalcGasLimit(parentBlock.GasLimit(), vd.GasLimit)
-
-	proposerPubkey, err := utils.HexToPubkey(string(vd.Pubkey))
-	if err != nil {
-		return fmt.Errorf("could not parse pubkey (%s) - %w", vd.Pubkey, err)
-	}
 
 	if !b.eth.Synced() {
 		return errors.New("backend not Synced")
@@ -607,7 +620,7 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 
 	slotCtx, slotCtxCancel := context.WithTimeout(context.Background(), 12*time.Second)
 	b.slotAttrs = *attrs
-	b.slotConstraintsPubkey = constraintsPubkey
+	b.slotConstraintsPubkeys = constraintsPubkeys
 	b.slotCtx = slotCtx
 	b.slotCtxCancel = slotCtxCancel
 
