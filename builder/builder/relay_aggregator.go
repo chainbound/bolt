@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	builderSpec "github.com/attestantio/go-builder-client/spec"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -61,7 +61,7 @@ func (r *RemoteRelayAggregator) SubmitBlock(msg *builderSpec.VersionedSubmitBloc
 	return nil
 }
 
-func (r *RemoteRelayAggregator) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequestWithProofs, registration ValidatorData) error {
+func (r *RemoteRelayAggregator) SubmitBlockWithProofs(msg *types.VersionedSubmitBlockRequestWithProofs, registration ValidatorData) error {
 	r.registrationsCacheLock.RLock()
 	defer r.registrationsCacheLock.RUnlock()
 
@@ -81,8 +81,8 @@ func (r *RemoteRelayAggregator) SubmitBlockWithProofs(msg *common.VersionedSubmi
 	return nil
 }
 
-func (r *RemoteRelayAggregator) GetDelegationsForSlot(nextSlot uint64) (common.SignedDelegations, error) {
-	delegationsCh := make(chan *common.SignedDelegations, len(r.relays))
+func (r *RemoteRelayAggregator) GetDelegationsForSlot(nextSlot uint64) (types.SignedDelegations, error) {
+	delegationsCh := make(chan *types.SignedDelegations, len(r.relays))
 
 	for i, relay := range r.relays {
 		go func(relay IRelay, relayI int) {
@@ -99,7 +99,7 @@ func (r *RemoteRelayAggregator) GetDelegationsForSlot(nextSlot uint64) (common.S
 
 	err := errors.New("could not get delegations from any relay")
 
-	aggregated := common.SignedDelegations{}
+	aggregated := types.SignedDelegations{}
 	for i := 0; i < len(r.relays); i++ {
 		d := <-delegationsCh
 

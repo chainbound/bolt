@@ -23,14 +23,10 @@ import (
 
 var errHTTPErrorResponse = errors.New("HTTP error response")
 
-func DecodeConstraints(constraints *common.SignedConstraints) (types.HashToConstraintDecoded, error) {
+func DecodeConstraints(constraints *types.SignedConstraints) (types.HashToConstraintDecoded, error) {
 	decodedConstraints := make(types.HashToConstraintDecoded)
 	for _, tx := range constraints.Message.Transactions {
-		decoded := new(types.Transaction)
-		if err := decoded.UnmarshalBinary([]byte(*tx)); err != nil {
-			return nil, err
-		}
-		decodedConstraints[decoded.Hash()] = decoded
+		decodedConstraints[tx.Hash()] = tx
 	}
 	return decodedConstraints, nil
 }
@@ -143,7 +139,7 @@ func SendHTTPRequest(ctx context.Context, client http.Client, method, url string
 func CalculateMerkleMultiProofs(
 	payloadTransactions types.Transactions,
 	HashToConstraintDecoded types.HashToConstraintDecoded,
-) (inclusionProof *common.InclusionProof, rootNode *ssz.Node, err error) {
+) (inclusionProof *types.InclusionProof, rootNode *ssz.Node, err error) {
 	constraints, _, _ := types.ParseConstraintsDecoded(HashToConstraintDecoded)
 
 	// BOLT: generate merkle tree from payload transactions (we need raw RLP bytes for this)
@@ -200,7 +196,7 @@ func CalculateMerkleMultiProofs(
 	timeForProofs := time.Since(timeStart)
 	log.Info(fmt.Sprintf("[BOLT]: Calculated merkle multiproof for %d transactions in %s", len(constraints), timeForProofs))
 
-	inclusionProof = common.InclusionProofFromMultiProof(multiProof)
+	inclusionProof = types.InclusionProofFromMultiProof(multiProof)
 	inclusionProof.TransactionHashes = transactionHashes
 
 	return

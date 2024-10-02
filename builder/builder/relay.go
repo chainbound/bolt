@@ -11,7 +11,7 @@ import (
 
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/flashbots/go-boost-utils/utils"
 )
@@ -129,7 +129,7 @@ func (r *RemoteRelay) GetValidatorForSlot(nextSlot uint64) (ValidatorData, error
 	return ValidatorData{}, ErrValidatorNotFound
 }
 
-func (r *RemoteRelay) GetDelegationsForSlot(nextSlot uint64) (common.SignedDelegations, error) {
+func (r *RemoteRelay) GetDelegationsForSlot(nextSlot uint64) (types.SignedDelegations, error) {
 	log.Info("Getting delegations for slot", "slot", nextSlot, "endpoint", r.config.Endpoint)
 	endpoint := r.config.Endpoint + fmt.Sprintf("/relay/v1/builder/delegations?slot=%d", nextSlot)
 
@@ -137,10 +137,10 @@ func (r *RemoteRelay) GetDelegationsForSlot(nextSlot uint64) (common.SignedDeleg
 		panic("ssz not supported")
 	}
 
-	var dst common.SignedDelegations
+	var dst types.SignedDelegations
 	code, err := SendHTTPRequest(context.TODO(), *http.DefaultClient, http.MethodGet, endpoint, nil, &dst)
 	if err != nil {
-		return nil, fmt.Errorf("error sending http request block with proofs to relay %s. err: %w", r.config.Endpoint, err)
+		return nil, fmt.Errorf("error getting delegations from relay %s. err: %w", r.config.Endpoint, err)
 	}
 
 	if code > 299 {
@@ -206,7 +206,7 @@ func (r *RemoteRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, 
 	return nil
 }
 
-func (r *RemoteRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequestWithProofs, _ ValidatorData) error {
+func (r *RemoteRelay) SubmitBlockWithProofs(msg *types.VersionedSubmitBlockRequestWithProofs, _ ValidatorData) error {
 	log.Info("submitting block with constraint inclusion proofs to remote relay", "endpoint", r.config.Endpoint)
 	endpoint := r.config.Endpoint + "/relay/v1/builder/blocks_with_proofs"
 	if r.cancellationsEnabled {

@@ -8,7 +8,7 @@ import (
 	builderApiBellatrix "github.com/attestantio/go-builder-client/api/bellatrix"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,9 +25,9 @@ type testRelay struct {
 
 	requestedSlot            uint64
 	submittedMsg             *builderSpec.VersionedSubmitBlockRequest
-	submittedMsgWithProofs   *common.VersionedSubmitBlockRequestWithProofs
+	submittedMsgWithProofs   *types.VersionedSubmitBlockRequestWithProofs
 	submittedMsgCh           chan *builderSpec.VersionedSubmitBlockRequest
-	submittedMsgWithProofsCh chan *common.VersionedSubmitBlockRequestWithProofs
+	submittedMsgWithProofsCh chan *types.VersionedSubmitBlockRequestWithProofs
 }
 
 type testRelayAggBackend struct {
@@ -59,7 +59,7 @@ func (r *testRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, re
 	return r.sbError
 }
 
-func (r *testRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequestWithProofs, vd ValidatorData) error {
+func (r *testRelay) SubmitBlockWithProofs(msg *types.VersionedSubmitBlockRequestWithProofs, vd ValidatorData) error {
 	if r.submittedMsgWithProofsCh != nil {
 		select {
 		case r.submittedMsgWithProofsCh <- msg:
@@ -70,8 +70,8 @@ func (r *testRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockReques
 	return r.sbError
 }
 
-func (r *testRelay) GetDelegationsForSlot(nextSlot uint64) (common.SignedDelegations, error) {
-	return common.SignedDelegations{}, nil
+func (r *testRelay) GetDelegationsForSlot(nextSlot uint64) (types.SignedDelegations, error) {
+	return types.SignedDelegations{}, nil
 }
 
 func (r *testRelay) GetValidatorForSlot(nextSlot uint64) (ValidatorData, error) {

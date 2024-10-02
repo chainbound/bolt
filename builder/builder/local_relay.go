@@ -21,8 +21,8 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/bellatrix"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	eth2UtilBellatrix "github.com/attestantio/go-eth2-client/util/bellatrix"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/flashbots/go-boost-utils/bls"
 	"github.com/flashbots/go-boost-utils/ssz"
@@ -117,7 +117,7 @@ func (r *LocalRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, _
 	return r.submitBlock(msg.Bellatrix)
 }
 
-func (r *LocalRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequestWithProofs, _ ValidatorData) error {
+func (r *LocalRelay) SubmitBlockWithProofs(msg *types.VersionedSubmitBlockRequestWithProofs, _ ValidatorData) error {
 	panic("Not implemented!")
 }
 
@@ -235,8 +235,8 @@ func (r *LocalRelay) GetValidatorForSlot(nextSlot uint64) (ValidatorData, error)
 	return ValidatorData{}, errors.New("missing validator")
 }
 
-func (r *LocalRelay) GetDelegationsForSlot(nextSlot uint64) (common.SignedDelegations, error) {
-	return common.SignedDelegations{}, nil
+func (r *LocalRelay) GetDelegationsForSlot(nextSlot uint64) (types.SignedDelegations, error) {
+	return types.SignedDelegations{}, nil
 }
 
 func (r *LocalRelay) handleGetHeader(w http.ResponseWriter, req *http.Request) {

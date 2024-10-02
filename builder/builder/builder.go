@@ -67,8 +67,8 @@ type ValidatorData struct {
 
 type IRelay interface {
 	SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, vd ValidatorData) error
-	SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequestWithProofs, vd ValidatorData) error
-	GetDelegationsForSlot(nextSlot uint64) (common.SignedDelegations, error)
+	SubmitBlockWithProofs(msg *types.VersionedSubmitBlockRequestWithProofs, vd ValidatorData) error
+	GetDelegationsForSlot(nextSlot uint64) (types.SignedDelegations, error)
 	GetValidatorForSlot(nextSlot uint64) (ValidatorData, error)
 	Config() RelayConfig
 	Start() error
@@ -350,7 +350,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error
 
 		// We assume the data is the JSON representation of the constraints
 		log.Info(fmt.Sprintf("Received new constraint: %s", data))
-		constraintsSigned := make(common.SignedConstraintsList, 0, 8)
+		constraintsSigned := make(types.SignedConstraintsList, 0, 8)
 		if err := json.Unmarshal([]byte(data), &constraintsSigned); err != nil {
 			log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))
 			continue
@@ -365,7 +365,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error
 			oneValidSignature := false
 			// Check if the signature is valid against any of the authorized pubkeys
 			for _, pubkey := range b.slotConstraintsPubkeys {
-				valid, err := constraint.VerifySignature(pubkey)
+				valid, err := constraint.VerifySignature(pubkey, b.GetConstraintsDomain())
 				if err != nil || !valid {
 					log.Error("Failed to verify constraint signature", "err", err)
 					continue
@@ -411,6 +411,19 @@ func (b *Builder) Stop() error {
 	return nil
 }
 
+// GetConstraintsDomain returns the constraints domain used to sign constraints-API related messages.
+//
+// The builder signing domain is built as follows:
+// - We build a ForkData ssz container with the fork version and the genesis validators root. In the builder domain, this is an empty root.
+// - We take the hash tree root of this container and replace the first 4 bytes with the builder domain mask. That gives us the signing domain.
+//
+// To get the constraints domain, we take the builder domain and replace the first 4 bytes with the constraints domain type.
+func (b *Builder) GetConstraintsDomain() phase0.Domain {
+	domain := b.builderSigningDomain
+	copy(domain[:4], types.ConstraintsDomainType[:])
+	return domain
+}
+
 // BOLT: modify to calculate merkle inclusion proofs for committed transactions
 func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 	executableData := engine.BlockToExecutableData(opts.Block, opts.BlockValue, opts.BlobSidecars)
@@ -448,7 +461,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 		return err
 	}
 
-	var versionedBlockRequestWithConstraintProofs *common.VersionedSubmitBlockRequestWithProofs
+	var versionedBlockRequestWithConstraintProofs *types.VersionedSubmitBlockRequestWithProofs
 
 	// BOLT: fetch constraints from the cache, which is automatically updated by the SSE subscription
 	constraints, _ := b.constraintsCache.Get(opts.PayloadAttributes.Slot)
@@ -465,7 +478,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 			return err
 		}
 
-		versionedBlockRequestWithConstraintProofs = &common.VersionedSubmitBlockRequestWithProofs{
+		versionedBlockRequestWithConstraintProofs = &types.VersionedSubmitBlockRequestWithProofs{
 			VersionedSubmitBlockRequest: versionedBlockRequest,
 			Proofs:                      inclusionProof,
 		}
@@ -603,7 +616,7 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 		constraintsPubkeys = make([]phase0.BLSPubKey, 0, len(delegations))
 		for _, delegation := range delegations {
 			// Verify signature against the public key
-			valid, err := delegation.VerifySignature(pubkey)
+			valid, err := delegation.VerifySignature(pubkey, b.GetConstraintsDomain())
 			if err != nil || !valid {
 				log.Error("could not verify signature", "err", err)
 				continue
