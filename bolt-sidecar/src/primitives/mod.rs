@@ -387,6 +387,29 @@ impl FullTransaction {
     pub fn sender(&self) -> Option<&Address> {
         self.sender.as_ref()
     }
+
+    /// Returns the effective miner gas tip cap (`gasTipCap`) for the given base fee:
+    /// `min(maxFeePerGas - baseFee, maxPriorityFeePerGas)`
+    ///
+    /// Returns `None` if the basefee is higher than the [`Transaction::max_fee_per_gas`].
+    /// Ref: https://github.com/paradigmxyz/reth/blob/2d592125128c3742ff97b321884f93f9063abcb2/crates/primitives/src/transaction/mod.rs#L444
+    pub fn effective_tip_per_gas(&self, base_fee: u128) -> Option<u128> {
+        let max_fee_per_gas = self.max_fee_per_gas();
+
+        if max_fee_per_gas < base_fee {
+            return None;
+        }
+
+        // Calculate the difference between max_fee_per_gas and base_fee
+        let fee = max_fee_per_gas - base_fee;
+
+        // Compare the fee with max_priority_fee_per_gas (or gas price for non-EIP1559 transactions)
+        if let Some(priority_fee) = self.max_priority_fee_per_gas() {
+            Some(fee.min(priority_fee))
+        } else {
+            Some(fee)
+        }
+    }
 }
 
 fn serialize_txs<S: serde::Serializer>(
@@ -438,8 +461,8 @@ pub struct DelegationMessage {
 impl SignableBLS for DelegationMessage {
     fn digest(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
-        hasher.update(&self.validator_pubkey.to_vec());
-        hasher.update(&self.delegatee_pubkey.to_vec());
+        hasher.update(self.validator_pubkey.to_vec());
+        hasher.update(self.delegatee_pubkey.to_vec());
 
         hasher.finalize().into()
     }
@@ -460,8 +483,8 @@ pub struct RevocationMessage {
 impl SignableBLS for RevocationMessage {
     fn digest(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
-        hasher.update(&self.validator_pubkey.to_vec());
-        hasher.update(&self.delegatee_pubkey.to_vec());
+        hasher.update(self.validator_pubkey.to_vec());
+        hasher.update(self.delegatee_pubkey.to_vec());
 
         hasher.finalize().into()
     }

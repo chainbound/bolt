@@ -1,4 +1,3 @@
-use reth_primitives::TxType;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::str::FromStr;
 
@@ -146,25 +145,10 @@ impl InclusionRequest {
 
     /// Validates the priority fee against the max fee per gas.
     /// Returns true if the fee is less than or equal to the max fee per gas, false otherwise.
+    /// Ref: https://github.com/paradigmxyz/reth/blob/2d592125128c3742ff97b321884f93f9063abcb2/crates/transaction-pool/src/validate/eth.rs#L242
     pub fn validate_max_priority_fee(&self) -> bool {
         for tx in &self.txs {
-            // Calculate the effective fee depending on the transaction type
-            let effective_fee = match tx.tx_type() {
-                TxType::Legacy | TxType::Eip2930 => {
-                    match tx.tx_type() {
-                        // Retrieve the gas price depending on the transaction type
-                        TxType::Legacy => tx.as_legacy().map(|tx| tx.gas_price),
-                        TxType::Eip2930 => tx.as_eip2930().map(|tx| tx.gas_price),
-                        _ => None,
-                    }
-                    .unwrap_or(0)
-                }
-                // For EIP-1559 (or any other), the effective priority fee is the max priority fee
-                // per gas
-                _ => tx.max_priority_fee_per_gas().unwrap_or(0),
-            };
-
-            if effective_fee > tx.max_fee_per_gas() {
+            if tx.max_priority_fee_per_gas() > Some(tx.max_fee_per_gas()) {
                 return false;
             }
         }
@@ -177,29 +161,13 @@ impl InclusionRequest {
     /// priority fee, `false` otherwise.
     pub fn validate_min_priority_fee(&self, max_base_fee: u128, min_priority_fee: u128) -> bool {
         for tx in &self.txs {
-            // Calculate the effective priority fee depending on the transaction type
-            let effective_priority_fee = match tx.tx_type() {
-                TxType::Legacy | TxType::Eip2930 => {
-                    let gas_price = match tx.tx_type() {
-                        // Retrieve the gas price depending on the transaction type
-                        TxType::Legacy => tx.as_legacy().map(|tx| tx.gas_price),
-                        TxType::Eip2930 => tx.as_eip2930().map(|tx| tx.gas_price),
-                        _ => None,
-                    }
-                    .unwrap_or(0);
-
-                    // Compute the priority fee by subtracting the base fee from the gas price.
-                    // If the gas price is less than or equal to the base fee, the priority fee is
-                    // 0.
-                    gas_price.saturating_sub(max_base_fee)
-                }
-                // For EIP-1559 (or any other), the effective priority fee is the max priority fee
-                // per gas
-                _ => tx.max_priority_fee_per_gas().unwrap_or(0),
+            // If this returns None, the fee is lower than the basefee
+            let Some(tip) = tx.effective_tip_per_gas(max_base_fee) else {
+                return false;
             };
 
-            // Check if the computed priority fee is less than the required minimum
-            if effective_priority_fee < min_priority_fee {
+            // Check if the effective gas tip is more than the minimum priority fee
+            if tip < min_priority_fee {
                 return false;
             }
         }

@@ -189,7 +189,7 @@ fn random_constraints(count: usize) -> Vec<FullTransaction> {
 
     let req: InclusionRequest = serde_json::from_str(json_req).unwrap();
 
-    req.txs.iter().cloned().take(count).collect()
+    req.txs.iter().take(count).cloned().collect()
 }
 
 #[tokio::test]
