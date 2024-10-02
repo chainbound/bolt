@@ -160,20 +160,9 @@ impl InclusionRequest {
     /// Returns `true` if the "effective priority fee" is greater than or equal to the set minimum
     /// priority fee, `false` otherwise.
     pub fn validate_min_priority_fee(&self, max_base_fee: u128, min_priority_fee: u128) -> bool {
-        for tx in &self.txs {
-            // If this returns None, the fee is lower than the basefee
-            let Some(tip) = tx.effective_tip_per_gas(max_base_fee) else {
-                return false;
-            };
-
-            // Check if the effective gas tip is more than the minimum priority fee
-            if tip < min_priority_fee {
-                return false;
-            }
-        }
-
-        // If all transactions meet the minimum priority fee, return true
-        true
+        self.txs.iter().all(|tx| {
+            tx.effective_tip_per_gas(max_base_fee).map_or(false, |tip| tip >= min_priority_fee)
+        })
     }
 
     /// Returns the total gas limit of all transactions in this request.
