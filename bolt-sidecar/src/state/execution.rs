@@ -539,6 +539,7 @@ mod tests {
         signers::local::PrivateKeySigner,
     };
     use fetcher::{StateClient, StateFetcher};
+    use reth_primitives::constants::GWEI_TO_WEI;
     use tracing::info;
 
     use crate::{
@@ -869,15 +870,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_invalid_inclusion_request_min_priority_fee() -> eyre::Result<()> {
-        let _ = tracing_subscriber::fmt::try_init();
-
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
         let limits = Limits {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
-            min_priority_fee: NonZero::new(2000000000).unwrap(),
+            min_priority_fee: NonZero::new(2 * GWEI_TO_WEI as u128).unwrap(),
         };
 
         let mut state = ExecutionState::new(client.clone(), limits).await?;
@@ -890,7 +889,8 @@ mod tests {
         state.update_head(None, slot).await?;
 
         // Create a transaction with a max priority fee that is too low
-        let tx = default_test_transaction(*sender, None).with_max_priority_fee_per_gas(5);
+        let tx = default_test_transaction(*sender, None)
+            .with_max_priority_fee_per_gas(GWEI_TO_WEI as u128);
 
         let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
 
@@ -898,6 +898,61 @@ mod tests {
             state.validate_request(&mut request).await,
             Err(ValidationError::MaxPriorityFeePerGasTooLow)
         ));
+
+        // Create a transaction with a max priority fee that is correct
+        let tx = default_test_transaction(*sender, None)
+            .with_max_priority_fee_per_gas(3 * GWEI_TO_WEI as u128);
+
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
+
+        assert!(state.validate_request(&mut request).await.is_ok());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_invalid_inclusion_request_min_priority_fee_legacy() -> eyre::Result<()> {
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let limits = Limits {
+            max_commitments_per_slot: NonZero::new(10).unwrap(),
+            max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
+            min_priority_fee: NonZero::new(2 * GWEI_TO_WEI as u128).unwrap(),
+        };
+
+        let mut state = ExecutionState::new(client.clone(), limits).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let base_fee = state.basefee();
+        let Some(max_base_fee) = calculate_max_basefee(base_fee, 10 - slot) else {
+            return Err(eyre::eyre!("Failed to calculate max base fee"));
+        };
+
+        // Create a transaction with a gas price that is too low
+        let tx = default_test_transaction(*sender, None)
+            .with_gas_price(max_base_fee + GWEI_TO_WEI as u128);
+
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
+
+        assert!(matches!(
+            state.validate_request(&mut request).await,
+            Err(ValidationError::MaxPriorityFeePerGasTooLow)
+        ));
+
+        // Create a transaction with a gas price that is correct
+        let tx = default_test_transaction(*sender, None)
+            .with_gas_price(max_base_fee + 3 * GWEI_TO_WEI as u128);
+
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
+
+        assert!(state.validate_request(&mut request).await.is_ok());
 
         Ok(())
     }
