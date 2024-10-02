@@ -5,19 +5,19 @@ import {BLS12381} from "../lib/bls/BLS12381.sol";
 import {ValidatorProver} from "../lib/ssz/ValidatorProver.sol";
 
 interface IBoltValidators {
-    /// @notice Validator
+    /// @notice Validator info
     struct Validator {
+        // whether the validator exists in the registry
+        bool exists;
         // the incremental sequence number assigned to the validator
         uint64 sequenceNumber;
-        // the entity authorized to deposit collateral for the validator
-        // to add credibility to its commitments
-        address authorizedCollateralProvider;
+        // the maximum amount of gas that the validator can consume with preconfirmations
+        // in a single slot. Operators must respect this limit when making commitments.
+        uint128 maxCommittedGasLimit;
         // the entity authorized to make commitments on behalf of the validator
         address authorizedOperator;
         // the EOA that registered the validator and can update its configuration
         address controller;
-        // whether the validator exists in the registry
-        bool exists;
     }
 
     struct ProposerStatus {
@@ -34,6 +34,7 @@ interface IBoltValidators {
     error ValidatorAlreadyExists();
     error ValidatorDoesNotExist();
     error UnsafeRegistrationNotAllowed();
+    error UnauthorizedCaller();
 
     function getAllValidators() external view returns (Validator[] memory);
 
@@ -51,27 +52,29 @@ interface IBoltValidators {
 
     function registerValidatorUnsafe(
         BLS12381.G1Point calldata pubkey,
-        address authorizedCollateralProvider,
+        uint128 maxCommittedGasLimit,
         address authorizedOperator
     ) external;
 
     function registerValidator(
         BLS12381.G1Point calldata pubkey,
         BLS12381.G2Point calldata signature,
-        address authorizedCollateralProvider,
+        uint128 maxCommittedGasLimit,
         address authorizedOperator
     ) external;
 
     function batchRegisterValidators(
         BLS12381.G1Point[] calldata pubkeys,
         BLS12381.G2Point calldata signature,
-        address authorizedCollateralProvider,
+        uint128 maxCommittedGasLimit,
         address authorizedOperator
     ) external;
 
     function batchRegisterValidatorsUnsafe(
         BLS12381.G1Point[] calldata pubkeys,
-        address authorizedCollateralProvider,
+        uint128 maxCommittedGasLimit,
         address authorizedOperator
     ) external;
+
+    function updateMaxCommittedGasLimit(bytes32 pubkeyHash, uint128 maxCommittedGasLimit) external;
 }
