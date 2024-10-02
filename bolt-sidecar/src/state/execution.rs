@@ -531,7 +531,7 @@ mod tests {
     use std::{num::NonZero, str::FromStr, time::Duration};
 
     use alloy::{
-        consensus::constants::{ETH_TO_WEI, LEGACY_TX_TYPE_ID},
+        consensus::constants::ETH_TO_WEI,
         eips::eip2718::Encodable2718,
         network::EthereumWallet,
         primitives::{uint, Uint},
@@ -540,7 +540,6 @@ mod tests {
     };
     use fetcher::{StateClient, StateFetcher};
     use reth_primitives::constants::GWEI_TO_WEI;
-    use tracing::info;
 
     use crate::{
         crypto::{bls::Signer, SignableBLS, SignerBLS},
