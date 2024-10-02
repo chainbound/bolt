@@ -2,7 +2,6 @@
 pragma solidity 0.8.25;
 
 import {BLS12381} from "../lib/bls/BLS12381.sol";
-import {ValidatorProver} from "../lib/ssz/ValidatorProver.sol";
 
 interface IBoltValidators {
     /// @notice Validator
