@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -569,13 +568,13 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 		return fmt.Errorf("could not parse pubkey (%s) - %w", vd.Pubkey, err)
 	}
 
-	// By default, the proposer key is the constraint signer key
-	pubkey, err := hex.DecodeString(string(vd.Pubkey))
+	// BOLT: by default, the proposer key is the constraint signer key
+	pubkey, err := utils.HexToPubkey(string(vd.Pubkey))
 	if err != nil {
 		log.Error("could not parse pubkey", "pubkey", vd.Pubkey, "err", err)
 	}
 
-	constraintsPubkeys := []phase0.BLSPubKey{phase0.BLSPubKey(pubkey)}
+	constraintsPubkeys := []phase0.BLSPubKey{pubkey}
 
 	// BOLT: get delegations for the slot
 	delegations, err := b.relay.GetDelegationsForSlot(attrs.Slot)
@@ -586,13 +585,16 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 	if len(delegations) > 0 {
 		constraintsPubkeys = make([]phase0.BLSPubKey, 0, len(delegations))
 		for _, delegation := range delegations {
+			// Verify signature against the public key
+			valid, err := delegation.VerifySignature(pubkey)
+			if err != nil || !valid {
+				log.Error("could not verify signature", "err", err)
+				continue
+			}
+
 			constraintsPubkeys = append(constraintsPubkeys, delegation.Message.DelegateePubkey)
 		}
 	}
-
-	// BOLT: TODO:
-	// - get delegation for the slot in attrs (the next slot)
-	// - save the delegation if it exists
 
 	parentBlock := b.eth.GetBlockByHash(attrs.HeadHash)
 	if parentBlock == nil {
@@ -620,6 +622,7 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 
 	slotCtx, slotCtxCancel := context.WithTimeout(context.Background(), 12*time.Second)
 	b.slotAttrs = *attrs
+	// BOLT: save the authorized pubkeys for the upcoming slot
 	b.slotConstraintsPubkeys = constraintsPubkeys
 	b.slotCtx = slotCtx
 	b.slotCtxCancel = slotCtxCancel
