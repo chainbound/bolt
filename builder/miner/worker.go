@@ -1164,8 +1164,9 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 				return txRecovered.Sender == from
 			})
 
+			// The slice might be empty so the last value might be nil!
 			lowestNonceConstraintBySender := common.Last(constraintsBySender)
-			if lowestNonceConstraintBySender.Transaction.Nonce() < tx.Nonce() {
+			if lowestNonceConstraintBySender != nil && lowestNonceConstraintBySender.Transaction.Nonce() < tx.Nonce() {
 				// This means that the constraint with the lowest nonce from this sender
 				// has lower nonce than the pooled tx, so we cannot execute the pooled tx yet.
 				// We need to execute the constraint first.
