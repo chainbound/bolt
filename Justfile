@@ -46,8 +46,13 @@ builder-logs:
     @id=$(docker ps -n 100 | grep bolt-builder | awk -F' ' '{print $1}') && \
     docker logs -f $id
 
-# show the logs for the bolt devnet mev-boost sidecar
+# show the logs for the bolt devnet bolt-boost sidecar
 boost-logs:
+    @id=$(docker ps -n 100 | grep bolt-boost | awk -F' ' '{print $1}') && \
+    docker logs -f $id
+
+# show the logs for the bolt devnet mev-boost sidecar
+mev-boost-logs:
     @id=$(docker ps -n 100 | grep bolt-mev-boost | awk -F' ' '{print $1}') && \
     docker logs -f $id
 
