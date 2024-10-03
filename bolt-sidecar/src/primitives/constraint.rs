@@ -70,6 +70,11 @@ impl ConstraintsMessage {
 
         Self { pubkey, slot: request.slot, top: false, transactions }
     }
+
+    /// Builds a constraints message from a single transaction.
+    pub fn from_transaction(pubkey: BlsPublicKey, slot: u64, transaction: FullTransaction) -> Self {
+        Self { pubkey, slot, top: false, transactions: vec![transaction] }
+    }
 }
 
 impl SignableBLS for ConstraintsMessage {

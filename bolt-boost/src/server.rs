@@ -146,7 +146,7 @@ async fn delegate(
     State(state): State<PbsState<BuilderState>>,
     Json(delegation): Json<SignedDelegation>,
 ) -> Result<impl IntoResponse, PbsClientError> {
-    info!(pubkey = %delegation.message.pubkey, validator_index = delegation.message.validator_index, "Delegating signing rights");
+    info!(delegatee = %delegation.message.delegatee_pubkey, validator = %delegation.message.validator_pubkey, "Delegating signing rights");
     post_request(state, DELEGATE_PATH, &delegation).await?;
     Ok(StatusCode::OK)
 }
@@ -158,7 +158,7 @@ async fn revoke(
     State(state): State<PbsState<BuilderState>>,
     Json(revocation): Json<SignedRevocation>,
 ) -> Result<impl IntoResponse, PbsClientError> {
-    info!(pubkey = %revocation.message.pubkey, validator_index = revocation.message.validator_index, "Revoking signing rights");
+    info!(delegatee = %revocation.message.delegatee_pubkey, validator = %revocation.message.validator_pubkey, "Revoking signing rights");
     post_request(state, REVOKE_PATH, &revocation).await?;
     Ok(StatusCode::OK)
 }

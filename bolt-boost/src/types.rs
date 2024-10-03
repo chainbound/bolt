@@ -114,8 +114,8 @@ pub struct SignedDelegation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct DelegationMessage {
-    pub validator_index: u64,
-    pub pubkey: BlsPublicKey,
+    pub validator_pubkey: BlsPublicKey,
+    pub delegatee_pubkey: BlsPublicKey,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
@@ -126,8 +126,8 @@ pub struct SignedRevocation {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Encode, Decode)]
 pub struct RevocationMessage {
-    pub validator_index: u64,
-    pub pubkey: BlsPublicKey,
+    pub validator_pubkey: BlsPublicKey,
+    pub delegatee_pubkey: BlsPublicKey,
 }
 
 pub type GetHeaderWithProofsResponse = VersionedResponse<SignedExecutionPayloadHeaderWithProofs>;
