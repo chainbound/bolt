@@ -38,7 +38,7 @@ inspect:
 
 # show the logs for the bolt devnet relay
 relay-logs:
-    @id=$(docker ps -n 100 | grep mev-relay-api | awk -F' ' '{print $1}') && \
+    @id=$(docker ps -n 100 | grep helix-relay | awk -F' ' '{print $1}') && \
     docker logs -f $id
 
 # show the logs for the bolt devnet builder
@@ -137,6 +137,7 @@ build-images:
 	@just _build-relay
 	@just _build-sidecar
 	@just _build-mevboost
+	@just _build-bolt-boost
 
 # build the docker image for the bolt builder
 _build-builder:
@@ -153,6 +154,10 @@ _build-sidecar:
 # build the docker image for the bolt mev-boost sidecar
 _build-mevboost:
 	cd mev-boost && docker buildx build -t ghcr.io/chainbound/bolt-mev-boost:0.1.0 . --load
+
+# build the docker image for bolt-boost
+_build-bolt-boost:
+	cd bolt-boost && docker buildx build -t ghcr.io/chainbound/bolt-boost:0.1.0 . --load
 
 # deploy the bolt sidecar to the dev server
 deploy-sidecar-dev:
