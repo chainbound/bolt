@@ -11,7 +11,7 @@ import (
 
 	builderSpec "github.com/attestantio/go-builder-client/spec"
 	"github.com/attestantio/go-eth2-client/spec"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/flashbots/go-boost-utils/utils"
 )
@@ -129,6 +129,32 @@ func (r *RemoteRelay) GetValidatorForSlot(nextSlot uint64) (ValidatorData, error
 	return ValidatorData{}, ErrValidatorNotFound
 }
 
+func (r *RemoteRelay) GetDelegationsForSlot(nextSlot uint64) (types.SignedDelegations, error) {
+	log.Info("Getting delegations for slot", "slot", nextSlot, "endpoint", r.config.Endpoint)
+	endpoint := r.config.Endpoint + fmt.Sprintf("/relay/v1/builder/delegations?slot=%d", nextSlot)
+
+	if r.config.SszEnabled {
+		panic("ssz not supported")
+	}
+
+	// BOLT: Add 2s timeout to request
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	var dst types.SignedDelegations
+	code, err := SendHTTPRequest(ctx, *http.DefaultClient, http.MethodGet, endpoint, nil, &dst)
+	if err != nil {
+		return nil, fmt.Errorf("error getting delegations from relay %s. err: %w", r.config.Endpoint, err)
+	}
+
+	if code > 299 {
+		return nil, fmt.Errorf("non-ok response code %d from relay", code)
+	}
+
+	return dst, nil
+
+}
+
 func (r *RemoteRelay) Start() error {
 	return nil
 }
@@ -184,8 +210,8 @@ func (r *RemoteRelay) SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, 
 	return nil
 }
 
-func (r *RemoteRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequestWithProofs, _ ValidatorData) error {
-	log.Info("submitting block with proofs to remote relay", "endpoint", r.config.Endpoint)
+func (r *RemoteRelay) SubmitBlockWithProofs(msg *types.VersionedSubmitBlockRequestWithProofs, _ ValidatorData) error {
+	log.Info("submitting block with constraint inclusion proofs to remote relay", "endpoint", r.config.Endpoint)
 	endpoint := r.config.Endpoint + "/relay/v1/builder/blocks_with_proofs"
 	if r.cancellationsEnabled {
 		endpoint = endpoint + "?cancellations=1"
@@ -194,18 +220,15 @@ func (r *RemoteRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequ
 	var code int
 	var err error
 	if r.config.SszEnabled {
-		panic("ssz not supported for preconfs proofs yet")
+		panic("ssz not supported for constraint proofs yet")
 	} else {
-
-		// BOLT: send event to web demo
 		if len(msg.Proofs.TransactionHashes) > 0 {
-			number, _ := msg.Inner.BlockNumber()
+			number, _ := msg.BlockNumber()
 			message := fmt.Sprintf("sending block %d with proofs to relay (path: %s)", number, "/relay/v1/builder/blocks_with_proofs")
 			log.Info(message)
-			EmitBoltDemoEvent(message)
 		}
 
-		switch msg.Inner.Version {
+		switch msg.Version {
 		case spec.DataVersionBellatrix:
 			code, err = SendHTTPRequest(context.TODO(), *http.DefaultClient, http.MethodPost, endpoint, msg, nil)
 		case spec.DataVersionCapella:
@@ -213,7 +236,7 @@ func (r *RemoteRelay) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequ
 		case spec.DataVersionDeneb:
 			code, err = SendHTTPRequest(context.TODO(), *http.DefaultClient, http.MethodPost, endpoint, msg, nil)
 		default:
-			return fmt.Errorf("unknown data version %d", msg.Inner.Version)
+			return fmt.Errorf("unknown data version %d", msg.Version)
 		}
 	}
 

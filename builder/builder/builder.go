@@ -53,7 +53,8 @@ const (
 )
 
 const (
-	SubscribeConstraintsPath = "/relay/v1/builder/constraints"
+	GetConstraintsPath       = "/relay/v1/builder/constraints"
+	SubscribeConstraintsPath = "/relay/v1/builder/constraints_stream"
 )
 
 type PubkeyHex string
@@ -66,7 +67,8 @@ type ValidatorData struct {
 
 type IRelay interface {
 	SubmitBlock(msg *builderSpec.VersionedSubmitBlockRequest, vd ValidatorData) error
-	SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequestWithProofs, vd ValidatorData) error
+	SubmitBlockWithProofs(msg *types.VersionedSubmitBlockRequestWithProofs, vd ValidatorData) error
+	GetDelegationsForSlot(nextSlot uint64) (types.SignedDelegations, error)
 	GetValidatorForSlot(nextSlot uint64) (ValidatorData, error)
 	Config() RelayConfig
 	Start() error
@@ -100,10 +102,11 @@ type Builder struct {
 	limiter                       *rate.Limiter
 	submissionOffsetFromEndOfSlot time.Duration
 
-	slotMu        sync.Mutex
-	slotAttrs     types.BuilderPayloadAttributes
-	slotCtx       context.Context
-	slotCtxCancel context.CancelFunc
+	slotMu                 sync.Mutex
+	slotConstraintsPubkeys []phase0.BLSPubKey // The pubkey of the authorized constraints signer
+	slotAttrs              types.BuilderPayloadAttributes
+	slotCtx                context.Context
+	slotCtxCancel          context.CancelFunc
 
 	stop chan struct{}
 }
@@ -347,7 +350,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error
 
 		// We assume the data is the JSON representation of the constraints
 		log.Info(fmt.Sprintf("Received new constraint: %s", data))
-		constraintsSigned := make(common.SignedConstraintsList, 0, 8)
+		constraintsSigned := make(types.SignedConstraintsList, 0, 8)
 		if err := json.Unmarshal([]byte(data), &constraintsSigned); err != nil {
 			log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))
 			continue
@@ -359,13 +362,28 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error
 		}
 
 		for _, constraint := range constraintsSigned {
+			oneValidSignature := false
+			// Check if the signature is valid against any of the authorized pubkeys
+			for _, pubkey := range b.slotConstraintsPubkeys {
+				valid, err := constraint.VerifySignature(pubkey, b.GetConstraintsDomain())
+				if err != nil || !valid {
+					log.Error("Failed to verify constraint signature", "err", err)
+					continue
+				}
+
+				oneValidSignature = true
+			}
+
+			// If there is no valid signature, continue with the next constraint
+			if !oneValidSignature {
+				continue
+			}
+
 			decodedConstraints, err := DecodeConstraints(constraint)
 			if err != nil {
 				log.Error("Failed to decode constraint: ", err)
 				continue
 			}
-
-			EmitBoltDemoEvent(fmt.Sprintf("Received constraint from relay for slot %d, stored in cache (path: %s)", constraint.Message.Slot, SubscribeConstraintsPath))
 
 			// For every constraint, we need to check if it has already been seen for the associated slot
 			slotConstraints, _ := b.constraintsCache.Get(constraint.Message.Slot)
@@ -382,9 +400,7 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error
 
 			// Update the slot constraints in the cache
 			b.constraintsCache.Put(constraint.Message.Slot, slotConstraints)
-
 		}
-
 	}
 
 	return nil
@@ -395,7 +411,20 @@ func (b *Builder) Stop() error {
 	return nil
 }
 
-// BOLT: modify to calculate merkle inclusion proofs for preconfirmed transactions
+// GetConstraintsDomain returns the constraints domain used to sign constraints-API related messages.
+//
+// The builder signing domain is built as follows:
+// - We build a ForkData ssz container with the fork version and the genesis validators root. In the builder domain, this is an empty root.
+// - We take the hash tree root of this container and replace the first 4 bytes with the builder domain mask. That gives us the signing domain.
+//
+// To get the constraints domain, we take the builder domain and replace the first 4 bytes with the constraints domain type.
+func (b *Builder) GetConstraintsDomain() phase0.Domain {
+	domain := b.builderSigningDomain
+	copy(domain[:4], types.ConstraintsDomainType[:])
+	return domain
+}
+
+// BOLT: modify to calculate merkle inclusion proofs for committed transactions
 func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 	executableData := engine.BlockToExecutableData(opts.Block, opts.BlockValue, opts.BlobSidecars)
 	var dataVersion spec.DataVersion
@@ -432,7 +461,7 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 		return err
 	}
 
-	var versionedBlockRequestWithPreconfsProofs *common.VersionedSubmitBlockRequestWithProofs
+	var versionedBlockRequestWithConstraintProofs *types.VersionedSubmitBlockRequestWithProofs
 
 	// BOLT: fetch constraints from the cache, which is automatically updated by the SSE subscription
 	constraints, _ := b.constraintsCache.Get(opts.PayloadAttributes.Slot)
@@ -441,23 +470,17 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 	if len(constraints) > 0 {
 		message := fmt.Sprintf("sealing block %d with %d constraints", opts.Block.Number(), len(constraints))
 		log.Info(message)
-		EmitBoltDemoEvent(message)
 
-		timeStart := time.Now()
 		inclusionProof, _, err := CalculateMerkleMultiProofs(opts.Block.Transactions(), constraints)
-		timeForProofs := time.Since(timeStart)
 
 		if err != nil {
 			log.Error("[BOLT]: could not calculate merkle multiproofs", "err", err)
 			return err
 		}
 
-		// BOLT: send event to web demo
-		EmitBoltDemoEvent(fmt.Sprintf("created merkle multiproof of %d constraint(s) for block %d in %v", len(constraints), opts.Block.Number(), timeForProofs))
-
-		versionedBlockRequestWithPreconfsProofs = &common.VersionedSubmitBlockRequestWithProofs{
-			Inner:  versionedBlockRequest,
-			Proofs: inclusionProof,
+		versionedBlockRequestWithConstraintProofs = &types.VersionedSubmitBlockRequestWithProofs{
+			VersionedSubmitBlockRequest: versionedBlockRequest,
+			Proofs:                      inclusionProof,
 		}
 	}
 
@@ -474,13 +497,13 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 			log.Error("could not validate block", "version", dataVersion.String(), "err", err)
 		}
 	} else {
-		// NOTE: we can ignore preconfs for `processBuiltBlock`
+		// NOTE: we can ignore constraints for `processBuiltBlock`
 		go b.processBuiltBlock(opts.Block, opts.BlockValue, opts.OrdersClosedAt, opts.SealedAt, opts.CommitedBundles, opts.AllBundles, opts.UsedSbundles, &blockBidMsg)
-		if versionedBlockRequestWithPreconfsProofs != nil {
-			log.Info(fmt.Sprintf("[BOLT]: Sending sealed block to relay %s", versionedBlockRequestWithPreconfsProofs))
-			err = b.relay.SubmitBlockWithProofs(versionedBlockRequestWithPreconfsProofs, opts.ValidatorData)
+		if versionedBlockRequestWithConstraintProofs != nil {
+			log.Info(fmt.Sprintf("[BOLT]: Sending sealed block to relay %s", versionedBlockRequestWithConstraintProofs))
+			err = b.relay.SubmitBlockWithProofs(versionedBlockRequestWithConstraintProofs, opts.ValidatorData)
 		} else if len(constraints) == 0 {
-			// If versionedBlockRequestWithPreconfsProofs is nil and no constraints, then we don't have proofs to send
+			// If versionedBlockRequestWithConstraintsProofs is nil and no constraints, then we don't have proofs to send
 			err = b.relay.SubmitBlock(versionedBlockRequest, opts.ValidatorData)
 		} else {
 			log.Warn(fmt.Sprintf("[BOLT]: Could not send sealed block this time because we have %d constraints but no proofs", len(constraints)))
@@ -570,6 +593,40 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 		return fmt.Errorf("could not get validator while submitting block for slot %d - %w", attrs.Slot, err)
 	}
 
+	proposerPubkey, err := utils.HexToPubkey(string(vd.Pubkey))
+	if err != nil {
+		return fmt.Errorf("could not parse pubkey (%s) - %w", vd.Pubkey, err)
+	}
+
+	// BOLT: by default, the proposer key is the constraint signer key
+	pubkey, err := utils.HexToPubkey(string(vd.Pubkey))
+	if err != nil {
+		log.Error("could not parse pubkey", "pubkey", vd.Pubkey, "err", err)
+	}
+	constraintsPubkeys := []phase0.BLSPubKey{pubkey}
+
+	// BOLT: get delegations for the slot
+	delegations, err := b.relay.GetDelegationsForSlot(attrs.Slot)
+	if err != nil {
+		log.Error("could not get delegations for slot, using default validator key", "slot", attrs.Slot, "err", err)
+	}
+
+	if len(delegations) > 0 {
+		// If there are delegations, reset the constraintsPubkeys (i.e. remove the validator key as authorized)
+		constraintsPubkeys = make([]phase0.BLSPubKey, 0, len(delegations))
+		for _, delegation := range delegations {
+			// Verify signature against the public key
+			valid, err := delegation.VerifySignature(pubkey, b.GetConstraintsDomain())
+			if err != nil || !valid {
+				log.Error("could not verify signature", "err", err)
+				continue
+			}
+
+			// If signature is valid, add the pubkey to the list of authorized constraint pubkeys
+			constraintsPubkeys = append(constraintsPubkeys, delegation.Message.DelegateePubkey)
+		}
+	}
+
 	parentBlock := b.eth.GetBlockByHash(attrs.HeadHash)
 	if parentBlock == nil {
 		return fmt.Errorf("parent block hash not found in block tree given head block hash %s", attrs.HeadHash)
@@ -577,11 +634,6 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 
 	attrs.SuggestedFeeRecipient = [20]byte(vd.FeeRecipient)
 	attrs.GasLimit = core.CalcGasLimit(parentBlock.GasLimit(), vd.GasLimit)
-
-	proposerPubkey, err := utils.HexToPubkey(string(vd.Pubkey))
-	if err != nil {
-		return fmt.Errorf("could not parse pubkey (%s) - %w", vd.Pubkey, err)
-	}
 
 	if !b.eth.Synced() {
 		return errors.New("backend not Synced")
@@ -601,6 +653,8 @@ func (b *Builder) OnPayloadAttribute(attrs *types.BuilderPayloadAttributes) erro
 
 	slotCtx, slotCtxCancel := context.WithTimeout(context.Background(), 12*time.Second)
 	b.slotAttrs = *attrs
+	// BOLT: save the authorized pubkeys for the upcoming slot
+	b.slotConstraintsPubkeys = constraintsPubkeys
 	b.slotCtx = slotCtx
 	b.slotCtxCancel = slotCtxCancel
 
