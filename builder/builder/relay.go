@@ -137,8 +137,12 @@ func (r *RemoteRelay) GetDelegationsForSlot(nextSlot uint64) (types.SignedDelega
 		panic("ssz not supported")
 	}
 
+	// BOLT: Add 2s timeout to request
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
 	var dst types.SignedDelegations
-	code, err := SendHTTPRequest(context.TODO(), *http.DefaultClient, http.MethodGet, endpoint, nil, &dst)
+	code, err := SendHTTPRequest(ctx, *http.DefaultClient, http.MethodGet, endpoint, nil, &dst)
 	if err != nil {
 		return nil, fmt.Errorf("error getting delegations from relay %s. err: %w", r.config.Endpoint, err)
 	}
