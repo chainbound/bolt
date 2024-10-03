@@ -25,11 +25,11 @@ mev_params:
   mev_builder_cl_image: sigp/lighthouse:latest
   # Bolt-specific images:
   bolt_boost_image: ghcr.io/chainbound/bolt-boost:0.1.0
+  bolt_sidecar_image: ghcr.io/chainbound/bolt-sidecar:0.1.0
   helix_relay_image: ghcr.io/chainbound/helix:0.1.0
   mev_relay_image: ghcr.io/chainbound/bolt-relay:0.1.0
   mev_builder_image: ghcr.io/chainbound/bolt-builder:0.1.0
   mev_boost_image: ghcr.io/chainbound/bolt-mev-boost:0.1.0
-  mev_sidecar_image: ghcr.io/chainbound/bolt-sidecar:0.1.0
 
   mev_boost_args: []
   mev_relay_api_extra_args: []
