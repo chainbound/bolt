@@ -6,7 +6,6 @@ use alloy::{
     signers::k256::sha2::{Digest, Sha256},
 };
 use axum::http::HeaderMap;
-use commit_boost::prelude::tree_hash;
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use ssz_derive::{Decode, Encode};

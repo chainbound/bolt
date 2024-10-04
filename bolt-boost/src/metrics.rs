@@ -1,4 +1,4 @@
-use commit_boost::prelude::PbsService;
+use cb_pbs::PbsService;
 use lazy_static::lazy_static;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,

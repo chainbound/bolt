@@ -21,9 +21,10 @@ use cb_common::{
     },
     signature::verify_signed_message,
     types::Chain,
-    utils::{get_user_agent_with_version, ms_into_slot},
+    utils::{get_user_agent_with_version, ms_into_slot, utcnow_ms},
 };
-use commit_boost::prelude::*;
+use cb_pbs::{register_validator, BuilderApi, BuilderApiState, PbsState};
+// use commit_boost::prelude::*;
 use eyre::Result;
 use futures::{future::join_all, stream::FuturesUnordered, StreamExt};
 use serde::Serialize;
@@ -444,7 +445,7 @@ async fn send_one_get_header(
     debug!(
         latency = ?request_latency,
         block_hash = %get_header_response.data.message.header.block_hash,
-        value_eth = format_ether(get_header_response.data.message.value()),
+        value_eth = format_ether(get_header_response.data.message.value),
         "received new header"
     );
 
@@ -471,7 +472,7 @@ fn validate_header(
     let block_hash = signed_header.message.header.block_hash;
     let received_relay_pubkey = signed_header.message.pubkey;
     let tx_root = signed_header.message.header.transactions_root;
-    let value = signed_header.message.value();
+    let value = signed_header.message.value;
 
     if block_hash == B256::ZERO {
         return Err(ValidationError::EmptyBlockhash);
