@@ -1,0 +1,48 @@
+name: Bolt Sidecar CI
+
+on:
+  push:
+    paths:
+      - "bolt-sidecar/**"
+  pull_request:
+    paths:
+      - "bolt-sidecar/**"
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cargo-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RUST_BACKTRACE: 1
+
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+
+      - name: Install cargo-nextest
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: cargo-nextest
+
+      - name: Run bolt-sidecar tests
+        run: cd bolt-sidecar && cargo nextest run --workspace --retries 3
+        env:
+          RPC_URL: ${{ secrets.RPC_URL }}
