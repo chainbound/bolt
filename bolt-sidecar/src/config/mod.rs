@@ -31,7 +31,7 @@ pub const DEFAULT_CONSTRAINTS_PROXY_PORT: u16 = 18551;
 // Default limit values
 pub const DEFAULT_MAX_COMMITMENTS: usize = 128;
 pub const DEFAULT_MAX_COMMITTED_GAS: u64 = 10_000_000;
-pub const DEFAULT_MIN_PRIORITY_FEE: u128 = 1000000000; // 1 Gwei
+pub const DEFAULT_MIN_PRIORITY_FEE: u128 = 1_000_000_000; // 1 Gwei
 
 /// Command-line options for the Bolt sidecar
 #[derive(Parser, Debug)]
