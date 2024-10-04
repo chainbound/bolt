@@ -15,7 +15,7 @@ thiserror = "1.0.63"
 reqwest = "0.12.7"
 
 # crypto
-ssz_rs = { git = "https://github.com/mempirate/ssz-rs", branch = "feat/bump-deps", features = [
+ssz_rs = { git = "https://github.com/ralexstokes/ssz-rs", rev = "ec3073e", features = [
     "sha2-asm",
 ] }
 tree_hash = "0.8"
@@ -40,8 +40,8 @@ alloy = { version = "0.3.6", features = [
 ] }
 
 # commit-boost
-cb-common = { git = "https://github.com/commit-boost/commit-boost-client", rev = "v0.3.0" }
-cb-pbs = { git = "https://github.com/commit-boost/commit-boost-client", rev = "v0.3.0" }
+cb-common = { git = "https://github.com/commit-boost/commit-boost-client", tag = "v0.3.0" }
+cb-pbs = { git = "https://github.com/commit-boost/commit-boost-client", tag = "v0.3.0" }
 
 # other
 rand = "0.8.5"

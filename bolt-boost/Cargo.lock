@@ -1131,7 +1131,7 @@ dependencies = [
 [[package]]
 name = "cb-common"
 version = "0.3.0"
-source = "git+https://github.com/commit-boost/commit-boost-client?rev=v0.3.0#d511c267243b3371f4d47604aebe6a20dbbd0e79"
+source = "git+https://github.com/commit-boost/commit-boost-client?tag=v0.3.0#d511c267243b3371f4d47604aebe6a20dbbd0e79"
 dependencies = [
  "alloy",
  "axum",
@@ -1162,7 +1162,7 @@ dependencies = [
 [[package]]
 name = "cb-metrics"
 version = "0.3.0"
-source = "git+https://github.com/commit-boost/commit-boost-client?rev=v0.3.0#d511c267243b3371f4d47604aebe6a20dbbd0e79"
+source = "git+https://github.com/commit-boost/commit-boost-client?tag=v0.3.0#d511c267243b3371f4d47604aebe6a20dbbd0e79"
 dependencies = [
  "axum",
  "cb-common",
@@ -1176,7 +1176,7 @@ dependencies = [
 [[package]]
 name = "cb-pbs"
 version = "0.3.0"
-source = "git+https://github.com/commit-boost/commit-boost-client?rev=v0.3.0#d511c267243b3371f4d47604aebe6a20dbbd0e79"
+source = "git+https://github.com/commit-boost/commit-boost-client?tag=v0.3.0#d511c267243b3371f4d47604aebe6a20dbbd0e79"
 dependencies = [
  "alloy",
  "async-trait",
@@ -3856,7 +3856,7 @@ dependencies = [
 [[package]]
 name = "ssz_rs"
 version = "0.9.0"
-source = "git+https://github.com/mempirate/ssz-rs?branch=feat/bump-deps#5bce60fa871e4ecd31024ea2a7be58a6c74f7dfa"
+source = "git+https://github.com/ralexstokes/ssz-rs?rev=ec3073e#ec3073e2273b4d0873fcb6df68ff4eff79588e92"
 dependencies = [
  "alloy-primitives 0.8.5",
  "bitvec",
@@ -3868,7 +3868,7 @@ dependencies = [
 [[package]]
 name = "ssz_rs_derive"
 version = "0.9.0"
-source = "git+https://github.com/mempirate/ssz-rs?branch=feat/bump-deps#5bce60fa871e4ecd31024ea2a7be58a6c74f7dfa"
+source = "git+https://github.com/ralexstokes/ssz-rs?rev=ec3073e#ec3073e2273b4d0873fcb6df68ff4eff79588e92"
 dependencies = [
  "proc-macro2",
  "quote",
