@@ -11,6 +11,16 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use eyre::Result;
+use futures::{future::join_all, stream::FuturesUnordered, StreamExt};
+use serde::Serialize;
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
+use tokio::time::sleep;
+use tracing::{debug, error, info, warn, Instrument};
+
 use cb_common::{
     config::PbsConfig,
     constants::APPLICATION_BUILDER_DOMAIN,
@@ -24,16 +34,6 @@ use cb_common::{
     utils::{get_user_agent_with_version, ms_into_slot, utcnow_ms},
 };
 use cb_pbs::{register_validator, BuilderApi, BuilderApiState, PbsState};
-// use commit_boost::prelude::*;
-use eyre::Result;
-use futures::{future::join_all, stream::FuturesUnordered, StreamExt};
-use serde::Serialize;
-use std::{
-    collections::HashMap,
-    time::{Duration, Instant},
-};
-use tokio::time::sleep;
-use tracing::{debug, error, info, warn, Instrument};
 
 use crate::metrics::{
     GET_HEADER_WP_TAG, RELAY_INVALID_BIDS, RELAY_LATENCY, RELAY_STATUS_CODE, TIMEOUT_ERROR_CODE_STR,

@@ -1,6 +1,7 @@
+use eyre::Result;
+
 use cb_common::{config::load_pbs_custom_config, utils::initialize_pbs_tracing_log};
 use cb_pbs::{PbsService, PbsState};
-use eyre::Result;
 
 mod constraints;
 mod error;

@@ -1,9 +1,10 @@
-use cb_pbs::PbsService;
 use lazy_static::lazy_static;
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_gauge_with_registry, HistogramVec, IntCounterVec, IntGauge, Registry,
 };
+
+use cb_pbs::PbsService;
 
 pub(crate) const TIMEOUT_ERROR_CODE_STR: &str = "555";
 pub(crate) const GET_HEADER_WP_TAG: &str = "get_header_with_proofs";
