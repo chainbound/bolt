@@ -12,7 +12,7 @@ use beacon_api_client::{mainnet::Client as BeaconApiClient, BlockId, ProposerDut
 use rand::{thread_rng, Rng};
 use serde_json::Value;
 
-pub const NOICE_GAS_PRICE: u128 = 69_420_000u128;
+pub const DEFAULT_GAS_PRICE: u128 = 2_000_000_000u128; // 2 gwei
 pub const DEAD_ADDRESS: &str = "0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD";
 
 /// Generates random ETH transfer to `DEAD_ADDRESS` with a random payload.
@@ -21,7 +21,7 @@ pub fn generate_random_tx() -> TransactionRequest {
         .with_to(Address::from_str(DEAD_ADDRESS).unwrap())
         .with_value(U256::from(thread_rng().gen_range(1..100)))
         .with_gas_limit(1000000u128)
-        .with_gas_price(NOICE_GAS_PRICE)
+        .with_gas_price(DEFAULT_GAS_PRICE)
 }
 
 /// Generate random transaction with blob (eip4844)
