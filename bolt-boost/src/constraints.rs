@@ -74,7 +74,8 @@ impl ConstraintsCache {
 
         let message_with_data = ConstraintsWithProofData::try_from(constraints)?;
 
-        if let Some(cs) = self.cache.write().get_mut(&slot) {
+        let mut cache = self.cache.write();
+        if let Some(cs) = cache.get_mut(&slot) {
             if cs.len() >= MAX_CONSTRAINTS_PER_SLOT {
                 error!("Max constraints per slot reached for slot {}", slot);
                 return Err(Error::LimitReached(slot));
@@ -82,7 +83,7 @@ impl ConstraintsCache {
 
             cs.push(message_with_data);
         } else {
-            self.cache.write().insert(slot, vec![message_with_data]);
+            cache.insert(slot, vec![message_with_data]);
         }
 
         metrics::CONSTRAINTS_CACHE_SIZE.inc();
@@ -127,15 +128,15 @@ mod tests {
             transactions: vec![tx],
         };
 
-        cache.insert(0, constraints.clone()).unwrap();
-
         assert!(cache.conflicts_with(&0, &constraints).is_none());
-        assert!(cache.conflicts_with(&1, &constraints).is_none());
 
         cache.insert(0, constraints.clone()).unwrap();
+
         assert!(matches!(
             cache.conflicts_with(&0, &constraints),
             Some(Conflict::DuplicateTransaction)
         ));
+
+        assert!(cache.conflicts_with(&1, &constraints).is_none());
     }
 }
