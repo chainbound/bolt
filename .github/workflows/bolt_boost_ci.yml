@@ -1,6 +1,12 @@
-name: Bolt-sidecar CI
+name: Rust CI
 
-on: [push, pull_request]
+on:
+  push:
+    paths:
+      - "bolt-boost/**"
+  pull_request:
+    paths:
+      - "bolt-boost/**"
 
 env:
   CARGO_TERM_COLOR: always
@@ -23,9 +29,6 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Foundry
-        uses: foundry-rs/foundry-toolchain@v1
-
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@v2
         with:
@@ -36,7 +39,7 @@ jobs:
         with:
           crate: cargo-nextest
 
-      - name: Run all tests
-        run: cd bolt-sidecar && cargo nextest run --workspace --retries 3
+      - name: Run bolt-boost tests
+        run: cd bolt-boost && cargo nextest run --workspace --retries 3
         env:
           RPC_URL: ${{ secrets.RPC_URL }}
