@@ -1,6 +1,7 @@
 use eyre::Result;
+use tracing_subscriber::EnvFilter;
 
-use cb_common::{config::load_pbs_custom_config, utils::initialize_pbs_tracing_log};
+use cb_common::config::load_pbs_custom_config;
 use cb_pbs::{PbsService, PbsState};
 
 mod constraints;
@@ -13,13 +14,15 @@ mod types;
 #[cfg(test)]
 mod testutil;
 
-use server::{BuilderState, ConstraintsApi};
-use types::Config;
+use crate::{
+    server::{BuilderState, ConstraintsApi},
+    types::Config,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let (pbs_config, extra) = load_pbs_custom_config::<Config>()?;
-    let _guard = initialize_pbs_tracing_log();
+    tracing_subscriber::fmt().with_env_filter(EnvFilter::from_default_env()).init();
 
     let chain = pbs_config.chain;
     tracing::info!(?chain, "Starting bolt-boost with the following relays:");
