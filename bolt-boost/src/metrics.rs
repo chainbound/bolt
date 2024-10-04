@@ -32,7 +32,7 @@ lazy_static! {
 
     /// Latency by relay by endpoint
     pub static ref RELAY_LATENCY: HistogramVec = register_histogram_vec_with_registry!(
-        "relay_latency",
+        "relay_latency_bolt",
         "HTTP latency by relay",
         &["endpoint", "relay_id"],
         BOLT_BOOST_METRICS
@@ -41,7 +41,7 @@ lazy_static! {
 
     /// Status code received by relay by endpoint
     pub static ref RELAY_STATUS_CODE: IntCounterVec = register_int_counter_vec_with_registry!(
-        "relay_status_code_total",
+        "relay_status_code_total_bolt",
         "HTTP status code received by relay",
         &["http_status_code", "endpoint", "relay_id"],
         BOLT_BOOST_METRICS
