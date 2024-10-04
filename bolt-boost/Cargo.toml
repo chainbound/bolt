@@ -14,9 +14,11 @@ eyre = "0.6.12"
 thiserror = "1.0.63"
 reqwest = "0.12.7"
 
-ssz_rs = { git = "https://github.com/ralexstokes/ssz-rs", rev = "1df4cd9b", features = [
+# crypto
+ssz_rs = { git = "https://github.com/mempirate/ssz-rs", branch = "feat/bump-deps", features = [
     "sha2-asm",
-] } # crypto
+] }
+tree_hash = "0.8"
 
 # tracing & metrics
 tracing = "0.1.40"
@@ -26,23 +28,27 @@ prometheus = "0.13.4"
 # serialization
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.115"
-ethereum_ssz = "0.5"
-ethereum_ssz_derive = "0.5"
+ethereum_ssz = "0.7.0"
+ethereum_ssz_derive = "0.7.0"
 
 # alloy
-alloy = { version = "0.2.0", features = [
-    "full",
+alloy = { version = "0.3.6", features = [
+    "signer-local",
     "provider-trace-api",
     "rpc-types-beacon",
     "rpc-types-engine",
 ] }
 
 # commit-boost
-commit-boost = { git = "https://github.com/commit-boost/commit-boost-client", rev = "45ce8f1b" }
-cb-common = { git = "https://github.com/commit-boost/commit-boost-client", rev = "45ce8f1b" }
+cb-common = { git = "https://github.com/commit-boost/commit-boost-client", rev = "v0.3.0" }
+cb-pbs = { git = "https://github.com/commit-boost/commit-boost-client", rev = "v0.3.0" }
 
 # other
-types = { git = "https://github.com/sigp/lighthouse", rev = "2e0eb6d1" }
 rand = "0.8.5"
 parking_lot = "0.12.3"
 lazy_static = "1.5.0"
+
+[dev-dependencies]
+# NOTE: we need this in order to play nice with Lighthouse types at version 5.3.0
+ssz_compat = { version = "0.5", package = "ethereum_ssz" }
+types = { git = "https://github.com/sigp/lighthouse", tag = "v5.3.0" }
