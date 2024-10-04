@@ -130,7 +130,9 @@ Make sure you have the following requirements on your machine:
 
 > [!WARNING]
 > The Kurtosis CLI version tested is `0.88.16`. Some issues may arise if you are
-> using a different version. Please make sure to install the correct version.
+> using a different version. 
+>
+> [Please make sure to install the correct version](https://docs.kurtosis.com/install-historical/).
 
 Then, clone this repository and navigate to the root directory of the project:
 
