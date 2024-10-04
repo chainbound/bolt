@@ -1,4 +1,4 @@
-name: Rust CI
+name: Bolt Sidecar CI
 
 on:
   push:
