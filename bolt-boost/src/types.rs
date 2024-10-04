@@ -1,7 +1,7 @@
 use alloy::{
     consensus::TxEnvelope,
     eips::eip2718::{Decodable2718, Eip2718Error},
-    primitives::{keccak256, Bytes, TxHash, B256},
+    primitives::{Bytes, TxHash, B256},
     rpc::types::beacon::{BlsPublicKey, BlsSignature},
     signers::k256::sha2::{Digest, Sha256},
 };
@@ -53,7 +53,7 @@ impl SignedConstraints {
 
 #[derive(Debug, Clone, Serialize, Eq, PartialEq, Deserialize, Encode, Decode)]
 pub struct ConstraintsMessage {
-    pub validator_index: u64,
+    pub pubkey: BlsPublicKey,
     pub slot: u64,
     pub top: bool,
     pub transactions: Vec<Bytes>,
@@ -63,12 +63,14 @@ impl ConstraintsMessage {
     /// Returns the digest of this message.
     pub fn digest(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
-        hasher.update(self.validator_index.to_le_bytes());
+        hasher.update(self.pubkey);
         hasher.update(self.slot.to_le_bytes());
         hasher.update((self.top as u8).to_le_bytes());
 
-        for constraint in &self.transactions {
-            hasher.update(keccak256(constraint));
+        for bytes in &self.transactions {
+            let tx = TxEnvelope::decode_2718(&mut bytes.as_ref()).expect("valid transaction");
+
+            hasher.update(tx.tx_hash());
         }
 
         hasher.finalize().into()
