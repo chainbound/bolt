@@ -2,6 +2,13 @@
 default:
   @just --list --unsorted
 
+# 1. Make sure the nightly-2024-10-03 toolchain is installed
+# 2. cd to git root and cd into crate
+fmt crate:
+  rustup toolchain install nightly-2024-10-03 > /dev/null 2>&1 && \
+  cd $(git rev-parse --show-toplevel)/{{crate}} && \
+  cargo +nightly-2024-10-03 fmt
+
 # run the web demo locally
 demo:
 	chmod +x ./scripts/start-demo.sh
