@@ -127,7 +127,7 @@ send-preconf count='1':
 	cd bolt-kurtosis-client && RUST_LOG=info cargo run -- \
 		--provider-url $(kurtosis port print bolt-devnet el-1-geth-lighthouse rpc) \
 		--beacon-client-url $(kurtosis port print bolt-devnet cl-1-lighthouse-geth http) \
-		--bolt-sidecar-url http://$(kurtosis port print bolt-devnet mev-sidecar-api api)  \
+		--bolt-sidecar-url http://$(kurtosis port print bolt-devnet bolt-sidecar api)  \
 		--private-key 53321db7c1e331d93a11a41d16f004d7ff63972ec8ec7c25db329728ceeb1710 \
 		--slot head \
 		--count {{count}}
@@ -137,7 +137,7 @@ send-blob-preconf count='1':
 	cd bolt-kurtosis-client && RUST_LOG=info cargo run -- \
 		--provider-url $(kurtosis port print bolt-devnet el-1-geth-lighthouse rpc) \
 		--beacon-client-url $(kurtosis port print bolt-devnet cl-1-lighthouse-geth http) \
-		--bolt-sidecar-url http://$(kurtosis port print bolt-devnet mev-sidecar-api api)  \
+		--bolt-sidecar-url http://$(kurtosis port print bolt-devnet bolt-sidecar api)  \
 		--private-key 53321db7c1e331d93a11a41d16f004d7ff63972ec8ec7c25db329728ceeb1710 \
 		--slot head \
 		--blob \
