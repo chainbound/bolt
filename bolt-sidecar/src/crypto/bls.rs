@@ -21,14 +21,6 @@ pub type BLSSig = FixedBytes<96>;
 pub trait SignableBLS {
     /// Returns the digest of the object.
     fn digest(&self) -> [u8; 32];
-
-    /// Verify the signature of the object with the given public key.
-    ///
-    /// Note: The default implementation should be used where possible.
-    fn verify(&self, signature: &Signature, pubkey: &BlsPublicKey) -> bool {
-        signature.verify(false, &self.digest(), BLS_DST_PREFIX, &[], pubkey, true) ==
-            BLST_ERROR::BLST_SUCCESS
-    }
 }
 
 /// A generic signing trait to generate BLS signatures.
@@ -81,14 +73,40 @@ impl Signer {
         Ok(BLSSig::from_slice(&sig.to_bytes()))
     }
 
-    /// Verify the signature of the object with the given public key.
-    pub fn verify<T: SignableBLS>(
+    /// Verify the signature with the public key of the signer using the Application Builder domain.
+    pub fn verify_application_builder_root(
         &self,
-        obj: &T,
+        root: [u8; 32],
+        signature: &Signature,
+    ) -> eyre::Result<()> {
+        self.verify_root(root, signature, &self.pubkey(), self.chain.builder_domain())
+    }
+
+    /// Verify the signature with the public key of the signer using the Commit Boost domain.
+    pub fn verify_commit_boost_root(
+        &self,
+        root: [u8; 32],
+        signature: &Signature,
+    ) -> eyre::Result<()> {
+        self.verify_root(root, signature, &self.pubkey(), self.chain.commit_boost_domain())
+    }
+
+    /// Verify the signature of the object with the given public key.
+    pub fn verify_root(
+        &self,
+        root: [u8; 32],
         signature: &Signature,
         pubkey: &BlsPublicKey,
-    ) -> bool {
-        obj.verify(signature, pubkey)
+        domain: [u8; 32],
+    ) -> eyre::Result<()> {
+        let signing_root = compute_signing_root(&root, domain)?;
+
+        let res = signature.verify(true, signing_root.as_ref(), BLS_DST_PREFIX, &[], pubkey, true);
+        if res == BLST_ERROR::BLST_SUCCESS {
+            Ok(())
+        } else {
+            eyre::bail!(format!("Invalid signature: {:?}", res))
+        }
     }
 }
 
@@ -133,6 +151,6 @@ mod tests {
 
         let signature = signer.sign_commit_boost_root(msg.digest()).unwrap();
         let sig = blst::min_pk::Signature::from_bytes(signature.as_ref()).unwrap();
-        assert!(signer.verify(&msg, &sig, &signer.pubkey()));
+        assert!(signer.verify_commit_boost_root(msg.digest(), &sig).is_ok());
     }
 }
