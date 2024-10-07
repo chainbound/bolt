@@ -7,3 +7,9 @@
 [submodule "bolt-contracts/lib/relic-sdk"]
 	path = bolt-contracts/lib/relic-sdk
 	url = https://github.com/Relic-Protocol/relic-sdk
+[submodule "bolt-contracts/lib/core"]
+	path = bolt-contracts/lib/core
+	url = https://github.com/symbioticfi/core
+[submodule "bolt-contracts/lib/eigenlayer-contracts"]
+	path = bolt-contracts/lib/eigenlayer-contracts
+	url = https://github.com/layr-labs/eigenlayer-contracts

@@ -1,2 +1,5 @@
 *_dump.log
 target/
+.DS_Store
+.env
+.vscode
