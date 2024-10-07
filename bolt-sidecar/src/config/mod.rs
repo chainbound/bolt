@@ -111,7 +111,7 @@ pub struct Config {
     /// The engine API url
     pub engine_api_url: Url,
     /// URL for the commit-boost sidecar
-    pub commit_boost_address: Option<String>,
+    pub commit_boost_url: Option<String>,
     /// The JWT secret token to authenticate calls to the commit-boost
     pub commit_boost_jwt_hex: Option<String>,
     /// Private key to use for signing preconfirmation requests
@@ -141,7 +141,7 @@ impl Default for Config {
         Self {
             rpc_port: DEFAULT_RPC_PORT,
             constraints_proxy_port: DEFAULT_CONSTRAINTS_PROXY_PORT,
-            commit_boost_address: None,
+            commit_boost_url: None,
             commit_boost_jwt_hex: None,
             constraints_url: "http://localhost:3030".parse().expect("Valid URL"),
             beacon_api_url: "http://localhost:5052".parse().expect("Valid URL"),
@@ -216,7 +216,7 @@ impl TryFrom<Opts> for Config {
         if let Some(commit_boost_url) = &opts.signing.commit_boost_url {
             if let Ok(url) = Url::parse(commit_boost_url) {
                 if let Ok(socket_addrs) = url.socket_addrs(|| None) {
-                    config.commit_boost_address = Some(socket_addrs[0].to_string());
+                    config.commit_boost_url = Some(socket_addrs[0].to_string());
                 }
             }
         }

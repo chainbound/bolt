@@ -82,7 +82,7 @@ impl SidecarDriver<StateClient, CommitBoostSigner, CommitBoostSigner> {
         let state_client = StateClient::new(cfg.execution_api_url.clone());
 
         let commit_boost_signer = CommitBoostSigner::new(
-            cfg.commit_boost_address.clone().expect("CommitBoost URL must be provided"),
+            cfg.commit_boost_url.clone().expect("CommitBoost URL must be provided"),
             &cfg.commit_boost_jwt_hex.clone().expect("CommitBoost JWT must be provided"),
         )
         .await?;
