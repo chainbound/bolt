@@ -11,6 +11,7 @@ use alloy::{
 };
 use alloy_node_bindings::{Anvil, AnvilInstance};
 use blst::min_pk::SecretKey;
+use cb_common::signature::sign_commit_boost_root;
 use ethereum_consensus::crypto::{PublicKey, Signature};
 use rand::Rng;
 use reth_primitives::PooledTransactionsElement;
@@ -18,7 +19,7 @@ use secp256k1::Message;
 use tracing::warn;
 
 use crate::{
-    crypto::{bls::Signer as BlsSigner, ecdsa::SignableECDSA, SignableBLS, SignerBLS},
+    crypto::{ecdsa::SignableECDSA, SignableBLS},
     primitives::{
         CommitmentRequest, ConstraintsMessage, DelegationMessage, FullTransaction,
         InclusionRequest, RevocationMessage, SignedConstraints, SignedDelegation, SignedRevocation,
@@ -196,7 +197,6 @@ fn random_constraints(count: usize) -> Vec<FullTransaction> {
 async fn generate_test_data() {
     let sk = test_bls_secret_key();
     let pk = sk.sk_to_pk();
-    let signer = BlsSigner::new(sk);
 
     println!("Validator Public Key: {}", hex::encode(pk.to_bytes()));
 
@@ -217,7 +217,7 @@ async fn generate_test_data() {
     let digest = SignableBLS::digest(&delegation_msg);
 
     // Sign the Delegation message
-    let delegation_signature = SignerBLS::sign(&signer, &digest).await.unwrap();
+    let delegation_signature = sign_commit_boost_root(cb_common::types::Chain::Mainnet, &sk, digest);
 
     // Create SignedDelegation
     let signed_delegation = SignedDelegation {
@@ -240,7 +240,7 @@ async fn generate_test_data() {
     let digest = SignableBLS::digest(&revocation_msg);
 
     // Sign the Revocation message
-    let revocation_signature = SignerBLS::sign(&signer, &digest).await.unwrap();
+    let revocation_signature = sign_commit_boost_root(cb_common::types::Chain::Mainnet, &sk, digest);
 
     // Create SignedRevocation
     let signed_revocation = SignedRevocation {
@@ -266,7 +266,7 @@ async fn generate_test_data() {
     let digest = SignableBLS::digest(&constraints_msg);
 
     // Sign the ConstraintsMessage
-    let constraints_signature = SignerBLS::sign(&signer, &digest).await.unwrap();
+    let constraints_signature = sign_commit_boost_root(cb_common::types::Chain::Mainnet, &sk, digest);
 
     // Create SignedConstraints
     let signed_constraints =
