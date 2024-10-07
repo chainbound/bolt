@@ -112,6 +112,8 @@ type BoostService struct {
 	httpClientGetPayload       http.Client
 	httpClientRegVal           http.Client
 	httpClientSubmitConstraint http.Client
+	httpClientDelegate         http.Client
+	httpClientRevoke           http.Client
 	requestMaxRetries          int
 
 	bids     map[bidRespKey]bidResp // keeping track of bids, to log the originating relay on withholding
@@ -163,6 +165,16 @@ func NewBoostService(opts BoostServiceOpts) (*BoostService, error) {
 			Timeout:       opts.RequestTimeoutSubmitConstraint,
 			CheckRedirect: httpClientDisallowRedirects,
 		},
+		httpClientDelegate: http.Client{
+			// NOTE: using the same timeout as registerValidator
+			Timeout:       opts.RequestTimeoutRegVal,
+			CheckRedirect: httpClientDisallowRedirects,
+		},
+		httpClientRevoke: http.Client{
+			// NOTE: using the same timeout as registerValidator
+			Timeout:       opts.RequestTimeoutRegVal,
+			CheckRedirect: httpClientDisallowRedirects,
+		},
 		requestMaxRetries: opts.RequestMaxRetries,
 
 		// BOLT: Initialize the constraint cache
@@ -200,6 +212,9 @@ func (m *BoostService) getRouter() http.Handler {
 	r.HandleFunc(pathGetHeader, m.handleGetHeader).Methods(http.MethodGet)
 	r.HandleFunc(pathGetHeaderWithProofs, m.handleGetHeaderWithProofs).Methods(http.MethodGet)
 	r.HandleFunc(pathGetPayload, m.handleGetPayload).Methods(http.MethodPost)
+
+	r.HandleFunc(pathDelegate, m.handleDelegate).Methods(http.MethodPost)
+	r.HandleFunc(pathRevoke, m.handleRevoke).Methods(http.MethodPost)
 
 	r.Use(mux.CORSMethodMiddleware(r))
 	loggedRouter := httplogger.LoggingMiddlewareLogrus(m.log, r)
@@ -327,6 +342,92 @@ func (m *BoostService) handleRegisterValidator(w http.ResponseWriter, req *http.
 	}
 
 	go m.sendValidatorRegistrationsToRelayMonitors(payload)
+
+	for i := 0; i < len(m.relays); i++ {
+		respErr := <-relayRespCh
+		if respErr == nil {
+			m.respondOK(w, nilResponse)
+			return
+		}
+	}
+
+	m.respondError(w, http.StatusBadGateway, errNoSuccessfulRelayResponse.Error())
+}
+
+func (m *BoostService) handleDelegate(w http.ResponseWriter, req *http.Request) {
+	log := m.log.WithField("method", "delegate")
+	log.Debug("delegate")
+
+	payload := SignedDelegation{}
+	if err := DecodeJSON(req.Body, &payload); err != nil {
+		m.respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	ua := UserAgent(req.Header.Get("User-Agent"))
+	log = log.WithFields(logrus.Fields{
+		"delegateePubkey": payload.Message.DelegateePubkey.String(),
+		"ua":              ua,
+	})
+
+	relayRespCh := make(chan error, len(m.relays))
+
+	for _, relay := range m.relays {
+		go func(relay RelayEntry) {
+			url := relay.GetURI(pathDelegate)
+			log := log.WithField("url", url)
+
+			_, err := SendHTTPRequest(context.Background(), m.httpClientDelegate, http.MethodPost, url, ua, nil, payload, nil)
+			relayRespCh <- err
+			if err != nil {
+				log.WithError(err).Warn("error calling delegate on relay")
+				return
+			}
+		}(relay)
+	}
+
+	for i := 0; i < len(m.relays); i++ {
+		respErr := <-relayRespCh
+		if respErr == nil {
+			m.respondOK(w, nilResponse)
+			return
+		}
+	}
+
+	m.respondError(w, http.StatusBadGateway, errNoSuccessfulRelayResponse.Error())
+}
+
+func (m *BoostService) handleRevoke(w http.ResponseWriter, req *http.Request) {
+	log := m.log.WithField("method", "revoke")
+	log.Debug("revoke")
+
+	payload := SignedRevocation{}
+	if err := DecodeJSON(req.Body, &payload); err != nil {
+		m.respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	ua := UserAgent(req.Header.Get("User-Agent"))
+	log = log.WithFields(logrus.Fields{
+		"delegateePubkey": payload.Message.DelegateePubkey.String(),
+		"ua":              ua,
+	})
+
+	relayRespCh := make(chan error, len(m.relays))
+
+	for _, relay := range m.relays {
+		go func(relay RelayEntry) {
+			url := relay.GetURI(pathRevoke)
+			log := log.WithField("url", url)
+
+			_, err := SendHTTPRequest(context.Background(), m.httpClientRevoke, http.MethodPost, url, ua, nil, payload, nil)
+			relayRespCh <- err
+			if err != nil {
+				log.WithError(err).Warn("error calling revoke on relay")
+				return
+			}
+		}(relay)
+	}
 
 	for i := 0; i < len(m.relays); i++ {
 		respErr := <-relayRespCh

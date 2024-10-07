@@ -104,3 +104,23 @@ func (c *ConstraintsCache) FindTransactionByHash(txHash gethCommon.Hash) (*Trans
 	}
 	return nil, false
 }
+
+type SignedDelegation struct {
+	Message   Delegation          `json:"message"`
+	Signature phase0.BLSSignature `json:"signature"`
+}
+
+type Delegation struct {
+	ValidatorPubkey phase0.BLSPubKey `json:"validator_pubkey"`
+	DelegateePubkey phase0.BLSPubKey `json:"delegatee_pubkey"`
+}
+
+type SignedRevocation struct {
+	Message   Delegation          `json:"message"`
+	Signature phase0.BLSSignature `json:"signature"`
+}
+
+type Revocation struct {
+	ValidatorPubkey phase0.BLSPubKey `json:"validator_pubkey"`
+	DelegateePubkey phase0.BLSPubKey `json:"delegatee_pubkey"`
+}
