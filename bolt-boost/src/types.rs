@@ -137,6 +137,7 @@ pub type GetHeaderWithProofsResponse = VersionedResponse<SignedExecutionPayloadH
 pub struct SignedExecutionPayloadHeaderWithProofs {
     #[serde(flatten)]
     pub header: SignedExecutionPayloadHeader,
+    #[serde(default)]
     pub proofs: InclusionProofs,
 }
 
