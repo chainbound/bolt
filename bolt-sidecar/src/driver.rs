@@ -65,7 +65,8 @@ impl SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
         let state_client = StateClient::new(cfg.execution_api_url.clone());
 
         // Constraints are signed with a BLS private key
-        let constraint_signer = BlsSigner::new(cfg.private_key.clone().unwrap());
+        let constraint_signing_key = cfg.private_key.clone().expect("Private key must be provided");
+        let constraint_signer = BlsSigner::new(constraint_signing_key, cfg.chain);
 
         // Commitment responses are signed with a regular Ethereum wallet private key.
         // This is now generated randomly because slashing is not yet implemented.
@@ -221,21 +222,23 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         // parse the request into constraints and sign them
         let slot = inclusion_request.slot;
 
-        // NOTE: we iterate over the transactions in the request and generate a signed constraint for each one. This is because
-        // the transactions in the commitment request are not supposed to be treated as a relative-ordering bundle, but a batch
+        // NOTE: we iterate over the transactions in the request and generate a signed constraint
+        // for each one. This is because the transactions in the commitment request are not
+        // supposed to be treated as a relative-ordering bundle, but a batch
         // with no ordering guarantees.
         for tx in inclusion_request.txs {
             let tx_type = tx.tx_type();
             let message = ConstraintsMessage::from_transaction(validator_pubkey.clone(), slot, tx);
 
-            let signed_constraints = match self.constraint_signer.sign(&message.digest()).await {
-                Ok(signature) => SignedConstraints { message, signature },
-                Err(err) => {
-                    error!(?err, "Failed to sign constraints");
-                    let _ = response.send(Err(CommitmentError::Internal));
-                    return;
-                }
-            };
+            let signed_constraints =
+                match self.constraint_signer.sign_commit_boost_root(&message.digest()).await {
+                    Ok(signature) => SignedConstraints { message, signature },
+                    Err(err) => {
+                        error!(?err, "Failed to sign constraints");
+                        let _ = response.send(Err(CommitmentError::Internal));
+                        return;
+                    }
+                };
 
             ApiMetrics::increment_transactions_preconfirmed(tx_type);
             self.execution.add_constraint(slot, signed_constraints);

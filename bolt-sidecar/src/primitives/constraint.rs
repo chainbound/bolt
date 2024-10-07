@@ -1,35 +1,13 @@
-use alloy::{
-    primitives::keccak256,
-    signers::k256::sha2::{Digest, Sha256},
-};
+use alloy::signers::k256::sha2::{Digest, Sha256};
 use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
-use secp256k1::Message;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    crypto::{bls::BLSSig, ecdsa::SignableECDSA, SignableBLS},
+    crypto::{bls::BLSSig, SignableBLS},
     primitives::{deserialize_txs, serialize_txs},
 };
 
 use super::{FullTransaction, InclusionRequest};
-
-/// What the proposer sidecar will need to sign to confirm the inclusion request.
-impl SignableECDSA for ConstraintsMessage {
-    fn digest(&self) -> Message {
-        let mut data = Vec::new();
-        data.extend_from_slice(&self.pubkey.to_vec());
-        data.extend_from_slice(&self.slot.to_le_bytes());
-
-        let mut constraint_bytes = Vec::new();
-        for constraint in &self.transactions {
-            constraint_bytes.extend_from_slice(&constraint.envelope_encoded().0);
-        }
-        data.extend_from_slice(&constraint_bytes);
-
-        let hash = keccak256(data).0;
-        Message::from_digest_slice(&hash).expect("digest")
-    }
-}
 
 /// The inclusion request transformed into an explicit list of signed constraints
 /// that need to be forwarded to the PBS pipeline to inform block production.

@@ -18,7 +18,7 @@ use secp256k1::Message;
 use tracing::warn;
 
 use crate::{
-    crypto::{bls::Signer as BlsSigner, ecdsa::SignableECDSA, SignableBLS, SignerBLS},
+    crypto::{bls::Signer as BlsSigner, ecdsa::SignableECDSA, SignableBLS},
     primitives::{
         CommitmentRequest, ConstraintsMessage, DelegationMessage, FullTransaction,
         InclusionRequest, RevocationMessage, SignedConstraints, SignedDelegation, SignedRevocation,
@@ -116,11 +116,6 @@ pub(crate) fn default_test_transaction(sender: Address, nonce: Option<u64>) -> T
         .with_max_fee_per_gas(20_000_000_000)
 }
 
-/// Create a default BLS secret key
-pub(crate) fn test_bls_secret_key() -> SecretKey {
-    SecretKey::key_gen(&[0u8; 32], &[]).unwrap()
-}
-
 /// Arbitrary bytes that can be signed with both ECDSA and BLS keys
 pub(crate) struct TestSignableData {
     pub data: [u8; 32],
@@ -194,9 +189,8 @@ fn random_constraints(count: usize) -> Vec<FullTransaction> {
 
 #[tokio::test]
 async fn generate_test_data() {
-    let sk = test_bls_secret_key();
-    let pk = sk.sk_to_pk();
-    let signer = BlsSigner::new(sk);
+    let signer = BlsSigner::random();
+    let pk = signer.pubkey();
 
     println!("Validator Public Key: {}", hex::encode(pk.to_bytes()));
 
@@ -217,7 +211,7 @@ async fn generate_test_data() {
     let digest = SignableBLS::digest(&delegation_msg);
 
     // Sign the Delegation message
-    let delegation_signature = SignerBLS::sign(&signer, &digest).await.unwrap();
+    let delegation_signature = signer.sign_commit_boost_root(digest).unwrap();
 
     // Create SignedDelegation
     let signed_delegation = SignedDelegation {
@@ -240,7 +234,7 @@ async fn generate_test_data() {
     let digest = SignableBLS::digest(&revocation_msg);
 
     // Sign the Revocation message
-    let revocation_signature = SignerBLS::sign(&signer, &digest).await.unwrap();
+    let revocation_signature = signer.sign_commit_boost_root(digest).unwrap();
 
     // Create SignedRevocation
     let signed_revocation = SignedRevocation {
@@ -266,7 +260,7 @@ async fn generate_test_data() {
     let digest = SignableBLS::digest(&constraints_msg);
 
     // Sign the ConstraintsMessage
-    let constraints_signature = SignerBLS::sign(&signer, &digest).await.unwrap();
+    let constraints_signature = signer.sign_commit_boost_root(digest).unwrap();
 
     // Create SignedConstraints
     let signed_constraints =

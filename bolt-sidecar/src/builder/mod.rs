@@ -83,7 +83,7 @@ impl LocalBuilder {
             payload_and_bid: None,
             fallback_builder: FallbackPayloadBuilder::new(config, beacon_api_client, genesis_time),
             secret_key: config.builder_private_key.clone(),
-            chain: config.chain.clone(),
+            chain: config.chain,
         }
     }
 

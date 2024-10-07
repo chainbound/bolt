@@ -2,10 +2,13 @@ use std::fmt::Debug;
 
 use alloy::primitives::FixedBytes;
 use blst::{min_pk::Signature, BLST_ERROR};
+use ethereum_consensus::deneb::compute_signing_root;
 use rand::RngCore;
 
 pub use blst::min_pk::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
 pub use ethereum_consensus::deneb::BlsSignature;
+
+use crate::ChainConfig;
 
 /// The BLS Domain Separator used in Ethereum 2.0.
 pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
@@ -19,14 +22,6 @@ pub trait SignableBLS {
     /// Returns the digest of the object.
     fn digest(&self) -> [u8; 32];
 
-    /// Sign the object with the given key. Returns the signature.
-    ///
-    /// Note: The default implementation should be used where possible.
-    #[allow(dead_code)]
-    fn sign(&self, key: &BlsSecretKey) -> Signature {
-        sign_with_prefix(key, &self.digest())
-    }
-
     /// Verify the signature of the object with the given public key.
     ///
     /// Note: The default implementation should be used where possible.
@@ -37,31 +32,56 @@ pub trait SignableBLS {
 }
 
 /// A generic signing trait to generate BLS signatures.
+///
+/// Note: we keep this async to allow remote signer implementations.
 #[async_trait::async_trait]
 pub trait SignerBLS: Send + Debug {
     /// Sign the given data and return the signature.
-    async fn sign(&self, data: &[u8; 32]) -> eyre::Result<BLSSig>;
+    async fn sign_commit_boost_root(&self, data: &[u8; 32]) -> eyre::Result<BLSSig>;
 }
 
-/// A BLS signer that can sign any type that implements the `Signable` trait.
+/// A BLS signer that can sign any type that implements the [`SignableBLS`] trait.
 #[derive(Debug, Clone)]
 pub struct Signer {
+    chain: ChainConfig,
     key: BlsSecretKey,
 }
 
 impl Signer {
     /// Create a new signer with the given BLS secret key.
-    pub fn new(key: BlsSecretKey) -> Self {
-        Self { key }
+    pub fn new(key: BlsSecretKey, chain: ChainConfig) -> Self {
+        Self { key, chain }
     }
 
-    /// Create a signer with a random BLS key.
+    /// Create a signer with a random BLS key configured for Mainnet for testing.
+    #[cfg(test)]
     pub fn random() -> Self {
-        Self { key: random_bls_secret() }
+        Self { key: random_bls_secret(), chain: ChainConfig::mainnet() }
+    }
+
+    /// Get the public key of the signer.
+    pub fn pubkey(&self) -> BlsPublicKey {
+        self.key.sk_to_pk()
+    }
+
+    /// Sign an SSZ object root with the Application Builder domain.
+    pub fn sign_application_builder_root(&self, root: [u8; 32]) -> eyre::Result<BLSSig> {
+        self.sign_root(root, self.chain.builder_domain())
+    }
+
+    /// Sign an SSZ object root with the Commit Boost domain.
+    pub fn sign_commit_boost_root(&self, root: [u8; 32]) -> eyre::Result<BLSSig> {
+        self.sign_root(root, self.chain.commit_boost_domain())
+    }
+
+    /// Sign an SSZ object root with the given domain.
+    pub fn sign_root(&self, root: [u8; 32], domain: [u8; 32]) -> eyre::Result<BLSSig> {
+        let signing_root = compute_signing_root(&root, domain)?;
+        let sig = self.key.sign(signing_root.as_slice(), BLS_DST_PREFIX, &[]);
+        Ok(BLSSig::from_slice(&sig.to_bytes()))
     }
 
     /// Verify the signature of the object with the given public key.
-    #[allow(dead_code)]
     pub fn verify<T: SignableBLS>(
         &self,
         obj: &T,
@@ -74,9 +94,8 @@ impl Signer {
 
 #[async_trait::async_trait]
 impl SignerBLS for Signer {
-    async fn sign(&self, data: &[u8; 32]) -> eyre::Result<BLSSig> {
-        let sig = sign_with_prefix(&self.key, data);
-        Ok(BLSSig::from(sig.to_bytes()))
+    async fn sign_commit_boost_root(&self, data: &[u8; 32]) -> eyre::Result<BLSSig> {
+        self.sign_commit_boost_root(*data)
     }
 }
 
@@ -93,26 +112,18 @@ pub fn random_bls_secret() -> BlsSecretKey {
     BlsSecretKey::key_gen(&ikm, &[]).unwrap()
 }
 
-/// Sign the given data with the given BLS secret key.
-#[inline]
-fn sign_with_prefix(key: &BlsSecretKey, data: &[u8]) -> Signature {
-    key.sign(data, BLS_DST_PREFIX, &[])
-}
-
 #[cfg(test)]
 mod tests {
     use crate::{
-        crypto::bls::{SignableBLS, Signer, SignerBLS},
-        test_util::{test_bls_secret_key, TestSignableData},
+        crypto::bls::{SignableBLS, Signer},
+        test_util::TestSignableData,
     };
 
     use rand::Rng;
 
     #[tokio::test]
     async fn test_bls_signer() {
-        let key = test_bls_secret_key();
-        let pubkey = key.sk_to_pk();
-        let signer = Signer::new(key);
+        let signer = Signer::random();
 
         // Generate random data for the test
         let mut rng = rand::thread_rng();
@@ -120,8 +131,8 @@ mod tests {
         rng.fill(&mut data);
         let msg = TestSignableData { data };
 
-        let signature = SignerBLS::sign(&signer, &msg.digest()).await.unwrap();
+        let signature = signer.sign_commit_boost_root(msg.digest()).unwrap();
         let sig = blst::min_pk::Signature::from_bytes(signature.as_ref()).unwrap();
-        assert!(signer.verify(&msg, &sig, &pubkey));
+        assert!(signer.verify(&msg, &sig, &signer.pubkey()));
     }
 }
