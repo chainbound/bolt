@@ -172,6 +172,7 @@ async fn get_header_with_proofs(
     Path(params): Path<GetHeaderParams>,
     req_headers: HeaderMap,
 ) -> Result<impl IntoResponse, PbsClientError> {
+    let slot_uuid = state.get_or_update_slot_uuid(params.slot);
     let ms_into_slot = ms_into_slot(params.slot, state.config.chain);
     let max_timeout_ms = state
         .pbs_config()
@@ -187,8 +188,6 @@ async fn get_header_with_proofs(
 
         return Ok(StatusCode::NO_CONTENT.into_response());
     }
-
-    let (_, slot_uuid) = state.get_slot_and_uuid();
 
     // prepare headers, except for start time which is set in `send_one_get_header`
     let mut send_headers = HeaderMap::new();
