@@ -121,7 +121,7 @@ type BoostService struct {
 	slotUIDLock sync.Mutex
 
 	// BOLT: constraint cache
-	constraints *ConstraintCache
+	constraints *ConstraintsCache
 }
 
 // NewBoostService created a new BoostService
@@ -166,7 +166,7 @@ func NewBoostService(opts BoostServiceOpts) (*BoostService, error) {
 		requestMaxRetries: opts.RequestMaxRetries,
 
 		// BOLT: Initialize the constraint cache
-		constraints: NewConstraintCache(64),
+		constraints: NewConstraintsCache(64),
 	}, nil
 }
 
@@ -196,10 +196,8 @@ func (m *BoostService) getRouter() http.Handler {
 	r.HandleFunc(pathStatus, m.handleStatus).Methods(http.MethodGet)
 	r.HandleFunc(pathRegisterValidator, m.handleRegisterValidator).Methods(http.MethodPost)
 	r.HandleFunc(pathSubmitConstraint, m.handleSubmitConstraint).Methods(http.MethodPost)
-	// TODO: manage the switch between the endpoint with and without proofs
-	// with the bolt sidecar proxy instead of using the same response here.
-	// TODO: revert this to m.handleGetHeader
-	r.HandleFunc(pathGetHeader, m.handleGetHeaderWithProofs).Methods(http.MethodGet)
+
+	r.HandleFunc(pathGetHeader, m.handleGetHeader).Methods(http.MethodGet)
 	r.HandleFunc(pathGetHeaderWithProofs, m.handleGetHeaderWithProofs).Methods(http.MethodGet)
 	r.HandleFunc(pathGetPayload, m.handleGetPayload).Methods(http.MethodPost)
 
@@ -364,42 +362,39 @@ func (m *BoostService) verifyInclusionProof(transactionsRoot phase0.Root, proof 
 		return errHashesIndexesMismatch
 	}
 
-	log.Infof("[BOLT]: Verifying merkle multiproofs for %d transactions", len(proof.TransactionHashes))
+	log.Infof("[BOLT]: Verifying merkel multiproofs for %d transactions", len(proof.TransactionHashes))
 
 	// Decode the constraints, and sort them according to the utility function used
 	// TODO: this should be done before verification ideally
-	hashToConstraint := make(HashToConstraintDecoded)
-	for hash, constraint := range inclusionConstraints {
+	hashToTransaction := make(HashToTransactionDecoded)
+	for hash, tx := range inclusionConstraints {
 		transaction := new(gethTypes.Transaction)
-		err := transaction.UnmarshalBinary(constraint.Tx)
+		err := transaction.UnmarshalBinary(*tx)
 		if err != nil {
 			log.WithError(err).Error("error unmarshalling transaction while verifying proofs")
 			return err
 		}
-		hashToConstraint[hash] = &ConstraintDecoded{
-			Tx:    transaction.WithoutBlobTxSidecar(),
-			Index: constraint.Index,
-		}
+		hashToTransaction[hash] = transaction.WithoutBlobTxSidecar()
 	}
 	leaves := make([][]byte, len(inclusionConstraints))
 	indexes := make([]int, len(proof.GeneralizedIndexes))
 
 	for i, hash := range proof.TransactionHashes {
-		constraint, ok := hashToConstraint[gethCommon.Hash(hash)]
-		if constraint == nil || !ok {
+		tx, ok := hashToTransaction[gethCommon.Hash(hash)]
+		if tx == nil || !ok {
 			return errNilConstraint
 		}
 
 		// Compute the hash tree root for the raw preconfirmed transaction
 		// and use it as "Leaf" in the proof to be verified against
-		encoded, err := constraint.Tx.MarshalBinary()
+		encoded, err := tx.MarshalBinary()
 		if err != nil {
 			log.WithError(err).Error("error marshalling transaction without blob tx sidecar")
 			return err
 		}
 
-		tx := Transaction(encoded)
-		txHashTreeRoot, err := tx.HashTreeRoot()
+		txBytes := Transaction(encoded)
+		txHashTreeRoot, err := txBytes.HashTreeRoot()
 		if err != nil {
 			return errInvalidRoot
 		}
@@ -464,19 +459,19 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 
 	// Add all constraints to the cache
 	for _, signedConstraints := range payload {
-		constraintMessage := signedConstraints.Message
+		constraintsMessage := signedConstraints.Message
 
-		log.Infof("[BOLT]: adding inclusion constraints to cache. slot = %d, validatorIndex = %d, number of relays = %d", constraintMessage.Slot, constraintMessage.ValidatorIndex, len(m.relays))
+		log.Infof("[BOLT]: adding inclusion constraints to cache. slot = %d, validatorPubkey = %d, number of relays = %d", constraintsMessage.Slot, constraintsMessage.Pubkey, len(m.relays))
 
 		// Add the constraints to the cache.
 		// They will be cleared when we receive a payload for the slot in `handleGetPayload`
-		err := m.constraints.AddInclusionConstraints(constraintMessage.Slot, constraintMessage.Constraints)
+		err := m.constraints.AddInclusionConstraints(constraintsMessage.Slot, constraintsMessage.Transactions)
 		if err != nil {
 			log.WithError(err).Errorf("error adding inclusion constraints to cache")
 			continue
 		}
 
-		log.Infof("[BOLT]: added inclusion constraints to cache. slot = %d, validatorIndex = %d, number of relays = %d", constraintMessage.Slot, constraintMessage.ValidatorIndex, len(m.relays))
+		log.Infof("[BOLT]: added inclusion constraints to cache. slot = %d, validatorPubkey = %d, number of relays = %d", constraintsMessage.Slot, constraintsMessage.Pubkey, len(m.relays))
 	}
 
 	relayRespCh := make(chan error, len(m.relays))
@@ -877,7 +872,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 				return
 			}
 
-			// BOLT: verify preconfirmation inclusion proofs. If they don't match, we don't consider the bid to be valid.
+			// BOLT: verify inclusion proofs. If they don't match, we don't consider the bid to be valid.
 			if responsePayload.Proofs != nil {
 				// BOLT: verify the proofs against the constraints. If they don't match, we don't consider the bid to be valid.
 				transactionsRoot, err := responsePayload.Bid.TransactionsRoot()

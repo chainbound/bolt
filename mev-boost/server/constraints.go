@@ -7,22 +7,25 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2"
 )
 
-type BatchedSignedConstraints = []*SignedConstraints
+type (
+	BatchedSignedConstraints = []*SignedConstraints
+	HashToTransactionDecoded = map[gethCommon.Hash]*types.Transaction
+)
 
+// SignedConstraints represents the signed constraints.
+// Reference: https://docs.boltprotocol.xyz/api/builder
 type SignedConstraints struct {
 	Message   ConstraintsMessage  `json:"message"`
 	Signature phase0.BLSSignature `json:"signature"`
 }
 
+// ConstraintsMessage represents the constraints message.
+// Reference: https://docs.boltprotocol.xyz/api/builder
 type ConstraintsMessage struct {
-	ValidatorIndex uint64        `json:"validator_index"`
-	Slot           uint64        `json:"slot"`
-	Constraints    []*Constraint `json:"constraints"`
-}
-
-type Constraint struct {
-	Tx    Transaction `json:"tx"`
-	Index *uint64     `json:"index"`
+	Pubkey       phase0.BLSPubKey `json:"pubkey"`
+	Slot         uint64           `json:"slot"`
+	Top          bool             `json:"top"`
+	Transactions []Transaction    // Custom marshal and unmarshal implemented below
 }
 
 func (s *SignedConstraints) String() string {
@@ -33,29 +36,25 @@ func (m *ConstraintsMessage) String() string {
 	return JSONStringify(m)
 }
 
-func (c *Constraint) String() string {
-	return JSONStringify(c)
-}
-
-// ConstraintCache is a cache for constraints.
-type ConstraintCache struct {
+// ConstraintsCache is a cache for constraints.
+type ConstraintsCache struct {
 	// map of slots to all constraints for that slot
-	constraints *lru.Cache[uint64, map[gethCommon.Hash]*Constraint]
+	constraints *lru.Cache[uint64, map[gethCommon.Hash]*Transaction]
 }
 
-// NewConstraintCache creates a new constraint cache.
+// NewConstraintsCache creates a new constraint cache.
 // cap is the maximum number of slots to store constraints for.
-func NewConstraintCache(cap int) *ConstraintCache {
-	constraints, _ := lru.New[uint64, map[gethCommon.Hash]*Constraint](cap)
-	return &ConstraintCache{
+func NewConstraintsCache(cap int) *ConstraintsCache {
+	constraints, _ := lru.New[uint64, map[gethCommon.Hash]*Transaction](cap)
+	return &ConstraintsCache{
 		constraints: constraints,
 	}
 }
 
 // AddInclusionConstraint adds an inclusion constraint to the cache at the given slot for the given transaction.
-func (c *ConstraintCache) AddInclusionConstraint(slot uint64, tx Transaction, index *uint64) error {
+func (c *ConstraintsCache) AddInclusionConstraint(slot uint64, tx Transaction, index *uint64) error {
 	if _, exists := c.constraints.Get(slot); !exists {
-		c.constraints.Add(slot, make(map[gethCommon.Hash]*Constraint))
+		c.constraints.Add(slot, make(map[gethCommon.Hash]*Transaction))
 	}
 
 	// parse transaction to get its hash and store it in the cache
@@ -67,52 +66,41 @@ func (c *ConstraintCache) AddInclusionConstraint(slot uint64, tx Transaction, in
 	}
 
 	m, _ := c.constraints.Get(slot)
-	m[parsedTx.Hash()] = &Constraint{
-		Tx:    tx,
-		Index: index,
-	}
+	m[parsedTx.Hash()] = &tx
 
 	return nil
 }
 
 // AddInclusionConstraints adds multiple inclusion constraints to the cache at the given slot
-func (c *ConstraintCache) AddInclusionConstraints(slot uint64, constraints []*Constraint) error {
+func (c *ConstraintsCache) AddInclusionConstraints(slot uint64, transactions []Transaction) error {
 	if _, exists := c.constraints.Get(slot); !exists {
-		c.constraints.Add(slot, make(map[gethCommon.Hash]*Constraint))
+		c.constraints.Add(slot, make(map[gethCommon.Hash]*Transaction))
 	}
 
 	m, _ := c.constraints.Get(slot)
-	for _, constraint := range constraints {
+	for _, tx := range transactions {
 		parsedTx := new(types.Transaction)
-		err := parsedTx.UnmarshalBinary(constraint.Tx)
+		err := parsedTx.UnmarshalBinary(tx)
 		if err != nil {
 			return err
 		}
-		m[parsedTx.Hash()] = constraint
+		m[parsedTx.Hash()] = &tx
 	}
 
 	return nil
 }
 
 // Get gets the constraints at the given slot.
-func (c *ConstraintCache) Get(slot uint64) (map[gethCommon.Hash]*Constraint, bool) {
+func (c *ConstraintsCache) Get(slot uint64) (map[gethCommon.Hash]*Transaction, bool) {
 	return c.constraints.Get(slot)
 }
 
 // FindTransactionByHash finds the constraint for the given transaction hash and returns it.
-func (c *ConstraintCache) FindTransactionByHash(txHash gethCommon.Hash) (*Constraint, bool) {
-	for _, hashToConstraint := range c.constraints.Values() {
-		if constraint, exists := hashToConstraint[txHash]; exists {
-			return constraint, true
+func (c *ConstraintsCache) FindTransactionByHash(txHash gethCommon.Hash) (*Transaction, bool) {
+	for _, hashToTx := range c.constraints.Values() {
+		if tx, exists := hashToTx[txHash]; exists {
+			return tx, true
 		}
 	}
 	return nil, false
 }
-
-type (
-	HashToConstraintDecoded = map[gethCommon.Hash]*ConstraintDecoded
-	ConstraintDecoded       struct {
-		Index *uint64
-		Tx    *types.Transaction
-	}
-)
