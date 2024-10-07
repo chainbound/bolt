@@ -65,7 +65,7 @@ type mockRelay struct {
 
 	// Default responses placeholders, used if overrider does not exist
 	GetHeaderResponse           *builderSpec.VersionedSignedBuilderBid
-	GetHeaderWithProofsResponse *BidWithInclusionProofs
+	GetHeaderWithProofsResponse *VersionedSignedBuilderBidWithProofs
 	GetPayloadResponse          *builderApi.VersionedSubmitBlindedBlockResponse
 
 	// Server section
@@ -197,7 +197,7 @@ func (m *mockRelay) MakeGetHeaderWithConstraintsResponse(value uint64, blockHash
 	tx   Transaction
 	hash phase0.Hash32
 },
-) *BidWithInclusionProofs {
+) *VersionedSignedBuilderBidWithProofs {
 	transactions := new(utilbellatrix.ExecutionPayloadTransactions)
 
 	for _, con := range constraints {
@@ -288,7 +288,7 @@ func (m *mockRelay) MakeGetHeaderResponse(value uint64, blockHash, parentHash, p
 
 // MakeGetHeaderWithProofsResponseWithTxsRoot is used to create the default or can be used to create a custom response to the getHeaderWithProofs
 // method
-func (m *mockRelay) MakeGetHeaderWithProofsResponseWithTxsRoot(value uint64, blockHash, parentHash, publicKey string, version spec.DataVersion, txsRoot phase0.Root) *BidWithInclusionProofs {
+func (m *mockRelay) MakeGetHeaderWithProofsResponseWithTxsRoot(value uint64, blockHash, parentHash, publicKey string, version spec.DataVersion, txsRoot phase0.Root) *VersionedSignedBuilderBidWithProofs {
 	switch version {
 	case spec.DataVersionCapella:
 		// Fill the payload with custom values.
@@ -307,8 +307,8 @@ func (m *mockRelay) MakeGetHeaderWithProofsResponseWithTxsRoot(value uint64, blo
 		signature, err := ssz.SignMessage(message, ssz.DomainBuilder, m.secretKey)
 		require.NoError(m.t, err)
 
-		return &BidWithInclusionProofs{
-			Bid: &builderSpec.VersionedSignedBuilderBid{
+		return &VersionedSignedBuilderBidWithProofs{
+			VersionedSignedBuilderBid: &builderSpec.VersionedSignedBuilderBid{
 				Version: spec.DataVersionCapella,
 				Capella: &builderApiCapella.SignedBuilderBid{
 					Message:   message,
@@ -335,8 +335,8 @@ func (m *mockRelay) MakeGetHeaderWithProofsResponseWithTxsRoot(value uint64, blo
 		signature, err := ssz.SignMessage(message, ssz.DomainBuilder, m.secretKey)
 		require.NoError(m.t, err)
 
-		return &BidWithInclusionProofs{
-			Bid: &builderSpec.VersionedSignedBuilderBid{
+		return &VersionedSignedBuilderBidWithProofs{
+			VersionedSignedBuilderBid: &builderSpec.VersionedSignedBuilderBid{
 				Version: spec.DataVersionDeneb,
 				Deneb: &builderApiDeneb.SignedBuilderBid{
 					Message:   message,
