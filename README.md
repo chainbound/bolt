@@ -130,7 +130,7 @@ Make sure you have the following requirements on your machine:
 
 > [!WARNING]
 > The Kurtosis CLI version tested is `0.88.16`. Some issues may arise if you are
-> using a different version. 
+> using a different version.
 >
 > [Please make sure to install the correct version](https://docs.kurtosis.com/install-historical/).
 
@@ -157,6 +157,25 @@ just demo
 ```
 
 The web demo will be available on your browser at [`http://localhost:3000`](http://localhost:3000).
+
+**Commit-Boost support**
+
+The devnet by default will run using a fork of MEV-Boost which
+supports the [Constraints-API](https://docs.boltprotocol.xyz/api/builder).
+Bolt also supports [Commit-Boost](https://commit-boost.github.io/commit-boost-client/)
+by providing a compatible MEV-Boost module called _Bolt-Boost_
+that implements the Constraints-API. To use it in the devnet
+add the appropriate `bolt_boost_image` in the `kurtosis_config.yaml` file:
+
+```yaml
+# ... the rest of the file
+mev_params:
+  # Bolt-specific images:
+  # Adding the `bolt_boost_image` will start the devnet with Bolt-Boost
+  # instead of MEV-Boost
+  bolt_boost_image: ghcr.io/chainbound/bolt-boost:0.1.0
+  # ... the rest of the `mev_params`
+```
 
 ### Stopping the devnet and demo
 
