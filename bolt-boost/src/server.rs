@@ -25,13 +25,11 @@ use cb_common::{
     config::PbsConfig,
     constants::APPLICATION_BUILDER_DOMAIN,
     pbs::{
-        error::{PbsError, ValidationError},
-        GetHeaderResponse, RelayClient, SignedExecutionPayloadHeader, EMPTY_TX_ROOT_HASH,
-        HEADER_SLOT_UUID_KEY, HEADER_START_TIME_UNIX_MS,
+        error::{PbsError, ValidationError}, GetHeaderResponse, RelayClient, SignedExecutionPayloadHeader, EMPTY_TX_ROOT_HASH, HEADER_SLOT_UUID_KEY, HEADER_START_TIME_UNIX_MS
     },
     signature::verify_signed_message,
     types::Chain,
-    utils::{get_user_agent_with_version, ms_into_slot, utcnow_ms},
+    utils::{get_user_agent, get_user_agent_with_version, ms_into_slot, utcnow_ms},
 };
 use cb_pbs::{register_validator, BuilderApi, BuilderApiState, PbsState};
 
@@ -172,7 +170,13 @@ async fn get_header_with_proofs(
     Path(params): Path<GetHeaderParams>,
     req_headers: HeaderMap,
 ) -> Result<impl IntoResponse, PbsClientError> {
+    let slot_uuid = state.get_or_update_slot_uuid(params.slot);
+
+    let ua = get_user_agent(&req_headers);
     let ms_into_slot = ms_into_slot(params.slot, state.config.chain);
+
+    info!(ua, parent_hash=%params.parent_hash, validator_pubkey=%params.pubkey, ms_into_slot);
+
     let max_timeout_ms = state
         .pbs_config()
         .timeout_get_header_ms
@@ -187,8 +191,6 @@ async fn get_header_with_proofs(
 
         return Ok(StatusCode::NO_CONTENT.into_response());
     }
-
-    let (_, slot_uuid) = state.get_slot_and_uuid();
 
     // prepare headers, except for start time which is set in `send_one_get_header`
     let mut send_headers = HeaderMap::new();
