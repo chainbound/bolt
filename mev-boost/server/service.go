@@ -885,7 +885,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 			path := fmt.Sprintf("/eth/v1/builder/header_with_proofs/%s/%s/%s", slot, parentHashHex, pubkey)
 			url := relay.GetURI(path)
 			log := log.WithField("url", url)
-			responsePayload := new(BidWithInclusionProofs)
+			responsePayload := new(VersionedSignedBuilderBidWithProofs)
 			code, err := SendHTTPRequest(context.Background(), m.httpClientGetHeader, http.MethodGet, url, ua, headers, nil, responsePayload)
 			if err != nil {
 				log.WithError(err).Warn("error making request to relay")
@@ -901,19 +901,19 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 				return
 			}
 
-			if responsePayload.Bid == nil {
+			if responsePayload == nil {
 				log.Warn("Bid in response is nil")
 				return
 			}
 
 			// Skip if payload is empty
-			if responsePayload.Bid.IsEmpty() {
+			if responsePayload.IsEmpty() {
 				log.Warn("Bid is empty")
 				return
 			}
 
 			// Getting the bid info will check if there are missing fields in the response
-			bidInfo, err := parseBidInfo(responsePayload.Bid)
+			bidInfo, err := parseBidInfo(responsePayload.VersionedSignedBuilderBid)
 			if err != nil {
 				log.WithError(err).Warn("error parsing bid info")
 				return
@@ -939,7 +939,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 
 			// Verify the relay signature in the relay response
 			if !config.SkipRelaySignatureCheck {
-				ok, err := checkRelaySignature(responsePayload.Bid, m.builderSigningDomain, relay.PublicKey)
+				ok, err := checkRelaySignature(responsePayload.VersionedSignedBuilderBid, m.builderSigningDomain, relay.PublicKey)
 				if err != nil {
 					log.WithError(err).Error("error verifying relay signature")
 					return
@@ -976,7 +976,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 			// BOLT: verify inclusion proofs. If they don't match, we don't consider the bid to be valid.
 			if responsePayload.Proofs != nil {
 				// BOLT: verify the proofs against the constraints. If they don't match, we don't consider the bid to be valid.
-				transactionsRoot, err := responsePayload.Bid.TransactionsRoot()
+				transactionsRoot, err := responsePayload.TransactionsRoot()
 				if err != nil {
 					log.WithError(err).Error("[BOLT]: error getting transaction root")
 					return
@@ -1008,7 +1008,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 
 			// Use this relay's response as mev-boost response because it's most profitable
 			log.Infof("new best bid. Has proofs: %v", responsePayload.Proofs != nil)
-			result.response = *responsePayload.Bid
+			result.response = *responsePayload.VersionedSignedBuilderBid
 			result.bidInfo = bidInfo
 			result.t = time.Now()
 		}(relay)
