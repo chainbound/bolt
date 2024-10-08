@@ -465,7 +465,7 @@ func (m *BoostService) verifyInclusionProof(transactionsRoot phase0.Root, proof 
 		return errHashesIndexesMismatch
 	}
 
-	log.Infof("[BOLT]: Verifying merkel multiproofs for %d transactions", len(proof.TransactionHashes))
+	log.Infof("[BOLT]: Verifying merkle multiproofs for %d transactions", len(proof.TransactionHashes))
 
 	// Decode the constraints, and sort them according to the utility function used
 	// TODO: this should be done before verification ideally
