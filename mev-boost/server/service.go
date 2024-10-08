@@ -356,7 +356,7 @@ func (m *BoostService) handleRegisterValidator(w http.ResponseWriter, req *http.
 
 func (m *BoostService) handleDelegate(w http.ResponseWriter, req *http.Request) {
 	log := m.log.WithField("method", "delegate")
-	log.Debug("delegate")
+	log.Debug("delegate:", req.Body)
 
 	payload := SignedDelegation{}
 	if err := DecodeJSON(req.Body, &payload); err != nil {
@@ -366,6 +366,7 @@ func (m *BoostService) handleDelegate(w http.ResponseWriter, req *http.Request) 
 
 	ua := UserAgent(req.Header.Get("User-Agent"))
 	log = log.WithFields(logrus.Fields{
+		"validatorPubkey": payload.Message.ValidatorPubkey.String(),
 		"delegateePubkey": payload.Message.DelegateePubkey.String(),
 		"ua":              ua,
 	})
@@ -399,7 +400,7 @@ func (m *BoostService) handleDelegate(w http.ResponseWriter, req *http.Request) 
 
 func (m *BoostService) handleRevoke(w http.ResponseWriter, req *http.Request) {
 	log := m.log.WithField("method", "revoke")
-	log.Debug("revoke")
+	log.Debug("revoke:", req.Body)
 
 	payload := SignedRevocation{}
 	if err := DecodeJSON(req.Body, &payload); err != nil {
@@ -409,6 +410,7 @@ func (m *BoostService) handleRevoke(w http.ResponseWriter, req *http.Request) {
 
 	ua := UserAgent(req.Header.Get("User-Agent"))
 	log = log.WithFields(logrus.Fields{
+		"validatorPubkey": payload.Message.ValidatorPubkey.String(),
 		"delegateePubkey": payload.Message.DelegateePubkey.String(),
 		"ua":              ua,
 	})
@@ -901,7 +903,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 				return
 			}
 
-			if responsePayload == nil {
+			if responsePayload.VersionedSignedBuilderBid == nil {
 				log.Warn("Bid in response is nil")
 				return
 			}

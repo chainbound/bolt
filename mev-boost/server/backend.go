@@ -9,9 +9,12 @@ const (
 	pathGetPayload          = "/eth/v1/builder/blinded_blocks"
 
 	// Constraints namespace paths
+	// Ref: https://docs.boltprotocol.xyz/api/builder#constraints
 	pathSubmitConstraint = "/constraints/v1/builder/constraints"
-	pathDelegate         = "/constraints/v1/builder/delegate"
-	pathRevoke           = "/constraints/v1/builder/revoke"
+	// Ref: https://docs.boltprotocol.xyz/api/builder#delegate
+	pathDelegate = "/constraints/v1/builder/delegate"
+	// Ref: https://docs.boltprotocol.xyz/api/builder#revoke
+	pathRevoke = "/constraints/v1/builder/revoke"
 
 	// // Relay Monitor paths
 	// pathAuctionTranscript = "/monitor/v1/transcript"

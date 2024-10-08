@@ -25,7 +25,7 @@ type ConstraintsMessage struct {
 	Pubkey       phase0.BLSPubKey `json:"pubkey"`
 	Slot         uint64           `json:"slot"`
 	Top          bool             `json:"top"`
-	Transactions []Transaction    // Custom marshal and unmarshal implemented below
+	Transactions []Transaction    `json:"transactions"`
 }
 
 func (s *SignedConstraints) String() string {
@@ -105,21 +105,25 @@ func (c *ConstraintsCache) FindTransactionByHash(txHash gethCommon.Hash) (*Trans
 	return nil, false
 }
 
+// Ref: https://docs.boltprotocol.xyz/api/builder#delegate
 type SignedDelegation struct {
 	Message   Delegation          `json:"message"`
 	Signature phase0.BLSSignature `json:"signature"`
 }
 
+// Ref: https://docs.boltprotocol.xyz/api/builder#delegate
 type Delegation struct {
 	ValidatorPubkey phase0.BLSPubKey `json:"validator_pubkey"`
 	DelegateePubkey phase0.BLSPubKey `json:"delegatee_pubkey"`
 }
 
+// Ref: https://docs.boltprotocol.xyz/api/builder#revoke
 type SignedRevocation struct {
 	Message   Delegation          `json:"message"`
 	Signature phase0.BLSSignature `json:"signature"`
 }
 
+// Ref: https://docs.boltprotocol.xyz/api/builder#revoke
 type Revocation struct {
 	ValidatorPubkey phase0.BLSPubKey `json:"validator_pubkey"`
 	DelegateePubkey phase0.BLSPubKey `json:"delegatee_pubkey"`
