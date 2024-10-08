@@ -123,6 +123,8 @@ func (m *mockRelay) getRouter() http.Handler {
 	r.HandleFunc(pathGetHeader, m.handleGetHeader).Methods(http.MethodGet)
 	r.HandleFunc(pathGetHeaderWithProofs, m.handleGetHeaderWithProofs).Methods(http.MethodGet)
 	r.HandleFunc(pathSubmitConstraint, m.handleSubmitConstraint).Methods(http.MethodPost)
+	r.HandleFunc(pathDelegate, m.handleDelegate).Methods(http.MethodPost)
+	r.HandleFunc(pathRevoke, m.handleRevoke).Methods(http.MethodPost)
 	r.HandleFunc(pathGetPayload, m.handleGetPayload).Methods(http.MethodPost)
 
 	return m.newTestMiddleware(r)
@@ -163,6 +165,28 @@ func (m *mockRelay) handleRegisterValidator(w http.ResponseWriter, req *http.Req
 // defaultHandleRegisterValidator returns the default handler for handleRegisterValidator
 func (m *mockRelay) defaultHandleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	payload := []builderApiV1.SignedValidatorRegistration{}
+	if err := DecodeJSON(req.Body, &payload); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (m *mockRelay) handleDelegate(w http.ResponseWriter, req *http.Request) {
+	payload := SignedDelegation{}
+	if err := DecodeJSON(req.Body, &payload); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (m *mockRelay) handleRevoke(w http.ResponseWriter, req *http.Request) {
+	payload := SignedRevocation{}
 	if err := DecodeJSON(req.Body, &payload); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

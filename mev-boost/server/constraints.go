@@ -119,7 +119,7 @@ type Delegation struct {
 
 // Ref: https://docs.boltprotocol.xyz/api/builder#revoke
 type SignedRevocation struct {
-	Message   Delegation          `json:"message"`
+	Message   Revocation          `json:"message"`
 	Signature phase0.BLSSignature `json:"signature"`
 }
 

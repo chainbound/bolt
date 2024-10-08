@@ -311,6 +311,61 @@ func TestRegisterValidator(t *testing.T) {
 	})
 }
 
+func TestDelegate(t *testing.T) {
+	path := pathDelegate
+	delegate := SignedDelegation{
+		Message: Delegation{
+			ValidatorPubkey: _HexToPubkey("0xa695ad325dfc7e1191fbc9f186f58eff42a634029731b18380ff89bf42c464a42cb8ca55b200f051f57f1e1893c68759"),
+			DelegateePubkey: _HexToPubkey("0xb8ba260170b9cda2ad54c321d9a8d77e4ca34517106f587eb5ec184bf78f8a0ce4fb55658301b0dc6b129d10adf62391"),
+		},
+		Signature: _HexToSignature("0x8790321eacadd5b869838bc01db2338b0bd88a802d768bff8ddbe12aeff67ebc003af8ecc3bafedfef98d2946e869974075006f22367f77c58ca1f1ba20f0d90bf323d243063db16c631ce4ff89bc4f3f239e0879cc4eb492b9906a16fab6f16"),
+	}
+	payload := delegate
+
+	t.Run("Normal function", func(t *testing.T) {
+		backend := newTestBackend(t, 1, time.Second)
+		rr := backend.request(t, http.MethodPost, path, payload)
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Equal(t, 1, backend.relays[0].GetRequestCount(path))
+	})
+}
+
+func TestRevoke(t *testing.T) {
+	path := pathRevoke
+	revoke := SignedRevocation{
+		Message: Revocation{
+			ValidatorPubkey: _HexToPubkey("0xa695ad325dfc7e1191fbc9f186f58eff42a634029731b18380ff89bf42c464a42cb8ca55b200f051f57f1e1893c68759"),
+			DelegateePubkey: _HexToPubkey("0xb8ba260170b9cda2ad54c321d9a8d77e4ca34517106f587eb5ec184bf78f8a0ce4fb55658301b0dc6b129d10adf62391"),
+		},
+		Signature: _HexToSignature("0x8790321eacadd5b869838bc01db2338b0bd88a802d768bff8ddbe12aeff67ebc003af8ecc3bafedfef98d2946e869974075006f22367f77c58ca1f1ba20f0d90bf323d243063db16c631ce4ff89bc4f3f239e0879cc4eb492b9906a16fab6f16"),
+	}
+	payload := revoke
+
+	t.Run("Normal function", func(t *testing.T) {
+		backend := newTestBackend(t, 1, time.Second)
+		rr := backend.request(t, http.MethodPost, path, payload)
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Equal(t, 1, backend.relays[0].GetRequestCount(path))
+	})
+}
+
+func TestParseSignedDelegation(t *testing.T) {
+	jsonStr := `{
+        "message": {
+            "validator_pubkey": "0xa695ad325dfc7e1191fbc9f186f58eff42a634029731b18380ff89bf42c464a42cb8ca55b200f051f57f1e1893c68759",
+            "delegatee_pubkey": "0xb8ba260170b9cda2ad54c321d9a8d77e4ca34517106f587eb5ec184bf78f8a0ce4fb55658301b0dc6b129d10adf62391"
+        },
+        "signature": "0x8790321eacadd5b869838bc01db2338b0bd88a802d768bff8ddbe12aeff67ebc003af8ecc3bafedfef98d2946e869974075006f22367f77c58ca1f1ba20f0d90bf323d243063db16c631ce4ff89bc4f3f239e0879cc4eb492b9906a16fab6f16"
+        }`
+
+	delegation := SignedDelegation{}
+	err := json.Unmarshal([]byte(jsonStr), &delegation)
+	require.NoError(t, err)
+	require.Equal(t, phase0.BLSPubKey(_HexToBytes("0xa695ad325dfc7e1191fbc9f186f58eff42a634029731b18380ff89bf42c464a42cb8ca55b200f051f57f1e1893c68759")), delegation.Message.ValidatorPubkey)
+	require.Equal(t, phase0.BLSPubKey(_HexToBytes("0xb8ba260170b9cda2ad54c321d9a8d77e4ca34517106f587eb5ec184bf78f8a0ce4fb55658301b0dc6b129d10adf62391")), delegation.Message.DelegateePubkey)
+	require.Equal(t, phase0.BLSSignature(_HexToBytes("0x8790321eacadd5b869838bc01db2338b0bd88a802d768bff8ddbe12aeff67ebc003af8ecc3bafedfef98d2946e869974075006f22367f77c58ca1f1ba20f0d90bf323d243063db16c631ce4ff89bc4f3f239e0879cc4eb492b9906a16fab6f16")), delegation.Signature)
+}
+
 func TestParseConstraints(t *testing.T) {
 	jsonStr := `[
 		{
