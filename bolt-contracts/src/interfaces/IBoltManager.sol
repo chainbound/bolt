@@ -20,6 +20,14 @@ interface IBoltManager {
         address operator
     ) external;
 
+    function pauseOperator(
+        address operator
+    ) external;
+
+    function unpauseOperator(
+        address operator
+    ) external;
+
     function isOperator(
         address operator
     ) external view returns (bool);

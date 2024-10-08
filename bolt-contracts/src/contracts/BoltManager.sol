@@ -137,21 +137,17 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Allow an operator to signal indefinite opt-out from Bolt Protocol.
     /// @dev Pausing activity does not prevent the operator from being slashable for
     /// the current network epoch until the end of the slashing window.
-    function pauseOperator() public {
-        if (!operators.contains(msg.sender)) {
-            revert OperatorNotRegistered();
-        }
-
-        operators.disable(msg.sender);
+    function pauseOperator(
+        address operator
+    ) external onlyMiddleware {
+        operators.disable(operator);
     }
 
     /// @notice Allow a disabled operator to signal opt-in to Bolt Protocol.
-    function unpauseOperator() public {
-        if (!operators.contains(msg.sender)) {
-            revert OperatorNotRegistered();
-        }
-
-        operators.enable(msg.sender);
+    function unpauseOperator(
+        address operator
+    ) external onlyMiddleware {
+        operators.enable(operator);
     }
 
     /// @notice Check if an operator is currently enabled to work in Bolt Protocol.
@@ -216,17 +212,17 @@ contract BoltManager is IBoltManager, Ownable {
     /// @notice Add a restaking protocol into Bolt
     /// @param protocolMiddleware The address of the restaking protocol Bolt middleware
     function addRestakingProtocol(
-        IBoltMiddleware protocolMiddleware
+        address protocolMiddleware
     ) public onlyOwner {
-        restakingProtocols.add(address(protocolMiddleware));
+        restakingProtocols.add(protocolMiddleware);
     }
 
     /// @notice Remove a restaking protocol from Bolt
     /// @param protocolMiddleware The address of the restaking protocol Bolt middleware
     function removeRestakingProtocol(
-        IBoltMiddleware protocolMiddleware
+        address protocolMiddleware
     ) public onlyOwner {
-        restakingProtocols.remove(address(protocolMiddleware));
+        restakingProtocols.remove(protocolMiddleware);
     }
 
     // ========= HELPER FUNCTIONS =========

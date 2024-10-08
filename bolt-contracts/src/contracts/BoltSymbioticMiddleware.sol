@@ -33,12 +33,6 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     /// BLS pubkey and are assigned a sequence number.
     IBoltManager public boltManager;
 
-    /// @notice Set of Symbiotic operator addresses that have opted in to Bolt Protocol.
-    EnumerableMap.AddressToUintMap private operators;
-
-    /// @notice Mapping of operator addresses to RPC endpoints.
-    mapping(address => string) private operatorRPCs;
-
     /// @notice Set of Symbiotic protocol vaults that are used in Bolt Protocol.
     EnumerableMap.AddressToUintMap private vaults;
 
@@ -130,20 +124,6 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
         return getEpochAtTs(Time.timestamp());
     }
 
-    /// @notice Check if an operator address is authorized to work for a validator,
-    /// given the validator's pubkey hash. This function performs a lookup in the
-    /// validators registry to check if they explicitly authorized the operator.
-    /// @param operator The operator address to check the authorization for.
-    /// @param pubkeyHash The pubkey hash of the validator to check the authorization for.
-    /// @return True if the operator is authorized, false otherwise.
-    function isOperatorAuthorizedForValidator(address operator, bytes32 pubkeyHash) public view returns (bool) {
-        if (operator == address(0) || pubkeyHash == bytes32(0)) {
-            revert InvalidQuery();
-        }
-
-        return boltManager.validators().getValidatorByPubkeyHash(pubkeyHash).authorizedOperator == operator;
-    }
-
     /// @notice Get the list of collateral addresses that are whitelisted.
     /// @return collaterals The list of collateral addresses that are whitelisted.
     function getWhitelistedCollaterals() public view returns (address[] memory collaterals) {
@@ -182,7 +162,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     /// @notice Allow an operator to signal opt-in to Bolt Protocol.
     /// @param operator The operator address to signal opt-in for.
     function registerOperator(address operator, string calldata rpc) public {
-        if (operators.contains(operator)) {
+        if (boltManager.isOperator(operator)) {
             revert AlreadyRegistered();
         }
 
@@ -194,42 +174,37 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
             revert OperatorNotOptedIn();
         }
 
-        operators.add(operator);
-        operators.enable(operator);
-
-        operatorRPCs[operator] = rpc;
+        boltManager.registerOperator(operator, rpc);
     }
 
     /// @notice Deregister a Symbiotic operator from working in Bolt Protocol.
     /// @dev This does NOT deregister the operator from the Symbiotic network.
     function deregisterOperator() public {
-        if (!operators.contains(msg.sender)) {
+        if (!boltManager.isOperator(msg.sender)) {
             revert NotRegistered();
         }
 
-        operators.remove(msg.sender);
-
-        delete operatorRPCs[msg.sender];
+        boltManager.deregisterOperator(msg.sender);
     }
 
     /// @notice Allow an operator to signal indefinite opt-out from Bolt Protocol.
     /// @dev Pausing activity does not prevent the operator from being slashable for
     /// the current network epoch until the end of the slashing window.
     function pauseOperator() public {
-        if (!operators.contains(msg.sender)) {
+        if (!boltManager.isOperator(msg.sender)) {
             revert NotRegistered();
         }
 
-        operators.disable(msg.sender);
+        boltManager.pauseOperator(msg.sender);
     }
 
     /// @notice Allow a disabled operator to signal opt-in to Bolt Protocol.
     function unpauseOperator() public {
-        if (!operators.contains(msg.sender)) {
+        if (!boltManager.isOperator(msg.sender)) {
             revert NotRegistered();
         }
 
-        operators.enable(msg.sender);
+        boltManager.unpauseOperator(msg.sender);
     }
 
     /// @notice Allow a vault to signal opt-in to Bolt Protocol.
@@ -283,66 +258,43 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
         return enabledTime != 0 && disabledTime == 0;
     }
 
-    /// @notice Check if an operator is currently enabled to work in Bolt Protocol.
-    /// @param operator The operator address to check the enabled status for.
-    /// @return True if the operator is enabled, false otherwise.
-    function isOperatorEnabled(
+    /// @notice Get the collaterals and amounts staked by an operator across the supported strategies.
+    ///
+    /// @param operator The operator address to get the collaterals and amounts staked for.
+    /// @return collaterals The collaterals staked by the operator.
+    /// @dev Assumes that the operator is registered and enabled.
+    function getOperatorCollaterals(
         address operator
-    ) public view returns (bool) {
-        (uint48 enabledTime, uint48 disabledTime) = operators.getTimes(operator);
-        return enabledTime != 0 && disabledTime == 0;
-    }
-
-    /// @notice Get the status of multiple proposers, given their pubkey hashes.
-    /// @param pubkeyHashes The pubkey hashes of the proposers to get the status for.
-    /// @return statuses The statuses of the proposers, including their operator and active stake.
-    function getProposersStatus(
-        bytes32[] calldata pubkeyHashes
-    ) public view returns (IBoltValidators.ProposerStatus[] memory statuses) {
-        statuses = new IBoltValidators.ProposerStatus[](pubkeyHashes.length);
-        for (uint256 i = 0; i < pubkeyHashes.length; ++i) {
-            statuses[i] = getProposerStatus(pubkeyHashes[i]);
-        }
-    }
-
-    /// @notice Get the status of a proposer, given their pubkey hash.
-    /// @param pubkeyHash The pubkey hash of the proposer to get the status for.
-    /// @return status The status of the proposer, including their operator and active stake.
-    function getProposerStatus(
-        bytes32 pubkeyHash
-    ) public view returns (IBoltValidators.ProposerStatus memory status) {
-        if (pubkeyHash == bytes32(0)) {
-            revert InvalidQuery();
-        }
+    ) public view returns (address[] memory, uint256[] memory) {
+        address[] memory collateralTokens = new address[](vaults.length());
+        uint256[] memory amounts = new uint256[](vaults.length());
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
-        IBoltValidators.Validator memory validator = boltManager.validators().getValidatorByPubkeyHash(pubkeyHash);
-        address operator = validator.authorizedOperator;
-
-        status.pubkeyHash = pubkeyHash;
-        status.active = validator.exists;
-        status.operator = operator;
-        status.operatorRPC = operatorRPCs[operator];
-
-        (uint48 enabledTime, uint48 disabledTime) = operators.getTimes(operator);
-        if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
-            return status;
-        }
-
-        status.collaterals = new address[](vaults.length());
-        status.amounts = new uint256[](vaults.length());
 
         for (uint256 i = 0; i < vaults.length(); ++i) {
-            (address vault, uint48 enabledVaultTime, uint48 disabledVaultTime) = vaults.atWithTimes(i);
+            (address vault, uint48 enabledTime, uint48 disabledTime) = vaults.atWithTimes(i);
 
-            address collateral = IVault(vault).collateral();
-            status.collaterals[i] = collateral;
-            if (!_wasEnabledAt(enabledVaultTime, disabledVaultTime, epochStartTs)) {
+            if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
                 continue;
             }
 
-            status.amounts[i] = getOperatorStakeAt(operator, collateral, epochStartTs);
+            address collateral = IVault(vault).collateral();
+            collateralTokens[i] = collateral;
+
+            // in order to have stake in a network, the operator needs to be opted in to that vault.
+            // this authorization is fully handled in the Vault, we just need to read the stake.
+            amounts[i] = IBaseDelegator(IVault(vault).delegator()).stakeAt(
+                // The stake for each subnetwork is stored in the vault's delegator contract.
+                // stakeAt returns the stake of "operator" at "timestamp" for "network" (or subnetwork)
+                // bytes(0) is for hints, which we don't currently use.
+                BOLT_SYMBIOTIC_NETWORK.subnetwork(0),
+                operator,
+                epochStartTs,
+                new bytes(0)
+            );
         }
+
+        return (collateralTokens, amounts);
     }
 
     /// @notice Get the stake of an operator in Symbiotic protocol at the current timestamp.
@@ -395,33 +347,6 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
         }
 
         return amount;
-    }
-
-    /// @notice Get the total stake of all Symbiotic operators at a given epoch for a collateral asset.
-    /// @param epoch The epoch to check the total stake for.
-    /// @param collateral The collateral address to check the total stake for.
-    /// @return totalStake The total stake of all operators at the given epoch, in collateral token.
-    function getTotalStake(uint48 epoch, address collateral) public view returns (uint256 totalStake) {
-        uint48 epochStartTs = getEpochStartTs(epoch);
-
-        // for epoch older than SLASHING_WINDOW total stake can be invalidated
-        if (
-            epochStartTs < SLASHING_WINDOW || epochStartTs < Time.timestamp() - SLASHING_WINDOW
-                || epochStartTs > Time.timestamp()
-        ) {
-            revert InvalidQuery();
-        }
-
-        for (uint256 i; i < operators.length(); ++i) {
-            (address operator, uint48 enabledTime, uint48 disabledTime) = operators.atWithTimes(i);
-
-            // just skip operator if it was added after the target epoch or paused
-            if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
-                continue;
-            }
-
-            totalStake += getOperatorStakeAt(operator, collateral, epochStartTs);
-        }
     }
 
     /// @notice Slash a given operator for a given amount of collateral.

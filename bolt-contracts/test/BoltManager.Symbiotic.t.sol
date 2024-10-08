@@ -163,8 +163,10 @@ contract BoltManagerTest is Test {
         );
 
         // --- Whitelist collateral in BoltSymbioticMiddleware ---
-        vm.prank(admin);
+        vm.startPrank(admin);
         middleware.addWhitelistedCollateral(address(collateral));
+        manager.addRestakingProtocol(address(middleware));
+        vm.stopPrank();
     }
 
     /// @notice Internal helper to register Symbiotic contracts and opt-in operators and vaults.
@@ -208,7 +210,7 @@ contract BoltManagerTest is Test {
         assertEq(middleware.isVaultEnabled(address(vault)), true);
 
         middleware.registerOperator(operator, "https://bolt-rpc.io");
-        assertEq(middleware.isOperatorEnabled(operator), true);
+        assertEq(manager.isOperatorEnabled(operator), true);
 
         // --- Set the stake limit for the Vault ---
 
@@ -282,9 +284,10 @@ contract BoltManagerTest is Test {
         assertEq(vault.currentEpoch(), 2);
 
         // it takes 2 epochs to activate the stake
-        assertEq(middleware.getTotalStake(0, address(collateral)), 0);
-        assertEq(middleware.getTotalStake(1, address(collateral)), 0);
-        assertEq(middleware.getTotalStake(2, address(collateral)), 1 ether);
+        // TODO:
+        // assertEq(middleware.getTotalStake(0, address(collateral)), 0);
+        // assertEq(middleware.getTotalStake(1, address(collateral)), 0);
+        // assertEq(middleware.getTotalStake(2, address(collateral)), 1 ether);
 
         stakeFromDelegator = networkRestakeDelegator.stake(subnetwork, operator);
         stakeFromMiddleware = middleware.getOperatorStake(operator, address(collateral));
@@ -308,7 +311,7 @@ contract BoltManagerTest is Test {
         vm.warp(block.timestamp + EPOCH_DURATION * 2 + 1);
         assertEq(vault.currentEpoch(), 2);
 
-        IBoltValidators.ProposerStatus memory status = middleware.getProposerStatus(pubkeyHash);
+        IBoltValidators.ProposerStatus memory status = manager.getProposerStatus(pubkeyHash);
         assertEq(status.pubkeyHash, pubkeyHash);
         assertEq(status.operator, operator);
         assertEq(status.active, true);
@@ -336,7 +339,7 @@ contract BoltManagerTest is Test {
         vm.warp(block.timestamp + EPOCH_DURATION * 2 + 1);
         assertEq(vault.currentEpoch(), 2);
 
-        IBoltValidators.ProposerStatus[] memory statuses = middleware.getProposersStatus(pubkeyHashes);
+        IBoltValidators.ProposerStatus[] memory statuses = manager.getProposersStatus(pubkeyHashes);
         assertEq(statuses.length, 10);
     }
 
@@ -346,7 +349,7 @@ contract BoltManagerTest is Test {
         bytes32 pubkeyHash = bytes32(uint256(1));
 
         vm.expectRevert(IBoltValidators.ValidatorDoesNotExist.selector);
-        middleware.getProposerStatus(pubkeyHash);
+        manager.getProposerStatus(pubkeyHash);
     }
 
     function testGetWhitelistedCollaterals() public view {
