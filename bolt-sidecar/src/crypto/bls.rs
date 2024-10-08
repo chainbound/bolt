@@ -2,10 +2,10 @@ use std::fmt::Debug;
 
 use alloy::primitives::FixedBytes;
 use blst::{min_pk::Signature, BLST_ERROR};
-use ethereum_consensus::deneb::compute_signing_root;
+use ethereum_consensus::{crypto::PublicKey as BlsPublicKey, deneb::compute_signing_root};
 use rand::RngCore;
 
-pub use blst::min_pk::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
+pub use blst::min_pk::{PublicKey, SecretKey as BlsSecretKey};
 pub use ethereum_consensus::deneb::BlsSignature;
 
 use crate::ChainConfig;
@@ -28,6 +28,9 @@ pub trait SignableBLS {
 /// Note: we keep this async to allow remote signer implementations.
 #[async_trait::async_trait]
 pub trait SignerBLS: Send + Debug {
+    /// Get the public key of the signer.
+    fn pubkey(&self) -> BlsPublicKey;
+
     /// Sign the given data and return the signature.
     async fn sign_commit_boost_root(&self, data: &[u8; 32]) -> eyre::Result<BLSSig>;
 }
@@ -62,12 +65,13 @@ impl Signer {
 
     /// Get the public key of the signer.
     pub fn pubkey(&self) -> BlsPublicKey {
-        self.key.sk_to_pk()
+        let pk = self.key.sk_to_pk();
+        BlsPublicKey::try_from(pk.to_bytes().as_ref()).unwrap()
     }
 
     /// Sign an SSZ object root with the Application Builder domain.
     pub fn sign_application_builder_root(&self, root: [u8; 32]) -> eyre::Result<BLSSig> {
-        self.sign_root(root, self.chain.builder_domain())
+        self.sign_root(root, self.chain.application_builder_domain())
     }
 
     /// Sign an SSZ object root with the Commit Boost domain.
@@ -88,7 +92,7 @@ impl Signer {
         root: [u8; 32],
         signature: &Signature,
     ) -> eyre::Result<()> {
-        self.verify_root(root, signature, &self.pubkey(), self.chain.builder_domain())
+        self.verify_root(root, signature, self.chain.application_builder_domain())
     }
 
     /// Verify the signature with the public key of the signer using the Commit Boost domain.
@@ -97,7 +101,7 @@ impl Signer {
         root: [u8; 32],
         signature: &Signature,
     ) -> eyre::Result<()> {
-        self.verify_root(root, signature, &self.pubkey(), self.chain.commit_boost_domain())
+        self.verify_root(root, signature, self.chain.commit_boost_domain())
     }
 
     /// Verify the signature of the object with the given public key.
@@ -105,12 +109,12 @@ impl Signer {
         &self,
         root: [u8; 32],
         signature: &Signature,
-        pubkey: &BlsPublicKey,
         domain: [u8; 32],
     ) -> eyre::Result<()> {
         let signing_root = compute_signing_root(&root, domain)?;
+        let pk = blst::min_pk::PublicKey::from_bytes(self.pubkey().as_ref()).unwrap();
 
-        let res = signature.verify(true, signing_root.as_ref(), BLS_DST_PREFIX, &[], pubkey, true);
+        let res = signature.verify(true, signing_root.as_ref(), BLS_DST_PREFIX, &[], &pk, true);
         if res == BLST_ERROR::BLST_SUCCESS {
             Ok(())
         } else {
@@ -121,14 +125,13 @@ impl Signer {
 
 #[async_trait::async_trait]
 impl SignerBLS for Signer {
+    fn pubkey(&self) -> BlsPublicKey {
+        self.pubkey()
+    }
+
     async fn sign_commit_boost_root(&self, data: &[u8; 32]) -> eyre::Result<BLSSig> {
         self.sign_commit_boost_root(*data)
     }
-}
-
-/// Compatibility between ethereum_consensus and blst
-pub fn from_bls_signature_to_consensus_signature(sig_bytes: impl AsRef<[u8]>) -> BlsSignature {
-    BlsSignature::try_from(sig_bytes.as_ref()).unwrap()
 }
 
 /// Generate a random BLS secret key.

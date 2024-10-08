@@ -193,7 +193,9 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
 
         let start = Instant::now();
 
-        let validator_pubkey = match self.consensus.validate_request(&request) {
+        // TODO(nico): currently we don't use the validator pubkey to sign. this will be re-added
+        // later to support different signing setups.
+        let _validator_pubkey = match self.consensus.validate_request(&request) {
             Ok(index) => index,
             Err(err) => {
                 error!(?err, "Consensus: failed to validate request");
@@ -228,7 +230,8 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         // with no ordering guarantees.
         for tx in inclusion_request.txs {
             let tx_type = tx.tx_type();
-            let message = ConstraintsMessage::from_transaction(validator_pubkey.clone(), slot, tx);
+            let pubkey = self.constraint_signer.pubkey();
+            let message = ConstraintsMessage::from_transaction(pubkey, slot, tx);
 
             let signed_constraints =
                 match self.constraint_signer.sign_commit_boost_root(&message.digest()).await {

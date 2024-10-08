@@ -3,9 +3,10 @@ use std::{str::FromStr, sync::Arc};
 use alloy::{rpc::types::beacon::BlsSignature, signers::Signature};
 use cb_common::{
     commit::{client::SignerClient, request::SignConsensusRequest},
-    signer::{BlsPublicKey, EcdsaPublicKey},
+    signer::EcdsaPublicKey,
 };
 use commit_boost::prelude::SignProxyRequest;
+use ethereum_consensus::crypto::bls::PublicKey as BlsPublicKey;
 use eyre::ErrReport;
 use parking_lot::RwLock;
 use thiserror::Error;
@@ -60,7 +61,11 @@ impl CommitBoostSigner {
                     );
                     let mut pubkeys_lock = this.pubkeys.write();
                     let mut proxy_ecdsa_lock = this.proxy_ecdsa.write();
-                    *pubkeys_lock = pubkeys.consensus;
+                    *pubkeys_lock = pubkeys
+                        .consensus
+                        .into_iter()
+                        .map(|k| BlsPublicKey::try_from(k.as_ref()).unwrap())
+                        .collect();
                     *proxy_ecdsa_lock = pubkeys.proxy_ecdsa;
                 }
                 Err(e) => {
@@ -74,7 +79,8 @@ impl CommitBoostSigner {
 
     /// Get the consensus public key from the Commit-Boost signer.
     pub fn get_consensus_pubkey(&self) -> BlsPublicKey {
-        *self.pubkeys.read().first().expect("consensus pubkey loaded")
+        let pk = self.pubkeys.read().first().expect("consensus pubkey loaded").clone();
+        BlsPublicKey::try_from(pk.as_ref()).expect("consensus pubkey is valid")
     }
 
     /// Get the proxy ECDSA public key from the Commit-Boost signer.
@@ -109,11 +115,17 @@ impl CommitBoostSigner {
 
 #[async_trait::async_trait]
 impl SignerBLS for CommitBoostSigner {
+    fn pubkey(&self) -> BlsPublicKey {
+        self.get_consensus_pubkey()
+    }
+
     async fn sign_commit_boost_root(&self, data: &[u8; 32]) -> eyre::Result<BlsSignature> {
-        let request = SignConsensusRequest {
-            pubkey: *self.pubkeys.read().first().expect("consensus pubkey loaded"),
-            object_root: *data,
-        };
+        // convert the pubkey from ethereum_consensus to commit-boost format
+        let pubkey = cb_common::signer::BlsPublicKey::from(
+            alloy::rpc::types::beacon::BlsPublicKey::from_slice(self.pubkey().as_ref()),
+        );
+
+        let request = SignConsensusRequest { pubkey, object_root: *data };
 
         debug!(?request, "Requesting signature from commit_boost");
 

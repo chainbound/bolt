@@ -72,7 +72,11 @@ impl SignableBLS for ConstraintsMessage {
 
 #[cfg(test)]
 mod tests {
+    use crate::crypto::bls::Signer;
+
     use super::*;
+    use alloy::primitives::bytes;
+    use blst::min_pk::Signature as BlsSignature;
     use rand::{rngs::ThreadRng, Rng};
 
     fn random_u64(rng: &mut ThreadRng) -> u64 {
@@ -130,5 +134,23 @@ mod tests {
 
         // Verify that the deserialized message is equal to the original message
         assert_eq!(message, deserialized_message);
+    }
+
+    #[test]
+    fn test_constraints_signature_roundtrip() {
+        let signer = Signer::random();
+
+        let tx_bytes = bytes!("f8678085019dc6838082520894deaddeaddeaddeaddeaddeaddeaddeaddeaddead38808360306ca06664c078fa60bd3ece050903dd295949908dd9686ec8871fa558f868e031cd39a00ed4f0b122b32b73f19230fabe6a726e2d07f84eda5beaa42a1ae1271bdee39f").to_vec();
+        let tx = FullTransaction::decode_enveloped(tx_bytes.as_slice()).unwrap();
+
+        let constraint = ConstraintsMessage::from_transaction(signer.pubkey(), 165, tx);
+
+        let digest = constraint.digest();
+        let signature = signer.sign_commit_boost_root(digest).unwrap();
+        let signed_constraints = SignedConstraints { message: constraint, signature };
+
+        // verify the signature
+        let blst_sig = BlsSignature::from_bytes(signed_constraints.signature.as_ref()).unwrap();
+        assert!(signer.verify_commit_boost_root(digest, &blst_sig).is_ok());
     }
 }

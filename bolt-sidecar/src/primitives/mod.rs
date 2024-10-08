@@ -379,6 +379,12 @@ impl std::ops::DerefMut for FullTransaction {
 }
 
 impl FullTransaction {
+    /// Convenience method to parse a raw transaction into a `FullTransaction`.
+    pub fn decode_enveloped(data: impl AsRef<[u8]>) -> eyre::Result<Self> {
+        let tx = PooledTransactionsElement::decode_enveloped(&mut data.as_ref())?;
+        Ok(Self { tx, sender: None })
+    }
+
     pub fn into_inner(self) -> PooledTransactionsElement {
         self.tx
     }

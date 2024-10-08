@@ -13,7 +13,6 @@ use alloy_node_bindings::{Anvil, AnvilInstance};
 use blst::min_pk::SecretKey;
 use ethereum_consensus::crypto::{PublicKey, Signature};
 use rand::Rng;
-use reth_primitives::PooledTransactionsElement;
 use secp256k1::Message;
 use tracing::warn;
 
@@ -157,8 +156,8 @@ pub(crate) async fn create_signed_commitment_request(
     for tx in txs {
         let tx_signed = tx.clone().build(&wallet).await?;
         let raw_encoded = tx_signed.encoded_2718();
-        let tx_pooled = PooledTransactionsElement::decode_enveloped(&mut raw_encoded.as_slice())?;
-        full_txs.push(FullTransaction::from(tx_pooled));
+        let full_tx = FullTransaction::decode_enveloped(raw_encoded.as_slice())?;
+        full_txs.push(full_tx);
     }
     let mut request = InclusionRequest { txs: full_txs, slot, signature: None, signer: None };
 
@@ -192,7 +191,7 @@ async fn generate_test_data() {
     let signer = BlsSigner::random();
     let pk = signer.pubkey();
 
-    println!("Validator Public Key: {}", hex::encode(pk.to_bytes()));
+    println!("Validator Public Key: {}", hex::encode(pk.as_ref()));
 
     // Generate a delegatee's BLS secret key and public key
     let delegatee_ikm: [u8; 32] = rand::thread_rng().gen();
@@ -202,8 +201,7 @@ async fn generate_test_data() {
 
     // Prepare a Delegation message
     let delegation_msg = DelegationMessage {
-        validator_pubkey: PublicKey::try_from(pk.to_bytes().as_slice())
-            .expect("Failed to convert validator public key"),
+        validator_pubkey: pk.clone(),
         delegatee_pubkey: PublicKey::try_from(delegatee_pk.to_bytes().as_slice())
             .expect("Failed to convert delegatee public key"),
     };
@@ -225,8 +223,7 @@ async fn generate_test_data() {
 
     // Prepare a revocation message
     let revocation_msg = RevocationMessage {
-        validator_pubkey: PublicKey::try_from(pk.to_bytes().as_slice())
-            .expect("Failed to convert validator public key"),
+        validator_pubkey: pk.clone(),
         delegatee_pubkey: PublicKey::try_from(delegatee_pk.to_bytes().as_slice())
             .expect("Failed to convert delegatee public key"),
     };
@@ -249,13 +246,7 @@ async fn generate_test_data() {
     let transactions = random_constraints(1);
 
     // Prepare a ConstraintsMessage
-    let constraints_msg = ConstraintsMessage {
-        pubkey: PublicKey::try_from(pk.to_bytes().as_slice())
-            .expect("Failed to convert validator public key"),
-        slot: 32,
-        top: true,
-        transactions,
-    };
+    let constraints_msg = ConstraintsMessage { pubkey: pk, slot: 32, top: true, transactions };
 
     let digest = SignableBLS::digest(&constraints_msg);
 

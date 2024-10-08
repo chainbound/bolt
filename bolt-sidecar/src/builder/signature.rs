@@ -23,7 +23,7 @@ pub fn sign_builder_message<T: HashTreeRoot>(
     sk: &SecretKey,
     msg: &T,
 ) -> Result<Signature, MerkleizationError> {
-    let domain = chain.builder_domain();
+    let domain = chain.application_builder_domain();
     let object_root = msg.hash_tree_root()?.0;
     let signing_root = compute_signing_root(object_root, domain);
 
@@ -42,7 +42,7 @@ pub fn verify_signed_builder_message<T: HashTreeRoot>(
     msg: &T,
     signature: &BlsSignature,
 ) -> Result<(), ethereum_consensus::Error> {
-    let domain = chain.builder_domain();
+    let domain = chain.application_builder_domain();
     let object_root = msg.hash_tree_root()?.0;
     let signing_root = compute_signing_root(object_root, domain);
 
@@ -121,18 +121,27 @@ mod tests {
     #[test]
     fn test_compute_builder_domain() {
         let mainnet = ChainConfig::mainnet();
-        assert_eq!(compute_builder_domain(mainnet.fork_version(), None), mainnet.builder_domain());
+        assert_eq!(
+            compute_builder_domain(mainnet.fork_version(), None),
+            mainnet.application_builder_domain()
+        );
 
         let holesky = ChainConfig::holesky();
-        assert_eq!(compute_builder_domain(holesky.fork_version(), None), holesky.builder_domain());
+        assert_eq!(
+            compute_builder_domain(holesky.fork_version(), None),
+            holesky.application_builder_domain()
+        );
 
         let kurtosis = ChainConfig::kurtosis(0, 0);
         assert_eq!(
             compute_builder_domain(kurtosis.fork_version(), None),
-            kurtosis.builder_domain()
+            kurtosis.application_builder_domain()
         );
 
         let helder = ChainConfig::helder();
-        assert_eq!(compute_builder_domain(helder.fork_version(), None), helder.builder_domain());
+        assert_eq!(
+            compute_builder_domain(helder.fork_version(), None),
+            helder.application_builder_domain()
+        );
     }
 }
