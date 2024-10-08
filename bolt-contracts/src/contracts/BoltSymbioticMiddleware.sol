@@ -297,7 +297,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     /// @param pubkeyHashes The pubkey hashes of the proposers to get the status for.
     /// @return statuses The statuses of the proposers, including their operator and active stake.
     function getProposersStatus(
-        bytes32[] memory pubkeyHashes
+        bytes32[] calldata pubkeyHashes
     ) public view returns (IBoltValidators.ProposerStatus[] memory statuses) {
         statuses = new IBoltValidators.ProposerStatus[](pubkeyHashes.length);
         for (uint256 i = 0; i < pubkeyHashes.length; ++i) {
