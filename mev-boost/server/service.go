@@ -552,7 +552,7 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 	for _, signedConstraints := range payload {
 		constraintsMessage := signedConstraints.Message
 
-		log.Infof("[BOLT]: adding inclusion constraints to cache. slot = %d, validatorPubkey = %d, number of relays = %d", constraintsMessage.Slot, constraintsMessage.Pubkey, len(m.relays))
+		log.Infof("[BOLT]: adding inclusion constraints to cache. slot = %d, validatorPubkey = %s, number of relays = %d", constraintsMessage.Slot, constraintsMessage.Pubkey.String(), len(m.relays))
 
 		// Add the constraints to the cache.
 		// They will be cleared when we receive a payload for the slot in `handleGetPayload`
@@ -562,7 +562,7 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 			continue
 		}
 
-		log.Infof("[BOLT]: added inclusion constraints to cache. slot = %d, validatorPubkey = %d, number of relays = %d", constraintsMessage.Slot, constraintsMessage.Pubkey, len(m.relays))
+		log.Infof("[BOLT]: added inclusion constraints to cache. slot = %d, validatorPubkey = %s, number of relays = %d", constraintsMessage.Slot, constraintsMessage.Pubkey.String(), len(m.relays))
 	}
 
 	relayRespCh := make(chan error, len(m.relays))
