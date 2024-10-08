@@ -35,6 +35,9 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     /// @notice Set of EigenLayer operators addresses that have opted in to Bolt Protocol.
     EnumerableMap.AddressToUintMap private operators;
 
+    /// @notice Mapping of operator addresses to RPC endpoints.
+    mapping(address => string) private operatorRPCs;
+
     /// @notice Set of EigenLayer protocol strategies that are used in Bolt Protocol.
     EnumerableMap.AddressToUintMap private strategies;
 
@@ -169,6 +172,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator
     function registerOperator(
         address operator,
+        string memory rpc,
         ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature
     ) public {
         if (operators.contains(operator)) {
@@ -179,14 +183,13 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
             revert NotOperator();
         }
 
-        if (checkIfOperatorRegisteredToAVS(operator)) {
-            revert OperatorAlreadyRegisteredToAVS();
-        }
-
+        // Register the operator to the AVS directory for this AVS
         AVS_DIRECTORY.registerOperatorToAVS(operator, operatorSignature);
 
         operators.add(operator);
         operators.enable(operator);
+
+        operatorRPCs[operator] = rpc;
     }
 
     /// @notice Deregister an EigenLayer layer operator from working in Bolt Protocol.
@@ -197,9 +200,11 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
             revert NotRegistered();
         }
 
+        AVS_DIRECTORY.deregisterOperatorFromAVS(msg.sender);
+
         operators.remove(msg.sender);
 
-        AVS_DIRECTORY.deregisterOperatorFromAVS(msg.sender);
+        delete operatorRPCs[msg.sender];
     }
 
     /// @notice Allow an operator to signal indefinite opt-out from Bolt Protocol.
@@ -277,6 +282,10 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     function isOperatorEnabled(
         address operator
     ) public view returns (bool) {
+        if (!operators.contains(operator)) {
+            revert NotRegistered();
+        }
+
         (uint48 enabledTime, uint48 disabledTime) = operators.getTimes(operator);
         return enabledTime != 0 && disabledTime == 0;
     }
@@ -411,25 +420,6 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     }
 
     // ========= EIGENLAYER AVS FUNCTIONS =========
-
-    /// @notice Register an EigenLayer layer operator to work in Bolt Protocol.
-    /// @dev This requires calling the EigenLayer AVS Directory contract to register the operator.
-    /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator
-    function registerOperatorToAVS(
-        address operator,
-        ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature
-    ) public {
-        AVS_DIRECTORY.registerOperatorToAVS(operator, operatorSignature);
-    }
-
-    /// @notice Check if an operator is registered to work in Bolt Protocol AVS by
-    /// looking up the AVS Directory contract.
-    function checkIfOperatorRegisteredToAVS(
-        address operator
-    ) public view returns (bool registered) {
-        return AVS_DIRECTORY.avsOperatorStatus(address(this), operator)
-            == IAVSDirectory.OperatorAVSRegistrationStatus.REGISTERED;
-    }
 
     /// @notice emits an `AVSMetadataURIUpdated` event indicating the information has updated.
     /// @param metadataURI The URI for metadata associated with an avs

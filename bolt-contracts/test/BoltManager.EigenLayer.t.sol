@@ -143,8 +143,8 @@ contract BoltManagerEigenLayerTest is Test {
         emit IAVSDirectory.OperatorAVSRegistrationStatusUpdated(
             operator, address(middleware), IAVSDirectory.OperatorAVSRegistrationStatus.REGISTERED
         );
-        middleware.registerOperatorToAVS(operator, operatorSignature);
-        assertEq(middleware.checkIfOperatorRegisteredToAVS(operator), true);
+        middleware.registerOperator(operator, operatorSignature);
+        assertEq(middleware.isOperatorEnabled(operator), true);
 
         // PART 2: Validator and proposer opt into BOLT manager
         //
@@ -160,9 +160,6 @@ contract BoltManagerEigenLayerTest is Test {
 
         // 2. --- Operator and strategy registration into BoltManager (middleware) ---
 
-        middleware.registerOperator(operator);
-        assertEq(middleware.isOperatorEnabled(operator), true);
-
         middleware.registerStrategy(address(eigenLayerDeployer.wethStrat()));
         assertEq(middleware.isStrategyEnabled(address(eigenLayerDeployer.wethStrat())), true);
     }
@@ -170,8 +167,9 @@ contract BoltManagerEigenLayerTest is Test {
     function test_deregisterEigenLayerOperatorFromAVS() public {
         _eigenLayerOptInRoutine();
         vm.prank(operator);
-        middleware.deregisterOperatorFromAVS();
-        assertEq(middleware.checkIfOperatorRegisteredToAVS(operator), false);
+        middleware.deregisterOperator();
+        vm.expectRevert(IBoltMiddleware.NotRegistered.selector);
+        middleware.isOperatorEnabled(operator);
     }
 
     function test_getEigenLayerOperatorStake() public {

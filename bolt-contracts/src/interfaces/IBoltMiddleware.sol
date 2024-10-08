@@ -39,10 +39,6 @@ interface IBoltMiddleware {
         address collateral
     ) external view returns (bool);
 
-    function registerOperator(
-        address operator
-    ) external;
-
     function pauseOperator() external;
 
     function unpauseOperator() external;

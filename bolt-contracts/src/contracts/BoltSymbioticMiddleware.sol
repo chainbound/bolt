@@ -36,6 +36,9 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     /// @notice Set of Symbiotic operator addresses that have opted in to Bolt Protocol.
     EnumerableMap.AddressToUintMap private operators;
 
+    /// @notice Mapping of operator addresses to RPC endpoints.
+    mapping(address => string) private operatorRPCs;
+
     /// @notice Set of Symbiotic protocol vaults that are used in Bolt Protocol.
     EnumerableMap.AddressToUintMap private vaults;
 
@@ -178,9 +181,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
 
     /// @notice Allow an operator to signal opt-in to Bolt Protocol.
     /// @param operator The operator address to signal opt-in for.
-    function registerOperator(
-        address operator
-    ) public {
+    function registerOperator(address operator, string memory rpc) public {
         if (operators.contains(operator)) {
             revert AlreadyRegistered();
         }
@@ -195,6 +196,20 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
 
         operators.add(operator);
         operators.enable(operator);
+
+        operatorRPCs[operator] = rpc;
+    }
+
+    /// @notice Deregister a Symbiotic operator from working in Bolt Protocol.
+    /// @dev This does NOT deregister the operator from the Symbiotic network.
+    function deregisterOperator() public {
+        if (!operators.contains(msg.sender)) {
+            revert NotRegistered();
+        }
+
+        operators.remove(msg.sender);
+
+        delete operatorRPCs[msg.sender];
     }
 
     /// @notice Allow an operator to signal indefinite opt-out from Bolt Protocol.
