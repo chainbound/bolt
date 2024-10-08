@@ -34,7 +34,7 @@ pub const DEFAULT_MAX_COMMITTED_GAS: u64 = 10_000_000;
 pub const DEFAULT_MIN_PRIORITY_FEE: u128 = 1_000_000_000; // 1 Gwei
 
 /// Command-line options for the Bolt sidecar
-#[derive(Parser, Debug)]
+#[derive(Debug, Parser)]
 pub struct Opts {
     /// Port to listen on for incoming JSON-RPC requests
     #[clap(long, env = "BOLT_SIDECAR_PORT")]
