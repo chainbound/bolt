@@ -23,6 +23,7 @@ interface IBoltValidators {
         bytes32 pubkeyHash;
         bool active;
         address operator;
+        string operatorRPC;
         address[] collaterals;
         uint256[] amounts;
     }

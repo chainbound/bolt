@@ -320,6 +320,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
         status.pubkeyHash = pubkeyHash;
         status.active = validator.exists;
         status.operator = operator;
+        status.operatorRPC = operatorRPCs[operator];
 
         (uint48 enabledTime, uint48 disabledTime) = operators.getTimes(operator);
         if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
