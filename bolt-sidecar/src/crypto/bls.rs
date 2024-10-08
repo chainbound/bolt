@@ -33,10 +33,19 @@ pub trait SignerBLS: Send + Debug {
 }
 
 /// A BLS signer that can sign any type that implements the [`SignableBLS`] trait.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Signer {
     chain: ChainConfig,
     key: BlsSecretKey,
+}
+
+impl Debug for Signer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Signer")
+            .field("pubkey", &self.pubkey())
+            .field("chain", &self.chain.name())
+            .finish()
+    }
 }
 
 impl Signer {
