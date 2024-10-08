@@ -109,11 +109,11 @@ impl CommitBoostSigner {
 
 #[async_trait::async_trait]
 impl SignerBLS for CommitBoostSigner {
-    async fn sign(&self, data: &[u8; 32]) -> eyre::Result<BlsSignature> {
-        let request = SignConsensusRequest::builder(
-            *self.pubkeys.read().first().expect("consensus pubkey loaded"),
-        )
-        .with_msg(data);
+    async fn sign_commit_boost_root(&self, data: &[u8; 32]) -> eyre::Result<BlsSignature> {
+        let request = SignConsensusRequest {
+            pubkey: *self.pubkeys.read().first().expect("consensus pubkey loaded"),
+            object_root: *data,
+        };
 
         debug!(?request, "Requesting signature from commit_boost");
 
@@ -167,7 +167,7 @@ mod test {
         let mut data = [0u8; 32];
         rng.fill(&mut data);
 
-        let signature = signer.sign(&data).await.unwrap();
+        let signature = signer.sign_commit_boost_root(&data).await.unwrap();
         let sig = blst::min_pk::Signature::from_bytes(signature.as_ref()).unwrap();
         let pubkey = signer.get_consensus_pubkey();
         let bls_pubkey = blst::min_pk::PublicKey::from_bytes(pubkey.as_ref()).unwrap();

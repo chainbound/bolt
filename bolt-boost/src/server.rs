@@ -25,7 +25,9 @@ use cb_common::{
     config::PbsConfig,
     constants::APPLICATION_BUILDER_DOMAIN,
     pbs::{
-        error::{PbsError, ValidationError}, GetHeaderResponse, RelayClient, SignedExecutionPayloadHeader, EMPTY_TX_ROOT_HASH, HEADER_SLOT_UUID_KEY, HEADER_START_TIME_UNIX_MS
+        error::{PbsError, ValidationError},
+        GetHeaderResponse, RelayClient, SignedExecutionPayloadHeader, EMPTY_TX_ROOT_HASH,
+        HEADER_SLOT_UUID_KEY, HEADER_START_TIME_UNIX_MS,
     },
     signature::verify_signed_message,
     types::Chain,

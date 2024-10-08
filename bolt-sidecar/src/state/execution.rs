@@ -542,7 +542,7 @@ mod tests {
     use reth_primitives::constants::GWEI_TO_WEI;
 
     use crate::{
-        crypto::{bls::Signer, SignableBLS, SignerBLS},
+        crypto::{bls::Signer, SignableBLS},
         primitives::{ConstraintsMessage, SignedConstraints},
         state::fetcher,
         test_util::{create_signed_commitment_request, default_test_transaction, launch_anvil},
@@ -736,7 +736,7 @@ mod tests {
             Default::default(),
             request.as_inclusion_request().unwrap().clone(),
         );
-        let signature = signer.sign(&message.digest()).await?;
+        let signature = signer.sign_commit_boost_root(message.digest())?;
         let signed_constraints = SignedConstraints { message, signature };
         state.add_constraint(10, signed_constraints);
 
@@ -987,7 +987,7 @@ mod tests {
 
         let bls_signer = Signer::random();
         let message = ConstraintsMessage::build(Default::default(), inclusion_request);
-        let signature = bls_signer.sign(&message.digest()).await.unwrap();
+        let signature = bls_signer.sign_commit_boost_root(message.digest()).unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
         state.add_constraint(target_slot, signed_constraints);
@@ -1035,7 +1035,7 @@ mod tests {
 
         let bls_signer = Signer::random();
         let message = ConstraintsMessage::build(Default::default(), inclusion_request);
-        let signature = bls_signer.sign(&message.digest()).await.unwrap();
+        let signature = bls_signer.sign_commit_boost_root(message.digest()).unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
         state.add_constraint(target_slot, signed_constraints);
@@ -1082,7 +1082,7 @@ mod tests {
 
         let bls_signer = Signer::random();
         let message = ConstraintsMessage::build(Default::default(), inclusion_request);
-        let signature = bls_signer.sign(&message.digest()).await.unwrap();
+        let signature = bls_signer.sign_commit_boost_root(message.digest()).unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
         state.add_constraint(target_slot, signed_constraints);
