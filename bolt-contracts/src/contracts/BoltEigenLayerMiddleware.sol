@@ -172,7 +172,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator
     function registerOperator(
         address operator,
-        string memory rpc,
+        string calldata rpc,
         ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature
     ) public {
         if (operators.contains(operator)) {

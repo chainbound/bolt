@@ -181,7 +181,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
 
     /// @notice Allow an operator to signal opt-in to Bolt Protocol.
     /// @param operator The operator address to signal opt-in for.
-    function registerOperator(address operator, string memory rpc) public {
+    function registerOperator(address operator, string calldata rpc) public {
         if (operators.contains(operator)) {
             revert AlreadyRegistered();
         }
