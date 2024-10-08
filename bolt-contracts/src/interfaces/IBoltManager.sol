@@ -5,6 +5,24 @@ import {IBoltValidators} from "./IBoltValidators.sol";
 
 interface IBoltManager {
     error InvalidQuery();
+    error OperatorAlreadyRegistered();
+    error OperatorNotRegistered();
+
+    struct Operator {
+        string rpc;
+        address middleware;
+        uint256 timestamp;
+    }
+
+    function registerOperator(address operator, string calldata rpc) external;
+
+    function deregisterOperator(
+        address operator
+    ) external;
+
+    function isOperator(
+        address operator
+    ) external view returns (bool);
 
     function validators() external view returns (IBoltValidators);
 

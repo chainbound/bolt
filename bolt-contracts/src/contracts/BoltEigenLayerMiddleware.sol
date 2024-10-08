@@ -32,12 +32,6 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     /// BLS pubkey and are assigned a sequence number.
     IBoltManager public boltManager;
 
-    /// @notice Set of EigenLayer operators addresses that have opted in to Bolt Protocol.
-    EnumerableMap.AddressToUintMap private operators;
-
-    /// @notice Mapping of operator addresses to RPC endpoints.
-    mapping(address => string) private operatorRPCs;
-
     /// @notice Set of EigenLayer protocol strategies that are used in Bolt Protocol.
     EnumerableMap.AddressToUintMap private strategies;
 
@@ -117,20 +111,6 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
         return getEpochAtTs(Time.timestamp());
     }
 
-    /// @notice Check if an operator address is authorized to work for a validator,
-    /// given the validator's pubkey hash. This function performs a lookup in the
-    /// validators registry to check if they explicitly authorized the operator.
-    /// @param operator The operator address to check the authorization for.
-    /// @param pubkeyHash The pubkey hash of the validator to check the authorization for.
-    /// @return True if the operator is authorized, false otherwise.
-    function isOperatorAuthorizedForValidator(address operator, bytes32 pubkeyHash) public view returns (bool) {
-        if (operator == address(0) || pubkeyHash == bytes32(0)) {
-            revert InvalidQuery();
-        }
-
-        return boltManager.validators().getValidatorByPubkeyHash(pubkeyHash).authorizedOperator == operator;
-    }
-
     /// @notice Get the list of EigenLayer strategies addresses that are allowed.
     /// @return _strategies The list of strategies addresses that are allowed.
     function getWhitelistedCollaterals() public view returns (address[] memory _strategies) {
@@ -175,7 +155,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
         string calldata rpc,
         ISignatureUtils.SignatureWithSaltAndExpiry calldata operatorSignature
     ) public {
-        if (operators.contains(operator)) {
+        if (boltManager.isOperator(operator)) {
             revert AlreadyRegistered();
         }
 
@@ -186,45 +166,21 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
         // Register the operator to the AVS directory for this AVS
         AVS_DIRECTORY.registerOperatorToAVS(operator, operatorSignature);
 
-        operators.add(operator);
-        operators.enable(operator);
-
-        operatorRPCs[operator] = rpc;
+        // Register the operator in the manager
+        boltManager.registerOperator(operator, rpc);
     }
 
     /// @notice Deregister an EigenLayer layer operator from working in Bolt Protocol.
     /// @dev This requires calling the EigenLayer AVS Directory contract to deregister the operator.
     /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator.
     function deregisterOperator() public {
-        if (!operators.contains(msg.sender)) {
+        if (!boltManager.isOperator(msg.sender)) {
             revert NotRegistered();
         }
 
         AVS_DIRECTORY.deregisterOperatorFromAVS(msg.sender);
 
-        operators.remove(msg.sender);
-
-        delete operatorRPCs[msg.sender];
-    }
-
-    /// @notice Allow an operator to signal indefinite opt-out from Bolt Protocol.
-    /// @dev Pausing activity does not prevent the operator from being slashable for
-    /// the current network epoch until the end of the slashing window.
-    function pauseOperator() public {
-        if (!operators.contains(msg.sender)) {
-            revert NotRegistered();
-        }
-
-        operators.disable(msg.sender);
-    }
-
-    /// @notice Allow a disabled operator to signal opt-in to Bolt Protocol.
-    function unpauseOperator() public {
-        if (!operators.contains(msg.sender)) {
-            revert NotRegistered();
-        }
-
-        operators.enable(msg.sender);
+        boltManager.deregisterOperator(msg.sender);
     }
 
     /// @notice Register a strategy to work in Bolt Protocol.
@@ -276,71 +232,46 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
         return enabledTime != 0 && disabledTime == 0;
     }
 
-    /// @notice Check if an operator is currently enabled to work in Bolt Protocol.
-    /// @param operator The operator address to check the enabled status for.
-    /// @return True if the operator is enabled, false otherwise.
-    function isOperatorEnabled(
+    /// @notice Get the collaterals and amounts staked by an operator across the supported strategies.
+    ///
+    /// @param operator The operator address to get the collaterals and amounts staked for.
+    /// @return collaterals The collaterals staked by the operator.
+    /// @dev Assumes that the operator is registered and enabled.
+    function getOperatorCollaterals(
         address operator
-    ) public view returns (bool) {
-        if (!operators.contains(operator)) {
-            revert NotRegistered();
-        }
-
-        (uint48 enabledTime, uint48 disabledTime) = operators.getTimes(operator);
-        return enabledTime != 0 && disabledTime == 0;
-    }
-
-    /// @notice Get the status of multiple proposers, given their pubkey hashes.
-    /// @param pubkeyHashes The pubkey hashes of the proposers to get the status for.
-    /// @return statuses The statuses of the proposers, including their operator and active stake.
-    function getProposersStatus(
-        bytes32[] calldata pubkeyHashes
-    ) public view returns (IBoltValidators.ProposerStatus[] memory statuses) {
-        statuses = new IBoltValidators.ProposerStatus[](pubkeyHashes.length);
-        for (uint256 i = 0; i < pubkeyHashes.length; ++i) {
-            statuses[i] = getProposerStatus(pubkeyHashes[i]);
-        }
-    }
-
-    /// @notice Get the status of a proposer, given their pubkey hash.
-    /// @param pubkeyHash The pubkey hash of the proposer to get the status for.
-    /// @return status The status of the proposer, including their operator and active stake.
-    function getProposerStatus(
-        bytes32 pubkeyHash
-    ) public view returns (IBoltValidators.ProposerStatus memory status) {
-        if (pubkeyHash == bytes32(0)) {
-            revert InvalidQuery();
-        }
+    ) public view returns (address[] memory, uint256[] memory) {
+        address[] memory collateralTokens = new address[](strategies.length());
+        uint256[] memory amounts = new uint256[](strategies.length());
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
-        IBoltValidators.Validator memory validator = boltManager.validators().getValidatorByPubkeyHash(pubkeyHash);
 
-        address operator = validator.authorizedOperator;
-
-        status.pubkeyHash = pubkeyHash;
-        status.active = validator.exists;
-        status.operator = operator;
-        status.operatorRPC = operatorRPCs[operator];
-
-        (uint48 enabledTime, uint48 disabledTime) = operators.getTimes(operator);
-        if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
-            return status;
-        }
-
-        status.collaterals = new address[](strategies.length());
-        status.amounts = new uint256[](strategies.length());
+        IStrategy[] memory strategyImpls = new IStrategy[](strategies.length());
 
         for (uint256 i = 0; i < strategies.length(); ++i) {
-            (address strategy, uint48 enabledVaultTime, uint48 disabledVaultTime) = strategies.atWithTimes(i);
+            (address strategy, uint48 enabledTime, uint48 disabledTime) = strategies.atWithTimes(i);
 
-            address collateral = address(IStrategy(strategy).underlyingToken());
-            status.collaterals[i] = collateral;
-            if (!_wasEnabledAt(enabledVaultTime, disabledVaultTime, epochStartTs)) {
+            if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
                 continue;
             }
 
-            status.amounts[i] = getOperatorStake(operator, collateral);
+            address collateral = address(IStrategy(strategy).underlyingToken());
+            collateralTokens[i] = collateral;
+
+            if (collateral != address(IStrategy(strategy).underlyingToken())) {
+                continue;
+            }
+
+            strategyImpls[i] = IStrategy(strategy);
         }
+
+        // NOTE: order is preserved, which is why we can use the same index for both arrays below
+        uint256[] memory shares = DELEGATION_MANAGER.getOperatorShares(operator, strategyImpls);
+
+        for (uint256 i = 0; i < strategyImpls.length; ++i) {
+            amounts[i] = IStrategy(strategyImpls[i]).sharesToUnderlyingView(shares[i]);
+        }
+
+        return (collateralTokens, amounts);
     }
 
     /// @notice Get the amount of tokens delegated to an operator across the allowed strategies.
@@ -389,35 +320,6 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
         }
 
         return amount;
-    }
-
-    /// @notice Get the total stake of all EigenLayer operators at a given epoch for a collateral asset.
-    /// @param epoch The epoch to check the total stake for.
-    /// @param collateral The collateral address to check the total stake for.
-    /// @return totalStake The total stake of all operators at the given epoch, in collateral token.
-    function getTotalStake(uint48 epoch, address collateral) public view returns (uint256 totalStake) {
-        uint48 epochStartTs = getEpochStartTs(epoch);
-
-        // for epoch older than SLASHING_WINDOW total stake can be invalidated
-        // NOTE: not available in EigenLayer yet since slashing is not live
-        // if (
-        //     epochStartTs < SLASHING_WINDOW ||
-        //     epochStartTs < Time.timestamp() - SLASHING_WINDOW ||
-        //     epochStartTs > Time.timestamp()
-        // ) {
-        //     revert InvalidQuery();
-        // }
-
-        for (uint256 i; i < operators.length(); ++i) {
-            (address operator, uint48 enabledTime, uint48 disabledTime) = operators.atWithTimes(i);
-
-            // just skip operator if it was added after the target epoch or paused
-            if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
-                continue;
-            }
-
-            totalStake += getOperatorStake(operator, collateral);
-        }
     }
 
     // ========= EIGENLAYER AVS FUNCTIONS =========
