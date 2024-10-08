@@ -362,22 +362,31 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error
 		}
 
 		for _, constraint := range constraintsSigned {
-			oneValidSignature := false
+			// TODO: re-enable this once testing the devnet has ended
+			// oneValidSignature := false
 			// Check if the signature is valid against any of the authorized pubkeys
-			for _, pubkey := range b.slotConstraintsPubkeys {
-				valid, err := constraint.VerifySignature(pubkey, b.GetConstraintsDomain())
-				if err != nil || !valid {
-					log.Error("Failed to verify constraint signature", "err", err)
-					continue
-				}
+			// for _, pubkey := range b.slotConstraintsPubkeys {
+			// 	valid, err := constraint.VerifySignature(pubkey, b.GetConstraintsDomain())
+			// 	if err != nil || !valid {
+			// 		log.Error("Failed to verify constraint signature", "err", err)
+			// 		continue
+			// 	}
+			//
+			// 	oneValidSignature = true
+			// }
 
-				oneValidSignature = true
-			}
-
-			// If there is no valid signature, continue with the next constraint
-			if !oneValidSignature {
+			// TODO: remove this once testing the devnet has ended, we should check for authorized keys
+			valid, err := constraint.VerifySignature(constraint.Message.Pubkey, b.GetConstraintsDomain())
+			if err != nil || !valid {
+				log.Error("Failed to verify constraint signature", "err", err)
 				continue
 			}
+
+			// TODO: re-enable this once testing the devnet has ended
+			// If there is no valid signature, continue with the next constraint
+			// if !oneValidSignature {
+			// 	continue
+			// }
 
 			decodedConstraints, err := DecodeConstraints(constraint)
 			if err != nil {
@@ -472,7 +481,6 @@ func (b *Builder) onSealedBlock(opts SubmitBlockOpts) error {
 		log.Info(message)
 
 		inclusionProof, _, err := CalculateMerkleMultiProofs(opts.Block.Transactions(), constraints)
-
 		if err != nil {
 			log.Error("[BOLT]: could not calculate merkle multiproofs", "err", err)
 			return err
