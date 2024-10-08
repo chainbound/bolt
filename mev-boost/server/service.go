@@ -852,7 +852,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 		"genesisTime": m.genesisTime,
 		"slotTimeSec": config.SlotTimeSec,
 		"msIntoSlot":  msIntoSlot,
-	}).Infof("getHeader request start - %d milliseconds into slot %d", msIntoSlot, slotUint)
+	}).Infof("getHeaderWithProof request start - %d milliseconds into slot %d", msIntoSlot, slotUint)
 
 	// Add request headers
 	headers := map[string]string{

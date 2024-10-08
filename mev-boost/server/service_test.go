@@ -344,8 +344,9 @@ func TestConstraintsAndProofs(t *testing.T) {
 
 	payload := BatchedSignedConstraints{&SignedConstraints{
 		Message: ConstraintsMessage{
-			Pubkey:       phase0.BLSPubKey(_HexToBytes("0xa695ad325dfc7e1191fbc9f186f58eff42a634029731b18380ff89bf42c464a42cb8ca55b200f051f57f1e1893c68759")),
+			Pubkey:       phase0.BLSPubKey(_HexToBytes("0x8a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")),
 			Slot:         slot,
+			Top:          false,
 			Transactions: []Transaction{rawTx},
 		},
 		Signature: phase0.BLSSignature(_HexToBytes(
@@ -356,7 +357,7 @@ func TestConstraintsAndProofs(t *testing.T) {
 	hash := _HexToHash("0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7")
 	pubkey := _HexToPubkey(
 		"0x8a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")
-	getHeaderPath := getHeaderWithProofsPath(slot, hash, pubkey)
+	getHeaderWithProofsPath := getHeaderWithProofsPath(slot, hash, pubkey)
 
 	t.Run("Normal function", func(t *testing.T) {
 		backend := newTestBackend(t, 1, time.Second)
@@ -388,9 +389,9 @@ func TestConstraintsAndProofs(t *testing.T) {
 		)
 		backend.relays[0].GetHeaderWithProofsResponse = resp
 
-		rr := backend.request(t, http.MethodGet, getHeaderPath, nil)
+		rr := backend.request(t, http.MethodGet, getHeaderWithProofsPath, nil)
 		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
-		require.Equal(t, 1, backend.relays[0].GetRequestCount(getHeaderPath))
+		require.Equal(t, 1, backend.relays[0].GetRequestCount(getHeaderWithProofsPath))
 	})
 
 	t.Run("No proofs given", func(t *testing.T) {
@@ -408,11 +409,11 @@ func TestConstraintsAndProofs(t *testing.T) {
 		)
 		backend.relays[0].GetHeaderResponse = resp
 
-		rr := backend.request(t, http.MethodGet, getHeaderPath, nil)
+		rr := backend.request(t, http.MethodGet, getHeaderWithProofsPath, nil)
 		// When we have constraints registered, but the relay does not return any proofs, we should return no content.
 		// This will force a locally built block.
 		require.Equal(t, http.StatusNoContent, rr.Code, rr.Body.String())
-		require.Equal(t, 1, backend.relays[0].GetRequestCount(getHeaderPath))
+		require.Equal(t, 1, backend.relays[0].GetRequestCount(getHeaderWithProofsPath))
 	})
 }
 

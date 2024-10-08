@@ -30,7 +30,7 @@ type VersionedSignedBuilderBidWithProofs struct {
 // for deserialization. Instead, it tries to decode the object into the "Deneb" version first and if that fails, it tries
 // the "Capella" version. This is a workaround to make the deserialization work.
 //
-// NOTE(bolt): struct embedding of the VersionedSubmitBlockRequest is not possible for some reason because it causes the json
+// NOTE(bolt): struct embedding of the VersionedSignedBuilderBid is not possible for some reason because it causes the json
 // encoding to omit the `proofs` field. Embedding all of the fields directly does the job.
 func (v *VersionedSignedBuilderBidWithProofs) MarshalJSON() ([]byte, error) {
 	switch v.Version {
