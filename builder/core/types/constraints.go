@@ -13,6 +13,7 @@ import (
 	capellaSpec "github.com/attestantio/go-eth2-client/spec/capella"
 	denebSpec "github.com/attestantio/go-eth2-client/spec/deneb"
 
+	"github.com/attestantio/go-builder-client/api/deneb"
 	v1 "github.com/attestantio/go-builder-client/api/v1"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/common"
@@ -147,10 +148,12 @@ func (v *VersionedSubmitBlockRequestWithProofs) MarshalJSON() ([]byte, error) {
 			ExecutionPayload *denebSpec.ExecutionPayload `json:"execution_payload"`
 			Signature        phase0.BLSSignature         `json:"signature"`
 			Proofs           *InclusionProof             `json:"proofs"`
+			BlobsBundle      *deneb.BlobsBundle          `json:"blobs_bundle"`
 		}{
 			Message:          v.Deneb.Message,
 			ExecutionPayload: v.Deneb.ExecutionPayload,
 			Signature:        v.Deneb.Signature,
+			BlobsBundle:      v.Deneb.BlobsBundle,
 			Proofs:           v.Proofs,
 		})
 	}
