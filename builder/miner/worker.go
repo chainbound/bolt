@@ -1176,7 +1176,7 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 			}
 		} else {
 			// No more pool tx left, we can add the unindexed ones if available
-			if len(constraintsOrderedByNonceAndHashDesc) == 0 {
+			if len(constraintsRecoveredOrderedByNonceAndHashDesc) == 0 {
 				// To recap, this means:
 				// 1. there are no more pool tx left
 				// 2. there are no more constraints
