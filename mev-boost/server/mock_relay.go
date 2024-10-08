@@ -411,7 +411,7 @@ func (m *mockRelay) defaultHandleGetHeaderWithProofs(w http.ResponseWriter) {
 		"0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7",
 		"0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7",
 		"0x8a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249",
-		spec.DataVersionCapella,
+		spec.DataVersionDeneb,
 		nil,
 	)
 

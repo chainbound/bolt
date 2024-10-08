@@ -69,6 +69,69 @@ func (v *VersionedSignedBuilderBidWithProofs) MarshalJSON() ([]byte, error) {
 	return nil, fmt.Errorf("unknown data version %d", v.Version)
 }
 
+func (v *VersionedSignedBuilderBidWithProofs) UnmarshalJSON(data []byte) error {
+	var err error
+
+	// Try Deneb
+	var deneb struct {
+		Message   *builderApiDeneb.BuilderBid `json:"message"`
+		Signature phase0.BLSSignature         `json:"signature"`
+		Proofs    *InclusionProof             `json:"proofs"`
+	}
+	err = json.Unmarshal(data, &deneb)
+	if err == nil && deneb.Message != nil {
+		v.Proofs = deneb.Proofs
+
+		v.VersionedSignedBuilderBid = &builderSpec.VersionedSignedBuilderBid{}
+		v.Deneb = &builderApiDeneb.SignedBuilderBid{
+			Message:   deneb.Message,
+			Signature: deneb.Signature,
+		}
+		v.Version = consensusSpec.DataVersionDeneb
+		return nil
+	}
+
+	// Try Capella
+	var capella struct {
+		Message   *builderApiCapella.BuilderBid `json:"message"`
+		Signature phase0.BLSSignature           `json:"signature"`
+		Proofs    *InclusionProof               `json:"proofs"`
+	}
+	err = json.Unmarshal(data, &capella)
+	if err == nil && capella.Message != nil {
+		v.Proofs = capella.Proofs
+
+		v.VersionedSignedBuilderBid = &builderSpec.VersionedSignedBuilderBid{}
+		v.Capella = &builderApiCapella.SignedBuilderBid{
+			Message:   capella.Message,
+			Signature: capella.Signature,
+		}
+		v.Version = consensusSpec.DataVersionCapella
+		return nil
+	}
+
+	// Try Bellatrix
+	var bellatrix struct {
+		Message   *builderApiBellatrix.BuilderBid `json:"message"`
+		Signature phase0.BLSSignature             `json:"signature"`
+		Proofs    *InclusionProof                 `json:"proofs"`
+	}
+	err = json.Unmarshal(data, &bellatrix)
+	if err == nil && bellatrix.Message != nil {
+		v.Proofs = bellatrix.Proofs
+
+		v.VersionedSignedBuilderBid = &builderSpec.VersionedSignedBuilderBid{}
+		v.Bellatrix = &builderApiBellatrix.SignedBuilderBid{
+			Message:   bellatrix.Message,
+			Signature: bellatrix.Signature,
+		}
+		v.Version = consensusSpec.DataVersionBellatrix
+		return nil
+	}
+
+	return fmt.Errorf("failed to unmarshal VersionedSignedBuilderBidWithProofs: %v", err)
+}
+
 func (v *VersionedSignedBuilderBidWithProofs) String() string {
 	return JSONStringify(v)
 }
