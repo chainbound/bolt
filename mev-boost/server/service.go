@@ -522,19 +522,9 @@ func (m *BoostService) verifyInclusionProof(transactionsRoot phase0.Root, proof 
 
 	if !ok {
 		log.Error("[BOLT]: proof verification failed")
-
-		// BOLT: send event to web demo
-		message := fmt.Sprintf("failed to verify merkle proof for slot %d", slot)
-		EmitBoltDemoEvent(message)
-
 		return errInvalidProofs
 	} else {
 		log.Info(fmt.Sprintf("[BOLT]: merkle proof verified in %s", elapsed))
-
-		// BOLT: send event to web demo
-		// verified merkle proof for tx: %s in %v", proof.TxHash.String(), elapsed)
-		message := fmt.Sprintf("verified merkle proof for slot %d in %v", slot, elapsed)
-		EmitBoltDemoEvent(message)
 	}
 
 	return nil
@@ -548,8 +538,6 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 		"method": "submitConstraint",
 		"ua":     ua,
 	})
-
-	path := req.URL.Path
 
 	log.Info("submitConstraint")
 
@@ -578,8 +566,6 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 	}
 
 	relayRespCh := make(chan error, len(m.relays))
-
-	EmitBoltDemoEvent(fmt.Sprintf("received %d constraints, forwarding to Bolt relays... (path: %s)", len(payload), path))
 
 	for _, relay := range m.relays {
 		go func(relay RelayEntry) {
