@@ -25,10 +25,10 @@ ethereum_ssz_derive = "0.5"
 
 # alloy
 alloy = { version = "0.2.0", features = [
-    "full",
-    "provider-trace-api",
-    "rpc-types-beacon",
-    "rpc-types-engine",
+  "full",
+  "provider-trace-api",
+  "rpc-types-beacon",
+  "rpc-types-engine",
 ] }
 
 # reth
@@ -41,8 +41,9 @@ ethereum-consensus = { git = "https://github.com/ralexstokes/ethereum-consensus"
 beacon-api-client = { git = "https://github.com/ralexstokes/ethereum-consensus", rev = "cf3c404" }
 
 # lighthouse
-lighthouse_account_utils = { package = "account_utils", git = "https://github.com/sigp/lighthouse", rev = "32f2e05" }
+lighthouse_account_utils = { package = "account_utils", git = "https://github.com/sigp/lighthouse", rev = "a87f19d" }
 lighthouse_eth2_keystore = { package = "eth2_keystore", git = "https://github.com/sigp/lighthouse", rev = "a87f19d" }
+lighthouse_bls = { package = "bls", git = "https://github.com/sigp/lighthouse", rev = "a87f19d" }
 
 # types
 partial-mpt = { git = "https://github.com/chainbound/partial-mpt", branch = "feat/alloy" }
@@ -69,11 +70,11 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter", "fmt"] }
 # telemetry
 metrics = "0.23"
 metrics-exporter-prometheus = { version = "0.15.3", features = [
-    "http-listener",
+  "http-listener",
 ] }
 
 # commit-boost
-commit-boost = { git = "https://github.com/Commit-Boost/commit-boost-client", rev = "45ce8f1"}
+commit-boost = { git = "https://github.com/Commit-Boost/commit-boost-client", rev = "45ce8f1" }
 cb-common = { git = "https://github.com/Commit-Boost/commit-boost-client", rev = "45ce8f1" }
 
 [dev-dependencies]
