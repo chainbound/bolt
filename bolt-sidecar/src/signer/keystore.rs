@@ -1,0 +1,77 @@
+//! An ERC-2335 keystore signer.
+
+use std::{
+    ffi::OsString,
+    fs,
+    path::{Path, PathBuf},
+};
+
+use ethereum_consensus::crypto::PublicKey as CLPublicKey;
+
+use blst::min_pk::{PublicKey, SecretKey};
+use eyre::eyre;
+
+use lighthouse_bls::Keypair;
+use lighthouse_eth2_keystore::Keystore;
+
+use crate::{config::signing::BlsSecretKey, crypto::SignerBLS};
+
+pub struct KeystoreSigner {
+    keypairs: Vec<Keypair>,
+}
+
+impl KeystoreSigner {
+    fn new(keys_path: Option<&str>, password: &[u8]) -> eyre::Result<Self> {
+        let keystores_paths = keystore_paths(keys_path)?;
+        let mut keypairs = Vec::with_capacity(keystores_paths.len());
+
+        for path in keystores_paths {
+            let keypair = Keystore::from_json_file(path.clone())
+                .map_err(|e| {
+                    eyre!(format!("err while reading keystore json file {:?}: {:?}", path, e))
+                })?
+                .decrypt_keypair(password)
+                .map_err(|e| {
+                    eyre!(format!(
+                        "err while decrypting keypair from json file {:?}: {:?}",
+                        path, e
+                    ))
+                })?;
+            keypairs.push(keypair);
+        }
+
+        Ok(Self { keypairs })
+    }
+}
+
+/// Returns the paths of all the keystore files provided an optional `keys_path`, which defaults to `keys`.
+/// `keys_path` is a relative path from the root of this cargo project
+/// We're expecting a directory structure like:
+/// ${keys_path}/
+/// -- 0x1234.../validator.json
+/// -- 0x5678.../validator.json
+/// -- ...
+///
+fn keystore_paths(keys_path: Option<&str>) -> Result<Vec<PathBuf>, eyre::Error> {
+    // Create the path to the keystore directory, starting from the root of the project
+    let project_root = env!("CARGO_MANIFEST_DIR");
+    let keys_path = Path::new(project_root).join(keys_path.unwrap_or("keys"));
+
+    let json_extension = OsString::from("json");
+
+    let mut keystores_paths = vec![];
+    // Iter over the `keys` directory
+    for entry in fs::read_dir(keys_path)? {
+        let path = entry?.path();
+        if path.is_dir() {
+            for entry in fs::read_dir(path)? {
+                let path = entry?.path();
+                if path.is_file() && path.extension() == Some(&json_extension) {
+                    keystores_paths.push(path);
+                }
+            }
+        }
+    }
+
+    Ok(keystores_paths)
+}
