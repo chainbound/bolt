@@ -1,5 +1,6 @@
 cache/
 out/
 broadcast/
+logs/
 
 .env
