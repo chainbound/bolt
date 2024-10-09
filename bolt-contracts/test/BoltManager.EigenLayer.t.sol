@@ -44,6 +44,7 @@ contract BoltManagerEigenLayerTest is Test {
         // Set-up accounts
         (operator, operatorSk) = makeAddrAndKey("operator");
 
+        // vm.setEnv("CHAIN_ID", "100000000");
         // Deploy EigenLayer contracts.
         // This also deploy a `weth` token and `wethStrat` strategy base available as properties of the contract.
         eigenLayerDeployer = new EigenLayerDeployer(staker);
@@ -61,14 +62,16 @@ contract BoltManagerEigenLayerTest is Test {
         );
 
         // Register the middleware in the manager
-        vm.prank(admin);
+        vm.startPrank(admin);
         manager.addRestakingProtocol(address(middleware));
+        vm.stopPrank();
     }
 
     function _adminRoutine() internal {
         // PART 0: Admin setup -- Collateral whitelist
-        vm.prank(admin);
+        vm.startPrank(admin);
         middleware.addWhitelistedCollateral(address(eigenLayerDeployer.weth()));
+        vm.stopPrank();
         assertEq(middleware.getWhitelistedCollaterals().length, 1);
         assertEq(middleware.getWhitelistedCollaterals()[0], address(eigenLayerDeployer.weth()));
     }

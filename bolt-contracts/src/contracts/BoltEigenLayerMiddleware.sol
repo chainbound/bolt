@@ -254,21 +254,19 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
                 continue;
             }
 
-            address collateral = address(IStrategy(strategy).underlyingToken());
+            IStrategy strategyImpl = IStrategy(strategy);
+
+            address collateral = address(strategyImpl.underlyingToken());
             collateralTokens[i] = collateral;
 
-            if (collateral != address(IStrategy(strategy).underlyingToken())) {
-                continue;
-            }
-
-            strategyImpls[i] = IStrategy(strategy);
+            strategyImpls[i] = strategyImpl;
         }
 
         // NOTE: order is preserved, which is why we can use the same index for both arrays below
         uint256[] memory shares = DELEGATION_MANAGER.getOperatorShares(operator, strategyImpls);
 
         for (uint256 i = 0; i < strategyImpls.length; ++i) {
-            amounts[i] = IStrategy(strategyImpls[i]).sharesToUnderlyingView(shares[i]);
+            amounts[i] = strategyImpls[i].sharesToUnderlyingView(shares[i]);
         }
 
         return (collateralTokens, amounts);

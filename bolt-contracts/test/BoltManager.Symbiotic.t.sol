@@ -30,7 +30,7 @@ import {BLS12381} from "../src/lib/bls/BLS12381.sol";
 
 import {SymbioticSetupFixture} from "./fixtures/SymbioticSetup.f.sol";
 
-contract BoltManagerTest is Test {
+contract BoltManagerSymbioticTest is Test {
     using BLS12381 for BLS12381.G1Point;
     using Subnetwork for address;
 
