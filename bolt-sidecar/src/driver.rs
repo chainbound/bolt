@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 
 use alloy::{rpc::types::beacon::events::HeadEvent, signers::local::PrivateKeySigner};
 use beacon_api_client::mainnet::Client as BeaconClient;
+use cb_common::signer::BlsSigner;
 use ethereum_consensus::{
     clock::{self, SlotStream, SystemTimeProvider},
     phase0::mainnet::SLOTS_PER_EPOCH,
@@ -16,23 +17,28 @@ use crate::{
         server::{CommitmentsApiServer, Event as CommitmentEvent},
         spec::Error as CommitmentError,
     },
-    crypto::{bls::Signer as BlsSigner, SignableBLS, SignerBLS, SignerECDSA},
+    crypto::{
+        bls::{cl_public_key_to_arr, Signer as BlsSigner},
+        SignableBLS, SignerBLS, SignerECDSA,
+    },
     primitives::{
         CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
         SignedConstraints, TransactionExt,
     },
+    signer::local::Signer,
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
     telemetry::ApiMetrics,
     BuilderProxyConfig, CommitBoostSigner, ConstraintsApi, ConstraintsClient, LocalBuilder, Opts,
+    SignerBLSEnum,
 };
 
 /// The driver for the sidecar, responsible for managing the main event loop.
-pub struct SidecarDriver<C, BLS, ECDSA> {
+pub struct SidecarDriver<C, ECDSA> {
     head_tracker: HeadTracker,
     execution: ExecutionState<C>,
     consensus: ConsensusState,
-    constraint_signer: BLS,
+    constraint_signer: SignerBLSEnum,
     commitment_signer: ECDSA,
     local_builder: LocalBuilder,
     constraints_client: ConstraintsClient,
@@ -58,15 +64,17 @@ impl<B: SignerBLS> fmt::Debug for SidecarDriver<StateClient, B, PrivateKeySigner
     }
 }
 
-impl SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
+impl SidecarDriver<StateClient, PrivateKeySigner> {
     /// Create a new sidecar driver with the given [Config] and private key signer.
     pub async fn with_local_signer(opts: &Opts) -> eyre::Result<Self> {
         // The default state client simply uses the execution API URL to fetch state updates.
         let state_client = StateClient::new(opts.execution_api_url.clone());
 
         // Constraints are signed with a BLS private key
-        let constraint_signer =
-            BlsSigner::new(opts.signing.private_key.clone().expect("local signer").0, opts.chain);
+        let constraint_signer = SignerBLSEnum::Local(Signer::new(
+            opts.signing.private_key.clone().expect("local signer").0,
+            opts.chain,
+        ));
 
         // Commitment responses are signed with a regular Ethereum wallet private key.
         // This is now generated randomly because slashing is not yet implemented.
@@ -76,7 +84,7 @@ impl SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
     }
 }
 
-impl SidecarDriver<StateClient, CommitBoostSigner, CommitBoostSigner> {
+impl SidecarDriver<StateClient, CommitBoostSigner> {
     /// Create a new sidecar driver with the given [Config] and commit-boost signer.
     pub async fn with_commit_boost_signer(opts: &Opts) -> eyre::Result<Self> {
         // The default state client simply uses the execution API URL to fetch state updates.
@@ -91,21 +99,20 @@ impl SidecarDriver<StateClient, CommitBoostSigner, CommitBoostSigner> {
         )
         .await?;
 
-        // Constraints are signed with commit-boost signer
-        let constraint_signer = commit_boost_signer.clone();
+        let cb_bls_signer = SignerBLSEnum::CommitBoost(commit_boost_signer.clone());
 
         // Commitment responses are signed with commit-boost signer
         let commitment_signer = commit_boost_signer.clone();
 
-        Self::from_components(opts, constraint_signer, commitment_signer, state_client).await
+        Self::from_components(opts, cb_bls_signer, commitment_signer, state_client).await
     }
 }
 
-impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, ECDSA> {
+impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
     /// Create a new sidecar driver with the given components
     pub async fn from_components(
         opts: &Opts,
-        constraint_signer: BLS,
+        constraint_signer: SignerBLSEnum,
         commitment_signer: ECDSA,
         fetcher: C,
     ) -> eyre::Result<Self> {
@@ -198,7 +205,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
 
         // TODO(nico): currently we don't use the validator pubkey to sign. this will be re-added
         // later to support different signing setups.
-        let _validator_pubkey = match self.consensus.validate_request(&request) {
+        let validator_pubkey = match self.consensus.validate_request(&request) {
             Ok(index) => index,
             Err(err) => {
                 error!(?err, "Consensus: failed to validate request");
@@ -227,24 +234,38 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         // parse the request into constraints and sign them
         let slot = inclusion_request.slot;
 
+        let pubkey = match self.constraint_signer {
+            SignerBLSEnum::Local(ref signer) => signer.pubkey(),
+            SignerBLSEnum::CommitBoost(ref signer) => signer.pubkey(),
+            SignerBLSEnum::Keystore(_) => validator_pubkey.clone(),
+        };
+
         // NOTE: we iterate over the transactions in the request and generate a signed constraint
         // for each one. This is because the transactions in the commitment request are not
         // supposed to be treated as a relative-ordering bundle, but a batch
         // with no ordering guarantees.
         for tx in inclusion_request.txs {
             let tx_type = tx.tx_type();
-            let pubkey = self.constraint_signer.pubkey();
-            let message = ConstraintsMessage::from_transaction(pubkey, slot, tx);
+            let message = ConstraintsMessage::from_transaction(pubkey.clone(), slot, tx);
+            let digest = message.digest();
 
-            let signed_constraints =
-                match self.constraint_signer.sign_commit_boost_root(&message.digest()).await {
-                    Ok(signature) => SignedConstraints { message, signature },
-                    Err(err) => {
-                        error!(?err, "Failed to sign constraints");
-                        let _ = response.send(Err(CommitmentError::Internal));
-                        return;
-                    }
-                };
+            let signature = match self.constraint_signer {
+                SignerBLSEnum::Local(ref signer) => signer.sign_commit_boost_root(digest),
+                SignerBLSEnum::CommitBoost(ref signer) => {
+                    signer.sign_commit_boost_root(digest).await
+                }
+                SignerBLSEnum::Keystore(ref signer) => {
+                    signer.sign_commit_boost_root(digest, cl_public_key_to_arr(pubkey))
+                }
+            };
+            let signed_constraints = match signature {
+                Ok(signature) => SignedConstraints { message, signature },
+                Err(e) => {
+                    error!(?e, "Failed to sign constraints");
+                    let _ = response.send(Err(CommitmentError::Internal));
+                    return;
+                }
+            };
 
             ApiMetrics::increment_transactions_preconfirmed(tx_type);
             self.execution.add_constraint(slot, signed_constraints);

@@ -6,22 +6,21 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ethereum_consensus::crypto::PublicKey as CLPublicKey;
-
-use blst::min_pk::{PublicKey, SecretKey};
+use alloy::rpc::types::beacon::constants::BLS_PUBLIC_KEY_BYTES_LEN;
 use eyre::eyre;
 
 use lighthouse_bls::Keypair;
 use lighthouse_eth2_keystore::Keystore;
 
-use crate::{config::signing::BlsSecretKey, crypto::SignerBLS};
+use crate::crypto::bls::BLSSig;
 
+#[derive(Clone)]
 pub struct KeystoreSigner {
     keypairs: Vec<Keypair>,
 }
 
 impl KeystoreSigner {
-    fn new(keys_path: Option<&str>, password: &[u8]) -> eyre::Result<Self> {
+    pub fn new(keys_path: Option<&str>, password: &[u8]) -> eyre::Result<Self> {
         let keystores_paths = keystore_paths(keys_path)?;
         let mut keypairs = Vec::with_capacity(keystores_paths.len());
 
@@ -41,6 +40,25 @@ impl KeystoreSigner {
         }
 
         Ok(Self { keypairs })
+    }
+
+    pub fn sign_commit_boost_root(
+        &self,
+        root: [u8; 32],
+        public_key: [u8; BLS_PUBLIC_KEY_BYTES_LEN],
+    ) -> eyre::Result<BLSSig> {
+        // NOTE: is this a good comparison?
+        let sk = self
+            .keypairs
+            .iter()
+            .find(|kp| kp.pk.as_hex_string() == hex::encode(public_key))
+            .ok_or(eyre!("could not find private key associated to public key"))?;
+
+        let sig = hex::decode(sk.sk.sign(root.into()).to_string())?;
+        let sig =
+            BLSSig::try_from(sig.as_slice()).map_err(|_| eyre!("invalid signature length"))?;
+
+        Ok(sig)
     }
 }
 

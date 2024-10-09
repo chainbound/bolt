@@ -1,8 +1,15 @@
+use keystore::KeystoreSigner;
+use local::Signer;
+
+use crate::CommitBoostSigner;
+
 pub mod commit_boost;
 pub mod keystore;
 pub mod local;
 
-// pub enum SignerBLSEnum {
-//     Local(Signer),
-//     CommitBoost(CommitBoostSigner),
-// }
+#[derive(Clone)]
+pub enum SignerBLSEnum {
+    Local(Signer),
+    CommitBoost(CommitBoostSigner),
+    Keystore(KeystoreSigner),
+}

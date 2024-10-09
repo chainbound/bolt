@@ -46,7 +46,7 @@ pub mod state;
 
 /// The signers available to the sidecar
 mod signer;
-pub use signer::commit_boost::CommitBoostSigner;
+pub use signer::{commit_boost::CommitBoostSigner, SignerBLSEnum};
 
 /// Utilities for testing
 #[cfg(test)]

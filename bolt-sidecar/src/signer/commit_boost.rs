@@ -113,19 +113,18 @@ impl CommitBoostSigner {
     }
 }
 
-#[async_trait::async_trait]
-impl SignerBLS for CommitBoostSigner {
-    fn pubkey(&self) -> BlsPublicKey {
+impl CommitBoostSigner {
+    pub fn pubkey(&self) -> BlsPublicKey {
         self.get_consensus_pubkey()
     }
 
-    async fn sign_commit_boost_root(&self, data: &[u8; 32]) -> eyre::Result<BlsSignature> {
+    pub async fn sign_commit_boost_root(&self, data: [u8; 32]) -> eyre::Result<BlsSignature> {
         // convert the pubkey from ethereum_consensus to commit-boost format
         let pubkey = cb_common::signer::BlsPublicKey::from(
             alloy::rpc::types::beacon::BlsPublicKey::from_slice(self.pubkey().as_ref()),
         );
 
-        let request = SignConsensusRequest { pubkey, object_root: *data };
+        let request = SignConsensusRequest { pubkey, object_root: data };
 
         debug!(?request, "Requesting signature from commit_boost");
 
