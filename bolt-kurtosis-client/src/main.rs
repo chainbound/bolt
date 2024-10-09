@@ -84,7 +84,7 @@ async fn main() -> Result<()> {
         );
 
         info!("Transaction hash: {}", tx_hash);
-        info!("body: {}", serde_json::to_string(&request)?);
+        info!("body: {}", trim_zeroes(serde_json::to_string(&request)?));
 
         let client = reqwest::Client::new();
         let response = client
@@ -95,8 +95,13 @@ async fn main() -> Result<()> {
             .send()
             .await?;
 
-        info!("Response: {:?}", response.text().await?);
+        let res = trim_zeroes(response.text().await?);
+        info!("Response: {:?}", res);
     }
 
     Ok(())
+}
+
+fn trim_zeroes(s: impl Into<String>) -> String {
+    s.into().replace(&"0".repeat(32), ".").replace(&".".repeat(4), "")
 }

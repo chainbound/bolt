@@ -38,6 +38,7 @@ alloy = { version = "0.3.6", features = [
     "rpc-types-beacon",
     "rpc-types-engine",
 ] }
+alloy-rlp = "0.3.8"
 
 # commit-boost
 cb-common = { git = "https://github.com/commit-boost/commit-boost-client", tag = "v0.3.0" }

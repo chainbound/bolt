@@ -543,13 +543,9 @@ where
             Ok(response) => {
                 let url = response.url().clone();
                 let status = response.status();
-                let body = response.text().await.ok();
                 if status != StatusCode::OK {
-                    error!(
-                        %status,
-                        %url,
-                        "Failed to POST to relay: {body:?}"
-                    )
+                    let body = response.text().await.ok();
+                    error!(%status, %url, "Failed to POST to relay: {body:?}");
                 } else {
                     debug!(%url, "Successfully sent POST request to relay");
                     success = true;

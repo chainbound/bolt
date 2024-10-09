@@ -350,65 +350,66 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error
 
 		// We assume the data is the JSON representation of the constraints
 		log.Info(fmt.Sprintf("Received new constraint: %s", data))
-		constraintsSigned := new(types.SignedConstraints)
+		constraintsSigned := make(types.SignedConstraintsList, 0, 8)
 		if err := json.Unmarshal([]byte(data), &constraintsSigned); err != nil {
 			log.Warn(fmt.Sprintf("Failed to unmarshal constraints: %v", err))
 			continue
 		}
 
-		if len(constraintsSigned.Message.Transactions) == 0 {
+		if len(constraintsSigned) == 0 {
 			log.Warn("Received 0 length list of constraints")
 			continue
 		}
 
-		// TODO: re-enable this once testing the devnet has ended
-		// oneValidSignature := false
-		// Check if the signature is valid against any of the authorized pubkeys
-		// for _, pubkey := range b.slotConstraintsPubkeys {
-		// 	valid, err := constraint.VerifySignature(pubkey, b.GetConstraintsDomain())
-		// 	if err != nil || !valid {
-		// 		log.Error("Failed to verify constraint signature", "err", err)
-		// 		continue
-		// 	}
-		//
-		// 	oneValidSignature = true
-		// }
+		for _, constraint := range constraintsSigned {
+			// TODO: re-enable this once testing the devnet has ended
+			// oneValidSignature := false
+			// Check if the signature is valid against any of the authorized pubkeys
+			// for _, pubkey := range b.slotConstraintsPubkeys {
+			// 	valid, err := constraint.VerifySignature(pubkey, b.GetConstraintsDomain())
+			// 	if err != nil || !valid {
+			// 		log.Error("Failed to verify constraint signature", "err", err)
+			// 		continue
+			// 	}
+			//
+			// 	oneValidSignature = true
+			// }
 
-		// TODO: remove this once testing the devnet has ended, we should check for authorized keys
-		valid, err := constraintsSigned.VerifySignature(constraintsSigned.Message.Pubkey, b.GetConstraintsDomain())
-		if err != nil || !valid {
-			log.Error("Failed to verify constraint signature", "err", err)
-			continue
+			// TODO: remove this once testing the devnet has ended, we should check for authorized keys
+			valid, err := constraint.VerifySignature(constraint.Message.Pubkey, b.GetConstraintsDomain())
+			if err != nil || !valid {
+				log.Error("Failed to verify constraint signature", "err", err)
+				continue
+			}
+
+			// TODO: re-enable this once testing the devnet has ended
+			// If there is no valid signature, continue with the next constraint
+			// if !oneValidSignature {
+			// 	continue
+			// }
+
+			decodedConstraints, err := DecodeConstraints(constraint)
+			if err != nil {
+				log.Error("Failed to decode constraint: ", err)
+				continue
+			}
+
+			// For every constraint, we need to check if it has already been seen for the associated slot
+			slotConstraints, _ := b.constraintsCache.Get(constraint.Message.Slot)
+			if len(slotConstraints) == 0 {
+				// New constraint for this slot, add it in the map and continue with the next constraint
+				b.constraintsCache.Put(constraint.Message.Slot, decodedConstraints)
+				continue
+			}
+
+			for hash := range decodedConstraints {
+				// Update the slot constraints
+				slotConstraints[hash] = decodedConstraints[hash]
+			}
+
+			// Update the slot constraints in the cache
+			b.constraintsCache.Put(constraint.Message.Slot, slotConstraints)
 		}
-
-		// TODO: re-enable this once testing the devnet has ended
-		// If there is no valid signature, continue with the next constraint
-		// if !oneValidSignature {
-		// 	continue
-		// }
-
-		decodedConstraints, err := DecodeConstraints(constraintsSigned)
-		if err != nil {
-			log.Error("Failed to decode constraint: ", err)
-			continue
-		}
-
-		// For every constraint, we need to check if it has already been seen for the associated slot
-		slotConstraints, _ := b.constraintsCache.Get(constraintsSigned.Message.Slot)
-		if len(slotConstraints) == 0 {
-			// New constraint for this slot, add it in the map and continue with the next constraint
-			b.constraintsCache.Put(constraintsSigned.Message.Slot, decodedConstraints)
-			continue
-		}
-
-		for hash := range decodedConstraints {
-			// Update the slot constraints
-			slotConstraints[hash] = decodedConstraints[hash]
-		}
-
-		// Update the slot constraints in the cache
-		b.constraintsCache.Put(constraintsSigned.Message.Slot, slotConstraints)
-
 	}
 
 	return nil

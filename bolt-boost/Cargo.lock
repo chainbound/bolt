@@ -1060,6 +1060,7 @@ name = "bolt-boost"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "alloy-rlp",
  "async-trait",
  "axum",
  "axum-extra",
