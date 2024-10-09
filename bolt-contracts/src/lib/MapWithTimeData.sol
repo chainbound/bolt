@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import {Checkpoints} from "lib/openzeppelin-contracts/contracts/utils/structs/Checkpoints.sol";
-import {Time} from "lib/openzeppelin-contracts/contracts/utils/types/Time.sol";
-import {EnumerableMap} from "lib/openzeppelin-contracts/contracts/utils/structs/EnumerableMap.sol";
+import {Checkpoints} from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
+import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
+import {EnumerableMap} from "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
 
 library MapWithTimeData {
     using EnumerableMap for EnumerableMap.AddressToUintMap;

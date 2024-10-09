@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import {OwnableUpgradeable} from "lib/openzeppelin-contracts/contracts/access/OwnableUpgradeable.sol";
-import {Time} from "lib/openzeppelin-contracts/contracts/utils/types/Time.sol";
-import {EnumerableSet} from "lib/openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
-import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {IBaseDelegator} from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
 import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
@@ -21,7 +21,7 @@ import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
 import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
-contract BoltManager is IBoltManager, Ownable {
+contract BoltManager is IBoltManager, OwnableUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.OperatorMap;
     using OperatorMapWithTime for EnumerableMap.OperatorMap;
