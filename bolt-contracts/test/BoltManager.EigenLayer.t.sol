@@ -176,7 +176,7 @@ contract BoltManagerEigenLayerTest is Test {
         assertEq(middleware.isStrategyEnabled(address(eigenLayerDeployer.wethStrat())), true);
     }
 
-    function test_deregisterEigenLayerOperatorFromAVS() public {
+    function testDeregisterOperatorFromAVS() public {
         _eigenLayerOptInRoutine();
         vm.prank(operator);
         middleware.deregisterOperator();
@@ -195,7 +195,7 @@ contract BoltManagerEigenLayerTest is Test {
     //     assertEq(totalStake, 1 ether);
     // }
 
-    function test_getEigenLayerProposerStatus() public {
+    function testProposerStatus() public {
         _eigenLayerOptInRoutine();
 
         bytes32 pubkeyHash = _pubkeyHash(validatorPubkey);
@@ -229,7 +229,7 @@ contract BoltManagerEigenLayerTest is Test {
         assertEq(statuses.length, 10);
     }
 
-    function testGetNonExistentProposerStatus() public {
+    function testNonExistentProposerStatus() public {
         _eigenLayerOptInRoutine();
 
         bytes32 pubkeyHash = bytes32(uint256(1));
@@ -238,7 +238,7 @@ contract BoltManagerEigenLayerTest is Test {
         manager.getProposerStatus(pubkeyHash);
     }
 
-    function testGetWhitelistedCollaterals() public {
+    function testWhitelistedCollaterals() public {
         _adminRoutine();
         address[] memory collaterals = middleware.getWhitelistedCollaterals();
         assertEq(collaterals.length, 1);

@@ -37,9 +37,6 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     /// @notice Set of operator addresses that have opted in to Bolt Protocol.
     EnumerableMap.OperatorMap private operators;
 
-    /// @notice Mapping of operator addresses to RPC endpoints.
-    mapping(address => string) private operatorRPCs;
-
     /// @notice Set of restaking protocols supported. Each address corresponds to the
     /// associated Bolt Middleware contract.
     EnumerableSet.AddressSet private restakingProtocols;
@@ -119,15 +116,16 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     // ========= OPERATOR FUNCTIONS ====== //
 
     /// @notice Registers an operator with Bolt. Only callable by a supported middleware contract.
-    function registerOperator(address operator, string calldata rpc) external onlyMiddleware {
-        if (operators.contains(operator)) {
+    function registerOperator(address operatorAddr, string calldata rpc) external onlyMiddleware {
+        if (operators.contains(operatorAddr)) {
             revert OperatorAlreadyRegistered();
         }
 
-        operators.add(operator);
-        operators.enable(operator);
+        // Timestamp will be set when we enable the operator below
+        Operator memory operator = Operator(rpc, msg.sender, 0);
 
-        operatorRPCs[operator] = rpc;
+        operators.set(operatorAddr, operator);
+        operators.enable(operatorAddr);
     }
 
     /// @notice De-registers an operator from Bolt. Only callable by a supported middleware contract.
@@ -135,8 +133,6 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
         address operator
     ) public onlyMiddleware {
         operators.remove(operator);
-
-        delete operatorRPCs[operator];
     }
 
     /// @notice Allow an operator to signal indefinite opt-out from Bolt Protocol.
