@@ -51,9 +51,13 @@ contract BoltManagerEigenLayerTest is Test {
         eigenLayerDeployer.setUp();
 
         // Deploy Bolt contracts
-        validators = new BoltValidators(admin);
-        manager = new BoltManager(admin, address(validators));
-        middleware = new BoltEigenLayerMiddleware(
+        validators = new BoltValidators();
+        validators.initialize(admin);
+        manager = new BoltManager();
+        manager.initialize(admin, address(validators));
+        middleware = new BoltEigenLayerMiddleware();
+
+        middleware.initialize(
             address(admin),
             address(manager),
             address(eigenLayerDeployer.avsDirectory()),

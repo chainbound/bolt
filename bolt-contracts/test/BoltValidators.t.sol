@@ -20,7 +20,8 @@ contract BoltValidatorsTest is Test {
     address validator = makeAddr("validator");
 
     function setUp() public {
-        validators = new BoltValidators(admin);
+        validators = new BoltValidators();
+        validators.initialize(admin);
     }
 
     function testUnsafeRegistration() public {

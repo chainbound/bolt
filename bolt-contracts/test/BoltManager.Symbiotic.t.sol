@@ -150,10 +150,14 @@ contract BoltManagerSymbioticTest is Test {
 
         // --- Deploy Bolt contracts ---
 
-        validators = new BoltValidators(admin);
-        manager = new BoltManager(admin, address(validators));
+        validators = new BoltValidators();
+        validators.initialize(admin);
+        manager = new BoltManager();
+        manager.initialize(admin, address(validators));
 
-        middleware = new BoltSymbioticMiddleware(
+        middleware = new BoltSymbioticMiddleware();
+
+        middleware.initialize(
             admin,
             address(manager),
             networkAdmin,
