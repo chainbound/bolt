@@ -3,6 +3,8 @@ pragma solidity 0.8.25;
 
 import {Script, console} from "forge-std/Script.sol";
 
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
 import {BoltEigenLayerMiddleware} from "../src/contracts/BoltEigenLayerMiddleware.sol";
@@ -21,27 +23,53 @@ contract DeployBolt is Script {
     ) public {
         vm.startBroadcast();
 
-        address sender = msg.sender;
+        // The admin address will be authorized to call the adminOnly functions
+        // on the contract implementations, as well as upgrade the contracts.
+        address admin = msg.sender;
 
-        BoltValidators validators = new BoltValidators(sender);
-        console.log("BoltValidators deployed at", address(validators));
+        // TODO: IMPORTANT: Use a different account for the proxy admin!
+        // Otherwise we will not be able to access the adminOnly functions
+        // on the underlying implementations through the proxy.
+        // We can however call them directly if needed.
 
-        BoltManager manager = new BoltManager(sender, address(validators));
-        console.log("BoltManager deployed at", address(manager));
+        address validatorsImplementation = address(new BoltValidators(admin));
+        console.log("BoltValidators implementation deployed at", validatorsImplementation);
 
-        BoltEigenLayerMiddleware eigenLayerMiddleware = new BoltEigenLayerMiddleware(
-            sender, address(validators), eigenlayerAVSDirectory, eigenlayerDelegationManager, eigenlayerStrategyManager
+        address validatorsProxy = address(new ERC1967Proxy(validatorsImplementation, ""));
+        console.log("BoltValidators proxy deployed at", validatorsProxy);
+
+        address managerImplementation = address(new BoltManager(admin, validatorsProxy));
+        console.log("BoltManager implementation deployed at", managerImplementation);
+
+        address managerProxy = address(new ERC1967Proxy(managerImplementation, ""));
+        console.log("BoltManager proxy deployed at", managerProxy);
+
+        address eigenLayerMiddlewareImplementation = address(
+            new BoltEigenLayerMiddleware(
+                admin, managerProxy, eigenlayerAVSDirectory, eigenlayerDelegationManager, eigenlayerStrategyManager
+            )
         );
-        console.log("BoltEigenLayerMiddleware deployed at", address(eigenLayerMiddleware));
-        BoltSymbioticMiddleware symbioticMiddleware = new BoltSymbioticMiddleware(
-            sender,
-            address(validators),
-            symbioticNetwork,
-            symbioticOperatorRegistry,
-            symbioticOperatorNetOptIn,
-            symbioticVaultRegistry
+
+        console.log("BoltEigenLayerMiddleware implementation deployed at", eigenLayerMiddlewareImplementation);
+
+        address eigenLayerMiddlewareProxy = address(new ERC1967Proxy(eigenLayerMiddlewareImplementation, ""));
+        console.log("BoltEigenLayerMiddleware proxy deployed at", eigenLayerMiddlewareProxy);
+
+        address symbioticMiddleware = address(
+            new BoltSymbioticMiddleware(
+                admin,
+                address(managerProxy),
+                symbioticNetwork,
+                symbioticOperatorRegistry,
+                symbioticOperatorNetOptIn,
+                symbioticVaultRegistry
+            )
         );
         console.log("BoltSymbioticMiddleware deployed at", address(symbioticMiddleware));
+
+        address symbioticMiddlewareProxy = address(new ERC1967Proxy(symbioticMiddleware, ""));
+        console.log("BoltSymbioticMiddleware proxy deployed at", address(symbioticMiddlewareProxy));
+
         vm.stopBroadcast();
     }
 }

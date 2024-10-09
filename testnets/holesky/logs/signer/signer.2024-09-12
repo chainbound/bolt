@@ -1,0 +1,18 @@
+{"timestamp":"2024-09-12T07:59:07.123567Z","level":"INFO","fields":{"message":"Starting signing service","modules":"[\"BOLT\"]","port":"20000"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T07:59:07.361736Z","level":"DEBUG","fields":{"message":"New request","event":"get_pubkeys","req_id":"7dd159a8-d063-459d-8760-128cfcf82ecd"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T08:33:59.714504Z","level":"INFO","fields":{"message":"Starting signing service","modules":"[\"BOLT\"]","port":"20000"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T08:33:59.941602Z","level":"DEBUG","fields":{"message":"New request","event":"get_pubkeys","req_id":"ec336090-3f18-4d09-ae7e-83920c9ac136"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T08:35:00.586757Z","level":"INFO","fields":{"message":"Starting signing service","modules":"[\"BOLT\"]","port":"20000"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T08:35:00.756086Z","level":"DEBUG","fields":{"message":"New request","event":"get_pubkeys","req_id":"0805f26a-d839-4bb4-ae69-fe50dee2f97f"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T08:36:29.271673Z","level":"INFO","fields":{"message":"Starting signing service","modules":"[\"BOLT\"]","port":"20000"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T08:36:29.463433Z","level":"DEBUG","fields":{"message":"New request","event":"get_pubkeys","req_id":"81214549-05f2-4a17-ab95-1a8a39d3dd40"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T08:37:18.964178Z","level":"INFO","fields":{"message":"Starting signing service","modules":"[\"BOLT\"]","port":"20000"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T08:37:19.167298Z","level":"DEBUG","fields":{"message":"New request","event":"get_pubkeys","req_id":"0b0d7155-e8d6-4244-8b70-239386101e3b"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T09:21:33.618973Z","level":"INFO","fields":{"message":"Starting signing service","modules":"[\"BOLT\"]","port":"20000"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T09:21:33.820218Z","level":"DEBUG","fields":{"message":"New request","event":"get_pubkeys","req_id":"6fa11594-9c7e-4776-bb8d-0e7ad6437507"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T09:25:56.185046Z","level":"INFO","fields":{"message":"Starting signing service","modules":"[\"BOLT\"]","port":"20000"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T09:25:56.378790Z","level":"DEBUG","fields":{"message":"New request","event":"get_pubkeys","req_id":"309b1570-a887-4639-a994-7cb9980f994b"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T09:27:03.592777Z","level":"INFO","fields":{"message":"Starting signing service","modules":"[\"BOLT\"]","port":"20000"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T09:27:03.796736Z","level":"DEBUG","fields":{"message":"New request","event":"get_pubkeys","req_id":"b0a2c8f0-3d21-44bd-8d04-913d834e6fa8"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T09:40:50.079258Z","level":"INFO","fields":{"message":"Starting signing service","modules":"[\"BOLT\"]","port":"20000"},"target":"cb_signer::service"}
+{"timestamp":"2024-09-12T09:40:50.308085Z","level":"DEBUG","fields":{"message":"New request","event":"get_pubkeys","req_id":"f53966e7-8689-4c11-84e3-c7cec9212f5d"},"target":"cb_signer::service"}
