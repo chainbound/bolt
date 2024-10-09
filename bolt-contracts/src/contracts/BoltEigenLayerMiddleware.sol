@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {EnumerableMap} from "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
@@ -21,7 +22,7 @@ import {AVSDirectoryStorage} from "@eigenlayer/src/contracts/core/AVSDirectorySt
 import {DelegationManagerStorage} from "@eigenlayer/src/contracts/core/DelegationManagerStorage.sol";
 import {StrategyManagerStorage} from "@eigenlayer/src/contracts/core/StrategyManagerStorage.sol";
 
-contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
+contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
@@ -38,19 +39,17 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     /// @notice Set of EigenLayer collaterals addresses that are allowed.
     EnumerableSet.AddressSet private whitelistedCollaterals;
 
-    // ========= IMMUTABLES =========
-
     /// @notice Address of the EigenLayer AVS Directory contract.
-    AVSDirectoryStorage public immutable AVS_DIRECTORY;
+    AVSDirectoryStorage public AVS_DIRECTORY;
 
     /// @notice Address of the EigenLayer Delegation Manager contract.
-    DelegationManagerStorage public immutable DELEGATION_MANAGER;
+    DelegationManagerStorage public DELEGATION_MANAGER;
 
     /// @notice Address of the EigenLayer Strategy Manager contract.
-    StrategyManagerStorage public immutable STRATEGY_MANAGER;
+    StrategyManagerStorage public STRATEGY_MANAGER;
 
     /// @notice Start timestamp of the first epoch.
-    uint48 public immutable START_TIMESTAMP;
+    uint48 public START_TIMESTAMP;
 
     // ========= CONSTANTS =========
 
@@ -68,20 +67,21 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     error StrategyNotAllowed();
     error OperatorAlreadyRegisteredToAVS();
 
-    // ========= CONSTRUCTOR =========
+    // ========= INITIALIZER & PROXY FUNCTIONALITY ========= //
 
     /// @notice Constructor for the BoltEigenLayerMiddleware contract.
     /// @param _boltManager The address of the Bolt Manager contract.
     /// @param _eigenlayerAVSDirectory The address of the EigenLayer AVS Directory contract.
     /// @param _eigenlayerDelegationManager The address of the EigenLayer Delegation Manager contract.
     /// @param _eigenlayerStrategyManager The address of the EigenLayer Strategy Manager.
-    constructor(
+    function initialize(
         address _owner,
         address _boltManager,
         address _eigenlayerAVSDirectory,
         address _eigenlayerDelegationManager,
         address _eigenlayerStrategyManager
-    ) Ownable(_owner) {
+    ) public initializer {
+        __Ownable_init(_owner);
         boltManager = IBoltManager(_boltManager);
         START_TIMESTAMP = Time.timestamp();
 
@@ -89,6 +89,10 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
         DELEGATION_MANAGER = DelegationManagerStorage(_eigenlayerDelegationManager);
         STRATEGY_MANAGER = StrategyManagerStorage(_eigenlayerStrategyManager);
     }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
 
     // ========= VIEW FUNCTIONS =========
 

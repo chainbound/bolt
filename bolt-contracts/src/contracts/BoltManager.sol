@@ -2,6 +2,7 @@
 pragma solidity 0.8.25;
 
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -21,7 +22,7 @@ import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
 import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
-contract BoltManager is IBoltManager, OwnableUpgradeable {
+contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.OperatorMap;
     using OperatorMapWithTime for EnumerableMap.OperatorMap;
@@ -43,9 +44,8 @@ contract BoltManager is IBoltManager, OwnableUpgradeable {
     /// associated Bolt Middleware contract.
     EnumerableSet.AddressSet private restakingProtocols;
 
-    // ============= IMMUTABLES ================ //
     /// @notice Start timestamp of the first epoch.
-    uint48 public immutable START_TIMESTAMP;
+    uint48 public START_TIMESTAMP;
 
     // ============= CONSTANTS ================= //
     /// @notice Duration of an epoch in seconds.
@@ -56,14 +56,19 @@ contract BoltManager is IBoltManager, OwnableUpgradeable {
         _;
     }
 
-    // ========= CONSTRUCTOR =========
+    // ========= INITIALIZER & PROXY FUNCTIONALITY ========== //
 
-    /// @notice Constructor for the BoltManager contract.
+    /// @notice The initializer for the BoltManager contract.
     /// @param _validators The address of the validators registry.
-    constructor(address _owner, address _validators) Ownable(_owner) {
+    function initialize(address _owner, address _validators) public initializer {
+        __Ownable_init(_owner);
         validators = IBoltValidators(_validators);
         START_TIMESTAMP = Time.timestamp();
     }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
 
     // ========= VIEW FUNCTIONS =========
 

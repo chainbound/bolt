@@ -32,42 +32,47 @@ contract DeployBolt is Script {
         // on the underlying implementations through the proxy.
         // We can however call them directly if needed.
 
-        address validatorsImplementation = address(new BoltValidators(admin));
+        address validatorsImplementation = address(new BoltValidators());
         console.log("BoltValidators implementation deployed at", validatorsImplementation);
 
-        address validatorsProxy = address(new ERC1967Proxy(validatorsImplementation, ""));
+        bytes memory initValidators = abi.encodeCall(BoltValidators.initialize, admin);
+        address validatorsProxy = address(new ERC1967Proxy(validatorsImplementation, initValidators));
         console.log("BoltValidators proxy deployed at", validatorsProxy);
 
-        address managerImplementation = address(new BoltManager(admin, validatorsProxy));
+        address managerImplementation = address(new BoltManager());
         console.log("BoltManager implementation deployed at", managerImplementation);
 
-        address managerProxy = address(new ERC1967Proxy(managerImplementation, ""));
+        bytes memory initManager = abi.encodeCall(BoltManager.initialize, (admin, validatorsProxy));
+        address managerProxy = address(new ERC1967Proxy(managerImplementation, initManager));
         console.log("BoltManager proxy deployed at", managerProxy);
 
-        address eigenLayerMiddlewareImplementation = address(
-            new BoltEigenLayerMiddleware(
-                admin, managerProxy, eigenlayerAVSDirectory, eigenlayerDelegationManager, eigenlayerStrategyManager
-            )
-        );
+        address eigenLayerMiddlewareImplementation = address(new BoltEigenLayerMiddleware());
 
         console.log("BoltEigenLayerMiddleware implementation deployed at", eigenLayerMiddlewareImplementation);
 
-        address eigenLayerMiddlewareProxy = address(new ERC1967Proxy(eigenLayerMiddlewareImplementation, ""));
+        bytes memory initEigenLayerMiddleware = abi.encodeCall(
+            BoltEigenLayerMiddleware.initialize,
+            (admin, managerProxy, eigenlayerAVSDirectory, eigenlayerDelegationManager, eigenlayerStrategyManager)
+        );
+        address eigenLayerMiddlewareProxy =
+            address(new ERC1967Proxy(eigenLayerMiddlewareImplementation, initEigenLayerMiddleware));
         console.log("BoltEigenLayerMiddleware proxy deployed at", eigenLayerMiddlewareProxy);
 
-        address symbioticMiddleware = address(
-            new BoltSymbioticMiddleware(
+        address symbioticMiddleware = address(new BoltSymbioticMiddleware());
+        console.log("BoltSymbioticMiddleware deployed at", address(symbioticMiddleware));
+
+        bytes memory initSymbioticMiddleware = abi.encodeCall(
+            BoltSymbioticMiddleware.initialize,
+            (
                 admin,
-                address(managerProxy),
+                managerProxy,
                 symbioticNetwork,
                 symbioticOperatorRegistry,
                 symbioticOperatorNetOptIn,
                 symbioticVaultRegistry
             )
         );
-        console.log("BoltSymbioticMiddleware deployed at", address(symbioticMiddleware));
-
-        address symbioticMiddlewareProxy = address(new ERC1967Proxy(symbioticMiddleware, ""));
+        address symbioticMiddlewareProxy = address(new ERC1967Proxy(symbioticMiddleware, initSymbioticMiddleware));
         console.log("BoltSymbioticMiddleware proxy deployed at", address(symbioticMiddlewareProxy));
 
         vm.stopBroadcast();

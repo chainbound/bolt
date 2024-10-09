@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {EnumerableMap} from "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 import {IBaseDelegator} from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
 import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
@@ -21,7 +22,7 @@ import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
 import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
-contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
+contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
@@ -39,22 +40,20 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     /// @notice Set of Symbiotic collateral addresses that are whitelisted.
     EnumerableSet.AddressSet private whitelistedCollaterals;
 
-    // ========= IMMUTABLES =========
-
     /// @notice Address of the Bolt network in Symbiotic Protocol.
-    address public immutable BOLT_SYMBIOTIC_NETWORK;
+    address public BOLT_SYMBIOTIC_NETWORK;
 
     /// @notice Address of the Symbiotic Operator Registry contract.
-    address public immutable OPERATOR_REGISTRY;
+    address public OPERATOR_REGISTRY;
 
     /// @notice Address of the Symbiotic Vault Registry contract.
-    address public immutable VAULT_REGISTRY;
+    address public VAULT_REGISTRY;
 
     /// @notice Address of the Symbiotic Operator Network Opt-In contract.
-    address public immutable OPERATOR_NET_OPTIN;
+    address public OPERATOR_NET_OPTIN;
 
     /// @notice Start timestamp of the first epoch.
-    uint48 public immutable START_TIMESTAMP;
+    uint48 public START_TIMESTAMP;
 
     // ========= CONSTANTS =========
 
@@ -86,14 +85,15 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
     /// @param _symbioticOperatorRegistry The address of the Symbiotic operator registry.
     /// @param _symbioticOperatorNetOptIn The address of the Symbiotic operator network opt-in contract.
     /// @param _symbioticVaultRegistry The address of the Symbiotic vault registry.
-    constructor(
+    function initialize(
         address _owner,
         address _boltManager,
         address _symbioticNetwork,
         address _symbioticOperatorRegistry,
         address _symbioticOperatorNetOptIn,
         address _symbioticVaultRegistry
-    ) Ownable(_owner) {
+    ) public initializer {
+        __Ownable_init(_owner);
         boltManager = IBoltManager(_boltManager);
         START_TIMESTAMP = Time.timestamp();
 
@@ -102,6 +102,10 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, Ownable {
         OPERATOR_NET_OPTIN = _symbioticOperatorNetOptIn;
         VAULT_REGISTRY = _symbioticVaultRegistry;
     }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
 
     // ========= VIEW FUNCTIONS =========
 

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 import {BLS12381} from "../lib/bls/BLS12381.sol";
 import {BLSSignatureVerifier} from "../lib/bls/BLSSignatureVerifier.sol";
@@ -9,7 +10,7 @@ import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 
 /// @title Bolt Validators
 /// @notice This contract is responsible for registering validators and managing their configuration
-contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
+contract BoltValidators is IBoltValidators, BLSSignatureVerifier, OwnableUpgradeable, UUPSUpgradeable {
     using BLS12381 for BLS12381.G1Point;
 
     // ========= STORAGE =========
@@ -48,9 +49,15 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
 
     /// @notice Constructor
     /// @param _owner Address of the owner of the contract
-    constructor(
+    function initialize(
         address _owner
-    ) Ownable(_owner) {}
+    ) public initializer {
+        __Ownable_init(_owner);
+    }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
 
     // ========= ADMIN FUNCTIONS =========
 
