@@ -12,10 +12,7 @@ pub use api::{
 };
 
 mod client;
-pub use client::{
-    commit_boost::CommitBoostSigner, constraints_client::ConstraintsClient, rpc::RpcClient,
-    BeaconClient,
-};
+pub use client::{constraints_client::ConstraintsClient, rpc::RpcClient, BeaconClient};
 
 /// Telemetry and metrics utilities
 pub mod telemetry;
@@ -46,6 +43,10 @@ pub mod primitives;
 
 /// State management and fetching for EVM simulation
 pub mod state;
+
+/// The signers available to the sidecar
+mod signer;
+pub use signer::commit_boost::CommitBoostSigner;
 
 /// Utilities for testing
 #[cfg(test)]
