@@ -4,6 +4,7 @@ pragma solidity 0.8.25;
 import {Script, console} from "forge-std/Script.sol";
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {Upgrades} from "@openzeppelin-upgrades/src/Upgrades.sol";
 
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
@@ -37,6 +38,7 @@ contract DeployBolt is Script {
 
         bytes memory initValidators = abi.encodeCall(BoltValidators.initialize, admin);
         address validatorsProxy = address(new ERC1967Proxy(validatorsImplementation, initValidators));
+        // Upgrades.deployUUPSProxy();
         console.log("BoltValidators proxy deployed at", validatorsProxy);
 
         address managerImplementation = address(new BoltManager());

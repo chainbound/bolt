@@ -23,6 +23,7 @@ remappings = [
   "@eigenlayer/=lib/eigenlayer-contracts/",
   "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
   "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+  "@openzeppelin-upgrades/=lib/openzeppelin-foundry-upgrades/",
 
   # Symbiotic remappings contexts
   "lib/core/:forge-std/=lib/core/lib/forge-std/src/",
@@ -41,6 +42,7 @@ remappings = [
   # OpenZeppelin remappings contexts
   "lib/openzeppelin-contracts/:@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
 ]
+
 
 [rpc_endpoints]
 mainnet = "${ETH_RPC_URL}"
