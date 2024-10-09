@@ -24,7 +24,7 @@ use crate::{
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
     telemetry::ApiMetrics,
-    BuilderProxyConfig, CommitBoostSigner, Config, ConstraintsApi, ConstraintsClient, LocalBuilder,
+    BuilderProxyConfig, CommitBoostSigner, ConstraintsApi, ConstraintsClient, LocalBuilder, Opts,
 };
 
 /// The driver for the sidecar, responsible for managing the main event loop.
@@ -60,31 +60,34 @@ impl<B: SignerBLS> fmt::Debug for SidecarDriver<StateClient, B, PrivateKeySigner
 
 impl SidecarDriver<StateClient, BlsSigner, PrivateKeySigner> {
     /// Create a new sidecar driver with the given [Config] and private key signer.
-    pub async fn with_local_signer(cfg: Config) -> eyre::Result<Self> {
+    pub async fn with_local_signer(opts: &Opts) -> eyre::Result<Self> {
         // The default state client simply uses the execution API URL to fetch state updates.
-        let state_client = StateClient::new(cfg.execution_api_url.clone());
+        let state_client = StateClient::new(opts.execution_api_url.clone());
 
         // Constraints are signed with a BLS private key
-        let constraint_signing_key = cfg.private_key.clone().expect("Private key must be provided");
-        let constraint_signer = BlsSigner::new(constraint_signing_key, cfg.chain);
+        let constraint_signer =
+            BlsSigner::new(opts.signing.private_key.clone().expect("local signer").0, opts.chain);
 
         // Commitment responses are signed with a regular Ethereum wallet private key.
         // This is now generated randomly because slashing is not yet implemented.
         let commitment_signer = PrivateKeySigner::random();
 
-        Self::from_components(cfg, constraint_signer, commitment_signer, state_client).await
+        Self::from_components(opts, constraint_signer, commitment_signer, state_client).await
     }
 }
 
 impl SidecarDriver<StateClient, CommitBoostSigner, CommitBoostSigner> {
     /// Create a new sidecar driver with the given [Config] and commit-boost signer.
-    pub async fn with_commit_boost_signer(cfg: Config) -> eyre::Result<Self> {
+    pub async fn with_commit_boost_signer(opts: &Opts) -> eyre::Result<Self> {
         // The default state client simply uses the execution API URL to fetch state updates.
-        let state_client = StateClient::new(cfg.execution_api_url.clone());
+        let state_client = StateClient::new(opts.execution_api_url.clone());
 
         let commit_boost_signer = CommitBoostSigner::new(
-            cfg.commit_boost_url.clone().expect("CommitBoost URL must be provided"),
-            &cfg.commit_boost_jwt_hex.clone().expect("CommitBoost JWT must be provided"),
+            opts.signing
+                .commit_boost_address
+                .expect("CommitBoost URL must be provided")
+                .to_string(),
+            &opts.signing.commit_boost_jwt_hex.clone().expect("CommitBoost JWT must be provided"),
         )
         .await?;
 
@@ -94,40 +97,40 @@ impl SidecarDriver<StateClient, CommitBoostSigner, CommitBoostSigner> {
         // Commitment responses are signed with commit-boost signer
         let commitment_signer = commit_boost_signer.clone();
 
-        Self::from_components(cfg, constraint_signer, commitment_signer, state_client).await
+        Self::from_components(opts, constraint_signer, commitment_signer, state_client).await
     }
 }
 
 impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, ECDSA> {
     /// Create a new sidecar driver with the given components
     pub async fn from_components(
-        cfg: Config,
+        opts: &Opts,
         constraint_signer: BLS,
         commitment_signer: ECDSA,
         fetcher: C,
     ) -> eyre::Result<Self> {
-        let constraints_client = ConstraintsClient::new(cfg.constraints_url.clone());
-        let beacon_client = BeaconClient::new(cfg.beacon_api_url.clone());
-        let execution = ExecutionState::new(fetcher, cfg.limits).await?;
+        let constraints_client = ConstraintsClient::new(opts.constraints_url.clone());
+        let beacon_client = BeaconClient::new(opts.beacon_api_url.clone());
+        let execution = ExecutionState::new(fetcher, opts.limits.clone()).await?;
 
         let genesis_time = beacon_client.get_genesis_details().await?.genesis_time;
         let slot_stream =
-            clock::from_system_time(genesis_time, cfg.chain.slot_time(), SLOTS_PER_EPOCH)
+            clock::from_system_time(genesis_time, opts.chain.slot_time(), SLOTS_PER_EPOCH)
                 .into_stream();
 
-        let local_builder = LocalBuilder::new(&cfg, beacon_client.clone(), genesis_time);
+        let local_builder = LocalBuilder::new(opts, beacon_client.clone(), genesis_time);
         let head_tracker = HeadTracker::start(beacon_client.clone());
 
         let consensus = ConsensusState::new(
             beacon_client,
-            cfg.validator_indexes.clone(),
-            cfg.chain.commitment_deadline(),
+            opts.validator_indexes.clone(),
+            opts.chain.commitment_deadline(),
         );
 
         let (payload_requests_tx, payload_requests_rx) = mpsc::channel(16);
         let builder_proxy_cfg = BuilderProxyConfig {
-            constraints_url: cfg.constraints_url.clone(),
-            server_port: cfg.constraints_proxy_port,
+            constraints_url: opts.constraints_url.clone(),
+            server_port: opts.constraints_proxy_port,
         };
 
         // start the builder api proxy server
@@ -139,7 +142,7 @@ impl<C: StateFetcher, BLS: SignerBLS, ECDSA: SignerECDSA> SidecarDriver<C, BLS, 
         });
 
         // start the commitments api server
-        let api_addr = format!("0.0.0.0:{}", cfg.rpc_port);
+        let api_addr = format!("0.0.0.0:{}", opts.port);
         let (api_events_tx, api_events_rx) = mpsc::channel(1024);
         CommitmentsApiServer::new(api_addr).run(api_events_tx).await;
 

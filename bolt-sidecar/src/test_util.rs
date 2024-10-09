@@ -11,12 +11,14 @@ use alloy::{
 };
 use alloy_node_bindings::{Anvil, AnvilInstance};
 use blst::min_pk::SecretKey;
+use clap::Parser;
 use ethereum_consensus::crypto::{PublicKey, Signature};
 use rand::Rng;
 use secp256k1::Message;
 use tracing::warn;
 
 use crate::{
+    config::signing::BlsSecretKey,
     crypto::{
         bls::{random_bls_secret, Signer as BlsSigner},
         ecdsa::SignableECDSA,
@@ -26,7 +28,7 @@ use crate::{
         CommitmentRequest, ConstraintsMessage, DelegationMessage, FullTransaction,
         InclusionRequest, RevocationMessage, SignedConstraints, SignedDelegation, SignedRevocation,
     },
-    ChainConfig, Config,
+    ChainConfig, Opts,
 };
 
 /// The URL of the test execution client HTTP API.
@@ -79,25 +81,29 @@ pub(crate) async fn try_get_beacon_api_url() -> Option<&'static str> {
 /// - The default values for the remaining configuration fields.
 ///
 /// If any of the above values can't be found, the function will return `None`.
-pub(crate) async fn get_test_config() -> Option<Config> {
+pub(crate) async fn get_test_config() -> Option<Opts> {
     let _ = dotenvy::dotenv();
+
+    std::env::set_var("BOLT_SIDECAR_PRIVATE_KEY", BlsSecretKey::random_bls_secret().to_string());
+    let mut opts = Opts::parse();
 
     let Some(jwt) = std::env::var("ENGINE_JWT").ok() else {
         warn!("ENGINE_JWT not found in environment variables");
         return None;
     };
 
-    let execution = try_get_execution_api_url().await?;
-    let beacon = try_get_beacon_api_url().await?;
-    let engine = try_get_engine_api_url().await?;
+    if let Some(url) = try_get_execution_api_url().await {
+        opts.execution_api_url = url.parse().expect("valid URL");
+    }
+    if let Some(url) = try_get_beacon_api_url().await {
+        opts.beacon_api_url = url.parse().expect("valid URL");
+    }
+    if let Some(url) = try_get_engine_api_url().await {
+        opts.engine_api_url = url.parse().expect("valid URL");
+    }
+    opts.jwt_hex = jwt;
 
-    Some(Config {
-        execution_api_url: execution.parse().ok()?,
-        engine_api_url: engine.parse().ok()?,
-        beacon_api_url: beacon.parse().ok()?,
-        jwt_hex: jwt,
-        ..Default::default()
-    })
+    Some(opts)
 }
 
 /// Launch a local instance of the Anvil test chain.

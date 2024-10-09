@@ -1,6 +1,5 @@
 use alloy::primitives::U256;
 use beacon_api_client::mainnet::Client as BeaconClient;
-use blst::min_pk::SecretKey;
 use ethereum_consensus::{
     crypto::{KzgCommitment, PublicKey},
     deneb::mainnet::ExecutionPayloadHeader,
@@ -10,10 +9,11 @@ use payload_builder::FallbackPayloadBuilder;
 use signature::sign_builder_message;
 
 use crate::{
+    config::signing::BlsSecretKey,
     primitives::{
         BuilderBid, GetPayloadResponse, PayloadAndBid, PayloadAndBlobs, SignedBuilderBid,
     },
-    ChainConfig, Config,
+    ChainConfig, Opts,
 };
 
 /// Basic block template handler that can keep track of
@@ -65,7 +65,7 @@ pub enum BuilderError {
 pub struct LocalBuilder {
     /// BLS credentials for the local builder. We use this to sign the
     /// payload bid submissions built by the sidecar.
-    secret_key: SecretKey,
+    secret_key: BlsSecretKey,
     /// Chain configuration
     /// (necessary for signing messages with the correct domain)
     chain: ChainConfig,
@@ -78,12 +78,12 @@ pub struct LocalBuilder {
 
 impl LocalBuilder {
     /// Create a new local builder with the given secret key.
-    pub fn new(config: &Config, beacon_api_client: BeaconClient, genesis_time: u64) -> Self {
+    pub fn new(opts: &Opts, beacon_api_client: BeaconClient, genesis_time: u64) -> Self {
         Self {
             payload_and_bid: None,
-            fallback_builder: FallbackPayloadBuilder::new(config, beacon_api_client, genesis_time),
-            secret_key: config.builder_private_key.clone(),
-            chain: config.chain,
+            fallback_builder: FallbackPayloadBuilder::new(opts, beacon_api_client, genesis_time),
+            secret_key: opts.builder_private_key.clone(),
+            chain: opts.chain,
         }
     }
 

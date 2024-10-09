@@ -36,7 +36,7 @@ pub use builder::LocalBuilder;
 
 /// Configuration and command-line argument parsing
 mod config;
-pub use config::{ChainConfig, Config, Opts};
+pub use config::{ChainConfig, Opts};
 
 /// Crypto utilities, including BLS and ECDSA
 pub mod crypto;

@@ -51,6 +51,12 @@ impl From<Vec<u64>> for ValidatorIndexes {
     }
 }
 
+impl ToString for ValidatorIndexes {
+    fn to_string(&self) -> String {
+        self.0.iter().map(|index| index.to_string()).collect::<Vec<_>>().join(",")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

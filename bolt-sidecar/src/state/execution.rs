@@ -13,7 +13,7 @@ use tracing::{debug, trace};
 use crate::{
     builder::BlockTemplate,
     common::{calculate_max_basefee, max_transaction_cost, validate_transaction},
-    config::Limits,
+    config::limits::LimitsOpts as Limits,
     primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot},
 };
 
