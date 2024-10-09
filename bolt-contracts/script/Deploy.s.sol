@@ -4,7 +4,7 @@ pragma solidity 0.8.25;
 import {Script, console} from "forge-std/Script.sol";
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {Upgrades} from "@openzeppelin-upgrades/src/Upgrades.sol";
+import {Upgrades} from "@openzeppelin-foundry-upgrades/src/Upgrades.sol";
 
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
@@ -28,40 +28,23 @@ contract DeployBolt is Script {
         // on the contract implementations, as well as upgrade the contracts.
         address admin = msg.sender;
 
-        // TODO: IMPORTANT: Use a different account for the proxy admin!
-        // Otherwise we will not be able to access the adminOnly functions
-        // on the underlying implementations through the proxy.
-        // We can however call them directly if needed.
-
-        address validatorsImplementation = address(new BoltValidators());
-        console.log("BoltValidators implementation deployed at", validatorsImplementation);
-
-        bytes memory initValidators = abi.encodeCall(BoltValidators.initialize, admin);
-        address validatorsProxy = address(new ERC1967Proxy(validatorsImplementation, initValidators));
-        // Upgrades.deployUUPSProxy();
+        // Generate the `initialize` call data for the contract.
+        bytes memory initValidators = abi.encodeCall(BoltValidators.initialize, (admin));
+        // Deploy the UUPSProxy through the `Upgrades` library, with the correct `initialize` call data.
+        address validatorsProxy = Upgrades.deployUUPSProxy("BoltValidators.sol", initValidators);
         console.log("BoltValidators proxy deployed at", validatorsProxy);
 
-        address managerImplementation = address(new BoltManager());
-        console.log("BoltManager implementation deployed at", managerImplementation);
-
         bytes memory initManager = abi.encodeCall(BoltManager.initialize, (admin, validatorsProxy));
-        address managerProxy = address(new ERC1967Proxy(managerImplementation, initManager));
+        address managerProxy = Upgrades.deployUUPSProxy("BoltManager.sol", initManager);
         console.log("BoltManager proxy deployed at", managerProxy);
-
-        address eigenLayerMiddlewareImplementation = address(new BoltEigenLayerMiddleware());
-
-        console.log("BoltEigenLayerMiddleware implementation deployed at", eigenLayerMiddlewareImplementation);
 
         bytes memory initEigenLayerMiddleware = abi.encodeCall(
             BoltEigenLayerMiddleware.initialize,
             (admin, managerProxy, eigenlayerAVSDirectory, eigenlayerDelegationManager, eigenlayerStrategyManager)
         );
         address eigenLayerMiddlewareProxy =
-            address(new ERC1967Proxy(eigenLayerMiddlewareImplementation, initEigenLayerMiddleware));
+            Upgrades.deployUUPSProxy("BoltEigenLayerMiddleware.sol", initEigenLayerMiddleware);
         console.log("BoltEigenLayerMiddleware proxy deployed at", eigenLayerMiddlewareProxy);
-
-        address symbioticMiddleware = address(new BoltSymbioticMiddleware());
-        console.log("BoltSymbioticMiddleware deployed at", address(symbioticMiddleware));
 
         bytes memory initSymbioticMiddleware = abi.encodeCall(
             BoltSymbioticMiddleware.initialize,
@@ -74,7 +57,8 @@ contract DeployBolt is Script {
                 symbioticVaultRegistry
             )
         );
-        address symbioticMiddlewareProxy = address(new ERC1967Proxy(symbioticMiddleware, initSymbioticMiddleware));
+        address symbioticMiddlewareProxy =
+            Upgrades.deployUUPSProxy("BoltSymbioticMiddleware.sol", initSymbioticMiddleware);
         console.log("BoltSymbioticMiddleware proxy deployed at", address(symbioticMiddlewareProxy));
 
         vm.stopBroadcast();
