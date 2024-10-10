@@ -17,12 +17,16 @@ use secp256k1::Message;
 use tracing::warn;
 
 use crate::{
-    crypto::{bls::Signer as BlsSigner, ecdsa::SignableECDSA, SignableBLS},
+    crypto::{
+        bls::{random_bls_secret, Signer as BlsSigner},
+        ecdsa::SignableECDSA,
+        SignableBLS,
+    },
     primitives::{
         CommitmentRequest, ConstraintsMessage, DelegationMessage, FullTransaction,
         InclusionRequest, RevocationMessage, SignedConstraints, SignedDelegation, SignedRevocation,
     },
-    Config,
+    ChainConfig, Config,
 };
 
 /// The URL of the test execution client HTTP API.
@@ -187,8 +191,8 @@ fn random_constraints(count: usize) -> Vec<FullTransaction> {
 }
 
 #[tokio::test]
-async fn generate_test_data() {
-    let signer = BlsSigner::random();
+async fn generate_test_data_kurtosis() {
+    let signer = BlsSigner::new(random_bls_secret(), ChainConfig::kurtosis(0, 0));
     let pk = signer.pubkey();
 
     println!("Validator Public Key: {}", hex::encode(pk.as_ref()));
@@ -200,33 +204,36 @@ async fn generate_test_data() {
     let delegatee_pk = delegatee_sk.sk_to_pk();
 
     // Prepare a Delegation message
-    let delegation_msg = DelegationMessage {
-        validator_pubkey: pk.clone(),
-        delegatee_pubkey: PublicKey::try_from(delegatee_pk.to_bytes().as_slice())
+    let delegation_msg = DelegationMessage::new(
+        pk.clone(),
+        PublicKey::try_from(delegatee_pk.to_bytes().as_slice())
             .expect("Failed to convert delegatee public key"),
-    };
+    );
 
     let digest = SignableBLS::digest(&delegation_msg);
 
     // Sign the Delegation message
     let delegation_signature = signer.sign_commit_boost_root(digest).unwrap();
+    let blst_sig = blst::min_pk::Signature::from_bytes(delegation_signature.as_ref())
+        .expect("Failed to convert delegation signature");
+    let consensus_sig = Signature::try_from(delegation_signature.as_ref())
+        .expect("Failed to convert delegation signature");
+
+    // Sanity check: verify the signature
+    assert!(signer.verify_commit_boost_root(digest, &blst_sig).is_ok());
 
     // Create SignedDelegation
-    let signed_delegation = SignedDelegation {
-        message: delegation_msg,
-        signature: Signature::try_from(delegation_signature.as_ref())
-            .expect("Failed to convert delegation signature"),
-    };
+    let signed_delegation = SignedDelegation { message: delegation_msg, signature: consensus_sig };
 
     // Output SignedDelegation
     println!("{}", serde_json::to_string_pretty(&signed_delegation).unwrap());
 
     // Prepare a revocation message
-    let revocation_msg = RevocationMessage {
-        validator_pubkey: pk.clone(),
-        delegatee_pubkey: PublicKey::try_from(delegatee_pk.to_bytes().as_slice())
+    let revocation_msg = RevocationMessage::new(
+        pk.clone(),
+        PublicKey::try_from(delegatee_pk.to_bytes().as_slice())
             .expect("Failed to convert delegatee public key"),
-    };
+    );
 
     let digest = SignableBLS::digest(&revocation_msg);
 
