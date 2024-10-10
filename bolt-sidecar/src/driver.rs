@@ -16,7 +16,7 @@ use crate::{
         server::{CommitmentsApiServer, Event as CommitmentEvent},
         spec::Error as CommitmentError,
     },
-    crypto::{bls::cl_public_key_to_arr, SignableBLS, SignerBLS, SignerECDSA},
+    crypto::{bls::cl_public_key_to_arr, SignableBLS, SignerECDSA},
     primitives::{
         CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
         SignedConstraints, TransactionExt,
@@ -44,7 +44,7 @@ pub struct SidecarDriver<C, ECDSA> {
     slot_stream: SlotStream<SystemTimeProvider>,
 }
 
-impl<B: SignerBLS> fmt::Debug for SidecarDriver<StateClient, PrivateKeySigner> {
+impl fmt::Debug for SidecarDriver<StateClient, PrivateKeySigner> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SidecarDriver")
             .field("head_tracker", &self.head_tracker)

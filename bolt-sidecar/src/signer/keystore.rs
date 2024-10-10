@@ -1,5 +1,6 @@
 //! An ERC-2335 keystore signer.
 
+use std::fmt::Debug;
 use std::{
     ffi::OsString,
     fs,
@@ -59,6 +60,17 @@ impl KeystoreSigner {
             BLSSig::try_from(sig.as_slice()).map_err(|_| eyre!("invalid signature length"))?;
 
         Ok(sig)
+    }
+}
+
+impl Debug for KeystoreSigner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Signer")
+            .field(
+                "pubkeys",
+                &self.keypairs.iter().map(|kp| kp.pk.as_hex_string()).collect::<Vec<_>>(),
+            )
+            .finish()
     }
 }
 

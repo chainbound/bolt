@@ -7,7 +7,7 @@ pub mod commit_boost;
 pub mod keystore;
 pub mod local;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum SignerBLSEnum {
     Local(LocalSigner),
     CommitBoost(CommitBoostSigner),
