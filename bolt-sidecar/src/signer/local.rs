@@ -2,7 +2,6 @@ use std::fmt::Debug;
 
 use blst::{min_pk::Signature, BLST_ERROR};
 use ethereum_consensus::{crypto::PublicKey as BlsPublicKey, deneb::compute_signing_root};
-use rand::RngCore;
 
 use crate::{crypto::bls::BLSSig, ChainConfig};
 pub use blst::min_pk::SecretKey as BlsSecretKey;
@@ -99,7 +98,9 @@ impl LocalSigner {
 }
 
 /// Generate a random BLS secret key.
+#[cfg(test)]
 pub fn random_bls_secret() -> BlsSecretKey {
+    use rand::RngCore;
     let mut rng = rand::thread_rng();
     let mut ikm = [0u8; 32];
     rng.fill_bytes(&mut ikm);

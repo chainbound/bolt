@@ -1,8 +1,8 @@
 //! An ERC-2335 keystore signer.
 
-use std::fmt::Debug;
 use std::{
     ffi::OsString,
+    fmt::Debug,
     fs,
     path::{Path, PathBuf},
 };

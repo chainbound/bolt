@@ -111,10 +111,12 @@ impl CommitBoostSigner {
 }
 
 impl CommitBoostSigner {
+    /// Get the public key of the signer.
     pub fn pubkey(&self) -> BlsPublicKey {
         self.get_consensus_pubkey()
     }
 
+    /// Sign an object root with the Commit Boost domain.
     pub async fn sign_commit_boost_root(&self, data: [u8; 32]) -> eyre::Result<BlsSignature> {
         // convert the pubkey from ethereum_consensus to commit-boost format
         let pubkey = cb_common::signer::BlsPublicKey::from(
