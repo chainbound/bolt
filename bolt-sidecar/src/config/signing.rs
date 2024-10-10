@@ -1,9 +1,15 @@
-use std::{fmt, net::SocketAddr, ops::Deref};
+use std::{
+    fmt::{self, Display},
+    fs::read_to_string,
+    net::SocketAddr,
+    ops::Deref,
+    path::Path,
+};
 
 use blst::min_pk::SecretKey;
 use clap::{ArgGroup, Args};
 use lighthouse_account_utils::ZeroizeString;
-use rand::RngCore;
+use rand::{Rng, RngCore};
 
 /// Command-line options for signing
 #[derive(Args)]
@@ -30,7 +36,7 @@ pub struct SigningOpts {
         group = "signing-opts",
         requires("commit_boost_url")
     )]
-    pub commit_boost_jwt_hex: Option<String>,
+    pub commit_boost_jwt_hex: Option<JwtSecretConfig>,
     /// The password for the ERC-2335 keystore.
     /// Reference: https://eips.ethereum.org/EIPS/eip-2335
     #[clap(long, env = "BOLT_SIDECAR_KEYSTORE_PASSWORD", group = "signing-opts")]
@@ -90,5 +96,48 @@ impl Deref for BlsSecretKey {
 impl fmt::Display for BlsSecretKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "0x{}", hex::encode(self.0.to_bytes()))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct JwtSecretConfig(pub String);
+
+impl Default for JwtSecretConfig {
+    fn default() -> Self {
+        let random_bytes: [u8; 32] = rand::thread_rng().gen();
+        let secret = hex::encode(random_bytes);
+        Self(secret)
+    }
+}
+
+impl From<&str> for JwtSecretConfig {
+    fn from(jwt: &str) -> Self {
+        let jwt = if jwt.starts_with("0x") {
+            jwt.trim_start_matches("0x").to_string()
+        } else if Path::new(&jwt).exists() {
+            read_to_string(jwt)
+                .unwrap_or_else(|_| panic!("Failed reading JWT secret file: {:?}", jwt))
+                .trim_start_matches("0x")
+                .to_string()
+        } else {
+            jwt.to_string()
+        };
+
+        assert!(jwt.len() == 64, "Engine JWT secret must be a 32 byte hex string");
+
+        Self(jwt)
+    }
+}
+
+impl Deref for JwtSecretConfig {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for JwtSecretConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "0x{}", self.0)
     }
 }
