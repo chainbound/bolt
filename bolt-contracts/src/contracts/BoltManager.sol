@@ -140,6 +140,10 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     function pauseOperator(
         address operator
     ) external onlyMiddleware {
+        if (!operators.contains(operator)) {
+            revert OperatorNotRegistered();
+        }
+
         operators.disable(operator);
     }
 
@@ -147,6 +151,10 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     function unpauseOperator(
         address operator
     ) external onlyMiddleware {
+        if (!operators.contains(operator)) {
+            revert OperatorNotRegistered();
+        }
+
         operators.enable(operator);
     }
 

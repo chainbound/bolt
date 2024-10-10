@@ -197,19 +197,11 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
     /// @dev Pausing activity does not prevent the operator from being slashable for
     /// the current network epoch until the end of the slashing window.
     function pauseOperator() public {
-        if (!boltManager.isOperator(msg.sender)) {
-            revert NotRegistered();
-        }
-
         boltManager.pauseOperator(msg.sender);
     }
 
     /// @notice Allow a disabled operator to signal opt-in to Bolt Protocol.
     function unpauseOperator() public {
-        if (!boltManager.isOperator(msg.sender)) {
-            revert NotRegistered();
-        }
-
         boltManager.unpauseOperator(msg.sender);
     }
 

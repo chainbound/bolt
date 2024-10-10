@@ -186,6 +186,18 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUp
         boltManager.deregisterOperator(msg.sender);
     }
 
+    /// @notice Allow an operator to signal indefinite opt-out from Bolt Protocol.
+    /// @dev Pausing activity does not prevent the operator from being slashable for
+    /// the current network epoch until the end of the slashing window.
+    function pauseOperator() public {
+        boltManager.pauseOperator(msg.sender);
+    }
+
+    /// @notice Allow a disabled operator to signal opt-in to Bolt Protocol.
+    function unpauseOperator() public {
+        boltManager.unpauseOperator(msg.sender);
+    }
+
     /// @notice Register a strategy to work in Bolt Protocol.
     /// @param strategy The EigenLayer strategy address
     function registerStrategy(
