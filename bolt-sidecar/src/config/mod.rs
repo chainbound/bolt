@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use alloy::primitives::Address;
 use clap::Parser;
 use reqwest::Url;
@@ -34,20 +32,16 @@ pub struct Opts {
         default_value_t = DEFAULT_RPC_PORT)]
     pub port: u16,
     /// URL for the beacon client
-    #[clap(long, env = "BOLT_SIDECAR_BEACON_API_URL",
-        default_value_t = Url::parse("http://localhost:5052").expect("Valid Beacon API URL"))]
+    #[clap(long, env = "BOLT_SIDECAR_BEACON_API_URL", default_value = "http://localhost:5052")]
     pub beacon_api_url: Url,
     /// URL for the Constraint sidecar client to use
-    #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_URL",
-        default_value_t = Url::parse("http://localhost:3030").expect("Valid URL"))]
+    #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_URL", default_value = "http://localhost:3030")]
     pub constraints_url: Url,
     /// Execution client API URL
-    #[clap(long, env = "BOLT_SIDECAR_EXECUTION_API_URL",
-        default_value_t = Url::parse("http://localhost:8545").expect("Valid Execution API URL"))]
+    #[clap(long, env = "BOLT_SIDECAR_EXECUTION_API_URL", default_value = "http://localhost:8545")]
     pub execution_api_url: Url,
     /// Execution client Engine API URL
-    #[clap(long, env = "BOLT_SIDECAR_ENGINE_API_URL",
-        default_value_t = Url::parse("http://localhost:8551").expect("Valid Engine API URL"))]
+    #[clap(long, env = "BOLT_SIDECAR_ENGINE_API_URL", default_value = "http://localhost:8551")]
     pub engine_api_url: Url,
     /// Constraint proxy server port to use
     #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT",
@@ -58,15 +52,13 @@ pub struct Opts {
     /// - a comma-separated list of indexes (e.g. "1,2,3,4")
     /// - a contiguous range of indexes (e.g. "1..4")
     /// - a mix of the above (e.g. "1,2..4,6..8")
-    #[clap(long, value_parser = ValidatorIndexes::from_str, env = "BOLT_SIDECAR_VALIDATOR_INDEXES",
-        default_value_t = ValidatorIndexes::default())]
+    #[clap(long, env = "BOLT_SIDECAR_VALIDATOR_INDEXES", default_value_t)]
     pub validator_indexes: ValidatorIndexes,
     /// The JWT secret token to authenticate calls to the engine API.
     ///
     /// It can either be a hex-encoded string or a file path to a file
     /// containing the hex-encoded secret.
-    #[clap(long, env = "BOLT_SIDECAR_JWT_HEX",
-        default_value_t = JwtSecretConfig::default())]
+    #[clap(long, env = "BOLT_SIDECAR_JWT_HEX", default_value_t)]
     pub jwt_hex: JwtSecretConfig,
     /// The fee recipient address for fallback blocks
     #[clap(long, env = "BOLT_SIDECAR_FEE_RECIPIENT",
