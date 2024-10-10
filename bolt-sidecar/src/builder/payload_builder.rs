@@ -449,14 +449,14 @@ mod tests {
         let wallet = EthereumWallet::from(signer);
 
         let addy = Address::from_private_key(&sk);
-        let tx = default_test_transaction(addy, Some(1)).with_chain_id(1);
+        let tx = default_test_transaction(addy, Some(3)).with_chain_id(1);
         let tx_signed = tx.build(&wallet).await?;
         let raw_encoded = tx_signed.encoded_2718();
         let tx_signed_reth = TransactionSigned::decode_enveloped(&mut raw_encoded.as_slice())?;
 
-        let slot = genesis_time +
-            (SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() / cfg.chain.slot_time()) +
-            1;
+        let slot = genesis_time
+            + (SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() / cfg.chain.slot_time())
+            + 1;
 
         let block = builder.build_fallback_payload(slot, &[tx_signed_reth]).await?;
         assert_eq!(block.body.len(), 1);

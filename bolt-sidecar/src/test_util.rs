@@ -1,4 +1,4 @@
-use crate::{signer::local::random_bls_secret, ChainConfig};
+use crate::ChainConfig;
 use alloy::{
     eips::eip2718::Encodable2718,
     network::{EthereumWallet, TransactionBuilder},
@@ -80,8 +80,6 @@ pub(crate) async fn try_get_beacon_api_url() -> Option<&'static str> {
 ///
 /// If any of the above values can't be found, the function will return `None`.
 pub(crate) async fn get_test_config() -> Option<Opts> {
-    let sk = BlsSecretKeyWrapper::random().to_string();
-    println!("sk: {}", sk);
     std::env::set_var("BOLT_SIDECAR_PRIVATE_KEY", BlsSecretKeyWrapper::random().to_string());
 
     let _ = dotenvy::dotenv();
@@ -199,7 +197,7 @@ fn random_constraints(count: usize) -> Vec<FullTransaction> {
 
 #[tokio::test]
 async fn generate_test_data_kurtosis() {
-    let signer = LocalSigner::new(random_bls_secret(), ChainConfig::kurtosis(0, 0));
+    let signer = LocalSigner::new(BlsSecretKeyWrapper::random().0, ChainConfig::kurtosis(0, 0));
     let pk = signer.pubkey();
 
     println!("Validator Public Key: {}", hex::encode(pk.as_ref()));
