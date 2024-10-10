@@ -1,14 +1,10 @@
 use std::fmt::Debug;
 
 use alloy::{primitives::FixedBytes, rpc::types::beacon::constants::BLS_PUBLIC_KEY_BYTES_LEN};
-use blst::{min_pk::Signature, BLST_ERROR};
-use ethereum_consensus::{crypto::PublicKey as BlsPublicKey, deneb::compute_signing_root};
-use rand::RngCore;
+use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
 
 pub use blst::min_pk::{PublicKey, SecretKey as BlsSecretKey};
 pub use ethereum_consensus::deneb::BlsSignature;
-
-use crate::{ChainConfig, CommitBoostSigner};
 
 /// The BLS Domain Separator used in Ethereum 2.0.
 pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";

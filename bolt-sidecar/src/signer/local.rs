@@ -108,10 +108,7 @@ pub fn random_bls_secret() -> BlsSecretKey {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        crypto::bls::{SignableBLS, Signer},
-        test_util::TestSignableData,
-    };
+    use crate::{crypto::bls::SignableBLS, signer::local::Signer, test_util::TestSignableData};
 
     use rand::Rng;
 

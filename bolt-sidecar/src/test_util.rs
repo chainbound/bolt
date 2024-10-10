@@ -19,15 +19,12 @@ use tracing::warn;
 
 use crate::{
     config::signing::BlsSecretKey,
-    crypto::{
-        bls::{random_bls_secret, Signer as BlsSigner},
-        ecdsa::SignableECDSA,
-        SignableBLS,
-    },
+    crypto::{ecdsa::SignableECDSA, SignableBLS},
     primitives::{
         CommitmentRequest, ConstraintsMessage, DelegationMessage, FullTransaction,
         InclusionRequest, RevocationMessage, SignedConstraints, SignedDelegation, SignedRevocation,
     },
+    signer::local::{random_bls_secret, Signer as BlsSigner},
     ChainConfig, Opts,
 };
 

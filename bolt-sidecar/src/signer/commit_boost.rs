@@ -13,10 +13,7 @@ use thiserror::Error;
 use tracing::{debug, error, info};
 
 use crate::{
-    crypto::{
-        bls::{SignerBLS, BLS_DST_PREFIX},
-        ecdsa::SignerECDSA,
-    },
+    crypto::{bls::BLS_DST_PREFIX, ecdsa::SignerECDSA},
     primitives::commitment::ECDSASignatureExt,
 };
 
@@ -178,7 +175,7 @@ mod test {
         let mut data = [0u8; 32];
         rng.fill(&mut data);
 
-        let signature = signer.sign_commit_boost_root(&data).await.unwrap();
+        let signature = signer.sign_commit_boost_root(data).await.unwrap();
         let sig = blst::min_pk::Signature::from_bytes(signature.as_ref()).unwrap();
         let pubkey = signer.get_consensus_pubkey();
         let bls_pubkey = blst::min_pk::PublicKey::from_bytes(pubkey.as_ref()).unwrap();

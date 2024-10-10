@@ -3,7 +3,6 @@ use std::time::{Duration, Instant};
 
 use alloy::{rpc::types::beacon::events::HeadEvent, signers::local::PrivateKeySigner};
 use beacon_api_client::mainnet::Client as BeaconClient;
-use cb_common::signer::BlsSigner;
 use ethereum_consensus::{
     clock::{self, SlotStream, SystemTimeProvider},
     phase0::mainnet::SLOTS_PER_EPOCH,
@@ -17,10 +16,7 @@ use crate::{
         server::{CommitmentsApiServer, Event as CommitmentEvent},
         spec::Error as CommitmentError,
     },
-    crypto::{
-        bls::{cl_public_key_to_arr, Signer as BlsSigner},
-        SignableBLS, SignerBLS, SignerECDSA,
-    },
+    crypto::{bls::cl_public_key_to_arr, SignableBLS, SignerBLS, SignerECDSA},
     primitives::{
         CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
         SignedConstraints, TransactionExt,
@@ -48,7 +44,7 @@ pub struct SidecarDriver<C, ECDSA> {
     slot_stream: SlotStream<SystemTimeProvider>,
 }
 
-impl<B: SignerBLS> fmt::Debug for SidecarDriver<StateClient, B, PrivateKeySigner> {
+impl<B: SignerBLS> fmt::Debug for SidecarDriver<StateClient, PrivateKeySigner> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SidecarDriver")
             .field("head_tracker", &self.head_tracker)
@@ -255,7 +251,7 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
                     signer.sign_commit_boost_root(digest).await
                 }
                 SignerBLSEnum::Keystore(ref signer) => {
-                    signer.sign_commit_boost_root(digest, cl_public_key_to_arr(pubkey))
+                    signer.sign_commit_boost_root(digest, cl_public_key_to_arr(pubkey.clone()))
                 }
             };
             let signed_constraints = match signature {

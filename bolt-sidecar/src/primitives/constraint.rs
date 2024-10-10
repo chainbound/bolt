@@ -72,7 +72,7 @@ impl SignableBLS for ConstraintsMessage {
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::bls::Signer;
+    use crate::signer::local::Signer;
 
     use super::*;
     use alloy::primitives::bytes;

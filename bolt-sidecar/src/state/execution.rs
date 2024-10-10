@@ -527,7 +527,7 @@ pub struct StateUpdate {
 
 #[cfg(test)]
 mod tests {
-    use crate::builder::template::StateDiff;
+    use crate::{builder::template::StateDiff, signer::local::Signer};
     use std::{num::NonZero, str::FromStr, time::Duration};
 
     use alloy::{
@@ -542,7 +542,7 @@ mod tests {
     use reth_primitives::constants::GWEI_TO_WEI;
 
     use crate::{
-        crypto::{bls::Signer, SignableBLS},
+        crypto::SignableBLS,
         primitives::{ConstraintsMessage, SignedConstraints},
         state::fetcher,
         test_util::{create_signed_commitment_request, default_test_transaction, launch_anvil},
