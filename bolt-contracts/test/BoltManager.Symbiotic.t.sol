@@ -213,7 +213,8 @@ contract BoltManagerSymbioticTest is Test {
         middleware.registerVault(address(vault));
         assertEq(middleware.isVaultEnabled(address(vault)), true);
 
-        middleware.registerOperator(operator, "https://bolt-rpc.io");
+        vm.prank(operator);
+        middleware.registerOperator("https://bolt-rpc.io");
         assertEq(manager.isOperatorEnabled(operator), true);
 
         // --- Set the stake limit for the Vault ---

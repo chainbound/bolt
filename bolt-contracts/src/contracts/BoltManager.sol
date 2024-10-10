@@ -121,11 +121,10 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
             revert OperatorAlreadyRegistered();
         }
 
-        // Timestamp will be set when we enable the operator below
-        Operator memory operator = Operator(rpc, msg.sender, 0);
+        // Create an already enabled operator
+        Operator memory operator = Operator(rpc, msg.sender, Time.timestamp());
 
         operators.set(operatorAddr, operator);
-        operators.enable(operatorAddr);
     }
 
     /// @notice De-registers an operator from Bolt. Only callable by a supported middleware contract.

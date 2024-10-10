@@ -151,27 +151,26 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUp
     // ========= EIGENLAYER MIDDLEWARE LOGIC =========
 
     /// @notice Allow an operator to signal opt-in to Bolt Protocol.
-    /// @param operator The operator address to signal opt-in for.
     /// @dev This requires calling the EigenLayer AVS Directory contract to register the operator.
-    /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator
+    /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator.
+    /// The msg.sender of this call will be the operator address.
     function registerOperator(
-        address operator,
         string calldata rpc,
         ISignatureUtils.SignatureWithSaltAndExpiry calldata operatorSignature
     ) public {
-        if (boltManager.isOperator(operator)) {
+        if (boltManager.isOperator(msg.sender)) {
             revert AlreadyRegistered();
         }
 
-        if (!DELEGATION_MANAGER.isOperator(operator)) {
+        if (!DELEGATION_MANAGER.isOperator(msg.sender)) {
             revert NotOperator();
         }
 
         // Register the operator to the AVS directory for this AVS
-        AVS_DIRECTORY.registerOperatorToAVS(operator, operatorSignature);
+        AVS_DIRECTORY.registerOperatorToAVS(msg.sender, operatorSignature);
 
         // Register the operator in the manager
-        boltManager.registerOperator(operator, rpc);
+        boltManager.registerOperator(msg.sender, rpc);
     }
 
     /// @notice Deregister an EigenLayer layer operator from working in Bolt Protocol.

@@ -154,7 +154,9 @@ contract BoltManagerEigenLayerTest is Test {
         emit IAVSDirectory.OperatorAVSRegistrationStatusUpdated(
             operator, address(middleware), IAVSDirectory.OperatorAVSRegistrationStatus.REGISTERED
         );
-        middleware.registerOperator(operator, "https://bolt-rpc.io", operatorSignature);
+
+        vm.prank(operator);
+        middleware.registerOperator("https://bolt-rpc.io", operatorSignature);
 
         assertEq(manager.isOperatorEnabled(operator), true);
 

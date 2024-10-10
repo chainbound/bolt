@@ -164,21 +164,23 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
     // ========= SYMBIOTIC MIDDLEWARE LOGIC =========
 
     /// @notice Allow an operator to signal opt-in to Bolt Protocol.
-    /// @param operator The operator address to signal opt-in for.
-    function registerOperator(address operator, string calldata rpc) public {
-        if (boltManager.isOperator(operator)) {
+    /// msg.sender must be an operator in the Symbiotic network.
+    function registerOperator(
+        string calldata rpc
+    ) public {
+        if (boltManager.isOperator(msg.sender)) {
             revert AlreadyRegistered();
         }
 
-        if (!IRegistry(OPERATOR_REGISTRY).isEntity(operator)) {
+        if (!IRegistry(OPERATOR_REGISTRY).isEntity(msg.sender)) {
             revert NotOperator();
         }
 
-        if (!IOptInService(OPERATOR_NET_OPTIN).isOptedIn(operator, BOLT_SYMBIOTIC_NETWORK)) {
+        if (!IOptInService(OPERATOR_NET_OPTIN).isOptedIn(msg.sender, BOLT_SYMBIOTIC_NETWORK)) {
             revert OperatorNotOptedIn();
         }
 
-        boltManager.registerOperator(operator, rpc);
+        boltManager.registerOperator(msg.sender, rpc);
     }
 
     /// @notice Deregister a Symbiotic operator from working in Bolt Protocol.
