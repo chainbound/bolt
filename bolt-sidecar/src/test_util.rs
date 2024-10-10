@@ -19,7 +19,7 @@ use secp256k1::Message;
 use tracing::warn;
 
 use crate::{
-    config::signing::BlsSecretKey,
+    config::signing::{BlsSecretKey, JwtSecretConfig},
     crypto::{ecdsa::SignableECDSA, SignableBLS},
     primitives::{
         CommitmentRequest, ConstraintsMessage, DelegationMessage, FullTransaction,
@@ -80,9 +80,12 @@ pub(crate) async fn try_get_beacon_api_url() -> Option<&'static str> {
 ///
 /// If any of the above values can't be found, the function will return `None`.
 pub(crate) async fn get_test_config() -> Option<Opts> {
+    let sk = BlsSecretKey::random_bls_secret().to_string();
+    println!("sk: {}", sk);
+    std::env::set_var("BOLT_SIDECAR_PRIVATE_KEY", BlsSecretKey::random_bls_secret().to_string());
+
     let _ = dotenvy::dotenv();
 
-    std::env::set_var("BOLT_SIDECAR_PRIVATE_KEY", BlsSecretKey::random_bls_secret().to_string());
     let mut opts = Opts::parse();
 
     let Some(jwt) = std::env::var("ENGINE_JWT").ok() else {
@@ -99,7 +102,7 @@ pub(crate) async fn get_test_config() -> Option<Opts> {
     if let Some(url) = try_get_engine_api_url().await {
         opts.engine_api_url = url.parse().expect("valid URL");
     }
-    opts.jwt_hex = jwt;
+    opts.jwt_hex = JwtSecretConfig(jwt);
 
     Some(opts)
 }
