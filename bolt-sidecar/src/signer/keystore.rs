@@ -62,14 +62,13 @@ impl KeystoreSigner {
     }
 }
 
-/// Returns the paths of all the keystore files provided an optional `keys_path`, which defaults to `keys`.
-/// `keys_path` is a relative path from the root of this cargo project
+/// Returns the paths of all the keystore files provided an optional `keys_path`, which defaults to
+/// `keys`. `keys_path` is a relative path from the root of this cargo project
 /// We're expecting a directory structure like:
 /// ${keys_path}/
 /// -- 0x1234.../validator.json
 /// -- 0x5678.../validator.json
 /// -- ...
-///
 fn keystore_paths(keys_path: Option<&str>) -> Result<Vec<PathBuf>, eyre::Error> {
     // Create the path to the keystore directory, starting from the root of the project
     let project_root = env!("CARGO_MANIFEST_DIR");
