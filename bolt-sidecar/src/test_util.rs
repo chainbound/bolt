@@ -1,3 +1,4 @@
+use crate::{signer::local::random_bls_secret, ChainConfig};
 use alloy::{
     eips::eip2718::Encodable2718,
     network::{EthereumWallet, TransactionBuilder},
@@ -24,8 +25,8 @@ use crate::{
         CommitmentRequest, ConstraintsMessage, DelegationMessage, FullTransaction,
         InclusionRequest, RevocationMessage, SignedConstraints, SignedDelegation, SignedRevocation,
     },
-    signer::local::{random_bls_secret, Signer as BlsSigner},
-    ChainConfig, Opts,
+    signer::local::LocalSigner,
+    Opts,
 };
 
 /// The URL of the test execution client HTTP API.
@@ -195,7 +196,7 @@ fn random_constraints(count: usize) -> Vec<FullTransaction> {
 
 #[tokio::test]
 async fn generate_test_data_kurtosis() {
-    let signer = BlsSigner::new(random_bls_secret(), ChainConfig::kurtosis(0, 0));
+    let signer = LocalSigner::new(random_bls_secret(), ChainConfig::kurtosis(0, 0));
     let pk = signer.pubkey();
 
     println!("Validator Public Key: {}", hex::encode(pk.as_ref()));

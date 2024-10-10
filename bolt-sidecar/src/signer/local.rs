@@ -12,12 +12,12 @@ pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_"
 
 /// A BLS signer that can sign any type that implements the [`SignableBLS`] trait.
 #[derive(Clone)]
-pub struct Signer {
+pub struct LocalSigner {
     chain: ChainConfig,
     key: BlsSecretKey,
 }
 
-impl Debug for Signer {
+impl Debug for LocalSigner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Signer")
             .field("pubkey", &self.pubkey())
@@ -26,7 +26,7 @@ impl Debug for Signer {
     }
 }
 
-impl Signer {
+impl LocalSigner {
     /// Create a new signer with the given BLS secret key.
     pub fn new(key: BlsSecretKey, chain: ChainConfig) -> Self {
         Self { key, chain }
@@ -108,13 +108,15 @@ pub fn random_bls_secret() -> BlsSecretKey {
 
 #[cfg(test)]
 mod tests {
-    use crate::{crypto::bls::SignableBLS, signer::local::Signer, test_util::TestSignableData};
+    use crate::{
+        crypto::bls::SignableBLS, signer::local::LocalSigner, test_util::TestSignableData,
+    };
 
     use rand::Rng;
 
     #[tokio::test]
     async fn test_bls_signer() {
-        let signer = Signer::random();
+        let signer = LocalSigner::random();
 
         // Generate random data for the test
         let mut rng = rand::thread_rng();

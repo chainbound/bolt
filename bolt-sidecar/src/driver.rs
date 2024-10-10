@@ -21,7 +21,7 @@ use crate::{
         CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
         SignedConstraints, TransactionExt,
     },
-    signer::local::Signer,
+    signer::local::LocalSigner,
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
     telemetry::ApiMetrics,
@@ -67,7 +67,7 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
         let state_client = StateClient::new(opts.execution_api_url.clone());
 
         // Constraints are signed with a BLS private key
-        let constraint_signer = SignerBLSEnum::Local(Signer::new(
+        let constraint_signer = SignerBLSEnum::Local(LocalSigner::new(
             opts.signing.private_key.clone().expect("local signer").0,
             opts.chain,
         ));

@@ -527,7 +527,7 @@ pub struct StateUpdate {
 
 #[cfg(test)]
 mod tests {
-    use crate::{builder::template::StateDiff, signer::local::Signer};
+    use crate::{builder::template::StateDiff, signer::local::LocalSigner};
     use std::{num::NonZero, str::FromStr, time::Duration};
 
     use alloy::{
@@ -703,7 +703,7 @@ mod tests {
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
-        let signer = Signer::random();
+        let signer = LocalSigner::random();
 
         // initialize the state by updating the head once
         let slot = client.get_head().await?;
@@ -985,7 +985,7 @@ mod tests {
 
         assert!(state.validate_request(&mut request).await.is_ok());
 
-        let bls_signer = Signer::random();
+        let bls_signer = LocalSigner::random();
         let message = ConstraintsMessage::build(Default::default(), inclusion_request);
         let signature = bls_signer.sign_commit_boost_root(message.digest()).unwrap();
         let signed_constraints = SignedConstraints { message, signature };
@@ -1033,7 +1033,7 @@ mod tests {
 
         assert!(state.validate_request(&mut request).await.is_ok());
 
-        let bls_signer = Signer::random();
+        let bls_signer = LocalSigner::random();
         let message = ConstraintsMessage::build(Default::default(), inclusion_request);
         let signature = bls_signer.sign_commit_boost_root(message.digest()).unwrap();
         let signed_constraints = SignedConstraints { message, signature };
@@ -1080,7 +1080,7 @@ mod tests {
 
         assert!(state.validate_request(&mut request).await.is_ok());
 
-        let bls_signer = Signer::random();
+        let bls_signer = LocalSigner::random();
         let message = ConstraintsMessage::build(Default::default(), inclusion_request);
         let signature = bls_signer.sign_commit_boost_root(message.digest()).unwrap();
         let signed_constraints = SignedConstraints { message, signature };
