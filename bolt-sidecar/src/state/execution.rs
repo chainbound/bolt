@@ -13,7 +13,7 @@ use tracing::{debug, trace};
 use crate::{
     builder::BlockTemplate,
     common::{calculate_max_basefee, max_transaction_cost, validate_transaction},
-    config::limits::LimitsOpts as Limits,
+    config::limits::LimitsOpts,
     primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot},
 };
 
@@ -154,7 +154,7 @@ pub struct ExecutionState<C> {
     /// The chain ID of the chain (constant).
     chain_id: u64,
     /// The limits set for the sidecar.
-    limits: Limits,
+    limits: LimitsOpts,
     /// The KZG settings for validating blobs.
     kzg_settings: EnvKzgSettings,
     /// The state fetcher client.
@@ -184,7 +184,7 @@ impl Default for ValidationParams {
 impl<C: StateFetcher> ExecutionState<C> {
     /// Creates a new state with the given client, initializing the
     /// basefee and head block number.
-    pub async fn new(client: C, limits: Limits) -> Result<Self, TransportError> {
+    pub async fn new(client: C, limits: LimitsOpts) -> Result<Self, TransportError> {
         let (basefee, blob_basefee, block_number, chain_id) = tokio::try_join!(
             client.get_basefee(None),
             client.get_blob_basefee(None),
@@ -557,7 +557,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -582,7 +582,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -620,7 +620,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -669,7 +669,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -699,7 +699,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -761,7 +761,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits = Limits {
+        let limits = LimitsOpts {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
             min_priority_fee: NonZero::new(200000000).unwrap(), // 0.2 gwei
@@ -800,7 +800,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits = Limits {
+        let limits = LimitsOpts {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
             min_priority_fee: NonZero::new(2000000000).unwrap(),
@@ -831,7 +831,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits = Limits {
+        let limits = LimitsOpts {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
             min_priority_fee: NonZero::new(2 * GWEI_TO_WEI as u128).unwrap(),
@@ -873,7 +873,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits = Limits {
+        let limits = LimitsOpts {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
             min_priority_fee: NonZero::new(2 * GWEI_TO_WEI as u128).unwrap(),
@@ -920,7 +920,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits = Limits {
+        let limits = LimitsOpts {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
             min_priority_fee: NonZero::new(2 * GWEI_TO_WEI as u128).unwrap(),
@@ -963,7 +963,7 @@ mod tests {
         let client = StateClient::new(anvil.endpoint_url());
         let provider = ProviderBuilder::new().on_http(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -1016,7 +1016,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -1058,7 +1058,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits: Limits = Limits {
+        let limits: LimitsOpts = LimitsOpts {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
             min_priority_fee: NonZero::new(1000000000).unwrap(),
@@ -1109,7 +1109,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -1136,7 +1136,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -1166,7 +1166,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
