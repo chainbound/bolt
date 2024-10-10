@@ -1,6 +1,7 @@
 ### About
 
-This directory is intended to be used as the folder to place ERC-2335 keystores.
+This directory is intended to be used as the folder to place ERC-2335 keystores
+files.
 
-It is assumed that the keystore files are placed in a directory named after the
-public key, and such file is called `voting_keystore.json`.
+It is assumed that each keystore file has a `.json` extension and is is placed
+in a directory named after the public key it corresponds to.
