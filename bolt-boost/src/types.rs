@@ -77,7 +77,6 @@ impl ConstraintsMessage {
 
         for bytes in &self.transactions {
             let tx = TxEnvelope::decode_2718(&mut bytes.as_ref())?;
-
             hasher.update(tx.tx_hash());
         }
 
@@ -102,48 +101,49 @@ impl TryFrom<ConstraintsMessage> for ConstraintsWithProofData {
             .iter()
             .map(|tx| {
                 let envelope = TxEnvelope::decode_2718(&mut tx.as_ref())?;
-                let tx_hash = *envelope.tx_hash();
+                let tx_hash_tree_root = calculate_tx_hash_tree_root(&envelope, tx)?;
 
-                let root = match envelope {
-                    // For type 3 txs, take the hash tree root of the inner tx (EIP-4844)
-                    TxEnvelope::Eip4844(tx) => match tx.tx() {
-                        TxEip4844Variant::TxEip4844(tx) => {
-                            let mut out = Vec::new();
-                            out.put_u8(0x03);
-                            tx.encode(&mut out);
-
-                            tree_hash::TreeHash::tree_hash_root(&Transaction::<
-                                <DenebSpec as EthSpec>::MaxBytesPerTransaction,
-                            >::from(
-                                out
-                            ))
-                        }
-                        TxEip4844Variant::TxEip4844WithSidecar(tx) => {
-                            use alloy_rlp::Encodable;
-                            let mut out = Vec::new();
-                            out.put_u8(0x03);
-                            tx.tx.encode(&mut out);
-
-                            tree_hash::TreeHash::tree_hash_root(&Transaction::<
-                                <DenebSpec as EthSpec>::MaxBytesPerTransaction,
-                            >::from(
-                                out
-                            ))
-                        }
-                    },
-                    // For other transaction types, take the hash tree root of the whole tx
-                    _ => tree_hash::TreeHash::tree_hash_root(&Transaction::<
-                        <DenebSpec as EthSpec>::MaxBytesPerTransaction,
-                    >::from(
-                        tx.to_vec()
-                    )),
-                };
-
-                Ok((tx_hash, root))
+                Ok((*envelope.tx_hash(), tx_hash_tree_root))
             })
             .collect::<Result<Vec<_>, Eip2718Error>>()?;
 
         Ok(Self { message: value, proof_data: transactions })
+    }
+}
+
+/// Calculate the SSZ hash tree root of a transaction, starting from its enveloped form.
+/// For type 3 transactions, the hash tree root of the inner transaction is taken (without blobs).
+fn calculate_tx_hash_tree_root(
+    envelope: &TxEnvelope,
+    raw_tx: &Bytes,
+) -> Result<B256, Eip2718Error> {
+    match envelope {
+        // For type 3 txs, take the hash tree root of the inner tx (EIP-4844)
+        TxEnvelope::Eip4844(tx) => match tx.tx() {
+            TxEip4844Variant::TxEip4844(tx) => {
+                let mut out = Vec::new();
+                out.put_u8(0x03);
+                tx.encode(&mut out);
+
+                Ok(tree_hash::TreeHash::tree_hash_root(&Transaction::<
+                    <DenebSpec as EthSpec>::MaxBytesPerTransaction,
+                >::from(out)))
+            }
+            TxEip4844Variant::TxEip4844WithSidecar(tx) => {
+                use alloy_rlp::Encodable;
+                let mut out = Vec::new();
+                out.put_u8(0x03);
+                tx.tx.encode(&mut out);
+
+                Ok(tree_hash::TreeHash::tree_hash_root(&Transaction::<
+                    <DenebSpec as EthSpec>::MaxBytesPerTransaction,
+                >::from(out)))
+            }
+        },
+        // For other transaction types, take the hash tree root of the whole tx
+        _ => Ok(tree_hash::TreeHash::tree_hash_root(&Transaction::<
+            <DenebSpec as EthSpec>::MaxBytesPerTransaction,
+        >::from(raw_tx.to_vec()))),
     }
 }
 
