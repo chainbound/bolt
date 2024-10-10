@@ -12,6 +12,7 @@ use eyre::eyre;
 
 use lighthouse_bls::Keypair;
 use lighthouse_eth2_keystore::Keystore;
+use ssz::Encode;
 
 use crate::crypto::bls::BLSSig;
 
@@ -50,11 +51,11 @@ impl KeystoreSigner {
         root: [u8; 32],
         public_key: [u8; BLS_PUBLIC_KEY_BYTES_LEN],
     ) -> eyre::Result<BLSSig> {
-        // NOTE: is this a good comparison?
         let sk = self
             .keypairs
             .iter()
-            .find(|kp| kp.pk.as_hex_string() == hex::encode(public_key))
+            // NOTE: need to check if this method returns just the raw bytes
+            .find(|kp| kp.pk.as_ssz_bytes() == public_key.as_ref())
             .ok_or(eyre!("could not find private key associated to public key"))?;
 
         let sig = hex::decode(sk.sk.sign(root.into()).to_string())?;
