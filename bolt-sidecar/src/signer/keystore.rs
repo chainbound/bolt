@@ -14,17 +14,18 @@ use lighthouse_bls::Keypair;
 use lighthouse_eth2_keystore::Keystore;
 use ssz::Encode;
 
-use crate::crypto::bls::BLSSig;
+use crate::{builder::signature::compute_signing_root, crypto::bls::BLSSig, ChainConfig};
 
 pub const KEYSTORES_DEFAULT_PATH: &str = "keys";
 
 #[derive(Clone)]
 pub struct KeystoreSigner {
     keypairs: Vec<Keypair>,
+    chain: ChainConfig,
 }
 
 impl KeystoreSigner {
-    pub fn new(keys_path: Option<&str>, password: &[u8]) -> eyre::Result<Self> {
+    pub fn new(keys_path: Option<&str>, password: &[u8], chain: ChainConfig) -> eyre::Result<Self> {
         let keystores_paths = keystore_paths(keys_path)?;
         let mut keypairs = Vec::with_capacity(keystores_paths.len());
 
@@ -43,7 +44,7 @@ impl KeystoreSigner {
             keypairs.push(keypair);
         }
 
-        Ok(Self { keypairs })
+        Ok(Self { keypairs, chain })
     }
 
     pub fn sign_commit_boost_root(
@@ -51,14 +52,25 @@ impl KeystoreSigner {
         root: [u8; 32],
         public_key: [u8; BLS_PUBLIC_KEY_BYTES_LEN],
     ) -> eyre::Result<BLSSig> {
+        self.sign_root(root, public_key, self.chain.commit_boost_domain())
+    }
+
+    fn sign_root(
+        &self,
+        root: [u8; 32],
+        public_key: [u8; BLS_PUBLIC_KEY_BYTES_LEN],
+        domain: [u8; 32],
+    ) -> eyre::Result<BLSSig> {
         let sk = self
             .keypairs
             .iter()
-            // NOTE: need to check if this method returns just the raw bytes
+            // `as_ssz_bytes` returns the raw bytes we need
             .find(|kp| kp.pk.as_ssz_bytes() == public_key.as_ref())
             .ok_or(eyre!("could not find private key associated to public key"))?;
 
-        let sig = hex::decode(sk.sk.sign(root.into()).to_string())?;
+        let signing_root = compute_signing_root(root, domain);
+
+        let sig = sk.sk.sign(signing_root.into()).as_ssz_bytes();
         let sig =
             BLSSig::try_from(sig.as_slice()).map_err(|_| eyre!("invalid signature length"))?;
 

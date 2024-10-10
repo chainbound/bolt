@@ -89,6 +89,7 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
         let keystore_signer = SignerBLS::Keystore(KeystoreSigner::new(
             None,
             opts.signing.keystore_password.as_ref().expect("keystore password").as_ref(),
+            opts.chain,
         )?);
 
         // Commitment responses are signed with a regular Ethereum wallet private key.
