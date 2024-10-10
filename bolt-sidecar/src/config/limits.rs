@@ -7,7 +7,7 @@ pub const DEFAULT_MAX_COMMITTED_GAS: u64 = 10_000_000;
 pub const DEFAULT_MIN_PRIORITY_FEE: u128 = 1_000_000_000; // 1 Gwei
 
 /// Limits for the sidecar.
-#[derive(Debug, Parser, Clone)]
+#[derive(Debug, Parser, Clone, Copy)]
 pub struct LimitsOpts {
     /// Max number of commitments to accept per block
     #[clap(long, env = "BOLT_SIDECAR_MAX_COMMITMENTS",
