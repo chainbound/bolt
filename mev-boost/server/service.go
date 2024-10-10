@@ -112,6 +112,8 @@ type BoostService struct {
 	httpClientGetPayload       http.Client
 	httpClientRegVal           http.Client
 	httpClientSubmitConstraint http.Client
+	httpClientDelegate         http.Client
+	httpClientRevoke           http.Client
 	requestMaxRetries          int
 
 	bids     map[bidRespKey]bidResp // keeping track of bids, to log the originating relay on withholding
@@ -121,7 +123,7 @@ type BoostService struct {
 	slotUIDLock sync.Mutex
 
 	// BOLT: constraint cache
-	constraints *ConstraintCache
+	constraints *ConstraintsCache
 }
 
 // NewBoostService created a new BoostService
@@ -163,10 +165,20 @@ func NewBoostService(opts BoostServiceOpts) (*BoostService, error) {
 			Timeout:       opts.RequestTimeoutSubmitConstraint,
 			CheckRedirect: httpClientDisallowRedirects,
 		},
+		httpClientDelegate: http.Client{
+			// NOTE: using the same timeout as registerValidator
+			Timeout:       opts.RequestTimeoutRegVal,
+			CheckRedirect: httpClientDisallowRedirects,
+		},
+		httpClientRevoke: http.Client{
+			// NOTE: using the same timeout as registerValidator
+			Timeout:       opts.RequestTimeoutRegVal,
+			CheckRedirect: httpClientDisallowRedirects,
+		},
 		requestMaxRetries: opts.RequestMaxRetries,
 
 		// BOLT: Initialize the constraint cache
-		constraints: NewConstraintCache(64),
+		constraints: NewConstraintsCache(64),
 	}, nil
 }
 
@@ -196,12 +208,13 @@ func (m *BoostService) getRouter() http.Handler {
 	r.HandleFunc(pathStatus, m.handleStatus).Methods(http.MethodGet)
 	r.HandleFunc(pathRegisterValidator, m.handleRegisterValidator).Methods(http.MethodPost)
 	r.HandleFunc(pathSubmitConstraint, m.handleSubmitConstraint).Methods(http.MethodPost)
-	// TODO: manage the switch between the endpoint with and without proofs
-	// with the bolt sidecar proxy instead of using the same response here.
-	// TODO: revert this to m.handleGetHeader
-	r.HandleFunc(pathGetHeader, m.handleGetHeaderWithProofs).Methods(http.MethodGet)
+
+	r.HandleFunc(pathGetHeader, m.handleGetHeader).Methods(http.MethodGet)
 	r.HandleFunc(pathGetHeaderWithProofs, m.handleGetHeaderWithProofs).Methods(http.MethodGet)
 	r.HandleFunc(pathGetPayload, m.handleGetPayload).Methods(http.MethodPost)
+
+	r.HandleFunc(pathDelegate, m.handleDelegate).Methods(http.MethodPost)
+	r.HandleFunc(pathRevoke, m.handleRevoke).Methods(http.MethodPost)
 
 	r.Use(mux.CORSMethodMiddleware(r))
 	loggedRouter := httplogger.LoggingMiddlewareLogrus(m.log, r)
@@ -341,6 +354,94 @@ func (m *BoostService) handleRegisterValidator(w http.ResponseWriter, req *http.
 	m.respondError(w, http.StatusBadGateway, errNoSuccessfulRelayResponse.Error())
 }
 
+func (m *BoostService) handleDelegate(w http.ResponseWriter, req *http.Request) {
+	log := m.log.WithField("method", "delegate")
+	log.Debug("delegate:", req.Body)
+
+	payload := SignedDelegation{}
+	if err := DecodeJSON(req.Body, &payload); err != nil {
+		m.respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	ua := UserAgent(req.Header.Get("User-Agent"))
+	log = log.WithFields(logrus.Fields{
+		"validatorPubkey": payload.Message.ValidatorPubkey.String(),
+		"delegateePubkey": payload.Message.DelegateePubkey.String(),
+		"ua":              ua,
+	})
+
+	relayRespCh := make(chan error, len(m.relays))
+
+	for _, relay := range m.relays {
+		go func(relay RelayEntry) {
+			url := relay.GetURI(pathDelegate)
+			log := log.WithField("url", url)
+
+			_, err := SendHTTPRequest(context.Background(), m.httpClientDelegate, http.MethodPost, url, ua, nil, payload, nil)
+			relayRespCh <- err
+			if err != nil {
+				log.WithError(err).Warn("error calling delegate on relay")
+				return
+			}
+		}(relay)
+	}
+
+	for i := 0; i < len(m.relays); i++ {
+		respErr := <-relayRespCh
+		if respErr == nil {
+			m.respondOK(w, nilResponse)
+			return
+		}
+	}
+
+	m.respondError(w, http.StatusBadGateway, errNoSuccessfulRelayResponse.Error())
+}
+
+func (m *BoostService) handleRevoke(w http.ResponseWriter, req *http.Request) {
+	log := m.log.WithField("method", "revoke")
+	log.Debug("revoke:", req.Body)
+
+	payload := SignedRevocation{}
+	if err := DecodeJSON(req.Body, &payload); err != nil {
+		m.respondError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	ua := UserAgent(req.Header.Get("User-Agent"))
+	log = log.WithFields(logrus.Fields{
+		"validatorPubkey": payload.Message.ValidatorPubkey.String(),
+		"delegateePubkey": payload.Message.DelegateePubkey.String(),
+		"ua":              ua,
+	})
+
+	relayRespCh := make(chan error, len(m.relays))
+
+	for _, relay := range m.relays {
+		go func(relay RelayEntry) {
+			url := relay.GetURI(pathRevoke)
+			log := log.WithField("url", url)
+
+			_, err := SendHTTPRequest(context.Background(), m.httpClientRevoke, http.MethodPost, url, ua, nil, payload, nil)
+			relayRespCh <- err
+			if err != nil {
+				log.WithError(err).Warn("error calling revoke on relay")
+				return
+			}
+		}(relay)
+	}
+
+	for i := 0; i < len(m.relays); i++ {
+		respErr := <-relayRespCh
+		if respErr == nil {
+			m.respondOK(w, nilResponse)
+			return
+		}
+	}
+
+	m.respondError(w, http.StatusBadGateway, errNoSuccessfulRelayResponse.Error())
+}
+
 // verifyInclusionProof verifies the proofs against the constraints, and returns an error if the proofs are invalid.
 func (m *BoostService) verifyInclusionProof(transactionsRoot phase0.Root, proof *InclusionProof, slot uint64) error {
 	log := m.log.WithFields(logrus.Fields{})
@@ -368,38 +469,35 @@ func (m *BoostService) verifyInclusionProof(transactionsRoot phase0.Root, proof 
 
 	// Decode the constraints, and sort them according to the utility function used
 	// TODO: this should be done before verification ideally
-	hashToConstraint := make(HashToConstraintDecoded)
-	for hash, constraint := range inclusionConstraints {
+	hashToTransaction := make(HashToTransactionDecoded)
+	for hash, tx := range inclusionConstraints {
 		transaction := new(gethTypes.Transaction)
-		err := transaction.UnmarshalBinary(constraint.Tx)
+		err := transaction.UnmarshalBinary(*tx)
 		if err != nil {
 			log.WithError(err).Error("error unmarshalling transaction while verifying proofs")
 			return err
 		}
-		hashToConstraint[hash] = &ConstraintDecoded{
-			Tx:    transaction.WithoutBlobTxSidecar(),
-			Index: constraint.Index,
-		}
+		hashToTransaction[hash] = transaction.WithoutBlobTxSidecar()
 	}
 	leaves := make([][]byte, len(inclusionConstraints))
 	indexes := make([]int, len(proof.GeneralizedIndexes))
 
 	for i, hash := range proof.TransactionHashes {
-		constraint, ok := hashToConstraint[gethCommon.Hash(hash)]
-		if constraint == nil || !ok {
+		tx, ok := hashToTransaction[gethCommon.Hash(hash)]
+		if tx == nil || !ok {
 			return errNilConstraint
 		}
 
 		// Compute the hash tree root for the raw preconfirmed transaction
 		// and use it as "Leaf" in the proof to be verified against
-		encoded, err := constraint.Tx.MarshalBinary()
+		encoded, err := tx.MarshalBinary()
 		if err != nil {
 			log.WithError(err).Error("error marshalling transaction without blob tx sidecar")
 			return err
 		}
 
-		tx := Transaction(encoded)
-		txHashTreeRoot, err := tx.HashTreeRoot()
+		txBytes := Transaction(encoded)
+		txHashTreeRoot, err := txBytes.HashTreeRoot()
 		if err != nil {
 			return errInvalidRoot
 		}
@@ -424,19 +522,9 @@ func (m *BoostService) verifyInclusionProof(transactionsRoot phase0.Root, proof 
 
 	if !ok {
 		log.Error("[BOLT]: proof verification failed")
-
-		// BOLT: send event to web demo
-		message := fmt.Sprintf("failed to verify merkle proof for slot %d", slot)
-		EmitBoltDemoEvent(message)
-
 		return errInvalidProofs
 	} else {
 		log.Info(fmt.Sprintf("[BOLT]: merkle proof verified in %s", elapsed))
-
-		// BOLT: send event to web demo
-		// verified merkle proof for tx: %s in %v", proof.TxHash.String(), elapsed)
-		message := fmt.Sprintf("verified merkle proof for slot %d in %v", slot, elapsed)
-		EmitBoltDemoEvent(message)
 	}
 
 	return nil
@@ -451,8 +539,6 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 		"ua":     ua,
 	})
 
-	path := req.URL.Path
-
 	log.Info("submitConstraint")
 
 	payload := BatchedSignedConstraints{}
@@ -464,24 +550,22 @@ func (m *BoostService) handleSubmitConstraint(w http.ResponseWriter, req *http.R
 
 	// Add all constraints to the cache
 	for _, signedConstraints := range payload {
-		constraintMessage := signedConstraints.Message
+		constraintsMessage := signedConstraints.Message
 
-		log.Infof("[BOLT]: adding inclusion constraints to cache. slot = %d, validatorIndex = %d, number of relays = %d", constraintMessage.Slot, constraintMessage.ValidatorIndex, len(m.relays))
+		log.Infof("[BOLT]: adding inclusion constraints to cache. slot = %d, validatorPubkey = %s, number of relays = %d", constraintsMessage.Slot, constraintsMessage.Pubkey.String(), len(m.relays))
 
 		// Add the constraints to the cache.
 		// They will be cleared when we receive a payload for the slot in `handleGetPayload`
-		err := m.constraints.AddInclusionConstraints(constraintMessage.Slot, constraintMessage.Constraints)
+		err := m.constraints.AddInclusionConstraints(constraintsMessage.Slot, constraintsMessage.Transactions)
 		if err != nil {
 			log.WithError(err).Errorf("error adding inclusion constraints to cache")
 			continue
 		}
 
-		log.Infof("[BOLT]: added inclusion constraints to cache. slot = %d, validatorIndex = %d, number of relays = %d", constraintMessage.Slot, constraintMessage.ValidatorIndex, len(m.relays))
+		log.Infof("[BOLT]: added inclusion constraints to cache. slot = %d, validatorPubkey = %s, number of relays = %d", constraintsMessage.Slot, constraintsMessage.Pubkey.String(), len(m.relays))
 	}
 
 	relayRespCh := make(chan error, len(m.relays))
-
-	EmitBoltDemoEvent(fmt.Sprintf("received %d constraints, forwarding to Bolt relays... (path: %s)", len(payload), path))
 
 	for _, relay := range m.relays {
 		go func(relay RelayEntry) {
@@ -768,7 +852,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 		"genesisTime": m.genesisTime,
 		"slotTimeSec": config.SlotTimeSec,
 		"msIntoSlot":  msIntoSlot,
-	}).Infof("getHeader request start - %d milliseconds into slot %d", msIntoSlot, slotUint)
+	}).Infof("getHeaderWithProof request start - %d milliseconds into slot %d", msIntoSlot, slotUint)
 
 	// Add request headers
 	headers := map[string]string{
@@ -789,7 +873,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 			path := fmt.Sprintf("/eth/v1/builder/header_with_proofs/%s/%s/%s", slot, parentHashHex, pubkey)
 			url := relay.GetURI(path)
 			log := log.WithField("url", url)
-			responsePayload := new(BidWithInclusionProofs)
+			responsePayload := new(VersionedSignedBuilderBidWithProofs)
 			code, err := SendHTTPRequest(context.Background(), m.httpClientGetHeader, http.MethodGet, url, ua, headers, nil, responsePayload)
 			if err != nil {
 				log.WithError(err).Warn("error making request to relay")
@@ -805,19 +889,19 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 				return
 			}
 
-			if responsePayload.Bid == nil {
+			if responsePayload.VersionedSignedBuilderBid == nil {
 				log.Warn("Bid in response is nil")
 				return
 			}
 
 			// Skip if payload is empty
-			if responsePayload.Bid.IsEmpty() {
+			if responsePayload.IsEmpty() {
 				log.Warn("Bid is empty")
 				return
 			}
 
 			// Getting the bid info will check if there are missing fields in the response
-			bidInfo, err := parseBidInfo(responsePayload.Bid)
+			bidInfo, err := parseBidInfo(responsePayload.VersionedSignedBuilderBid)
 			if err != nil {
 				log.WithError(err).Warn("error parsing bid info")
 				return
@@ -843,7 +927,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 
 			// Verify the relay signature in the relay response
 			if !config.SkipRelaySignatureCheck {
-				ok, err := checkRelaySignature(responsePayload.Bid, m.builderSigningDomain, relay.PublicKey)
+				ok, err := checkRelaySignature(responsePayload.VersionedSignedBuilderBid, m.builderSigningDomain, relay.PublicKey)
 				if err != nil {
 					log.WithError(err).Error("error verifying relay signature")
 					return
@@ -877,10 +961,10 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 				return
 			}
 
-			// BOLT: verify preconfirmation inclusion proofs. If they don't match, we don't consider the bid to be valid.
+			// BOLT: verify inclusion proofs. If they don't match, we don't consider the bid to be valid.
 			if responsePayload.Proofs != nil {
 				// BOLT: verify the proofs against the constraints. If they don't match, we don't consider the bid to be valid.
-				transactionsRoot, err := responsePayload.Bid.TransactionsRoot()
+				transactionsRoot, err := responsePayload.TransactionsRoot()
 				if err != nil {
 					log.WithError(err).Error("[BOLT]: error getting transaction root")
 					return
@@ -912,7 +996,7 @@ func (m *BoostService) handleGetHeaderWithProofs(w http.ResponseWriter, req *htt
 
 			// Use this relay's response as mev-boost response because it's most profitable
 			log.Infof("new best bid. Has proofs: %v", responsePayload.Proofs != nil)
-			result.response = *responsePayload.Bid
+			result.response = *responsePayload.VersionedSignedBuilderBid
 			result.bidInfo = bidInfo
 			result.t = time.Now()
 		}(relay)

@@ -10,23 +10,130 @@ import (
 
 	fastSsz "github.com/ferranbt/fastssz"
 
+	builderApiBellatrix "github.com/attestantio/go-builder-client/api/bellatrix"
+	builderApiCapella "github.com/attestantio/go-builder-client/api/capella"
+	builderApiDeneb "github.com/attestantio/go-builder-client/api/deneb"
 	builderSpec "github.com/attestantio/go-builder-client/spec"
+	consensusSpec "github.com/attestantio/go-eth2-client/spec"
+
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 )
 
-type BidWithInclusionProofs struct {
-	// The block bid
-	Bid *builderSpec.VersionedSignedBuilderBid `json:"bid"`
-	// The inclusion proofs
-	Proofs *InclusionProof `json:"proofs"`
+// A wrapper struct over `builderSpec.VersionedSignedBuilderBid`
+// to include constraint inclusion proofs
+type VersionedSignedBuilderBidWithProofs struct {
+	Proofs *InclusionProof
+	*builderSpec.VersionedSignedBuilderBid
 }
 
-func (b *BidWithInclusionProofs) String() string {
-	out, err := json.Marshal(b)
-	if err != nil {
-		return err.Error()
+// this is necessary, because the mev-boost-relay deserialization doesn't expect a "Version" and "Data" wrapper object
+// for deserialization. Instead, it tries to decode the object into the "Deneb" version first and if that fails, it tries
+// the "Capella" version. This is a workaround to make the deserialization work.
+//
+// NOTE(bolt): struct embedding of the VersionedSignedBuilderBid is not possible for some reason because it causes the json
+// encoding to omit the `proofs` field. Embedding all of the fields directly does the job.
+func (v *VersionedSignedBuilderBidWithProofs) MarshalJSON() ([]byte, error) {
+	switch v.Version {
+	case consensusSpec.DataVersionBellatrix:
+		return json.Marshal(struct {
+			Message   *builderApiBellatrix.BuilderBid `json:"message"`
+			Signature phase0.BLSSignature             `json:"signature"`
+			Proofs    *InclusionProof                 `json:"proofs"`
+		}{
+			Message:   v.Bellatrix.Message,
+			Signature: v.Bellatrix.Signature,
+			Proofs:    v.Proofs,
+		})
+	case consensusSpec.DataVersionCapella:
+		return json.Marshal(struct {
+			Message   *builderApiCapella.BuilderBid `json:"message"`
+			Signature phase0.BLSSignature           `json:"signature"`
+			Proofs    *InclusionProof               `json:"proofs"`
+		}{
+			Message:   v.Capella.Message,
+			Signature: v.Capella.Signature,
+			Proofs:    v.Proofs,
+		})
+	case consensusSpec.DataVersionDeneb:
+		return json.Marshal(struct {
+			Message   *builderApiDeneb.BuilderBid `json:"message"`
+			Signature phase0.BLSSignature         `json:"signature"`
+			Proofs    *InclusionProof             `json:"proofs"`
+		}{
+			Message:   v.Deneb.Message,
+			Signature: v.Deneb.Signature,
+			Proofs:    v.Proofs,
+		})
 	}
-	return string(out)
+
+	return nil, fmt.Errorf("unknown data version %d", v.Version)
+}
+
+func (v *VersionedSignedBuilderBidWithProofs) UnmarshalJSON(data []byte) error {
+	var err error
+
+	// Try Deneb
+	var deneb struct {
+		Message   *builderApiDeneb.BuilderBid `json:"message"`
+		Signature phase0.BLSSignature         `json:"signature"`
+		Proofs    *InclusionProof             `json:"proofs"`
+	}
+	err = json.Unmarshal(data, &deneb)
+	if err == nil && deneb.Message != nil {
+		v.Proofs = deneb.Proofs
+
+		v.VersionedSignedBuilderBid = &builderSpec.VersionedSignedBuilderBid{}
+		v.Deneb = &builderApiDeneb.SignedBuilderBid{
+			Message:   deneb.Message,
+			Signature: deneb.Signature,
+		}
+		v.Version = consensusSpec.DataVersionDeneb
+		return nil
+	}
+
+	// Try Capella
+	var capella struct {
+		Message   *builderApiCapella.BuilderBid `json:"message"`
+		Signature phase0.BLSSignature           `json:"signature"`
+		Proofs    *InclusionProof               `json:"proofs"`
+	}
+	err = json.Unmarshal(data, &capella)
+	if err == nil && capella.Message != nil {
+		v.Proofs = capella.Proofs
+
+		v.VersionedSignedBuilderBid = &builderSpec.VersionedSignedBuilderBid{}
+		v.Capella = &builderApiCapella.SignedBuilderBid{
+			Message:   capella.Message,
+			Signature: capella.Signature,
+		}
+		v.Version = consensusSpec.DataVersionCapella
+		return nil
+	}
+
+	// Try Bellatrix
+	var bellatrix struct {
+		Message   *builderApiBellatrix.BuilderBid `json:"message"`
+		Signature phase0.BLSSignature             `json:"signature"`
+		Proofs    *InclusionProof                 `json:"proofs"`
+	}
+	err = json.Unmarshal(data, &bellatrix)
+	if err == nil && bellatrix.Message != nil {
+		v.Proofs = bellatrix.Proofs
+
+		v.VersionedSignedBuilderBid = &builderSpec.VersionedSignedBuilderBid{}
+		v.Bellatrix = &builderApiBellatrix.SignedBuilderBid{
+			Message:   bellatrix.Message,
+			Signature: bellatrix.Signature,
+		}
+		v.Version = consensusSpec.DataVersionBellatrix
+		return nil
+	}
+
+	return fmt.Errorf("failed to unmarshal VersionedSignedBuilderBidWithProofs: %v", err)
+}
+
+func (v *VersionedSignedBuilderBidWithProofs) String() string {
+	return JSONStringify(v)
 }
 
 func (p *InclusionProof) String() string {
