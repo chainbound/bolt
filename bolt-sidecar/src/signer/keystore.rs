@@ -15,6 +15,8 @@ use lighthouse_eth2_keystore::Keystore;
 
 use crate::crypto::bls::BLSSig;
 
+pub const KEYSTORES_DEFAULT_PATH: &str = "keys";
+
 #[derive(Clone)]
 pub struct KeystoreSigner {
     keypairs: Vec<Keypair>,
@@ -84,7 +86,7 @@ impl Debug for KeystoreSigner {
 fn keystore_paths(keys_path: Option<&str>) -> Result<Vec<PathBuf>, eyre::Error> {
     // Create the path to the keystore directory, starting from the root of the project
     let project_root = env!("CARGO_MANIFEST_DIR");
-    let keys_path = Path::new(project_root).join(keys_path.unwrap_or("keys"));
+    let keys_path = Path::new(project_root).join(keys_path.unwrap_or(KEYSTORES_DEFAULT_PATH));
 
     let json_extension = OsString::from("json");
 

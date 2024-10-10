@@ -18,7 +18,16 @@ async fn main() -> Result<()> {
     if opts.signing.private_key.is_some() {
         match SidecarDriver::with_local_signer(&opts).await {
             Ok(driver) => driver.run_forever().await,
-            Err(err) => bail!("Failed to initialize the sidecar driver: {:?}", err),
+            Err(err) => {
+                bail!("Failed to initialize the sidecar driver with local signer: {:?}", err)
+            }
+        }
+    } else if opts.signing.keystore_password.is_some() {
+        match SidecarDriver::with_keystore_signer(&opts).await {
+            Ok(driver) => driver.run_forever().await,
+            Err(err) => {
+                bail!("Failed to initialize the sidecar driver with keystore signer: {:?}", err)
+            }
         }
     } else {
         match SidecarDriver::with_commit_boost_signer(&opts).await {

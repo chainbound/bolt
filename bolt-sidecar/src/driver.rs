@@ -21,7 +21,7 @@ use crate::{
         CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
         SignedConstraints, TransactionExt,
     },
-    signer::local::LocalSigner,
+    signer::{keystore::KeystoreSigner, local::LocalSigner},
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
     telemetry::ApiMetrics,
@@ -61,7 +61,7 @@ impl fmt::Debug for SidecarDriver<StateClient, PrivateKeySigner> {
 }
 
 impl SidecarDriver<StateClient, PrivateKeySigner> {
-    /// Create a new sidecar driver with the given [Config] and private key signer.
+    /// Create a new sidecar driver with the given [Opts] and private key signer.
     pub async fn with_local_signer(opts: &Opts) -> eyre::Result<Self> {
         // The default state client simply uses the execution API URL to fetch state updates.
         let state_client = StateClient::new(opts.execution_api_url.clone());
@@ -80,8 +80,27 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
     }
 }
 
+impl SidecarDriver<StateClient, PrivateKeySigner> {
+    /// Create a new sidecar driver with the given [Opts] and keystore signer.
+    pub async fn with_keystore_signer(opts: &Opts) -> eyre::Result<Self> {
+        // The default state client simply uses the execution API URL to fetch state updates.
+        let state_client = StateClient::new(opts.execution_api_url.clone());
+
+        let keystore_signer = SignerBLS::Keystore(KeystoreSigner::new(
+            None,
+            opts.signing.keystore_password.as_ref().expect("keystore password").as_ref(),
+        )?);
+
+        // Commitment responses are signed with a regular Ethereum wallet private key.
+        // This is now generated randomly because slashing is not yet implemented.
+        let commitment_signer = PrivateKeySigner::random();
+
+        Self::from_components(opts, keystore_signer, commitment_signer, state_client).await
+    }
+}
+
 impl SidecarDriver<StateClient, CommitBoostSigner> {
-    /// Create a new sidecar driver with the given [Config] and commit-boost signer.
+    /// Create a new sidecar driver with the given [Opts] and commit-boost signer.
     pub async fn with_commit_boost_signer(opts: &Opts) -> eyre::Result<Self> {
         // The default state client simply uses the execution API URL to fetch state updates.
         let state_client = StateClient::new(opts.execution_api_url.clone());
