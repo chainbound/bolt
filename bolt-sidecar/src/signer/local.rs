@@ -1,10 +1,10 @@
 use std::fmt::Debug;
 
 use blst::{min_pk::Signature, BLST_ERROR};
-use ethereum_consensus::{crypto::PublicKey as BlsPublicKey, deneb::compute_signing_root};
+use ethereum_consensus::{crypto::PublicKey as ClPublicKey, deneb::compute_signing_root};
 
 use crate::{crypto::bls::BLSSig, ChainConfig};
-pub use blst::min_pk::SecretKey as BlsSecretKey;
+pub use blst::min_pk::SecretKey;
 
 /// The BLS Domain Separator used in Ethereum 2.0.
 pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
@@ -13,7 +13,7 @@ pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_"
 #[derive(Clone)]
 pub struct LocalSigner {
     chain: ChainConfig,
-    key: BlsSecretKey,
+    key: SecretKey,
 }
 
 impl Debug for LocalSigner {
@@ -27,20 +27,14 @@ impl Debug for LocalSigner {
 
 impl LocalSigner {
     /// Create a new signer with the given BLS secret key.
-    pub fn new(key: BlsSecretKey, chain: ChainConfig) -> Self {
+    pub fn new(key: SecretKey, chain: ChainConfig) -> Self {
         Self { key, chain }
     }
 
-    /// Create a signer with a random BLS key configured for Mainnet for testing.
-    #[cfg(test)]
-    pub fn random() -> Self {
-        Self { key: random_bls_secret(), chain: ChainConfig::mainnet() }
-    }
-
     /// Get the public key of the signer.
-    pub fn pubkey(&self) -> BlsPublicKey {
+    pub fn pubkey(&self) -> ClPublicKey {
         let pk = self.key.sk_to_pk();
-        BlsPublicKey::try_from(pk.to_bytes().as_ref()).unwrap()
+        ClPublicKey::try_from(pk.to_bytes().as_ref()).unwrap()
     }
 
     /// Sign an SSZ object root with the Application Builder domain.
@@ -97,14 +91,14 @@ impl LocalSigner {
     }
 }
 
-/// Generate a random BLS secret key.
 #[cfg(test)]
-pub fn random_bls_secret() -> BlsSecretKey {
-    use rand::RngCore;
-    let mut rng = rand::thread_rng();
-    let mut ikm = [0u8; 32];
-    rng.fill_bytes(&mut ikm);
-    BlsSecretKey::key_gen(&ikm, &[]).unwrap()
+impl LocalSigner {
+    /// Create a signer with a random BLS key configured for Mainnet for testing.
+    pub fn random() -> Self {
+        use crate::common::BlsSecretKeyWrapper;
+
+        Self { key: BlsSecretKeyWrapper::random().0, chain: ChainConfig::mainnet() }
+    }
 }
 
 #[cfg(test)]

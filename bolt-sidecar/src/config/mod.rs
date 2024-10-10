@@ -1,7 +1,6 @@
 use alloy::primitives::Address;
 use clap::Parser;
 use reqwest::Url;
-use signing::{BlsSecretKey, JwtSecretConfig};
 
 pub mod validator_indexes;
 pub use validator_indexes::ValidatorIndexes;
@@ -17,6 +16,8 @@ use telemetry::TelemetryOpts;
 
 pub mod limits;
 use limits::LimitsOpts;
+
+use crate::common::{BlsSecretKeyWrapper, JwtSecretConfig};
 
 /// Default port for the JSON-RPC server exposed by the sidecar.
 pub const DEFAULT_RPC_PORT: u16 = 8000;
@@ -67,8 +68,8 @@ pub struct Opts {
     /// Secret BLS key to sign fallback payloads with
     /// (If not provided, a random key will be used)
     #[clap(long, env = "BOLT_SIDECAR_BUILDER_PRIVATE_KEY",
-        default_value_t = BlsSecretKey::random_bls_secret())]
-    pub builder_private_key: BlsSecretKey,
+        default_value_t = BlsSecretKeyWrapper::random())]
+    pub builder_private_key: BlsSecretKeyWrapper,
     /// Operating limits for the sidecar
     #[clap(flatten)]
     pub limits: LimitsOpts,

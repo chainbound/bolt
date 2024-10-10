@@ -9,7 +9,7 @@ use payload_builder::FallbackPayloadBuilder;
 use signature::sign_builder_message;
 
 use crate::{
-    config::signing::BlsSecretKey,
+    common::BlsSecretKeyWrapper,
     primitives::{
         BuilderBid, GetPayloadResponse, PayloadAndBid, PayloadAndBlobs, SignedBuilderBid,
     },
@@ -65,7 +65,7 @@ pub enum BuilderError {
 pub struct LocalBuilder {
     /// BLS credentials for the local builder. We use this to sign the
     /// payload bid submissions built by the sidecar.
-    secret_key: BlsSecretKey,
+    secret_key: BlsSecretKeyWrapper,
     /// Chain configuration
     /// (necessary for signing messages with the correct domain)
     chain: ChainConfig,

@@ -19,7 +19,7 @@ use secp256k1::Message;
 use tracing::warn;
 
 use crate::{
-    config::signing::{BlsSecretKey, JwtSecretConfig},
+    common::{BlsSecretKeyWrapper, JwtSecretConfig},
     crypto::{ecdsa::SignableECDSA, SignableBLS},
     primitives::{
         CommitmentRequest, ConstraintsMessage, DelegationMessage, FullTransaction,
@@ -80,9 +80,9 @@ pub(crate) async fn try_get_beacon_api_url() -> Option<&'static str> {
 ///
 /// If any of the above values can't be found, the function will return `None`.
 pub(crate) async fn get_test_config() -> Option<Opts> {
-    let sk = BlsSecretKey::random_bls_secret().to_string();
+    let sk = BlsSecretKeyWrapper::random().to_string();
     println!("sk: {}", sk);
-    std::env::set_var("BOLT_SIDECAR_PRIVATE_KEY", BlsSecretKey::random_bls_secret().to_string());
+    std::env::set_var("BOLT_SIDECAR_PRIVATE_KEY", BlsSecretKeyWrapper::random().to_string());
 
     let _ = dotenvy::dotenv();
 
