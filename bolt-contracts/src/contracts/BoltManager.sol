@@ -113,6 +113,62 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
         return operators.contains(operator);
     }
 
+    /// @notice Get the status of multiple proposers, given their pubkey hashes.
+    /// @param pubkeyHashes The pubkey hashes of the proposers to get the status for.
+    /// @return statuses The statuses of the proposers, including their operator and active stake.
+    function getProposersStatus(
+        bytes32[] calldata pubkeyHashes
+    ) public view returns (IBoltValidators.ProposerStatus[] memory statuses) {
+        statuses = new IBoltValidators.ProposerStatus[](pubkeyHashes.length);
+        for (uint256 i = 0; i < pubkeyHashes.length; ++i) {
+            statuses[i] = getProposerStatus(pubkeyHashes[i]);
+        }
+    }
+
+    /// @notice Get the status of a proposer, given their pubkey hash.
+    /// @param pubkeyHash The pubkey hash of the proposer to get the status for.
+    /// @return status The status of the proposer, including their operator and active stake.
+    function getProposerStatus(
+        bytes32 pubkeyHash
+    ) public view returns (IBoltValidators.ProposerStatus memory status) {
+        if (pubkeyHash == bytes32(0)) {
+            revert InvalidQuery();
+        }
+
+        uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
+        IBoltValidators.Validator memory validator = validators.getValidatorByPubkeyHash(pubkeyHash);
+
+        Operator memory operator = operators.get(validator.authorizedOperator);
+
+        status.pubkeyHash = pubkeyHash;
+        status.active = validator.exists;
+        status.operator = validator.authorizedOperator;
+        status.operatorRPC = operator.rpc;
+
+        (uint48 enabledTime, uint48 disabledTime) = operators.getTimes(validator.authorizedOperator);
+        if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
+            return status;
+        }
+
+        (status.collaterals, status.amounts) =
+            IBoltMiddleware(operator.middleware).getOperatorCollaterals(validator.authorizedOperator);
+
+        return status;
+    }
+
+    /// @notice Get the total amount staked of a given collateral asset.
+    function getTotalStake(
+        address collateral
+    ) public view returns (uint256 amount) {
+        // Loop over all of the operators, get their middleware, and retrieve their staked amount.
+        for (uint256 i = 0; i < operators.length(); ++i) {
+            (address operator, IBoltManager.Operator memory operatorData) = operators.at(i);
+            amount += IBoltMiddleware(operatorData.middleware).getOperatorStake(operator, collateral);
+        }
+
+        return amount;
+    }
+
     // ========= OPERATOR FUNCTIONS ====== //
 
     /// @notice Registers an operator with Bolt. Only callable by a supported middleware contract.
@@ -170,49 +226,6 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
 
         (uint48 enabledTime, uint48 disabledTime) = operators.getTimes(operator);
         return enabledTime != 0 && disabledTime == 0;
-    }
-
-    /// @notice Get the status of multiple proposers, given their pubkey hashes.
-    /// @param pubkeyHashes The pubkey hashes of the proposers to get the status for.
-    /// @return statuses The statuses of the proposers, including their operator and active stake.
-    function getProposersStatus(
-        bytes32[] calldata pubkeyHashes
-    ) public view returns (IBoltValidators.ProposerStatus[] memory statuses) {
-        statuses = new IBoltValidators.ProposerStatus[](pubkeyHashes.length);
-        for (uint256 i = 0; i < pubkeyHashes.length; ++i) {
-            statuses[i] = getProposerStatus(pubkeyHashes[i]);
-        }
-    }
-
-    /// @notice Get the status of a proposer, given their pubkey hash.
-    /// @param pubkeyHash The pubkey hash of the proposer to get the status for.
-    /// @return status The status of the proposer, including their operator and active stake.
-    function getProposerStatus(
-        bytes32 pubkeyHash
-    ) public view returns (IBoltValidators.ProposerStatus memory status) {
-        if (pubkeyHash == bytes32(0)) {
-            revert InvalidQuery();
-        }
-
-        uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
-        IBoltValidators.Validator memory validator = validators.getValidatorByPubkeyHash(pubkeyHash);
-
-        Operator memory operator = operators.get(validator.authorizedOperator);
-
-        status.pubkeyHash = pubkeyHash;
-        status.active = validator.exists;
-        status.operator = validator.authorizedOperator;
-        status.operatorRPC = operator.rpc;
-
-        (uint48 enabledTime, uint48 disabledTime) = operators.getTimes(validator.authorizedOperator);
-        if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
-            return status;
-        }
-
-        (status.collaterals, status.amounts) =
-            IBoltMiddleware(operator.middleware).getOperatorCollaterals(validator.authorizedOperator);
-
-        return status;
     }
 
     // ========= ADMIN FUNCTIONS ========= //
