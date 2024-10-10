@@ -26,7 +26,7 @@ use crate::{
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
     telemetry::ApiMetrics,
     BuilderProxyConfig, CommitBoostSigner, ConstraintsApi, ConstraintsClient, LocalBuilder, Opts,
-    SignerBLSEnum,
+    SignerBLS,
 };
 
 /// The driver for the sidecar, responsible for managing the main event loop.
@@ -34,7 +34,7 @@ pub struct SidecarDriver<C, ECDSA> {
     head_tracker: HeadTracker,
     execution: ExecutionState<C>,
     consensus: ConsensusState,
-    constraint_signer: SignerBLSEnum,
+    constraint_signer: SignerBLS,
     commitment_signer: ECDSA,
     local_builder: LocalBuilder,
     constraints_client: ConstraintsClient,
@@ -67,7 +67,7 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
         let state_client = StateClient::new(opts.execution_api_url.clone());
 
         // Constraints are signed with a BLS private key
-        let constraint_signer = SignerBLSEnum::Local(LocalSigner::new(
+        let constraint_signer = SignerBLS::Local(LocalSigner::new(
             opts.signing.private_key.clone().expect("local signer").0,
             opts.chain,
         ));
@@ -95,7 +95,7 @@ impl SidecarDriver<StateClient, CommitBoostSigner> {
         )
         .await?;
 
-        let cb_bls_signer = SignerBLSEnum::CommitBoost(commit_boost_signer.clone());
+        let cb_bls_signer = SignerBLS::CommitBoost(commit_boost_signer.clone());
 
         // Commitment responses are signed with commit-boost signer
         let commitment_signer = commit_boost_signer.clone();
@@ -108,7 +108,7 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
     /// Create a new sidecar driver with the given components
     pub async fn from_components(
         opts: &Opts,
-        constraint_signer: SignerBLSEnum,
+        constraint_signer: SignerBLS,
         commitment_signer: ECDSA,
         fetcher: C,
     ) -> eyre::Result<Self> {
@@ -231,9 +231,9 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
         let slot = inclusion_request.slot;
 
         let pubkey = match self.constraint_signer {
-            SignerBLSEnum::Local(ref signer) => signer.pubkey(),
-            SignerBLSEnum::CommitBoost(ref signer) => signer.pubkey(),
-            SignerBLSEnum::Keystore(_) => validator_pubkey.clone(),
+            SignerBLS::Local(ref signer) => signer.pubkey(),
+            SignerBLS::CommitBoost(ref signer) => signer.pubkey(),
+            SignerBLS::Keystore(_) => validator_pubkey.clone(),
         };
 
         // NOTE: we iterate over the transactions in the request and generate a signed constraint
@@ -246,11 +246,9 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
             let digest = message.digest();
 
             let signature = match self.constraint_signer {
-                SignerBLSEnum::Local(ref signer) => signer.sign_commit_boost_root(digest),
-                SignerBLSEnum::CommitBoost(ref signer) => {
-                    signer.sign_commit_boost_root(digest).await
-                }
-                SignerBLSEnum::Keystore(ref signer) => {
+                SignerBLS::Local(ref signer) => signer.sign_commit_boost_root(digest),
+                SignerBLS::CommitBoost(ref signer) => signer.sign_commit_boost_root(digest).await,
+                SignerBLS::Keystore(ref signer) => {
                     signer.sign_commit_boost_root(digest, cl_public_key_to_arr(pubkey.clone()))
                 }
             };

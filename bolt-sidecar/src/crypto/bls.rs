@@ -1,5 +1,3 @@
-use std::fmt::Debug;
-
 use alloy::{primitives::FixedBytes, rpc::types::beacon::constants::BLS_PUBLIC_KEY_BYTES_LEN};
 use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
 
@@ -19,18 +17,7 @@ pub trait SignableBLS {
     fn digest(&self) -> [u8; 32];
 }
 
-/// A generic signing trait to generate BLS signatures.
-///
-/// Note: we keep this async to allow remote signer implementations.
-#[async_trait::async_trait]
-pub trait SignerBLS: Send + Debug {
-    /// Get the public key of the signer.
-    fn pubkey(&self) -> BlsPublicKey;
-
-    /// Sign the given data and return the signature.
-    async fn sign_commit_boost_root(&self, data: &[u8; 32]) -> eyre::Result<BLSSig>;
-}
-
+/// Convert a BLS public key from Consensus Types to a byte array.
 pub fn cl_public_key_to_arr(pubkey: BlsPublicKey) -> [u8; BLS_PUBLIC_KEY_BYTES_LEN] {
     pubkey.as_ref().try_into().expect("BLS keys are 48 bytes")
 }
