@@ -8,7 +8,6 @@ use std::{
 };
 
 use alloy::rpc::types::beacon::constants::BLS_PUBLIC_KEY_BYTES_LEN;
-use eyre::eyre;
 
 use lighthouse_bls::Keypair;
 use lighthouse_eth2_keystore::Keystore;
@@ -18,6 +17,22 @@ use crate::{builder::signature::compute_signing_root, crypto::bls::BLSSig, Chain
 
 pub const KEYSTORES_DEFAULT_PATH: &str = "keys";
 
+#[derive(Debug, thiserror::Error)]
+pub enum KeystoreError {
+    #[error("Failed to read keystore directory: {0}")]
+    ReadFromDirectory(#[from] std::io::Error),
+    #[error("Failed to read keystore from JSON file {0}: {1}")]
+    ReadFromJSON(PathBuf, String),
+    #[error("Failed to decrypt keypair from JSON file {0} with the provided password: {1}")]
+    KeypairDecryption(PathBuf, String),
+    #[error("Could not find private key associated to public key {0}")]
+    UnknownPublicKey(String),
+    #[error("Invalid signature key length. Signature: {0}. Message: {1}")]
+    SignatureLength(String, String),
+}
+
+type Result<T> = std::result::Result<T, KeystoreError>;
+
 #[derive(Clone)]
 pub struct KeystoreSigner {
     keypairs: Vec<Keypair>,
@@ -25,22 +40,15 @@ pub struct KeystoreSigner {
 }
 
 impl KeystoreSigner {
-    pub fn new(keys_path: Option<&str>, password: &[u8], chain: ChainConfig) -> eyre::Result<Self> {
+    pub fn new(keys_path: Option<&str>, password: &[u8], chain: ChainConfig) -> Result<Self> {
         let keystores_paths = keystore_paths(keys_path)?;
         let mut keypairs = Vec::with_capacity(keystores_paths.len());
 
         for path in keystores_paths {
             let keypair = Keystore::from_json_file(path.clone())
-                .map_err(|e| {
-                    eyre!(format!("err while reading keystore json file {:?}: {:?}", path, e))
-                })?
+                .map_err(|e| KeystoreError::ReadFromJSON(path.clone(), format!("{e:?}")))?
                 .decrypt_keypair(password)
-                .map_err(|e| {
-                    eyre!(format!(
-                        "err while decrypting keypair from json file {:?}: {:?}",
-                        path, e
-                    ))
-                })?;
+                .map_err(|e| KeystoreError::KeypairDecryption(path.clone(), format!("{e:?}")))?;
             keypairs.push(keypair);
         }
 
@@ -51,7 +59,7 @@ impl KeystoreSigner {
         &self,
         root: [u8; 32],
         public_key: [u8; BLS_PUBLIC_KEY_BYTES_LEN],
-    ) -> eyre::Result<BLSSig> {
+    ) -> Result<BLSSig> {
         self.sign_root(root, public_key, self.chain.commit_boost_domain())
     }
 
@@ -60,19 +68,19 @@ impl KeystoreSigner {
         root: [u8; 32],
         public_key: [u8; BLS_PUBLIC_KEY_BYTES_LEN],
         domain: [u8; 32],
-    ) -> eyre::Result<BLSSig> {
+    ) -> Result<BLSSig> {
         let sk = self
             .keypairs
             .iter()
             // `as_ssz_bytes` returns the raw bytes we need
             .find(|kp| kp.pk.as_ssz_bytes() == public_key.as_ref())
-            .ok_or(eyre!("could not find private key associated to public key"))?;
+            .ok_or(KeystoreError::UnknownPublicKey(hex::encode(public_key)))?;
 
         let signing_root = compute_signing_root(root, domain);
 
         let sig = sk.sk.sign(signing_root.into()).as_ssz_bytes();
-        let sig =
-            BLSSig::try_from(sig.as_slice()).map_err(|_| eyre!("invalid signature length"))?;
+        let sig = BLSSig::try_from(sig.as_slice())
+            .map_err(|e| KeystoreError::SignatureLength(hex::encode(sig), format!("{e:?}")))?;
 
         Ok(sig)
     }
@@ -96,7 +104,7 @@ impl Debug for KeystoreSigner {
 /// -- 0x1234.../validator.json
 /// -- 0x5678.../validator.json
 /// -- ...
-fn keystore_paths(keys_path: Option<&str>) -> Result<Vec<PathBuf>, eyre::Error> {
+fn keystore_paths(keys_path: Option<&str>) -> Result<Vec<PathBuf>> {
     // Create the path to the keystore directory, starting from the root of the project
     let project_root = env!("CARGO_MANIFEST_DIR");
     let keys_path = Path::new(project_root).join(keys_path.unwrap_or(KEYSTORES_DEFAULT_PATH));
