@@ -363,6 +363,10 @@ func (m *BoostService) handleDelegate(w http.ResponseWriter, req *http.Request) 
 		m.respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if payload.Message.Action != 0 {
+		m.respondError(w, http.StatusBadRequest, "invalid action, expected 0 for delegate")
+		return
+	}
 
 	ua := UserAgent(req.Header.Get("User-Agent"))
 	log = log.WithFields(logrus.Fields{
@@ -406,6 +410,9 @@ func (m *BoostService) handleRevoke(w http.ResponseWriter, req *http.Request) {
 	if err := DecodeJSON(req.Body, &payload); err != nil {
 		m.respondError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if payload.Message.Action != 1 {
+		m.respondError(w, http.StatusBadRequest, "invalid action, expected 1 for revoke")
 	}
 
 	ua := UserAgent(req.Header.Get("User-Agent"))

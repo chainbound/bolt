@@ -105,26 +105,34 @@ func (c *ConstraintsCache) FindTransactionByHash(txHash gethCommon.Hash) (*Trans
 	return nil, false
 }
 
-// Ref: https://docs.boltprotocol.xyz/api/builder#delegate
+// SignedDelegation represents the delegation signed by the proposer pubkey to
+// authorize the delegatee pubkey to submit constraints on their behalf.
+//
+// Specs: https://docs.boltprotocol.xyz/api/builder#delegate
 type SignedDelegation struct {
 	Message   Delegation          `json:"message"`
 	Signature phase0.BLSSignature `json:"signature"`
 }
 
-// Ref: https://docs.boltprotocol.xyz/api/builder#delegate
+// Delegation as from Specs: https://docs.boltprotocol.xyz/api/builder#delegate
 type Delegation struct {
+	Action          uint8            `json:"action"`
 	ValidatorPubkey phase0.BLSPubKey `json:"validator_pubkey"`
 	DelegateePubkey phase0.BLSPubKey `json:"delegatee_pubkey"`
 }
 
-// Ref: https://docs.boltprotocol.xyz/api/builder#revoke
+// SignedRevocation represents the revocation signed by the proposer pubkey to
+// revoke the delegatee pubkey's ability to submit constraints on their behalf.
+//
+// Specs: https://docs.boltprotocol.xyz/api/builder#revoke
 type SignedRevocation struct {
 	Message   Revocation          `json:"message"`
 	Signature phase0.BLSSignature `json:"signature"`
 }
 
-// Ref: https://docs.boltprotocol.xyz/api/builder#revoke
+// Revocation as from Specs: https://docs.boltprotocol.xyz/api/builder#revoke
 type Revocation struct {
+	Action          uint8            `json:"action"`
 	ValidatorPubkey phase0.BLSPubKey `json:"validator_pubkey"`
 	DelegateePubkey phase0.BLSPubKey `json:"delegatee_pubkey"`
 }

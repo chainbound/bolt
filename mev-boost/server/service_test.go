@@ -315,6 +315,7 @@ func TestDelegate(t *testing.T) {
 	path := pathDelegate
 	delegate := SignedDelegation{
 		Message: Delegation{
+			Action:          0,
 			ValidatorPubkey: _HexToPubkey("0xa695ad325dfc7e1191fbc9f186f58eff42a634029731b18380ff89bf42c464a42cb8ca55b200f051f57f1e1893c68759"),
 			DelegateePubkey: _HexToPubkey("0xb8ba260170b9cda2ad54c321d9a8d77e4ca34517106f587eb5ec184bf78f8a0ce4fb55658301b0dc6b129d10adf62391"),
 		},
@@ -334,6 +335,7 @@ func TestRevoke(t *testing.T) {
 	path := pathRevoke
 	revoke := SignedRevocation{
 		Message: Revocation{
+			Action:          1,
 			ValidatorPubkey: _HexToPubkey("0xa695ad325dfc7e1191fbc9f186f58eff42a634029731b18380ff89bf42c464a42cb8ca55b200f051f57f1e1893c68759"),
 			DelegateePubkey: _HexToPubkey("0xb8ba260170b9cda2ad54c321d9a8d77e4ca34517106f587eb5ec184bf78f8a0ce4fb55658301b0dc6b129d10adf62391"),
 		},
