@@ -9,6 +9,7 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
+import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
 import {IBoltManager} from "../interfaces/IBoltManager.sol";
@@ -29,9 +30,12 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUp
 
     // ========= STORAGE =========
 
+    /// @notice Bolt Parameters contract.
+    IBoltParameters public parameters;
+
     /// @notice Validators registry, where validators are registered via their
     /// BLS pubkey and are assigned a sequence number.
-    IBoltManager public boltManager;
+    IBoltManager public manager;
 
     /// @notice Set of EigenLayer protocol strategies that are used in Bolt Protocol.
     EnumerableMap.AddressToUintMap private strategies;
@@ -52,13 +56,6 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUp
     uint48 public START_TIMESTAMP;
 
     // ========= CONSTANTS =========
-
-    /// @notice Duration of an epoch in seconds.
-    uint48 public constant EPOCH_DURATION = 1 days;
-
-    /// @notice Duration of the slashing window in seconds.
-    uint48 public constant SLASHING_WINDOW = 7 days;
-
     /// @notice Name hash of the restaking protocol for identifying the instance of `IBoltMiddleware`.
     bytes32 public constant NAME_HASH = keccak256("EIGENLAYER");
 
@@ -70,19 +67,22 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUp
     // ========= INITIALIZER & PROXY FUNCTIONALITY ========= //
 
     /// @notice Constructor for the BoltEigenLayerMiddleware contract.
-    /// @param _boltManager The address of the Bolt Manager contract.
+    /// @param _parameters The address of the Bolt Parameters contract.
+    /// @param _manager The address of the Bolt Manager contract.
     /// @param _eigenlayerAVSDirectory The address of the EigenLayer AVS Directory contract.
     /// @param _eigenlayerDelegationManager The address of the EigenLayer Delegation Manager contract.
     /// @param _eigenlayerStrategyManager The address of the EigenLayer Strategy Manager.
     function initialize(
         address _owner,
-        address _boltManager,
+        address _parameters,
+        address _manager,
         address _eigenlayerAVSDirectory,
         address _eigenlayerDelegationManager,
         address _eigenlayerStrategyManager
     ) public initializer {
         __Ownable_init(_owner);
-        boltManager = IBoltManager(_boltManager);
+        parameters = IBoltParameters(_parameters);
+        manager = IBoltManager(_manager);
         START_TIMESTAMP = Time.timestamp();
 
         AVS_DIRECTORY = AVSDirectoryStorage(_eigenlayerAVSDirectory);
@@ -100,14 +100,14 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUp
     function getEpochStartTs(
         uint48 epoch
     ) public view returns (uint48 timestamp) {
-        return START_TIMESTAMP + epoch * EPOCH_DURATION;
+        return START_TIMESTAMP + epoch * parameters.EPOCH_DURATION();
     }
 
     /// @notice Get the epoch at a given timestamp.
     function getEpochAtTs(
         uint48 timestamp
     ) public view returns (uint48 epoch) {
-        return (timestamp - START_TIMESTAMP) / EPOCH_DURATION;
+        return (timestamp - START_TIMESTAMP) / parameters.EPOCH_DURATION();
     }
 
     /// @notice Get the current epoch.
@@ -158,7 +158,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUp
         string calldata rpc,
         ISignatureUtils.SignatureWithSaltAndExpiry calldata operatorSignature
     ) public {
-        if (boltManager.isOperator(msg.sender)) {
+        if (manager.isOperator(msg.sender)) {
             revert AlreadyRegistered();
         }
 
@@ -170,32 +170,32 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUp
         AVS_DIRECTORY.registerOperatorToAVS(msg.sender, operatorSignature);
 
         // Register the operator in the manager
-        boltManager.registerOperator(msg.sender, rpc);
+        manager.registerOperator(msg.sender, rpc);
     }
 
     /// @notice Deregister an EigenLayer layer operator from working in Bolt Protocol.
     /// @dev This requires calling the EigenLayer AVS Directory contract to deregister the operator.
     /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator.
     function deregisterOperator() public {
-        if (!boltManager.isOperator(msg.sender)) {
+        if (!manager.isOperator(msg.sender)) {
             revert NotRegistered();
         }
 
         AVS_DIRECTORY.deregisterOperatorFromAVS(msg.sender);
 
-        boltManager.deregisterOperator(msg.sender);
+        manager.deregisterOperator(msg.sender);
     }
 
     /// @notice Allow an operator to signal indefinite opt-out from Bolt Protocol.
     /// @dev Pausing activity does not prevent the operator from being slashable for
     /// the current network epoch until the end of the slashing window.
     function pauseOperator() public {
-        boltManager.pauseOperator(msg.sender);
+        manager.pauseOperator(msg.sender);
     }
 
     /// @notice Allow a disabled operator to signal opt-in to Bolt Protocol.
     function unpauseOperator() public {
-        boltManager.unpauseOperator(msg.sender);
+        manager.unpauseOperator(msg.sender);
     }
 
     /// @notice Register a strategy to work in Bolt Protocol.

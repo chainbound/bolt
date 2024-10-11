@@ -19,6 +19,7 @@ import {IEntity} from "@symbiotic/interfaces/common/IEntity.sol";
 import {OperatorMapWithTime} from "../lib/OperatorMapWithTime.sol";
 import {EnumerableMap} from "../lib/EnumerableMap.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
+import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
 import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
@@ -29,6 +30,9 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     using Subnetwork for address;
 
     // ========= STORAGE =========
+
+    /// @notice Bolt Parameters contract.
+    IBoltParameters public parameters;
 
     /// @notice Validators registry, where validators are registered via their
     /// BLS pubkey and are assigned a sequence number.
@@ -44,10 +48,6 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     /// @notice Start timestamp of the first epoch.
     uint48 public START_TIMESTAMP;
 
-    // ============= CONSTANTS ================= //
-    /// @notice Duration of an epoch in seconds.
-    uint48 public constant EPOCH_DURATION = 1 days;
-
     modifier onlyMiddleware() {
         require(restakingProtocols.contains(msg.sender), "BoltManager: caller is not a middleware");
         _;
@@ -57,9 +57,12 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
 
     /// @notice The initializer for the BoltManager contract.
     /// @param _validators The address of the validators registry.
-    function initialize(address _owner, address _validators) public initializer {
+    function initialize(address _owner, address _parameters, address _validators) public initializer {
         __Ownable_init(_owner);
+
+        parameters = IBoltParameters(_parameters);
         validators = IBoltValidators(_validators);
+
         START_TIMESTAMP = Time.timestamp();
     }
 
@@ -72,14 +75,14 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     function getEpochStartTs(
         uint48 epoch
     ) public view returns (uint48 timestamp) {
-        return START_TIMESTAMP + epoch * EPOCH_DURATION;
+        return START_TIMESTAMP + epoch * parameters.EPOCH_DURATION();
     }
 
     /// @notice Get the epoch at a given timestamp.
     function getEpochAtTs(
         uint48 timestamp
     ) public view returns (uint48 epoch) {
-        return (timestamp - START_TIMESTAMP) / EPOCH_DURATION;
+        return (timestamp - START_TIMESTAMP) / parameters.EPOCH_DURATION();
     }
 
     /// @notice Get the current epoch.

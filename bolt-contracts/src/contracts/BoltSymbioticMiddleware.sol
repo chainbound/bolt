@@ -19,6 +19,7 @@ import {IEntity} from "@symbiotic/interfaces/common/IEntity.sol";
 
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
+import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
 import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
@@ -30,9 +31,12 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
 
     // ========= STORAGE =========
 
+    /// @notice Bolt Parameters contract.
+    IBoltParameters public parameters;
+
     /// @notice Validators registry, where validators are registered via their
     /// BLS pubkey and are assigned a sequence number.
-    IBoltManager public boltManager;
+    IBoltManager public manager;
 
     /// @notice Set of Symbiotic protocol vaults that are used in Bolt Protocol.
     EnumerableMap.AddressToUintMap private vaults;
@@ -63,12 +67,6 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
     /// @notice Slasher that can request a veto before actually slashing operators.
     uint256 public constant VETO_SLASHER_TYPE = 1;
 
-    /// @notice Duration of an epoch in seconds.
-    uint48 public constant EPOCH_DURATION = 1 days;
-
-    /// @notice Duration of the slashing window in seconds.
-    uint48 public constant SLASHING_WINDOW = 7 days;
-
     bytes32 public constant NAME_HASH = keccak256("SYMBIOTIC");
 
     // ========= ERRORS =========
@@ -80,21 +78,24 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
     // ========= CONSTRUCTOR =========
 
     /// @notice Constructor for the BoltSymbioticMiddleware contract.
-    /// @param _boltManager The address of the Bolt Manager contract.
+    /// @param _parameters The address of the Bolt Parameters contract.
+    /// @param _manager The address of the Bolt Manager contract.
     /// @param _symbioticNetwork The address of the Symbiotic network.
     /// @param _symbioticOperatorRegistry The address of the Symbiotic operator registry.
     /// @param _symbioticOperatorNetOptIn The address of the Symbiotic operator network opt-in contract.
     /// @param _symbioticVaultRegistry The address of the Symbiotic vault registry.
     function initialize(
         address _owner,
-        address _boltManager,
+        address _parameters,
+        address _manager,
         address _symbioticNetwork,
         address _symbioticOperatorRegistry,
         address _symbioticOperatorNetOptIn,
         address _symbioticVaultRegistry
     ) public initializer {
         __Ownable_init(_owner);
-        boltManager = IBoltManager(_boltManager);
+        parameters = IBoltParameters(_parameters);
+        manager = IBoltManager(_manager);
         START_TIMESTAMP = Time.timestamp();
 
         BOLT_SYMBIOTIC_NETWORK = _symbioticNetwork;
@@ -113,14 +114,14 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
     function getEpochStartTs(
         uint48 epoch
     ) public view returns (uint48 timestamp) {
-        return START_TIMESTAMP + epoch * EPOCH_DURATION;
+        return START_TIMESTAMP + epoch * parameters.EPOCH_DURATION();
     }
 
     /// @notice Get the epoch at a given timestamp.
     function getEpochAtTs(
         uint48 timestamp
     ) public view returns (uint48 epoch) {
-        return (timestamp - START_TIMESTAMP) / EPOCH_DURATION;
+        return (timestamp - START_TIMESTAMP) / parameters.EPOCH_DURATION();
     }
 
     /// @notice Get the current epoch.
@@ -168,7 +169,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
     function registerOperator(
         string calldata rpc
     ) public {
-        if (boltManager.isOperator(msg.sender)) {
+        if (manager.isOperator(msg.sender)) {
             revert AlreadyRegistered();
         }
 
@@ -180,29 +181,29 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
             revert OperatorNotOptedIn();
         }
 
-        boltManager.registerOperator(msg.sender, rpc);
+        manager.registerOperator(msg.sender, rpc);
     }
 
     /// @notice Deregister a Symbiotic operator from working in Bolt Protocol.
     /// @dev This does NOT deregister the operator from the Symbiotic network.
     function deregisterOperator() public {
-        if (!boltManager.isOperator(msg.sender)) {
+        if (!manager.isOperator(msg.sender)) {
             revert NotRegistered();
         }
 
-        boltManager.deregisterOperator(msg.sender);
+        manager.deregisterOperator(msg.sender);
     }
 
     /// @notice Allow an operator to signal indefinite opt-out from Bolt Protocol.
     /// @dev Pausing activity does not prevent the operator from being slashable for
     /// the current network epoch until the end of the slashing window.
     function pauseOperator() public {
-        boltManager.pauseOperator(msg.sender);
+        manager.pauseOperator(msg.sender);
     }
 
     /// @notice Allow a disabled operator to signal opt-in to Bolt Protocol.
     function unpauseOperator() public {
-        boltManager.unpauseOperator(msg.sender);
+        manager.unpauseOperator(msg.sender);
     }
 
     /// @notice Allow a vault to signal opt-in to Bolt Protocol.
