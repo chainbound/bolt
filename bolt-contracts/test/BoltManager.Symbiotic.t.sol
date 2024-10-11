@@ -23,6 +23,7 @@ import {SimpleCollateral} from "@symbiotic/../test/mocks/SimpleCollateral.sol";
 import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
 import {IBoltMiddleware} from "../src/interfaces/IBoltMiddleware.sol";
 
+import {BoltParameters} from "../src/contracts/BoltParameters.sol";
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
 import {BoltSymbioticMiddleware} from "../src/contracts/BoltSymbioticMiddleware.sol";
@@ -150,15 +151,23 @@ contract BoltManagerSymbioticTest is Test {
 
         // --- Deploy Bolt contracts ---
 
+        uint48 epochDuration = 1 days;
+        uint48 slashingWindow = 7 days;
+        bool allowUnsafeRegistration = true;
+
+        BoltParameters parameters = new BoltParameters();
+        parameters.initialize(admin, epochDuration, slashingWindow, allowUnsafeRegistration);
+
         validators = new BoltValidators();
-        validators.initialize(admin);
+        validators.initialize(admin, address(parameters));
         manager = new BoltManager();
-        manager.initialize(admin, address(validators));
+        manager.initialize(admin, address(parameters), address(validators));
 
         middleware = new BoltSymbioticMiddleware();
 
         middleware.initialize(
             admin,
+            address(parameters),
             address(manager),
             networkAdmin,
             address(operatorRegistry),
