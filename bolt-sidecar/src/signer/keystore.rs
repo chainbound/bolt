@@ -145,11 +145,12 @@ mod tests {
     pub const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 
     #[test]
-    fn test_keystore_signer() {
+    fn test_keystore_signer_1() {
         // 0. Test data setup
 
         // Reference: https://eips.ethereum.org/EIPS/eip-2335#test-cases
-        let test_keystore_json = r#"
+        let tests_keystore_json = [
+            r#"
             {
                 "crypto": {
                     "kdf": {
@@ -182,9 +183,125 @@ mod tests {
                 "uuid": "1d85ae20-35c5-4611-98e8-aa14a633906f",
                 "version": 4
             }
-        "#;
+        "#,
+            r#"
+            {
+                "crypto": {
+                    "kdf": {
+                        "function": "pbkdf2",
+                        "params": {
+                            "dklen": 32,
+                            "c": 262144,
+                            "prf": "hmac-sha256",
+                            "salt": "d4e56740f876aef8c010b86a40d5f56745a118d0906a34e69aec8c0db1cb8fa3"
+                        },
+                        "message": ""
+                    },
+                    "checksum": {
+                        "function": "sha256",
+                        "params": {},
+                        "message": "8a9f5d9912ed7e75ea794bc5a89bca5f193721d30868ade6f73043c6ea6febf1"
+                    },
+                    "cipher": {
+                        "function": "aes-128-ctr",
+                        "params": {
+                            "iv": "264daa3f303d7259501c93d997d84fe6"
+                        },
+                        "message": "cee03fde2af33149775b7223e7845e4fb2c8ae1792e5f99fe9ecf474cc8c16ad"
+                    }
+                },
+                "description": "This is a test keystore that uses PBKDF2 to secure the secret.",
+                "pubkey": "9612d7a727c9d0a22e185a1c768478dfe919cada9266988cb32359c11f2b7b27f4ae4040902382ae2910c15e2b420d07",
+                "path": "m/12381/60/0/0",
+                "uuid": "64625def-3331-4eea-ab6f-782f3ed16a83",
+                "version": 4
+            }
+        "#,
+        ];
+
         // Reference: https://eips.ethereum.org/EIPS/eip-2335#test-cases
         let keystore_password = r#"𝔱𝔢𝔰𝔱𝔭𝔞𝔰𝔰𝔴𝔬𝔯𝔡🔑"#;
+        let keystore_public_key = "0x9612d7a727c9d0a22e185a1c768478dfe919cada9266988cb32359c11f2b7b27f4ae4040902382ae2910c15e2b420d07";
+        let keystore_publlc_key_bytes: [u8; 48] = [
+            0x96, 0x12, 0xd7, 0xa7, 0x27, 0xc9, 0xd0, 0xa2, 0x2e, 0x18, 0x5a, 0x1c, 0x76, 0x84,
+            0x78, 0xdf, 0xe9, 0x19, 0xca, 0xda, 0x92, 0x66, 0x98, 0x8c, 0xb3, 0x23, 0x59, 0xc1,
+            0x1f, 0x2b, 0x7b, 0x27, 0xf4, 0xae, 0x40, 0x40, 0x90, 0x23, 0x82, 0xae, 0x29, 0x10,
+            0xc1, 0x5e, 0x2b, 0x42, 0x0d, 0x07,
+        ];
+        let keystore_secret_key =
+            "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
+        let chain_config = ChainConfig::mainnet();
+
+        // 1. Create a temp directory with the keystore and create a signer from it
+
+        let path_str = format!("{}/{}", CARGO_MANIFEST_DIR, KEYSTORES_DEFAULT_PATH);
+
+        for test_keystore_json in tests_keystore_json {
+            let tmp_dir = tempfile::TempDir::with_prefix_in(
+                "0xdeadbeefdeadbeefdeadbeefdeadbeef",
+                path_str.clone(),
+            )
+            .expect("to create temp dir");
+
+            // NOTE: it is sufficient to create a temp dir, then we can create a file as usual and it
+            // will be dropped correctly
+            let mut tmp_file = File::create_new(tmp_dir.path().join("voting-keystore.json"))
+                .expect("to create new file");
+
+            tmp_file.write_all(test_keystore_json.as_bytes()).expect("to write to temp file");
+
+            for entry in tmp_dir.path().read_dir().expect("to read tmp dir") {
+                let mut path = entry.expect("to read entry").path();
+                println!("inside loop: {:?}", path);
+                let extenstion = path
+                    .extension()
+                    .expect("to get extension")
+                    .to_str()
+                    .expect("to convert to str");
+
+                if extenstion.contains("tmp") {
+                    path.set_extension("json");
+                    println!("path: {:?}", path);
+                    break;
+                }
+            }
+
+            let keystore_signer =
+                KeystoreSigner::new(None, keystore_password.as_bytes(), chain_config)
+                    .expect("to create keystore signer");
+
+            assert_eq!(keystore_signer.keypairs.len(), 1);
+            assert_eq!(
+                keystore_signer.keypairs.first().expect("to get keypair").pk.to_string(),
+                keystore_public_key
+            );
+
+            // 2. Sign a message with the signer and check the signature
+
+            let keystore_sk_bls = SecretKey::from_bytes(
+                hex::decode(keystore_secret_key).expect("to decode secret key").as_slice(),
+            )
+            .expect("to create secret key");
+
+            let local_signer = LocalSigner::new(keystore_sk_bls, chain_config);
+
+            let sig_local = local_signer.sign_commit_boost_root([0; 32]).expect("to sign message");
+            let sig_keystore = keystore_signer
+                .sign_commit_boost_root([0; 32], keystore_publlc_key_bytes)
+                .expect("to sign message");
+            assert_eq!(sig_local, sig_keystore);
+        }
+    }
+
+    #[test]
+    fn test_keystore_signer_2() {
+        // 0. Test data setup
+
+        // Taken from the Kurtosis devnet
+        let test_keystore_json = r#"{"crypto":{"kdf":{"function":"pbkdf2","params":{"dklen":32,"c":2,"prf":"hmac-sha256","salt":"1411b589ab43558f1d29053f6e96e6268f4b8491ba48d0c164273575dd80c1b6"},"message":""},"checksum":{"function":"sha256","params":{},"message":"f669c41a996d60d094053504ccb1a7fa180376dd2474a9659dd86104f790d59c"},"cipher":{"function":"aes-128-ctr","params":{"iv":"2f0927f8ff08e9d4faee279a98fe8377"},"message":"2c34bed346f5520291239f067a912a34ee5f7680be06b0f7c4a930111b5c1b57"}},"description":"0x81b676591b823270a3284ace7d81cbce2d6cdce55bb0e053874d7e3a08f729453009d3e662ec3130379f43c0f3210b6d","pubkey":"81b676591b823270a3284ace7d81cbce2d6cdce55bb0e053874d7e3a08f729453009d3e662ec3130379f43c0f3210b6d","path":"","uuid":"a4f153d8-9ebf-49ac-b447-8aab996f7778","version":4}"#;
+        // Reference: https://eips.ethereum.org/EIPS/eip-2335#test-cases
+        let keystore_password = r#"password"#;
+        println!("{:?}", keystore_password.as_bytes());
         let keystore_public_key = "0x9612d7a727c9d0a22e185a1c768478dfe919cada9266988cb32359c11f2b7b27f4ae4040902382ae2910c15e2b420d07";
         let keystore_publlc_key_bytes: [u8; 48] = [
             0x96, 0x12, 0xd7, 0xa7, 0x27, 0xc9, 0xd0, 0xa2, 0x2e, 0x18, 0x5a, 0x1c, 0x76, 0x84,
