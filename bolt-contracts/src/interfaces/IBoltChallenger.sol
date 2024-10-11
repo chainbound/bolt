@@ -76,6 +76,4 @@ interface IBoltChallenger {
     ) external payable;
 
     function resolveRecentChallenge(bytes32 challengeID, Proof calldata proof) external;
-
-    function resolveChallenge(bytes32 challengeID, Proof calldata proof) external;
 }

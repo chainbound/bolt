@@ -167,12 +167,6 @@ contract BoltChallenger is IBoltChallenger {
         _resolve(challengeID, trustedBlockHash, proof);
     }
 
-    // Resolving a historical challenge requires acquiring a block hash from an alternative source
-    // from the EVM. This is because the BLOCKHASH opcode is limited to the 256 most recent blocks.
-    function resolveChallenge(bytes32 challengeID, Proof calldata proof) public {
-        // unimplemented!();
-    }
-
     /// @notice Resolve a challenge that has expired without being resolved.
     /// @dev This will result in the challenge being considered lost, without need to provide
     /// additional proofs of inclusion, as the time window has elapsed.
@@ -219,6 +213,11 @@ contract BoltChallenger is IBoltChallenger {
             challenge.status = ChallengeStatus.Lost;
             _transferFullBond(challenge.challenger);
             emit ChallengeLost(challengeID);
+
+            // Remove the challenge from the set of challenges
+            delete challenges[challengeID];
+            challengeIDs.remove(challengeID);
+
             return;
         }
 
@@ -252,6 +251,11 @@ contract BoltChallenger is IBoltChallenger {
             challenge.status = ChallengeStatus.Defended;
             _transferHalfBond(msg.sender);
             _transferHalfBond(challenge.commitmentSigner);
+
+            // Remove the challenge from the set of challenges
+            delete challenges[challengeID];
+            challengeIDs.remove(challengeID);
+
             emit ChallengeDefended(challengeID);
             return;
         } else if (account.nonce < decodedTx.nonce) {
@@ -266,6 +270,11 @@ contract BoltChallenger is IBoltChallenger {
             challenge.status = ChallengeStatus.Defended;
             _transferHalfBond(msg.sender);
             _transferHalfBond(challenge.commitmentSigner);
+
+            // Remove the challenge from the set of challenges
+            delete challenges[challengeID];
+            challengeIDs.remove(challengeID);
+
             emit ChallengeDefended(challengeID);
             return;
         }
@@ -293,6 +302,11 @@ contract BoltChallenger is IBoltChallenger {
         challenge.status = ChallengeStatus.Defended;
         _transferHalfBond(msg.sender);
         _transferHalfBond(challenge.commitmentSigner);
+
+        // Remove the challenge from the set of challenges
+        delete challenges[challengeID];
+        challengeIDs.remove(challengeID);
+
         emit ChallengeDefended(challengeID);
     }
 
