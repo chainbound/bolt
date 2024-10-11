@@ -6,8 +6,11 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeab
 
 contract BoltParameters is OwnableUpgradeable, UUPSUpgradeable {
     // --> Storage layout marker: 0 bits
+
+    /// @notice Duration of an epoch in seconds.
     uint48 public EPOCH_DURATION;
 
+    /// @notice Duration of the slashing window in seconds.
     uint48 public SLASHING_WINDOW;
 
     /// @notice Whether to allow unsafe registration of validators
