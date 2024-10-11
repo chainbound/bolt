@@ -67,7 +67,7 @@ contract BoltChallengerTest is Test {
         bytes32 trustedBlockHash = 0x0fc7c840f5b4b451e99dc8adb0d475eab2ac7d36278d9601d7f4b2dd05e8022f;
 
         // Read the RLP-encoded block header from a file (obtained via `debug_getRawHeader` RPC call)
-        string memory file = vm.readFile("./test/testdata/raw_header.json");
+        string memory file = vm.readFile("./test/testdata/header_20785012.json");
         bytes memory headerRLP = vm.parseJsonBytes(file, ".result");
 
         assertEq(keccak256(headerRLP), trustedBlockHash);
@@ -94,7 +94,7 @@ contract BoltChallengerTest is Test {
 
         // Read the RLP-encoded account proof from a file. This is obtained from the `eth_getProof`
         // RPC call + ABI-encoding of the resulting accountProof array.
-        string memory file = vm.readFile("./test/testdata/eth_proof.json");
+        string memory file = vm.readFile("./test/testdata/eth_proof_20785012.json");
         bytes[] memory accountProofJson = vm.parseJsonBytesArray(file, ".result.accountProof");
         bytes memory accountProof = _RLPEncodeList(accountProofJson);
 
@@ -126,8 +126,9 @@ contract BoltChallengerTest is Test {
         // The transaction we want to prove inclusion of
         bytes32 txHash = 0x9ec2c56ca36e445a46bc77ca77510f0ef21795d00834269f3752cbd29d63ba1f;
 
-        // MPT proof, obtained with the `eth-trie-proof` CLI tool
-        string memory file = vm.readFile("./test/testdata/tx_mpt_proof.json");
+        // MPT proof, obtained with the `trie-proofs` CLI tool from HerodotusDev
+        // ref: <https://github.com/HerodotusDev/trie-proofs>
+        string memory file = vm.readFile("./test/testdata/tx_mpt_proof_20785012.json");
         bytes[] memory txProofJson = vm.parseJsonBytesArray(file, ".proof");
         bytes memory txProof = _RLPEncodeList(txProofJson);
 
@@ -163,6 +164,8 @@ contract BoltChallengerTest is Test {
     // =========== Verifying Signatures ===========
 
     function testCommitmentDigestAndSignature() public {
+        // The test commitment has been created in the Bolt sidecar using the Rust
+        // methods to compute the digest() and recover the signer from the signature.
         IBoltChallenger.SignedCommitment memory commitment = _parseTestCommitment();
 
         // Reconstruct the commitment digest: `keccak( keccak(signed tx) || le_bytes(slot) )`
@@ -179,7 +182,7 @@ contract BoltChallengerTest is Test {
     }
 
     function testCommitmentSignature() public {
-        bytes memory signedTx = vm.parseJsonBytes(vm.readFile("./test/testdata/signed_tx.json"), ".raw");
+        bytes memory signedTx = vm.parseJsonBytes(vm.readFile("./test/testdata/signed_tx_20785012_1.json"), ".raw");
         uint64 slot = 20_728_344;
 
         // Reconstruct the commitment digest
@@ -198,15 +201,16 @@ contract BoltChallengerTest is Test {
 
     // =========== Opening a challenge ===========
 
-    function testOpenChallenge() public {
-        IBoltChallenger.SignedCommitment memory commitment = _parseTestCommitment();
+    function testOpenChallengeSingleTx() public {
+        IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
+        commitments[0] = _parseTestCommitment();
 
         assertEq(challenger.balance, 100 ether);
 
         // Open a challenge with the commitment
         vm.resumeGasMetering();
         vm.prank(challenger);
-        boltChallenger.openChallenge{value: 1 ether}(commitment);
+        boltChallenger.openChallenge{value: 1 ether}(commitments);
         vm.pauseGasMetering();
 
         assertEq(challenger.balance, 99 ether);
@@ -219,115 +223,130 @@ contract BoltChallengerTest is Test {
         assertEq(challenge.openedAt, block.timestamp);
         assertEq(uint256(challenge.status), 0);
         assertEq(challenge.challenger, challenger);
-        assertEq(challenge.commitmentSigner, 0x71f7D1B81E297816cf6691B2396060Ede49eFA5e);
-        assertEq(challenge.commitment.slot, commitment.slot);
-        assertEq(challenge.commitment.signature, commitment.signature);
-        assertEq(challenge.commitment.signedTx, commitment.signedTx);
+        assertEq(challenge.commitmentSigner, 0x27083ED52464625660f3e30Aa5B9C20A30D7E110);
+        assertEq(challenge.targetSlot, commitments[0].slot);
     }
 
-    function testOpenChallengeWithInsufficientBond() public {
-        IBoltChallenger.SignedCommitment memory commitment = _parseTestCommitment();
+    function testOpenChallengeWithIncorrectBond() public {
+        IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
+        commitments[0] = _parseTestCommitment();
 
         // Open a challenge with insufficient bond
         vm.resumeGasMetering();
         vm.prank(challenger);
-        vm.expectRevert(IBoltChallenger.InsufficientChallengeBond.selector);
-        boltChallenger.openChallenge{value: 0.1 ether}(commitment);
+        vm.expectRevert(IBoltChallenger.IncorrectChallengeBond.selector);
+        boltChallenger.openChallenge{value: 0.1 ether}(commitments);
         vm.pauseGasMetering();
     }
 
     function testOpenChallengeWithLargebond() public {
-        IBoltChallenger.SignedCommitment memory commitment = _parseTestCommitment();
+        IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
+        commitments[0] = _parseTestCommitment();
 
         // Open a challenge with a large bond, making sure that the rest is refunded
         vm.resumeGasMetering();
         vm.prank(challenger);
-        boltChallenger.openChallenge{value: 50 ether}(commitment);
+        vm.expectRevert(IBoltChallenger.IncorrectChallengeBond.selector);
+        boltChallenger.openChallenge{value: 50 ether}(commitments);
         vm.pauseGasMetering();
 
-        assertEq(challenger.balance, 99 ether);
+        assertEq(challenger.balance, 100 ether);
     }
 
     function testOpenAlreadyExistingChallenge() public {
-        IBoltChallenger.SignedCommitment memory commitment = _parseTestCommitment();
+        IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
+        commitments[0] = _parseTestCommitment();
 
         // Open a challenge
         vm.prank(challenger);
-        boltChallenger.openChallenge{value: 1 ether}(commitment);
+        boltChallenger.openChallenge{value: 1 ether}(commitments);
 
         // Try to open the same challenge again
         vm.resumeGasMetering();
         vm.prank(challenger);
         vm.expectRevert(IBoltChallenger.ChallengeAlreadyExists.selector);
-        boltChallenger.openChallenge{value: 1 ether}(commitment);
+        boltChallenger.openChallenge{value: 1 ether}(commitments);
         vm.pauseGasMetering();
     }
 
     function testOpenChallengeWithSlotInTheFuture() public {
-        IBoltChallenger.SignedCommitment memory commitment = _parseTestCommitment();
-        commitment.slot = uint64(BeaconChainUtils._getCurrentSlot()) + 10;
+        IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
+        commitments[0] = _parseTestCommitment();
+
+        commitments[0].slot = uint64(BeaconChainUtils._getCurrentSlot()) + 10;
 
         // Open a challenge with a slot in the future
         vm.resumeGasMetering();
         vm.prank(challenger);
         vm.expectRevert(IBoltChallenger.BlockIsNotFinalized.selector);
-        boltChallenger.openChallenge{value: 1 ether}(commitment);
+        boltChallenger.openChallenge{value: 1 ether}(commitments);
         vm.pauseGasMetering();
     }
 
     function testOpenChallengeInvalidSignature() public {
-        IBoltChallenger.SignedCommitment memory commitment = _parseTestCommitment();
+        IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
+        commitments[0] = _parseTestCommitment();
 
         // Modify the signature to make it invalid
-        commitment.signature[0] = bytes1(uint8(commitment.signature[0]) + 5);
+        commitments[0].signature[0] = bytes1(uint8(commitments[0].signature[0]) + 5);
 
         // Open a challenge with an invalid signature
         vm.resumeGasMetering();
         vm.prank(challenger);
         vm.expectRevert(ECDSA.ECDSAInvalidSignature.selector);
-        boltChallenger.openChallenge{value: 1 ether}(commitment);
+        boltChallenger.openChallenge{value: 1 ether}(commitments);
         vm.pauseGasMetering();
     }
 
     // =========== Resolving a challenge ===========
 
-    function testResolveChallengeFullDefense() public {
-        // Prove the full defense of a challenge: the block header, account proof, and tx proof
+    function testResolveChallengeFullDefenseSingleTx() public {
+        // Prove the full defense of a challenge: the block headers, account proof, and tx proofs
         // are all valid and the proposer has included the transaction in their slot.
 
-        IBoltChallenger.SignedCommitment memory commitment = _createRecentBoltCommitment();
+        uint256 inclusionBlockNumber = 20_785_012;
+        IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
+        commitments[0] = _createRecentBoltCommitment(inclusionBlockNumber, 1);
 
         // Open a challenge
         vm.prank(challenger);
-        boltChallenger.openChallenge{value: 1 ether}(commitment);
+        boltChallenger.openChallenge{value: 1 ether}(commitments);
 
         // Get the challenge ID
         IBoltChallenger.Challenge[] memory challenges = boltChallenger.getAllChallenges();
         assertEq(challenges.length, 1);
         bytes32 challengeID = challenges[0].id;
 
-        string memory rawHeader = vm.readFile("./test/testdata/raw_header.json");
-        string memory ethProof = vm.readFile("./test/testdata/eth_proof.json");
-        string memory txProof = vm.readFile("./test/testdata/tx_mpt_proof.json");
+        string memory rawPreviousHeader = vm.readFile("./test/testdata/header_20785011.json");
+        string memory rawInclusionHeader = vm.readFile("./test/testdata/header_20785012.json");
+        string memory ethProof = vm.readFile("./test/testdata/eth_proof_20785011.json");
+        string memory txProof = vm.readFile("./test/testdata/tx_mpt_proof_20785012.json");
+
+        bytes[] memory txProofs = new bytes[](1);
+        txProofs[0] = _RLPEncodeList(vm.parseJsonBytesArray(txProof, ".proof"));
+
+        uint256[] memory txIndexesInBlock = new uint256[](1);
+        txIndexesInBlock[0] = vm.parseJsonUint(txProof, ".index");
 
         IBoltChallenger.Proof memory proof = IBoltChallenger.Proof({
-            blockHeaderRLP: vm.parseJsonBytes(rawHeader, ".result"),
+            inclusionBlockNumber: inclusionBlockNumber,
+            previousBlockHeaderRLP: vm.parseJsonBytes(rawPreviousHeader, ".result"),
+            inclusionBlockHeaderRLP: vm.parseJsonBytes(rawInclusionHeader, ".result"),
             accountMerkleProof: _RLPEncodeList(vm.parseJsonBytesArray(ethProof, ".result.accountProof")),
-            txMerkleProof: _RLPEncodeList(vm.parseJsonBytesArray(txProof, ".proof")),
-            txIndexInBlock: vm.parseJsonUint(txProof, ".index"),
-            blockNumber: 20_785_012
+            txMerkleProofs: txProofs,
+            txIndexesInBlock: txIndexesInBlock
         });
 
-        // check that the block header transactions root matches the root in the tx proof data.
-        bytes32 txRoot = boltChallenger._decodeBlockHeaderRLPExt(proof.blockHeaderRLP).txRoot;
-        assertEq(txRoot, vm.parseJsonBytes32(txProof, ".root"));
+        // check that the inclusion block transactions root matches the root in the tx proof data.
+        bytes32 inclusionTxRoot = boltChallenger._decodeBlockHeaderRLPExt(proof.inclusionBlockHeaderRLP).txRoot;
+        assertEq(inclusionTxRoot, vm.parseJsonBytes32(txProof, ".root"));
 
-        bytes32 trustedBlockHash = 0x0fc7c840f5b4b451e99dc8adb0d475eab2ac7d36278d9601d7f4b2dd05e8022f;
+        bytes32 trustedPreviousBlockHash = 0x6be050fe1f6c7ffe8f30a350250a9ecc08ff3c031d129f65e1c10e5119d7a28b;
 
         // Resolve the challenge
         vm.resumeGasMetering();
         vm.prank(resolver);
-        boltChallenger._resolveExt(challengeID, trustedBlockHash, proof);
+        boltChallenger._resolveExt(challengeID, trustedPreviousBlockHash, proof);
         vm.pauseGasMetering();
 
         // Check the challenge was resolved
@@ -335,20 +354,177 @@ contract BoltChallengerTest is Test {
         assertEq(uint256(challenge.status), uint256(IBoltChallenger.ChallengeStatus.Defended));
     }
 
+    function testResolveChallengeFullDefenseStackedTxs() public {
+        // Prove the full defense of a challenge: the block headers, account proof, and tx proofs
+        // are all valid and the proposer has included the transaction in their slot.
+        // This time, the proposer has committed to multiple transactions in their slot.
+        //
+        // The test data for this test was generated by querying for an Ethereum block with a
+        // sender that has sent multiple transactions in the same block.
+        // Check out https://etherscan.io/block/20817618
+
+        uint256 inclusionBlockNumber = 20_817_618;
+        IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](5);
+        commitments[0] = _createRecentBoltCommitment(inclusionBlockNumber, 1);
+        commitments[1] = _createRecentBoltCommitment(inclusionBlockNumber, 2);
+        commitments[2] = _createRecentBoltCommitment(inclusionBlockNumber, 3);
+        commitments[3] = _createRecentBoltCommitment(inclusionBlockNumber, 4);
+        commitments[4] = _createRecentBoltCommitment(inclusionBlockNumber, 5);
+
+        // Sanity check senders of the transactions: they should all be the same
+        for (uint256 i = 0; i < commitments.length; i++) {
+            address recovered = commitments[i].signedTx.decodeEnveloped().recoverSender();
+            assertEq(recovered, 0xc21fb45Eeb45D883B838E30ABBd2896aE5AC888c);
+        }
+
+        // Sanity check signers of the commitments: they should all be the same
+        for (uint256 i = 0; i < commitments.length; i++) {
+            bytes32 cid = _computeCommitmentID(commitments[i].signedTx, commitments[i].slot);
+            address signer = ECDSA.recover(cid, commitments[i].signature);
+            assertEq(signer, target);
+        }
+
+        // Open a challenge
+        vm.prank(challenger);
+        boltChallenger.openChallenge{value: 1 ether}(commitments);
+
+        // Get the challenge ID
+        IBoltChallenger.Challenge[] memory challenges = boltChallenger.getAllChallenges();
+        assertEq(challenges.length, 1);
+        bytes32 challengeID = challenges[0].id;
+
+        // headers
+        string memory rawPreviousHeader = vm.readFile("./test/testdata/header_20817617.json");
+        string memory rawInclusionHeader = vm.readFile("./test/testdata/header_20817618.json");
+
+        // account
+        string memory ethProof = vm.readFile("./test/testdata/eth_proof_20817617.json");
+
+        // transactions
+        string memory txProof1 = vm.readFile("./test/testdata/tx_mpt_proof_20817618_1.json");
+        string memory txProof2 = vm.readFile("./test/testdata/tx_mpt_proof_20817618_2.json");
+        string memory txProof3 = vm.readFile("./test/testdata/tx_mpt_proof_20817618_3.json");
+        string memory txProof4 = vm.readFile("./test/testdata/tx_mpt_proof_20817618_4.json");
+        string memory txProof5 = vm.readFile("./test/testdata/tx_mpt_proof_20817618_5.json");
+
+        bytes[] memory txProofs = new bytes[](5);
+        txProofs[0] = _RLPEncodeList(vm.parseJsonBytesArray(txProof1, ".proof"));
+        txProofs[1] = _RLPEncodeList(vm.parseJsonBytesArray(txProof2, ".proof"));
+        txProofs[2] = _RLPEncodeList(vm.parseJsonBytesArray(txProof3, ".proof"));
+        txProofs[3] = _RLPEncodeList(vm.parseJsonBytesArray(txProof4, ".proof"));
+        txProofs[4] = _RLPEncodeList(vm.parseJsonBytesArray(txProof5, ".proof"));
+
+        uint256[] memory txIndexesInBlock = new uint256[](5);
+        txIndexesInBlock[0] = vm.parseJsonUint(txProof1, ".index");
+        txIndexesInBlock[1] = vm.parseJsonUint(txProof2, ".index");
+        txIndexesInBlock[2] = vm.parseJsonUint(txProof3, ".index");
+        txIndexesInBlock[3] = vm.parseJsonUint(txProof4, ".index");
+        txIndexesInBlock[4] = vm.parseJsonUint(txProof5, ".index");
+
+        IBoltChallenger.Proof memory proof = IBoltChallenger.Proof({
+            inclusionBlockNumber: inclusionBlockNumber,
+            previousBlockHeaderRLP: vm.parseJsonBytes(rawPreviousHeader, ".result"),
+            inclusionBlockHeaderRLP: vm.parseJsonBytes(rawInclusionHeader, ".result"),
+            accountMerkleProof: _RLPEncodeList(vm.parseJsonBytesArray(ethProof, ".result.accountProof")),
+            txMerkleProofs: txProofs,
+            txIndexesInBlock: txIndexesInBlock
+        });
+
+        // check that the inclusion block transactions root matches the root in the tx proof data.
+        bytes32 inclusionTxRoot = boltChallenger._decodeBlockHeaderRLPExt(proof.inclusionBlockHeaderRLP).txRoot;
+        assertEq(inclusionTxRoot, vm.parseJsonBytes32(txProof1, ".root"));
+
+        // block hash of https://etherscan.io/block/20817617
+        bytes32 trustedPreviousBlockHash = 0xb410d12f92ed268b184c1e6523b7d3fea5fcd0ba3f9bc6c6cb9a7e5b1523d225;
+
+        // Resolve the challenge
+        vm.resumeGasMetering();
+        vm.prank(resolver);
+        boltChallenger._resolveExt(challengeID, trustedPreviousBlockHash, proof);
+        vm.pauseGasMetering();
+
+        // Check the challenge was resolved
+        IBoltChallenger.Challenge memory challenge = boltChallenger.getAllChallenges()[0];
+        assertEq(uint256(challenge.status), uint256(IBoltChallenger.ChallengeStatus.Defended));
+    }
+
+    function testResolveExpiredChallenge() public {
+        IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
+        commitments[0] = _parseTestCommitment();
+
+        // Open a challenge with the commitment
+        vm.resumeGasMetering();
+        vm.prank(challenger);
+        boltChallenger.openChallenge{value: 1 ether}(commitments);
+        vm.pauseGasMetering();
+
+        // Check the challenge was opened
+        IBoltChallenger.Challenge[] memory challenges = boltChallenger.getAllChallenges();
+        assertEq(challenges.length, 1);
+
+        // Warp time to make the challenge expire
+        vm.warp(block.timestamp + 2 weeks);
+
+        // Try to resolve the challenge
+        vm.prank(resolver);
+        boltChallenger.resolveExpiredChallenge(challenges[0].id);
+
+        // Check the challenge was resolved
+        IBoltChallenger.Challenge memory challenge = boltChallenger.getAllChallenges()[0];
+        assertEq(uint256(challenge.status), uint256(IBoltChallenger.ChallengeStatus.Breached));
+    }
+
+    function testCannotResolveChallengeBeforeExpiration() public {
+        IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
+        commitments[0] = _parseTestCommitment();
+
+        // Open a challenge with the commitment
+        vm.resumeGasMetering();
+        vm.prank(challenger);
+        boltChallenger.openChallenge{value: 1 ether}(commitments);
+        vm.pauseGasMetering();
+
+        // Check the challenge was opened
+        IBoltChallenger.Challenge[] memory challenges = boltChallenger.getAllChallenges();
+        assertEq(challenges.length, 1);
+        bytes32 id = challenges[0].id;
+
+        // Try to resolve the challenge before it expires
+        vm.resumeGasMetering();
+        vm.prank(resolver);
+        vm.expectRevert(IBoltChallenger.ChallengeNotExpired.selector);
+        boltChallenger.resolveExpiredChallenge(id);
+        vm.pauseGasMetering();
+    }
+
     // =========== Helper functions ===========
 
     // Helper to create a test commitment with a recent slot, valid for a recent challenge
-    function _createRecentBoltCommitment() internal view returns (IBoltChallenger.SignedCommitment memory commitment) {
-        commitment.signedTx = vm.parseJsonBytes(vm.readFile("./test/testdata/signed_tx.json"), ".raw");
-        assertEq(commitment.signedTx.decodeEnveloped().recoverSender(), 0x0D9f5045B604bA0c050b5eb06D0b25d01c525Ea5);
+    function _createRecentBoltCommitment(
+        uint256 blockNumber,
+        uint256 id
+    ) internal view returns (IBoltChallenger.SignedCommitment memory commitment) {
+        // pattern: ./test/testdata/signed_tx_{blockNumber}_{id}.json
+        string memory base = "./test/testdata/signed_tx_";
+        string memory extension = string.concat(vm.toString(blockNumber), "_", vm.toString(id), ".json");
+        string memory path = string.concat(base, extension);
+        commitment.signedTx = vm.parseJsonBytes(vm.readFile(path), ".raw");
 
-        // pick a recent slot
+        // pick a recent slot, 100 slots behind the current slot
         commitment.slot = uint64(BeaconChainUtils._getCurrentSlot() - 100);
 
         // sign the new commitment with the target's private key
         bytes32 commitmentID = _computeCommitmentID(commitment.signedTx, commitment.slot);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(targetPK, commitmentID);
         commitment.signature = abi.encodePacked(r, s, v);
+
+        // Normalize v to 27 or 28
+        if (uint8(commitment.signature[64]) < 27) {
+            commitment.signature[64] = bytes1(uint8(commitment.signature[64]) + 0x1B);
+        }
+
+        // Sanity check
+        assertEq(ECDSA.recover(commitmentID, commitment.signature), target);
 
         return commitment;
     }
@@ -372,9 +548,7 @@ contract BoltChallengerTest is Test {
 
     // Helper to compute the commitment ID
     function _computeCommitmentID(bytes memory signedTx, uint64 slot) internal pure returns (bytes32) {
-        bytes32 txHash = keccak256(signedTx);
-        bytes memory leSlot = _toLittleEndian(slot);
-        return keccak256(abi.encodePacked(txHash, leSlot));
+        return keccak256(abi.encodePacked(keccak256(signedTx), _toLittleEndian(slot)));
     }
 
     // Helper to encode a list of bytes[] into an RLP list with each item RLP-encoded
