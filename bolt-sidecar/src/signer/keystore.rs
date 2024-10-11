@@ -106,8 +106,12 @@ impl Debug for KeystoreSigner {
 /// -- ...
 fn keystore_paths(keys_path: Option<&str>) -> Result<Vec<PathBuf>> {
     // Create the path to the keystore directory, starting from the root of the project
-    let project_root = env!("CARGO_MANIFEST_DIR");
-    let keys_path = Path::new(project_root).join(keys_path.unwrap_or(KEYSTORES_DEFAULT_PATH));
+    let keys_path = if let Some(keys_path) = keys_path {
+        Path::new(&keys_path).to_path_buf()
+    } else {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        Path::new(project_root).join(keys_path.unwrap_or(KEYSTORES_DEFAULT_PATH))
+    };
 
     let json_extension = OsString::from("json");
 

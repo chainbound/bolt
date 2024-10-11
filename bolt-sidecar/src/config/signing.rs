@@ -27,6 +27,9 @@ pub struct SigningOpts {
     /// Reference: https://eips.ethereum.org/EIPS/eip-2335
     #[clap(long, env = "BOLT_SIDECAR_KEYSTORE_PASSWORD")]
     pub keystore_password: Option<ZeroizeString>,
+    /// Path to the keystores folder. If not provided, the default path is used.
+    #[clap(long, env = "BOLT_SIDECAR_KEYSTORE_PATH", requires("keystore_password"))]
+    pub keystore_path: Option<String>,
 }
 
 // Implement Debug manually to hide the keystore_password field
@@ -48,6 +51,7 @@ impl Default for SigningOpts {
             commit_boost_address: None,
             commit_boost_jwt_hex: None,
             keystore_password: None,
+            keystore_path: None,
         }
     }
 }

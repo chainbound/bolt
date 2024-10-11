@@ -87,7 +87,7 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
         let state_client = StateClient::new(opts.execution_api_url.clone());
 
         let keystore_signer = SignerBLS::Keystore(KeystoreSigner::new(
-            None,
+            opts.signing.keystore_path.as_deref(),
             opts.signing.keystore_password.as_ref().expect("keystore password").as_ref(),
             opts.chain,
         )?);
