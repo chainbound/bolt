@@ -113,8 +113,8 @@ fn keystore_paths(keys_path: Option<&str>) -> Result<Vec<PathBuf>> {
 
     let mut keystores_paths = vec![];
     // Iter over the `keys` directory
-    for entry in fs::read_dir(keys_path)? {
-        let path = entry?.path();
+    for entry in fs::read_dir(keys_path).map_err(KeystoreError::ReadFromDirectory)? {
+        let path = entry.map_err(KeystoreError::ReadFromDirectory)?.path();
         if path.is_dir() {
             for entry in fs::read_dir(path)? {
                 let path = entry?.path();

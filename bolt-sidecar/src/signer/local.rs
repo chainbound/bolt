@@ -9,6 +9,16 @@ pub use blst::min_pk::SecretKey;
 /// The BLS Domain Separator used in Ethereum 2.0.
 pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
 
+#[derive(Debug, thiserror::Error)]
+pub enum LocalSignerError {
+    #[error("Failed to compute signing root: {0}")]
+    SigningRootComputation(#[from] ethereum_consensus::error::Error),
+    #[error("Invalid signature: {0}")]
+    InvalidSignature(String),
+}
+
+type Result<T> = std::result::Result<T, LocalSignerError>;
+
 /// A BLS signer that can sign any type that implements the [`SignableBLS`] trait.
 #[derive(Clone)]
 pub struct LocalSigner {
@@ -38,17 +48,17 @@ impl LocalSigner {
     }
 
     /// Sign an SSZ object root with the Application Builder domain.
-    pub fn sign_application_builder_root(&self, root: [u8; 32]) -> eyre::Result<BLSSig> {
+    pub fn sign_application_builder_root(&self, root: [u8; 32]) -> Result<BLSSig> {
         self.sign_root(root, self.chain.application_builder_domain())
     }
 
     /// Sign an SSZ object root with the Commit Boost domain.
-    pub fn sign_commit_boost_root(&self, root: [u8; 32]) -> eyre::Result<BLSSig> {
+    pub fn sign_commit_boost_root(&self, root: [u8; 32]) -> Result<BLSSig> {
         self.sign_root(root, self.chain.commit_boost_domain())
     }
 
     /// Sign an SSZ object root with the given domain.
-    pub fn sign_root(&self, root: [u8; 32], domain: [u8; 32]) -> eyre::Result<BLSSig> {
+    pub fn sign_root(&self, root: [u8; 32], domain: [u8; 32]) -> Result<BLSSig> {
         let signing_root = compute_signing_root(&root, domain)?;
         let sig = self.key.sign(signing_root.as_slice(), BLS_DST_PREFIX, &[]);
         Ok(BLSSig::from_slice(&sig.to_bytes()))
@@ -59,16 +69,12 @@ impl LocalSigner {
         &self,
         root: [u8; 32],
         signature: &Signature,
-    ) -> eyre::Result<()> {
+    ) -> Result<()> {
         self.verify_root(root, signature, self.chain.application_builder_domain())
     }
 
     /// Verify the signature with the public key of the signer using the Commit Boost domain.
-    pub fn verify_commit_boost_root(
-        &self,
-        root: [u8; 32],
-        signature: &Signature,
-    ) -> eyre::Result<()> {
+    pub fn verify_commit_boost_root(&self, root: [u8; 32], signature: &Signature) -> Result<()> {
         self.verify_root(root, signature, self.chain.commit_boost_domain())
     }
 
@@ -78,7 +84,7 @@ impl LocalSigner {
         root: [u8; 32],
         signature: &Signature,
         domain: [u8; 32],
-    ) -> eyre::Result<()> {
+    ) -> Result<()> {
         let signing_root = compute_signing_root(&root, domain)?;
         let pk = blst::min_pk::PublicKey::from_bytes(self.pubkey().as_ref()).unwrap();
 
@@ -86,7 +92,7 @@ impl LocalSigner {
         if res == BLST_ERROR::BLST_SUCCESS {
             Ok(())
         } else {
-            eyre::bail!(format!("Invalid signature: {:?}", res))
+            Err(LocalSignerError::InvalidSignature(format!("{res:?}")))
         }
     }
 }

@@ -2,12 +2,11 @@ use std::{str::FromStr, sync::Arc};
 
 use alloy::{rpc::types::beacon::BlsSignature, signers::Signature};
 use cb_common::{
-    commit::{client::SignerClient, request::SignConsensusRequest},
+    commit::{client::SignerClient, error::SignerClientError, request::SignConsensusRequest},
     signer::EcdsaPublicKey,
 };
 use commit_boost::prelude::SignProxyRequest;
 use ethereum_consensus::crypto::bls::PublicKey as BlsPublicKey;
-use eyre::ErrReport;
 use parking_lot::RwLock;
 use thiserror::Error;
 use tracing::{debug, error, info};
@@ -31,14 +30,19 @@ pub enum CommitBoostError {
     #[error("failed to sign constraint: {0}")]
     NoSignature(String),
     #[error("failed to create signer client: {0}")]
-    SignerClientError(#[from] ErrReport),
+    SignerClientError(#[from] SignerClientError),
+    #[error("error in commit boost signer: {0}")]
+    Other(#[from] eyre::Report),
 }
+
+type Result<T> = std::result::Result<T, CommitBoostError>;
 
 #[allow(unused)]
 impl CommitBoostSigner {
     /// Create a new [CommitBoostSigner] instance
-    pub async fn new(signer_server_address: String, jwt: &str) -> Result<Self, CommitBoostError> {
-        let signer_client = SignerClient::new(signer_server_address, jwt)?;
+    pub async fn new(signer_server_address: String, jwt: &str) -> Result<Self> {
+        let signer_client =
+            SignerClient::new(signer_server_address, jwt).map_err(CommitBoostError::Other)?;
 
         let client = Self {
             signer_client,
@@ -117,7 +121,7 @@ impl CommitBoostSigner {
     }
 
     /// Sign an object root with the Commit Boost domain.
-    pub async fn sign_commit_boost_root(&self, data: [u8; 32]) -> eyre::Result<BlsSignature> {
+    pub async fn sign_commit_boost_root(&self, data: [u8; 32]) -> Result<BlsSignature> {
         // convert the pubkey from ethereum_consensus to commit-boost format
         let pubkey = cb_common::signer::BlsPublicKey::from(
             alloy::rpc::types::beacon::BlsPublicKey::from_slice(self.pubkey().as_ref()),
