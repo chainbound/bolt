@@ -45,7 +45,8 @@ impl KeystoreSigner {
         let mut keypairs = Vec::with_capacity(keystores_paths.len());
 
         for path in keystores_paths {
-            let keypair = Keystore::from_json_file(path.clone())
+            let keypair = Keystore::from_json_file(path.clone());
+            let keypair = keypair
                 .map_err(|e| KeystoreError::ReadFromJSON(path.clone(), format!("{e:?}")))?
                 .decrypt_keypair(password)
                 .map_err(|e| KeystoreError::KeypairDecryption(path.clone(), format!("{e:?}")))?;
@@ -296,21 +297,21 @@ mod tests {
     #[test]
     fn test_keystore_signer_2() {
         // 0. Test data setup
+        //
 
         // Taken from the Kurtosis devnet
-        let test_keystore_json = r#"{"crypto":{"kdf":{"function":"pbkdf2","params":{"dklen":32,"c":2,"prf":"hmac-sha256","salt":"1411b589ab43558f1d29053f6e96e6268f4b8491ba48d0c164273575dd80c1b6"},"message":""},"checksum":{"function":"sha256","params":{},"message":"f669c41a996d60d094053504ccb1a7fa180376dd2474a9659dd86104f790d59c"},"cipher":{"function":"aes-128-ctr","params":{"iv":"2f0927f8ff08e9d4faee279a98fe8377"},"message":"2c34bed346f5520291239f067a912a34ee5f7680be06b0f7c4a930111b5c1b57"}},"description":"0x81b676591b823270a3284ace7d81cbce2d6cdce55bb0e053874d7e3a08f729453009d3e662ec3130379f43c0f3210b6d","pubkey":"81b676591b823270a3284ace7d81cbce2d6cdce55bb0e053874d7e3a08f729453009d3e662ec3130379f43c0f3210b6d","path":"","uuid":"a4f153d8-9ebf-49ac-b447-8aab996f7778","version":4}"#;
+        let test_keystore_json = r#"{"crypto":{"kdf":{"function":"pbkdf2","params":{"dklen":32,"c":262144,"prf":"hmac-sha256","salt":"be4382b8194846b21d15a46df9d0e8062a48dfb46d2826880af554f12979a743"},"message":""},"checksum":{"function":"sha256","params":{},"message":"9e7c6c8b9040fbe0cb4bd06119b90d5b72bac9cd2dfb36cd5997099f7f2eb338"},"cipher":{"function":"aes-128-ctr","params":{"iv":"e01ca31de1e01e3d29dc3f755ec02866"},"message":"8a9a40bfa7464c313b85787541bb2d4694095a19bc9235bc55e425ff0c12b1b8"}},"description":"0x81b676591b823270a3284ace7d81cbce2d6cdce55bb0e053874d7e3a08f729453009d3e662ec3130379f43c0f3210b6d","pubkey":"81b676591b823270a3284ace7d81cbce2d6cdce55bb0e053874d7e3a08f729453009d3e662ec3130379f43c0f3210b6d","path":"","uuid":"78a76023-9753-47b5-a989-3bd94aac4872","version":4}"#;
         // Reference: https://eips.ethereum.org/EIPS/eip-2335#test-cases
-        let keystore_password = r#"password"#;
-        println!("{:?}", keystore_password.as_bytes());
-        let keystore_public_key = "0x9612d7a727c9d0a22e185a1c768478dfe919cada9266988cb32359c11f2b7b27f4ae4040902382ae2910c15e2b420d07";
+        let keystore_password = r#"My5Sv2UAENRAppJ3w7ZvyO6ez1TyvKZ4NfJ25hgBRrw="#;
+        let keystore_public_key = "0x81b676591b823270a3284ace7d81cbce2d6cdce55bb0e053874d7e3a08f729453009d3e662ec3130379f43c0f3210b6d";
         let keystore_publlc_key_bytes: [u8; 48] = [
-            0x96, 0x12, 0xd7, 0xa7, 0x27, 0xc9, 0xd0, 0xa2, 0x2e, 0x18, 0x5a, 0x1c, 0x76, 0x84,
-            0x78, 0xdf, 0xe9, 0x19, 0xca, 0xda, 0x92, 0x66, 0x98, 0x8c, 0xb3, 0x23, 0x59, 0xc1,
-            0x1f, 0x2b, 0x7b, 0x27, 0xf4, 0xae, 0x40, 0x40, 0x90, 0x23, 0x82, 0xae, 0x29, 0x10,
-            0xc1, 0x5e, 0x2b, 0x42, 0x0d, 0x07,
+            0x81, 0xb6, 0x76, 0x59, 0x1b, 0x82, 0x32, 0x70, 0xa3, 0x28, 0x4a, 0xce, 0x7d, 0x81,
+            0xcb, 0xce, 0x2d, 0x6c, 0xdc, 0xe5, 0x5b, 0xb0, 0xe0, 0x53, 0x87, 0x4d, 0x7e, 0x3a,
+            0x08, 0xf7, 0x29, 0x45, 0x30, 0x09, 0xd3, 0xe6, 0x62, 0xec, 0x31, 0x30, 0x37, 0x9f,
+            0x43, 0xc0, 0xf3, 0x21, 0x0b, 0x6d,
         ];
         let keystore_secret_key =
-            "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
+            "64fc5f1ae34cc39e9040eb82aca3ab48dc417103f1ec58de2465a61210ce1829";
         let chain_config = ChainConfig::mainnet();
 
         // 1. Create a temp directory with the keystore and create a signer from it
