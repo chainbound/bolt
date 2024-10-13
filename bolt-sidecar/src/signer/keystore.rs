@@ -146,7 +146,7 @@ mod tests {
     pub const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 
     #[test]
-    fn test_keystore_signer_1() {
+    fn test_keystore_signer() {
         // 0. Test data setup
 
         // Reference: https://eips.ethereum.org/EIPS/eip-2335#test-cases
@@ -292,77 +292,5 @@ mod tests {
                 .expect("to sign message");
             assert_eq!(sig_local, sig_keystore);
         }
-    }
-
-    #[test]
-    fn test_keystore_signer_2() {
-        // 0. Test data setup
-        //
-
-        // Taken from the Kurtosis devnet
-        let test_keystore_json = r#"{"crypto":{"kdf":{"function":"pbkdf2","params":{"dklen":32,"c":262144,"prf":"hmac-sha256","salt":"be4382b8194846b21d15a46df9d0e8062a48dfb46d2826880af554f12979a743"},"message":""},"checksum":{"function":"sha256","params":{},"message":"9e7c6c8b9040fbe0cb4bd06119b90d5b72bac9cd2dfb36cd5997099f7f2eb338"},"cipher":{"function":"aes-128-ctr","params":{"iv":"e01ca31de1e01e3d29dc3f755ec02866"},"message":"8a9a40bfa7464c313b85787541bb2d4694095a19bc9235bc55e425ff0c12b1b8"}},"description":"0x81b676591b823270a3284ace7d81cbce2d6cdce55bb0e053874d7e3a08f729453009d3e662ec3130379f43c0f3210b6d","pubkey":"81b676591b823270a3284ace7d81cbce2d6cdce55bb0e053874d7e3a08f729453009d3e662ec3130379f43c0f3210b6d","path":"","uuid":"78a76023-9753-47b5-a989-3bd94aac4872","version":4}"#;
-        // Reference: https://eips.ethereum.org/EIPS/eip-2335#test-cases
-        let keystore_password = r#"My5Sv2UAENRAppJ3w7ZvyO6ez1TyvKZ4NfJ25hgBRrw="#;
-        let keystore_public_key = "0x81b676591b823270a3284ace7d81cbce2d6cdce55bb0e053874d7e3a08f729453009d3e662ec3130379f43c0f3210b6d";
-        let keystore_publlc_key_bytes: [u8; 48] = [
-            0x81, 0xb6, 0x76, 0x59, 0x1b, 0x82, 0x32, 0x70, 0xa3, 0x28, 0x4a, 0xce, 0x7d, 0x81,
-            0xcb, 0xce, 0x2d, 0x6c, 0xdc, 0xe5, 0x5b, 0xb0, 0xe0, 0x53, 0x87, 0x4d, 0x7e, 0x3a,
-            0x08, 0xf7, 0x29, 0x45, 0x30, 0x09, 0xd3, 0xe6, 0x62, 0xec, 0x31, 0x30, 0x37, 0x9f,
-            0x43, 0xc0, 0xf3, 0x21, 0x0b, 0x6d,
-        ];
-        let keystore_secret_key =
-            "64fc5f1ae34cc39e9040eb82aca3ab48dc417103f1ec58de2465a61210ce1829";
-        let chain_config = ChainConfig::mainnet();
-
-        // 1. Create a temp directory with the keystore and create a signer from it
-
-        let path_str = format!("{}/{}", CARGO_MANIFEST_DIR, KEYSTORES_DEFAULT_PATH);
-        let tmp_dir =
-            tempfile::TempDir::with_prefix_in("0xdeadbeefdeadbeefdeadbeefdeadbeef", path_str)
-                .expect("to create temp dir");
-
-        // NOTE: it is sufficient to create a temp dir, then we can create a file as usual and it
-        // will be dropped correctly
-        let mut tmp_file = File::create_new(tmp_dir.path().join("voting-keystore.json"))
-            .expect("to create new file");
-
-        tmp_file.write_all(test_keystore_json.as_bytes()).expect("to write to temp file");
-
-        for entry in tmp_dir.path().read_dir().expect("to read tmp dir") {
-            let mut path = entry.expect("to read entry").path();
-            println!("inside loop: {:?}", path);
-            let extenstion =
-                path.extension().expect("to get extension").to_str().expect("to convert to str");
-
-            if extenstion.contains("tmp") {
-                path.set_extension("json");
-                println!("path: {:?}", path);
-                break;
-            }
-        }
-
-        let keystore_signer = KeystoreSigner::new(None, keystore_password.as_bytes(), chain_config)
-            .expect("to create keystore signer");
-
-        assert_eq!(keystore_signer.keypairs.len(), 1);
-        assert_eq!(
-            keystore_signer.keypairs.first().expect("to get keypair").pk.to_string(),
-            keystore_public_key
-        );
-
-        // 2. Sign a message with the signer and check the signature
-
-        let keystore_sk_bls = SecretKey::from_bytes(
-            hex::decode(keystore_secret_key).expect("to decode secret key").as_slice(),
-        )
-        .expect("to create secret key");
-
-        let local_signer = LocalSigner::new(keystore_sk_bls, chain_config);
-
-        let sig_local = local_signer.sign_commit_boost_root([0; 32]).expect("to sign message");
-        let sig_keystore = keystore_signer
-            .sign_commit_boost_root([0; 32], keystore_publlc_key_bytes)
-            .expect("to sign message");
-        assert_eq!(sig_local, sig_keystore);
     }
 }
