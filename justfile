@@ -44,7 +44,7 @@ inspect:
 	kurtosis enclave inspect bolt-devnet
 
 bash service:
-    @id=$(docker ps -n 100 | grep helix-relay | awk -F' ' '{print $1}') && \
+    @id=$(docker ps -n 100 | grep {{ service }} | awk -F' ' '{print $1}') && \
     docker exec -it $id bash
 
 log service:
