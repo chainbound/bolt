@@ -27,6 +27,7 @@ pub const DEFAULT_CONSTRAINTS_PROXY_PORT: u16 = 18551;
 
 /// Command-line options for the Bolt sidecar
 #[derive(Debug, Parser)]
+#[clap(trailing_var_arg = true)]
 pub struct Opts {
     /// Port to listen on for incoming JSON-RPC requests
     #[clap(long, env = "BOLT_SIDECAR_PORT",
@@ -82,6 +83,11 @@ pub struct Opts {
     /// Telemetry options
     #[clap(flatten)]
     pub telemetry: TelemetryOpts,
+    /// Additional unrecognized arguments. Useful for CI and testing
+    /// to avoid issues on potential extra flags provided (e.g. "--exact" from cargo nextest).
+    #[cfg(test)]
+    #[clap(allow_hyphen_values = true)]
+    pub extra_args: Vec<String>,
 }
 
 #[cfg(test)]
