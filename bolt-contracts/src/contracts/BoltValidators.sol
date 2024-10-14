@@ -11,6 +11,9 @@ import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 
 /// @title Bolt Validators
 /// @notice This contract is responsible for registering validators and managing their configuration
+/// @dev This contract is upgradeable using the UUPSProxy pattern. Storage layout remains fixed across upgrades
+/// with the use of storage gaps.
+/// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 contract BoltValidators is IBoltValidators, BLSSignatureVerifier, OwnableUpgradeable, UUPSUpgradeable {
     using BLS12381 for BLS12381.G1Point;
 
@@ -32,10 +35,22 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, OwnableUpgrade
     /// @dev This is used internally to easily query the pubkey hash of a validator.
     mapping(uint64 => bytes32) private sequenceNumberToPubkeyHash;
 
+    // --> Storage layout marker: 3 slots
+
     /// @notice counter of the next index to be assigned to a validator.
     /// @dev This incremental index is only used to identify validators in the registry.
     /// It is not related to the `validatorIndex` assigned by the Beacon Chain.
     uint64 internal nextValidatorSequenceNumber;
+
+    /**
+     * @dev This empty reserved space is put in place to allow future versions to add new
+     * variables without shifting down storage in the inheritance chain.
+     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+     * This can be validated with the Openzeppelin Foundry Upgrades toolkit.
+     *
+     * Total storage slots: 50
+     */
+    uint256[47] private __gap;
 
     // ========= EVENTS =========
 

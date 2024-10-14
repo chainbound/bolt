@@ -23,6 +23,11 @@ import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
 import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
+/// @title Bolt Symbiotic Middleware
+/// @notice This contract is responsible for interfacing with the Symbiotic restaking protocol.
+/// @dev This contract is upgradeable using the UUPSProxy pattern. Storage layout remains fixed across upgrades
+/// with the use of storage gaps.
+/// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
@@ -59,15 +64,25 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
     /// @notice Start timestamp of the first epoch.
     uint48 public START_TIMESTAMP;
 
-    // ========= CONSTANTS =========
-
     /// @notice Slasher that can instantly slash operators without veto.
-    uint256 public constant INSTANT_SLASHER_TYPE = 0;
+    uint256 public INSTANT_SLASHER_TYPE;
 
     /// @notice Slasher that can request a veto before actually slashing operators.
-    uint256 public constant VETO_SLASHER_TYPE = 1;
+    uint256 public VETO_SLASHER_TYPE;
 
-    bytes32 public constant NAME_HASH = keccak256("SYMBIOTIC");
+    bytes32 public NAME_HASH;
+
+    // --> Storage layout marker: 12 slots
+
+    /**
+     * @dev This empty reserved space is put in place to allow future versions to add new
+     * variables without shifting down storage in the inheritance chain.
+     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+     * This can be validated with the Openzeppelin Foundry Upgrades toolkit.
+     *
+     * Total storage slots: 50
+     */
+    uint256[38] private __gap;
 
     // ========= ERRORS =========
 
@@ -102,6 +117,9 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
         OPERATOR_REGISTRY = _symbioticOperatorRegistry;
         OPERATOR_NET_OPTIN = _symbioticOperatorNetOptIn;
         VAULT_REGISTRY = _symbioticVaultRegistry;
+        INSTANT_SLASHER_TYPE = 0;
+        VETO_SLASHER_TYPE = 1;
+        NAME_HASH = keccak256("SYMBIOTIC");
     }
 
     function _authorizeUpgrade(

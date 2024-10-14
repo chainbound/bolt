@@ -17,6 +17,11 @@ import {TransactionDecoder} from "../lib/TransactionDecoder.sol";
 import {IBoltChallenger} from "../interfaces/IBoltChallenger.sol";
 import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 
+/// @title Bolt Challenger
+/// @notice Contract for managing (creating & resolving) challenges for Bolt inclusion commitments.
+/// @dev This contract is upgradeable using the UUPSProxy pattern. Storage layout remains fixed across upgrades
+/// with the use of storage gaps.
+/// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 contract BoltChallenger is IBoltChallenger, OwnableUpgradeable, UUPSUpgradeable {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
@@ -34,6 +39,18 @@ contract BoltChallenger is IBoltChallenger, OwnableUpgradeable, UUPSUpgradeable 
 
     /// @notice The mapping of challenge IDs to their respective challenges.
     mapping(bytes32 => Challenge) internal challenges;
+
+    // --> Storage layout marker: 3 slots
+
+    /**
+     * @dev This empty reserved space is put in place to allow future versions to add new
+     * variables without shifting down storage in the inheritance chain.
+     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+     * This can be validated with the Openzeppelin Foundry Upgrades toolkit.
+     *
+     * Total storage slots: 50
+     */
+    uint256[47] private __gap;
 
     // ========= INITIALIZER =========
 

@@ -23,6 +23,11 @@ import {AVSDirectoryStorage} from "@eigenlayer/src/contracts/core/AVSDirectorySt
 import {DelegationManagerStorage} from "@eigenlayer/src/contracts/core/DelegationManagerStorage.sol";
 import {StrategyManagerStorage} from "@eigenlayer/src/contracts/core/StrategyManagerStorage.sol";
 
+/// @title Bolt Manager
+/// @notice This contract is responsible for interfacing with the EigenLayer restaking protocol.
+/// @dev This contract is upgradeable using the UUPSProxy pattern. Storage layout remains fixed across upgrades
+/// with the use of storage gaps.
+/// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
@@ -52,12 +57,23 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUp
     /// @notice Address of the EigenLayer Strategy Manager contract.
     StrategyManagerStorage public STRATEGY_MANAGER;
 
+    /// @notice Name hash of the restaking protocol for identifying the instance of `IBoltMiddleware`.
+    bytes32 public NAME_HASH;
+
+    // --> Storage layout marker: 8 slots
+
     /// @notice Start timestamp of the first epoch.
     uint48 public START_TIMESTAMP;
 
-    // ========= CONSTANTS =========
-    /// @notice Name hash of the restaking protocol for identifying the instance of `IBoltMiddleware`.
-    bytes32 public constant NAME_HASH = keccak256("EIGENLAYER");
+    /**
+     * @dev This empty reserved space is put in place to allow future versions to add new
+     * variables without shifting down storage in the inheritance chain.
+     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+     * This can be validated with the Openzeppelin Foundry Upgrades toolkit.
+     *
+     * Total storage slots: 50
+     */
+    uint256[42] private __gap;
 
     // ========= ERRORS =========
 
@@ -88,6 +104,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUp
         AVS_DIRECTORY = AVSDirectoryStorage(_eigenlayerAVSDirectory);
         DELEGATION_MANAGER = DelegationManagerStorage(_eigenlayerDelegationManager);
         STRATEGY_MANAGER = StrategyManagerStorage(_eigenlayerStrategyManager);
+        NAME_HASH = keccak256("EIGENLAYER");
     }
 
     function _authorizeUpgrade(

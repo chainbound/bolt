@@ -4,6 +4,11 @@ pragma solidity 0.8.25;
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
+/// @title Bolt Parameters
+/// @notice The BoltParameters contract contains all the parameters for the Bolt protocol.
+/// @dev This contract is upgradeable using the UUPSProxy pattern. Storage layout remains fixed across upgrades
+/// with the use of storage gaps.
+/// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 contract BoltParameters is OwnableUpgradeable, UUPSUpgradeable {
     // =========== STORAGE =========== //
 

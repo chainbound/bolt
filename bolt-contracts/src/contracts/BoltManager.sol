@@ -14,6 +14,12 @@ import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
 import {IBoltManager} from "../interfaces/IBoltManager.sol";
 
+/// @title Bolt Manager
+/// @notice The Bolt Manager contract is responsible for managing operators & restaking middlewares, and is the
+/// entrypoint contract for all Bolt-related queries for off-chain consumers.
+/// @dev This contract is upgradeable using the UUPSProxy pattern. Storage layout remains fixed across upgrades
+/// with the use of storage gaps.
+/// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.OperatorMap;
@@ -35,8 +41,20 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     /// associated Bolt Middleware contract.
     EnumerableSet.AddressSet private restakingProtocols;
 
+    // --> Storage layout marker: 4 slots
+
     /// @notice Start timestamp of the first epoch.
     uint48 public START_TIMESTAMP;
+
+    /**
+     * @dev This empty reserved space is put in place to allow future versions to add new
+     * variables without shifting down storage in the inheritance chain.
+     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+     * This can be validated with the Openzeppelin Foundry Upgrades toolkit.
+     *
+     * Total storage slots: 50
+     */
+    uint256[46] private __gap;
 
     modifier onlyMiddleware() {
         if (!restakingProtocols.contains(msg.sender)) {
