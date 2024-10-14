@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use clap::{Args, ValueEnum};
 use ethereum_consensus::deneb::{compute_fork_data_root, Root};
+use serde::Deserialize;
 
 /// Default commitment deadline duration.
 ///
@@ -21,7 +22,7 @@ pub const COMMIT_BOOST_DOMAIN_MASK: [u8; 4] = [109, 109, 111, 67];
 
 /// Configuration for the chain the sidecar is running on.
 /// This allows to customize the slot time for custom Kurtosis devnets.
-#[derive(Debug, Clone, Copy, Args)]
+#[derive(Debug, Clone, Copy, Args, Deserialize)]
 pub struct ChainConfig {
     /// Chain on which the sidecar is running
     #[clap(long, env = "BOLT_SIDECAR_CHAIN", default_value = "mainnet")]
@@ -55,9 +56,8 @@ impl Default for ChainConfig {
 }
 
 /// Supported chains for the sidecar
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, ValueEnum, Deserialize)]
 #[clap(rename_all = "kebab_case")]
-#[allow(missing_docs)]
 pub enum Chain {
     Mainnet,
     Holesky,

@@ -30,6 +30,7 @@ use crate::{
 pub struct ConstraintsClient {
     url: Url,
     client: reqwest::Client,
+    delegations: Vec<SignedDelegation>,
 }
 
 impl ConstraintsClient {
@@ -38,7 +39,13 @@ impl ConstraintsClient {
         Self {
             url: url.into(),
             client: reqwest::ClientBuilder::new().user_agent("bolt-sidecar").build().unwrap(),
+            delegations: Vec::new(),
         }
+    }
+
+    /// Adds a list of delegations to the client.
+    pub fn add_delegations(&mut self, delegations: Vec<SignedDelegation>) {
+        self.delegations.extend(delegations);
     }
 
     fn endpoint(&self, path: &str) -> Url {
@@ -78,6 +85,13 @@ impl BuilderApi for ConstraintsClient {
         if response.status() != StatusCode::OK {
             let error = response.json::<ErrorResponse>().await?;
             return Err(BuilderApiError::FailedRegisteringValidators(error));
+        }
+
+        // If there are any delegations, propagate them to the relay
+        if self.delegations.is_empty() {
+            return Ok(());
+        } else if let Err(err) = self.delegate(&self.delegations).await {
+            error!(?err, "Failed to propagate delegations during validator registration");
         }
 
         Ok(())
@@ -190,12 +204,12 @@ impl ConstraintsApi for ConstraintsClient {
         Ok(header)
     }
 
-    async fn delegate(&self, signed_data: SignedDelegation) -> Result<(), BuilderApiError> {
+    async fn delegate(&self, signed_data: &[SignedDelegation]) -> Result<(), BuilderApiError> {
         let response = self
             .client
             .post(self.endpoint(DELEGATE_PATH))
             .header("content-type", "application/json")
-            .body(serde_json::to_string(&signed_data)?)
+            .body(serde_json::to_string(signed_data)?)
             .send()
             .await?;
 
@@ -207,12 +221,12 @@ impl ConstraintsApi for ConstraintsClient {
         Ok(())
     }
 
-    async fn revoke(&self, signed_data: SignedRevocation) -> Result<(), BuilderApiError> {
+    async fn revoke(&self, signed_data: &[SignedRevocation]) -> Result<(), BuilderApiError> {
         let response = self
             .client
             .post(self.endpoint(REVOKE_PATH))
             .header("content-type", "application/json")
-            .body(serde_json::to_string(&signed_data)?)
+            .body(serde_json::to_string(signed_data)?)
             .send()
             .await?;
 

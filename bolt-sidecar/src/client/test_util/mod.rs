@@ -98,13 +98,13 @@ impl ConstraintsApi for MockConstraintsClient {
         Ok(bid)
     }
 
-    async fn delegate(&self, signed_data: SignedDelegation) -> Result<(), BuilderApiError> {
+    async fn delegate(&self, signed_data: &[SignedDelegation]) -> Result<(), BuilderApiError> {
         Err(BuilderApiError::Generic(
             "MockConstraintsClient does not support delegating".to_string(),
         ))
     }
 
-    async fn revoke(&self, signed_data: SignedRevocation) -> Result<(), BuilderApiError> {
+    async fn revoke(&self, signed_data: &[SignedRevocation]) -> Result<(), BuilderApiError> {
         Err(BuilderApiError::Generic("MockConstraintsClient does not support revoking".to_string()))
     }
 }

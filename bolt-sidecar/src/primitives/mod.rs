@@ -24,7 +24,7 @@ use ethereum_consensus::{
     Fork,
 };
 use reth_primitives::{BlobTransactionSidecar, Bytes, PooledTransactionsElement, TxKind, TxType};
-use serde::{de, ser::SerializeSeq, Serialize};
+use serde::{de, ser::SerializeSeq};
 use tokio::sync::{mpsc, oneshot};
 
 pub use ethereum_consensus::crypto::{PublicKey as BlsPublicKey, Signature as BlsSignature};
@@ -454,7 +454,7 @@ pub struct SignatureError;
 
 /// Event types that can be emitted by the validator pubkey to
 /// signal some action on the Bolt protocol.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 enum SignedMessageAction {
     /// Signal delegation of a validator pubkey to a delegatee pubkey.
@@ -463,13 +463,13 @@ enum SignedMessageAction {
     Revocation,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct SignedDelegation {
     pub message: DelegationMessage,
     pub signature: BlsSignature,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 pub struct DelegationMessage {
     action: u8,
     pub validator_pubkey: BlsPublicKey,
@@ -494,13 +494,13 @@ impl SignableBLS for DelegationMessage {
     }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
 pub struct SignedRevocation {
     pub message: RevocationMessage,
     pub signature: BlsSignature,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
 pub struct RevocationMessage {
     action: u8,
     pub validator_pubkey: BlsPublicKey,

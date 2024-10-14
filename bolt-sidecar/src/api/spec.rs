@@ -172,8 +172,8 @@ pub trait ConstraintsApi: BuilderApi {
     ) -> Result<VersionedValue<SignedBuilderBid>, BuilderApiError>;
 
     /// Implements: <https://chainbound.github.io/bolt-docs/api/builder#delegate>
-    async fn delegate(&self, signed_data: SignedDelegation) -> Result<(), BuilderApiError>;
+    async fn delegate(&self, signed_data: &[SignedDelegation]) -> Result<(), BuilderApiError>;
 
     /// Implements: <https://chainbound.github.io/bolt-docs/api/builder#revoke>
-    async fn revoke(&self, signed_data: SignedRevocation) -> Result<(), BuilderApiError>;
+    async fn revoke(&self, signed_data: &[SignedRevocation]) -> Result<(), BuilderApiError>;
 }

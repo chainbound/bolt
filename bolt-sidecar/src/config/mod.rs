@@ -1,6 +1,10 @@
+use std::{fs::File, io::Read};
+
 use alloy::primitives::Address;
 use clap::Parser;
+use eyre::Context;
 use reqwest::Url;
+use serde::Deserialize;
 
 pub mod validator_indexes;
 pub use validator_indexes::ValidatorIndexes;
@@ -26,7 +30,7 @@ pub const DEFAULT_RPC_PORT: u16 = 8000;
 pub const DEFAULT_CONSTRAINTS_PROXY_PORT: u16 = 18551;
 
 /// Command-line options for the Bolt sidecar
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Deserialize)]
 #[clap(trailing_var_arg = true)]
 pub struct Opts {
     /// Port to listen on for incoming JSON-RPC requests
@@ -46,8 +50,7 @@ pub struct Opts {
     #[clap(long, env = "BOLT_SIDECAR_ENGINE_API_URL", default_value = "http://localhost:8551")]
     pub engine_api_url: Url,
     /// Constraint proxy server port to use
-    #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT",
-        default_value_t = DEFAULT_CONSTRAINTS_PROXY_PORT)]
+    #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT", default_value_t = DEFAULT_CONSTRAINTS_PROXY_PORT)]
     pub constraints_proxy_port: u16,
     /// Validator indexes of connected validators that the sidecar
     /// should accept commitments on behalf of. Accepted values:
@@ -66,10 +69,8 @@ pub struct Opts {
     #[clap(long, env = "BOLT_SIDECAR_FEE_RECIPIENT",
         default_value_t = Address::ZERO)]
     pub fee_recipient: Address,
-    /// Secret BLS key to sign fallback payloads with
-    /// (If not provided, a random key will be used)
-    #[clap(long, env = "BOLT_SIDECAR_BUILDER_PRIVATE_KEY",
-        default_value_t = BlsSecretKeyWrapper::random())]
+    /// Secret BLS key to sign fallback payloads with (If not provided, a random key will be used)
+    #[clap(long, env = "BOLT_SIDECAR_BUILDER_PRIVATE_KEY", default_value_t = BlsSecretKeyWrapper::random())]
     pub builder_private_key: BlsSecretKeyWrapper,
     /// Operating limits for the sidecar
     #[clap(flatten)]
@@ -88,6 +89,18 @@ pub struct Opts {
     #[cfg(test)]
     #[clap(allow_hyphen_values = true)]
     pub extra_args: Vec<String>,
+}
+
+impl Opts {
+    /// Parse the configuration from a TOML file.
+    pub fn parse_from_toml(file_path: &str) -> eyre::Result<Self> {
+        let mut file = File::open(file_path).wrap_err("Unable to open file")?;
+
+        let mut contents = String::new();
+        file.read_to_string(&mut contents).wrap_err("Unable to read file")?;
+
+        toml::from_str(&contents).wrap_err("Error parsing the TOML file")
+    }
 }
 
 #[cfg(test)]

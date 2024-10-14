@@ -61,7 +61,7 @@ thiserror = "1.0"
 rand = "0.8.5"
 dotenvy = "0.15.7"
 regex = "1.10.5"
-# backtrace = "0.3.74"
+toml = "0.5"
 
 # tracing
 tracing = "0.1.40"

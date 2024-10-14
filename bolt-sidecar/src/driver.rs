@@ -1,5 +1,8 @@
 use core::fmt;
-use std::time::{Duration, Instant};
+use std::{
+    fs,
+    time::{Duration, Instant},
+};
 
 use alloy::{rpc::types::beacon::events::HeadEvent, signers::local::PrivateKeySigner};
 use beacon_api_client::mainnet::Client as BeaconClient;
@@ -19,7 +22,7 @@ use crate::{
     crypto::{bls::cl_public_key_to_arr, SignableBLS, SignerECDSA},
     primitives::{
         CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
-        SignedConstraints, TransactionExt,
+        SignedConstraints, SignedDelegation, TransactionExt,
     },
     signer::{keystore::KeystoreSigner, local::LocalSigner},
     start_builder_proxy_server,
@@ -132,7 +135,6 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
         commitment_signer: ECDSA,
         fetcher: C,
     ) -> eyre::Result<Self> {
-        let constraints_client = ConstraintsClient::new(opts.constraints_url.clone());
         let beacon_client = BeaconClient::new(opts.beacon_api_url.clone());
         let execution = ExecutionState::new(fetcher, opts.limits).await?;
 
@@ -168,6 +170,21 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
         let api_addr = format!("0.0.0.0:{}", opts.port);
         let (api_events_tx, api_events_rx) = mpsc::channel(1024);
         CommitmentsApiServer::new(api_addr).run(api_events_tx).await;
+
+        let mut constraints_client = ConstraintsClient::new(opts.constraints_url.clone());
+
+        // read the delegaitons from disk if they exist and add them to the constraints client
+        if let Some(delegations_file_path) = opts.signing.delegations_path.as_ref() {
+            if let Ok(contents) = fs::read_to_string(delegations_file_path) {
+                match serde_json::from_str::<Vec<SignedDelegation>>(&contents) {
+                    Ok(delegations) => {
+                        info!(count = %delegations.len(), "Loaded signed delegations from disk");
+                        constraints_client.add_delegations(delegations);
+                    }
+                    Err(err) => error!(?err, "Failed to parse signed delegations from disk"),
+                }
+            }
+        }
 
         Ok(SidecarDriver {
             head_tracker,

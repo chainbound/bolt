@@ -3,6 +3,8 @@ use std::{
     str::FromStr,
 };
 
+use serde::{de, Deserialize, Deserializer};
+
 #[derive(Debug, Clone, Default)]
 pub struct ValidatorIndexes(Vec<u64>);
 
@@ -49,6 +51,16 @@ impl FromStr for ValidatorIndexes {
         }
 
         Ok(Self(vec))
+    }
+}
+
+impl<'de> Deserialize<'de> for ValidatorIndexes {
+    fn deserialize<D>(deserializer: D) -> Result<ValidatorIndexes, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        ValidatorIndexes::from_str(&s).map_err(de::Error::custom)
     }
 }
 
