@@ -91,7 +91,7 @@ The opt-in process requires the following steps:
 > Operator (NO), since the same steps apply to solo stakers.
 
 As a Node Operator you will be an ["Operator"](https://docs.eigenlayer.xyz/eigenlayer/overview/key-terms)
-in the Bolt AVS built on top of EigenLayer. This requires 
+in the Bolt AVS built on top of EigenLayer. This requires
 running an Ethereum validator and the Bolt sidecar in order issue
 preconfirmations.
 
@@ -157,7 +157,7 @@ for handling fault attribution in the case of a validator failing to meet their 
 In short, the challenger contract allows any user to challenge a validator's commitment by opening
 a dispute with the following inputs:
 
-1. The signed commitment made by the validator
+1. The signed commitment made by the validator (or a list of commitments on the same slot)
 2. An ETH bond to cover the cost of the dispute and disincentivize frivolous challenges
 
 The entrypoint is the `openChallenge` function. Once a challenge is opened, a `ChallengeOpened` event
@@ -181,22 +181,24 @@ The inputs to the resolution process are as follows:
 
 1. The ID of the challenge to respond to: this is emitted in the `ChallengeOpened` event and is unique.
 2. The [inclusion proofs](https://github.com/chainbound/bolt/blob/6c0f1b696cfe3de7e7e3830ac28c369c6ddf271e/bolt-contracts/src/interfaces/IBoltChallenger.sol#L39), consisting of the following components:
-   - the block number of the block containing the included transaction
-   - the RLP-encoded block header of the block containing the included transaction
-   - the account merkle proof of the sender of the included transaction
-   - the transaction merkle proof of the included transaction against the header's transaction root
-   - the transaction index in the block of the included transaction
+   a. the block number of the block containing the committed transactions (we call it "inclusionBlock")
+   b. the RLP-encoded block header of the block **before** the one containing the committed transactions (we call it "previousBlock")
+   b. the RLP-encoded block header of the block containing the included transactions (aka "inclusionBlock")
+   c. the account merkle proofs of the sender of the committed transactions against the previousBlock's state root
+   d. the transaction merkle proofs of the included transactions against the inclusionBlock's transaction root
+   e. the transaction index in the block of each included transaction
 
 If the arbitrator submits a valid response that satisfies the requirements for the challenge, the
-challenge is considered DEFENDED and the challenger's bond is slashed to cover the cost of the dispute
+challenge is considered `DEFENDED` and the challenger's bond is slashed to cover the cost of the dispute
 and to incentivize speedy resolution.
 
 If no arbitrators respond successfully within the challenge time window, the challenge is considered
-LOST and the `BoltChallenger` will keep track of this information for future reference.
+`BREACHED` and anyone can call the `resolveExpiredChallenge()` method. The `BoltChallenger` will keep
+track of this information for future reference.
 
 ### Slashing of validators
 
-If a challenge is LOST (as per the above definition), the validator's stake should be slashed to cover
+If a challenge is `BREACHED` (as per the above definition), the validator's stake should be slashed to cover
 the cost of a missed commitment. This is done by calling the `slash` function on the correct staking adapter
 and reading into the `BoltChallenger` contract to trustlessly determine if the challenge was lost.
 
@@ -204,8 +206,8 @@ In practice, slashing behaviour is abstracted behind any staking adapter – an 
 which will receive a request to slash a validator's stake and will have a last opportunity to veto
 the slashing request before it is executed on-chain.
 
-Subscribing to lost challenges from the `BoltChallenger` is a trustless way to determine if a slashing request
-is valid according to Bolt Protocol rules.
+Subscribing to breached challenge events from the `BoltChallenger` is a trustless way to determine if a slashing
+request is valid according to Bolt Protocol rules.
 
 ## Testing
 
@@ -240,11 +242,3 @@ The following considerations should be taken into account before interacting wit
 - Restaking is a complex process that involves trusting external systems and smart contracts.
 - Validators should be aware of the potential for slashing if they fail to meet their commitments or engage in malicious behavior.
 - Smart contracts are susceptible to bugs and vulnerabilities that could be exploited by attackers.
-
-## Conclusion
-
-The Bolt smart contracts provide a robust and flexible framework for integrating validator registration,
-delegation, and restaking mechanism within the Bolt Ecosystem.
-
-By leveraging the power and security of Symbiotic and Eigenlayer solutions, Bolt offers a sophisticated
-solution for staking pools that wish to opt-in to multiple conditions with extreme granularity.

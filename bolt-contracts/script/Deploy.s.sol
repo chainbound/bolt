@@ -41,7 +41,7 @@ contract DeployBolt is Script {
             symbioticOperatorNetOptIn,
             symbioticVaultRegistry
         );
-        console.log("BoltSymbioticMiddleware deployed at", address(eigenLayerMiddleware));
+        console.log("BoltSymbioticMiddleware deployed at", address(symbioticMiddleware));
         vm.stopBroadcast();
     }
 }
