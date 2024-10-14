@@ -7,15 +7,6 @@ import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-import {IBaseDelegator} from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
-import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
-import {IVault} from "@symbiotic/interfaces/vault/IVault.sol";
-import {IRegistry} from "@symbiotic/interfaces/common/IRegistry.sol";
-import {IOptInService} from "@symbiotic/interfaces/service/IOptInService.sol";
-import {ISlasher} from "@symbiotic/interfaces/slasher/ISlasher.sol";
-import {IVetoSlasher} from "@symbiotic/interfaces/slasher/IVetoSlasher.sol";
-import {IEntity} from "@symbiotic/interfaces/common/IEntity.sol";
-
 import {OperatorMapWithTime} from "../lib/OperatorMapWithTime.sol";
 import {EnumerableMap} from "../lib/EnumerableMap.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
@@ -27,7 +18,6 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.OperatorMap;
     using OperatorMapWithTime for EnumerableMap.OperatorMap;
-    using Subnetwork for address;
 
     // ========= STORAGE =========
 

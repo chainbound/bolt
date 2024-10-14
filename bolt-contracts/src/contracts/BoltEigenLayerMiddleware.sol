@@ -173,7 +173,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUp
         manager.registerOperator(msg.sender, rpc);
     }
 
-    /// @notice Deregister an EigenLayer layer operator from working in Bolt Protocol.
+    /// @notice Deregister an EigenLayer operator from working in Bolt Protocol.
     /// @dev This requires calling the EigenLayer AVS Directory contract to deregister the operator.
     /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator.
     function deregisterOperator() public {
