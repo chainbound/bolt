@@ -4,3 +4,6 @@ broadcast/
 logs/
 
 .env
+
+node_modules/
+target/
