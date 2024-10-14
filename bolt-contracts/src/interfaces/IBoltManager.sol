@@ -7,6 +7,7 @@ interface IBoltManager {
     error InvalidQuery();
     error OperatorAlreadyRegistered();
     error OperatorNotRegistered();
+    error UnauthorizedMiddleware();
 
     struct Operator {
         string rpc;

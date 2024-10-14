@@ -49,7 +49,9 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     uint48 public START_TIMESTAMP;
 
     modifier onlyMiddleware() {
-        require(restakingProtocols.contains(msg.sender), "BoltManager: caller is not a middleware");
+        if (!restakingProtocols.contains(msg.sender)) {
+            revert UnauthorizedMiddleware();
+        }
         _;
     }
 
