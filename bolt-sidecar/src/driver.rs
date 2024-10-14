@@ -219,8 +219,6 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
 
         let start = Instant::now();
 
-        // TODO(nico): currently we don't use the validator pubkey to sign. this will be re-added
-        // later to support different signing setups.
         let validator_pubkey = match self.consensus.validate_request(&request) {
             Ok(index) => index,
             Err(err) => {
