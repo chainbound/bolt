@@ -67,7 +67,7 @@ contract BoltChallengerTest is Test {
         bytes32 trustedBlockHash = 0x0fc7c840f5b4b451e99dc8adb0d475eab2ac7d36278d9601d7f4b2dd05e8022f;
 
         // Read the RLP-encoded block header from a file (obtained via `debug_getRawHeader` RPC call)
-        string memory file = vm.readFile("./test/testdata/raw_header.json");
+        string memory file = vm.readFile("./test/testdata/header_20785012.json");
         bytes memory headerRLP = vm.parseJsonBytes(file, ".result");
 
         assertEq(keccak256(headerRLP), trustedBlockHash);
@@ -94,7 +94,7 @@ contract BoltChallengerTest is Test {
 
         // Read the RLP-encoded account proof from a file. This is obtained from the `eth_getProof`
         // RPC call + ABI-encoding of the resulting accountProof array.
-        string memory file = vm.readFile("./test/testdata/eth_proof.json");
+        string memory file = vm.readFile("./test/testdata/eth_proof_20785012.json");
         bytes[] memory accountProofJson = vm.parseJsonBytesArray(file, ".result.accountProof");
         bytes memory accountProof = _RLPEncodeList(accountProofJson);
 
@@ -126,8 +126,9 @@ contract BoltChallengerTest is Test {
         // The transaction we want to prove inclusion of
         bytes32 txHash = 0x9ec2c56ca36e445a46bc77ca77510f0ef21795d00834269f3752cbd29d63ba1f;
 
-        // MPT proof, obtained with the `eth-trie-proof` CLI tool
-        string memory file = vm.readFile("./test/testdata/tx_mpt_proof.json");
+        // MPT proof, obtained with the `trie-proofs` CLI tool from HerodotusDev
+        // ref: <https://github.com/HerodotusDev/trie-proofs>
+        string memory file = vm.readFile("./test/testdata/tx_mpt_proof_20785012.json");
         bytes[] memory txProofJson = vm.parseJsonBytesArray(file, ".proof");
         bytes memory txProof = _RLPEncodeList(txProofJson);
 
@@ -163,6 +164,8 @@ contract BoltChallengerTest is Test {
     // =========== Verifying Signatures ===========
 
     function testCommitmentDigestAndSignature() public {
+        // The test commitment has been created in the Bolt sidecar using the Rust
+        // methods to compute the digest() and recover the signer from the signature.
         IBoltChallenger.SignedCommitment memory commitment = _parseTestCommitment();
 
         // Reconstruct the commitment digest: `keccak( keccak(signed tx) || le_bytes(slot) )`
@@ -179,7 +182,7 @@ contract BoltChallengerTest is Test {
     }
 
     function testCommitmentSignature() public {
-        bytes memory signedTx = vm.parseJsonBytes(vm.readFile("./test/testdata/signed_tx.json"), ".raw");
+        bytes memory signedTx = vm.parseJsonBytes(vm.readFile("./test/testdata/signed_tx_20785012_1.json"), ".raw");
         uint64 slot = 20_728_344;
 
         // Reconstruct the commitment digest
@@ -236,7 +239,7 @@ contract BoltChallengerTest is Test {
         vm.pauseGasMetering();
     }
 
-    function testOpenChallengeWithLargeBond() public {
+    function testOpenChallengeWithLargebond() public {
         IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
         commitments[0] = _parseTestCommitment();
 
@@ -343,12 +346,10 @@ contract BoltChallengerTest is Test {
         // Resolve the challenge
         vm.resumeGasMetering();
         vm.prank(resolver);
-        boltChallenger._resolveExt(challengeID, trustedPreviousBlockHash, proof);
-        vm.pauseGasMetering();
+        vm.expectEmit();
 
-        // Check the challenge was resolved
-        IBoltChallenger.Challenge memory challenge = boltChallenger.getAllChallenges()[0];
-        assertEq(uint256(challenge.status), uint256(IBoltChallenger.ChallengeStatus.Defended));
+        emit IBoltChallenger.ChallengeDefended(challengeID);
+        boltChallenger._resolveExt(challengeID, trustedPreviousBlockHash, proof);
     }
 
     function testResolveChallengeFullDefenseStackedTxs() public {
@@ -437,12 +438,11 @@ contract BoltChallengerTest is Test {
         // Resolve the challenge
         vm.resumeGasMetering();
         vm.prank(resolver);
-        boltChallenger._resolveExt(challengeID, trustedPreviousBlockHash, proof);
-        vm.pauseGasMetering();
 
-        // Check the challenge was resolved
-        IBoltChallenger.Challenge memory challenge = boltChallenger.getAllChallenges()[0];
-        assertEq(uint256(challenge.status), uint256(IBoltChallenger.ChallengeStatus.Defended));
+        vm.expectEmit();
+        emit IBoltChallenger.ChallengeDefended(challengeID);
+
+        boltChallenger._resolveExt(challengeID, trustedPreviousBlockHash, proof);
     }
 
     function testResolveExpiredChallenge() public {
@@ -464,11 +464,14 @@ contract BoltChallengerTest is Test {
 
         // Try to resolve the challenge
         vm.prank(resolver);
-        boltChallenger.resolveExpiredChallenge(challenges[0].id);
 
-        // Check the challenge was resolved
+        // Get the challenge
         IBoltChallenger.Challenge memory challenge = boltChallenger.getAllChallenges()[0];
-        assertEq(uint256(challenge.status), uint256(IBoltChallenger.ChallengeStatus.Breached));
+
+        vm.expectEmit();
+        emit IBoltChallenger.ChallengeBreached(challenge.id);
+
+        boltChallenger.resolveExpiredChallenge(challenge.id);
     }
 
     function testCannotResolveChallengeBeforeExpiration() public {
