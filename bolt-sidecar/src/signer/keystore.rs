@@ -253,8 +253,8 @@ mod tests {
             )
             .expect("to create temp dir");
 
-            // NOTE: it is sufficient to create a temp dir, then we can create a file as usual and it
-            // will be dropped correctly
+            // NOTE: it is sufficient to create a temp dir, then we can create a file as usual and
+            // it will be dropped correctly
             let mut tmp_file = File::create_new(tmp_dir.path().join("voting-keystore.json"))
                 .expect("to create new file");
 
