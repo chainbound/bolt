@@ -3,7 +3,8 @@
 use std::{
     ffi::OsString,
     fmt::Debug,
-    fs,
+    fs::{self, DirEntry, ReadDir},
+    io,
     path::{Path, PathBuf},
 };
 
@@ -15,23 +16,23 @@ use ssz::Encode;
 
 use crate::{builder::signature::compute_signing_root, crypto::bls::BLSSig, ChainConfig};
 
+use super::SignerResult;
+
 pub const KEYSTORES_DEFAULT_PATH: &str = "keys";
 
 #[derive(Debug, thiserror::Error)]
 pub enum KeystoreError {
-    #[error("Failed to read keystore directory: {0}")]
+    #[error("failed to read keystore directory: {0}")]
     ReadFromDirectory(#[from] std::io::Error),
-    #[error("Failed to read keystore from JSON file {0}: {1}")]
+    #[error("failed to read keystore from JSON file {0}: {1}")]
     ReadFromJSON(PathBuf, String),
-    #[error("Failed to decrypt keypair from JSON file {0} with the provided password: {1}")]
+    #[error("failed to decrypt keypair from JSON file {0} with the provided password: {1}")]
     KeypairDecryption(PathBuf, String),
-    #[error("Could not find private key associated to public key {0}")]
+    #[error("could not find private key associated to public key {0}")]
     UnknownPublicKey(String),
-    #[error("Invalid signature key length. Signature: {0}. Message: {1}")]
+    #[error("invalid signature key length -- signature: {0} -- message: {1}")]
     SignatureLength(String, String),
 }
-
-type Result<T> = std::result::Result<T, KeystoreError>;
 
 #[derive(Clone)]
 pub struct KeystoreSigner {
@@ -40,7 +41,7 @@ pub struct KeystoreSigner {
 }
 
 impl KeystoreSigner {
-    pub fn new(keys_path: Option<&str>, password: &[u8], chain: ChainConfig) -> Result<Self> {
+    pub fn new(keys_path: Option<&str>, password: &[u8], chain: ChainConfig) -> SignerResult<Self> {
         let keystores_paths = keystore_paths(keys_path)?;
         let mut keypairs = Vec::with_capacity(keystores_paths.len());
 
@@ -60,7 +61,7 @@ impl KeystoreSigner {
         &self,
         root: [u8; 32],
         public_key: [u8; BLS_PUBLIC_KEY_BYTES_LEN],
-    ) -> Result<BLSSig> {
+    ) -> SignerResult<BLSSig> {
         self.sign_root(root, public_key, self.chain.commit_boost_domain())
     }
 
@@ -69,7 +70,7 @@ impl KeystoreSigner {
         root: [u8; 32],
         public_key: [u8; BLS_PUBLIC_KEY_BYTES_LEN],
         domain: [u8; 32],
-    ) -> Result<BLSSig> {
+    ) -> SignerResult<BLSSig> {
         let sk = self
             .keypairs
             .iter()
@@ -105,7 +106,7 @@ impl Debug for KeystoreSigner {
 /// -- 0x1234.../validator.json
 /// -- 0x5678.../validator.json
 /// -- ...
-fn keystore_paths(keys_path: Option<&str>) -> Result<Vec<PathBuf>> {
+fn keystore_paths(keys_path: Option<&str>) -> SignerResult<Vec<PathBuf>> {
     // Create the path to the keystore directory, starting from the root of the project
     let keys_path = if let Some(keys_path) = keys_path {
         Path::new(&keys_path).to_path_buf()
@@ -118,11 +119,11 @@ fn keystore_paths(keys_path: Option<&str>) -> Result<Vec<PathBuf>> {
 
     let mut keystores_paths = vec![];
     // Iter over the `keys` directory
-    for entry in fs::read_dir(keys_path).map_err(KeystoreError::ReadFromDirectory)? {
-        let path = entry.map_err(KeystoreError::ReadFromDirectory)?.path();
+    for entry in read_dir(keys_path)? {
+        let path = read_path(entry)?;
         if path.is_dir() {
-            for entry in fs::read_dir(path)? {
-                let path = entry?.path();
+            for entry in read_dir(path)? {
+                let path = read_path(entry)?;
                 if path.is_file() && path.extension() == Some(&json_extension) {
                     keystores_paths.push(path);
                 }
@@ -131,6 +132,14 @@ fn keystore_paths(keys_path: Option<&str>) -> Result<Vec<PathBuf>> {
     }
 
     Ok(keystores_paths)
+}
+
+fn read_dir(path: PathBuf) -> SignerResult<ReadDir> {
+    Ok(fs::read_dir(path).map_err(KeystoreError::ReadFromDirectory)?)
+}
+
+fn read_path(entry: std::result::Result<DirEntry, io::Error>) -> SignerResult<PathBuf> {
+    Ok(entry.map_err(KeystoreError::ReadFromDirectory)?.path())
 }
 
 #[cfg(test)]

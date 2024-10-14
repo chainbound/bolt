@@ -21,7 +21,7 @@ use crate::{
         CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
         SignedConstraints, TransactionExt,
     },
-    signer::{keystore::KeystoreSigner, local::LocalSigner, SignerError},
+    signer::{keystore::KeystoreSigner, local::LocalSigner},
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
     telemetry::ApiMetrics,
@@ -264,15 +264,11 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
             let digest = message.digest();
 
             let signature = match self.constraint_signer {
-                SignerBLS::Local(ref signer) => {
-                    signer.sign_commit_boost_root(digest).map_err(SignerError::LocalSigner)
+                SignerBLS::Local(ref signer) => signer.sign_commit_boost_root(digest),
+                SignerBLS::CommitBoost(ref signer) => signer.sign_commit_boost_root(digest).await,
+                SignerBLS::Keystore(ref signer) => {
+                    signer.sign_commit_boost_root(digest, cl_public_key_to_arr(pubkey.clone()))
                 }
-                SignerBLS::CommitBoost(ref signer) => {
-                    signer.sign_commit_boost_root(digest).await.map_err(SignerError::CommitBoost)
-                }
-                SignerBLS::Keystore(ref signer) => signer
-                    .sign_commit_boost_root(digest, cl_public_key_to_arr(pubkey.clone()))
-                    .map_err(SignerError::Keystore),
             };
 
             let signed_constraints = match signature {

@@ -16,6 +16,8 @@ use crate::{
     primitives::commitment::ECDSASignatureExt,
 };
 
+use super::SignerResult;
+
 /// A client for interacting with CommitBoost.
 #[derive(Debug, Clone)]
 pub struct CommitBoostSigner {
@@ -35,12 +37,10 @@ pub enum CommitBoostError {
     Other(#[from] eyre::Report),
 }
 
-type Result<T> = std::result::Result<T, CommitBoostError>;
-
 #[allow(unused)]
 impl CommitBoostSigner {
     /// Create a new [CommitBoostSigner] instance
-    pub async fn new(signer_server_address: String, jwt: &str) -> Result<Self> {
+    pub async fn new(signer_server_address: String, jwt: &str) -> SignerResult<Self> {
         let signer_client =
             SignerClient::new(signer_server_address, jwt).map_err(CommitBoostError::Other)?;
 
@@ -121,7 +121,7 @@ impl CommitBoostSigner {
     }
 
     /// Sign an object root with the Commit Boost domain.
-    pub async fn sign_commit_boost_root(&self, data: [u8; 32]) -> Result<BlsSignature> {
+    pub async fn sign_commit_boost_root(&self, data: [u8; 32]) -> SignerResult<BlsSignature> {
         // convert the pubkey from ethereum_consensus to commit-boost format
         let pubkey = cb_common::signer::BlsPublicKey::from(
             alloy::rpc::types::beacon::BlsPublicKey::from_slice(self.pubkey().as_ref()),
@@ -131,7 +131,11 @@ impl CommitBoostSigner {
 
         debug!(?request, "Requesting signature from commit_boost");
 
-        Ok(self.signer_client.request_consensus_signature(request).await?)
+        Ok(self
+            .signer_client
+            .request_consensus_signature(request)
+            .await
+            .map_err(CommitBoostError::SignerClientError)?)
     }
 }
 

@@ -24,7 +24,9 @@ pub enum SignerError {
     #[error("local signer error: {0}")]
     LocalSigner(#[from] local::LocalSignerError),
     #[error("commit boost signer error: {0}")]
-    CommitBoost(commit_boost::CommitBoostError),
+    CommitBoost(#[from] commit_boost::CommitBoostError),
     #[error("keystore signer error: {0}")]
-    Keystore(keystore::KeystoreError),
+    Keystore(#[from] keystore::KeystoreError),
 }
+
+pub type SignerResult<T> = std::result::Result<T, SignerError>;
