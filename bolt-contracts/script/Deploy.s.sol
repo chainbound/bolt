@@ -31,10 +31,23 @@ contract DeployBolt is Script {
 
         uint48 epochDuration = 1 days;
         uint48 slashingWindow = 7 days;
+        uint48 maxChallengeDuration = 7 days;
         bool allowUnsafeRegistration = true;
+        uint256 challengeBond = 1 ether;
+        uint256 blockhashEvmLookback = 256;
 
-        bytes memory initParameters =
-            abi.encodeCall(BoltParameters.initialize, (admin, epochDuration, slashingWindow, allowUnsafeRegistration));
+        bytes memory initParameters = abi.encodeCall(
+            BoltParameters.initialize,
+            (
+                admin,
+                epochDuration,
+                slashingWindow,
+                maxChallengeDuration,
+                allowUnsafeRegistration,
+                challengeBond,
+                blockhashEvmLookback
+            )
+        );
         address parametersProxy = Upgrades.deployUUPSProxy("BoltParameters.sol", initParameters);
         console.log("BoltParameters proxy deployed at", parametersProxy);
 

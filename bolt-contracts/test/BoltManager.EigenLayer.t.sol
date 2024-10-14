@@ -53,10 +53,21 @@ contract BoltManagerEigenLayerTest is Test {
 
         uint48 epochDuration = 1 days;
         uint48 slashingWindow = 7 days;
+        uint48 maxChallengeDuration = 7 days;
         bool allowUnsafeRegistration = true;
+        uint256 challengeBond = 1 ether;
+        uint256 blockhashEvmLookback = 256;
 
         BoltParameters parameters = new BoltParameters();
-        parameters.initialize(admin, epochDuration, slashingWindow, allowUnsafeRegistration);
+        parameters.initialize(
+            admin,
+            epochDuration,
+            slashingWindow,
+            maxChallengeDuration,
+            allowUnsafeRegistration,
+            challengeBond,
+            blockhashEvmLookback
+        );
 
         // Deploy Bolt contracts
         validators = new BoltValidators();

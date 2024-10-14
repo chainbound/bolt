@@ -5,6 +5,7 @@ import {Test, console} from "forge-std/Test.sol";
 
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
+import {BoltParameters} from "../src/contracts/BoltParameters.sol";
 import {BoltChallenger} from "../src/contracts/BoltChallenger.sol";
 import {IBoltChallenger} from "../src/interfaces/IBoltChallenger.sol";
 import {RLPReader} from "../src/lib/rlp/RLPReader.sol";
@@ -41,6 +42,7 @@ contract BoltChallengerTest is Test {
 
     BoltChallengerExt boltChallenger;
 
+    address admin = makeAddr("admin");
     address challenger = makeAddr("challenger");
     address resolver = makeAddr("resolver");
 
@@ -51,7 +53,26 @@ contract BoltChallengerTest is Test {
         vm.pauseGasMetering();
         (target, targetPK) = makeAddrAndKey("target");
 
+        uint48 epochDuration = 1 days;
+        uint48 slashingWindow = 7 days;
+        uint48 maxChallengeDuration = 7 days;
+        bool allowUnsafeRegistration = true;
+        uint256 challengeBond = 1 ether;
+        uint256 blockhashEvmLookback = 256;
+
+        BoltParameters parameters = new BoltParameters();
+        parameters.initialize(
+            admin,
+            epochDuration,
+            slashingWindow,
+            maxChallengeDuration,
+            allowUnsafeRegistration,
+            challengeBond,
+            blockhashEvmLookback
+        );
+
         boltChallenger = new BoltChallengerExt();
+        boltChallenger.initialize(admin, address(parameters));
 
         vm.deal(challenger, 100 ether);
         vm.deal(resolver, 100 ether);

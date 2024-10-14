@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
+
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
@@ -12,8 +15,9 @@ import {RLPWriter} from "../lib/rlp/RLPWriter.sol";
 import {BeaconChainUtils} from "../lib/BeaconChainUtils.sol";
 import {TransactionDecoder} from "../lib/TransactionDecoder.sol";
 import {IBoltChallenger} from "../interfaces/IBoltChallenger.sol";
+import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 
-contract BoltChallenger is IBoltChallenger {
+contract BoltChallenger is IBoltChallenger, OwnableUpgradeable, UUPSUpgradeable {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
     using TransactionDecoder for bytes;
@@ -22,26 +26,29 @@ contract BoltChallenger is IBoltChallenger {
 
     // ========= STORAGE =========
 
+    /// @notice Bolt Parameters contract.
+    IBoltParameters public parameters;
+
     /// @notice The set of existing unique challenge IDs.
     EnumerableSet.Bytes32Set internal challengeIDs;
 
     /// @notice The mapping of challenge IDs to their respective challenges.
     mapping(bytes32 => Challenge) internal challenges;
 
-    // ========= CONSTANTS =========
+    // ========= INITIALIZER =========
 
-    /// @notice The challenge bond required to open a challenge.
-    uint256 public constant CHALLENGE_BOND = 1 ether;
+    /// @notice Initializer
+    /// @param _owner Address of the owner of the contract
+    /// @param _parameters Address of the Bolt Parameters contract
+    function initialize(address _owner, address _parameters) public initializer {
+        __Ownable_init(_owner);
 
-    /// @notice The maximum duration of a challenge to be considered valid.
-    uint256 public constant MAX_CHALLENGE_DURATION = 7 days;
+        parameters = IBoltParameters(_parameters);
+    }
 
-    /// @notice The maximum number of blocks to look back for block hashes in the EVM.
-    uint256 public constant BLOCKHASH_EVM_LOOKBACK = 256;
-
-    // ========= CONSTRUCTOR =========
-
-    constructor() {}
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
 
     // ========= VIEW FUNCTIONS =========
 
@@ -109,7 +116,7 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         // Check that the attached bond amount is correct
-        if (msg.value != CHALLENGE_BOND) {
+        if (msg.value != parameters.CHALLENGE_BOND()) {
             revert IncorrectChallengeBond();
         }
 
@@ -194,14 +201,20 @@ contract BoltChallenger is IBoltChallenger {
 
         // The visibility of the BLOCKHASH opcode is limited to the 256 most recent blocks.
         // For simplicity we restrict this to 256 slots even though 256 blocks would be more accurate.
-        if (challenges[challengeID].targetSlot < BeaconChainUtils._getCurrentSlot() - BLOCKHASH_EVM_LOOKBACK) {
+        if (
+            challenges[challengeID].targetSlot
+                < BeaconChainUtils._getCurrentSlot() - parameters.BLOCKHASH_EVM_LOOKBACK()
+        ) {
             revert BlockIsTooOld();
         }
 
         // Check that the previous block is within the EVM lookback window for block hashes.
         // Clearly, if the previous block is available, the inclusion one will be too.
         uint256 previousBlockNumber = proof.inclusionBlockNumber - 1;
-        if (previousBlockNumber > block.number || previousBlockNumber < block.number - BLOCKHASH_EVM_LOOKBACK) {
+        if (
+            previousBlockNumber > block.number
+                || previousBlockNumber < block.number - parameters.BLOCKHASH_EVM_LOOKBACK()
+        ) {
             revert InvalidBlockNumber();
         }
 
@@ -229,7 +242,7 @@ contract BoltChallenger is IBoltChallenger {
             revert ChallengeAlreadyResolved();
         }
 
-        if (challenge.openedAt + MAX_CHALLENGE_DURATION >= Time.timestamp()) {
+        if (challenge.openedAt + parameters.MAX_CHALLENGE_DURATION() >= Time.timestamp()) {
             revert ChallengeNotExpired();
         }
 
@@ -254,7 +267,7 @@ contract BoltChallenger is IBoltChallenger {
             revert ChallengeAlreadyResolved();
         }
 
-        if (challenge.openedAt + MAX_CHALLENGE_DURATION < Time.timestamp()) {
+        if (challenge.openedAt + parameters.MAX_CHALLENGE_DURATION() < Time.timestamp()) {
             // If the challenge has expired without being resolved, it is considered breached.
             // This should be handled by calling the `resolveExpiredChallenge()` function instead.
             revert ChallengeExpired();
@@ -468,7 +481,7 @@ contract BoltChallenger is IBoltChallenger {
     function _transferFullBond(
         address recipient
     ) internal {
-        (bool success,) = payable(recipient).call{value: CHALLENGE_BOND}("");
+        (bool success,) = payable(recipient).call{value: parameters.CHALLENGE_BOND()}("");
         if (!success) {
             revert BondTransferFailed();
         }
@@ -479,7 +492,7 @@ contract BoltChallenger is IBoltChallenger {
     function _transferHalfBond(
         address recipient
     ) internal {
-        (bool success,) = payable(recipient).call{value: CHALLENGE_BOND / 2}("");
+        (bool success,) = payable(recipient).call{value: parameters.CHALLENGE_BOND() / 2}("");
         if (!success) {
             revert BondTransferFailed();
         }

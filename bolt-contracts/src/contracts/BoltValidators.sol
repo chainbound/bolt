@@ -44,10 +44,11 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, OwnableUpgrade
     /// @param validator Validator struct
     event ValidatorRegistered(bytes32 indexed pubkeyHash, Validator validator);
 
-    // ========= CONSTRUCTOR =========
+    // ========= INITIALIZER =========
 
-    /// @notice Constructor
+    /// @notice Initializer
     /// @param _owner Address of the owner of the contract
+    /// @param _parameters Address of the Bolt Parameters contract
     function initialize(address _owner, address _parameters) public initializer {
         __Ownable_init(_owner);
 
