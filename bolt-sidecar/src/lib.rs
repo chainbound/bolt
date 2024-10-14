@@ -12,10 +12,7 @@ pub use api::{
 };
 
 mod client;
-pub use client::{
-    commit_boost::CommitBoostSigner, constraints_client::ConstraintsClient, rpc::RpcClient,
-    BeaconClient,
-};
+pub use client::{constraints_client::ConstraintsClient, rpc::RpcClient, BeaconClient};
 
 /// Telemetry and metrics utilities
 pub mod telemetry;
@@ -36,7 +33,7 @@ pub use builder::LocalBuilder;
 
 /// Configuration and command-line argument parsing
 mod config;
-pub use config::{ChainConfig, Config, Opts};
+pub use config::{ChainConfig, Opts};
 
 /// Crypto utilities, including BLS and ECDSA
 pub mod crypto;
@@ -46,6 +43,10 @@ pub mod primitives;
 
 /// State management and fetching for EVM simulation
 pub mod state;
+
+/// The signers available to the sidecar
+mod signer;
+pub use signer::{commit_boost::CommitBoostSigner, SignerBLS};
 
 /// Utilities for testing
 #[cfg(test)]

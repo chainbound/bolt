@@ -21,7 +21,7 @@ use super::{
     compat::{to_alloy_execution_payload, to_reth_withdrawal},
     BuilderError,
 };
-use crate::{BeaconClient, Config, RpcClient};
+use crate::{BeaconClient, Opts, RpcClient};
 
 /// Extra-data payload field used for locally built blocks, decoded in UTF-8.
 ///
@@ -54,7 +54,7 @@ pub struct FallbackPayloadBuilder {
 
 impl FallbackPayloadBuilder {
     /// Create a new fallback payload builder
-    pub fn new(config: &Config, beacon_api_client: BeaconClient, genesis_time: u64) -> Self {
+    pub fn new(config: &Opts, beacon_api_client: BeaconClient, genesis_time: u64) -> Self {
         let engine_hinter = EngineHinter {
             client: reqwest::Client::new(),
             jwt_hex: config.jwt_hex.to_string(),
@@ -449,14 +449,14 @@ mod tests {
         let wallet = EthereumWallet::from(signer);
 
         let addy = Address::from_private_key(&sk);
-        let tx = default_test_transaction(addy, Some(1)).with_chain_id(1);
+        let tx = default_test_transaction(addy, Some(3)).with_chain_id(1);
         let tx_signed = tx.build(&wallet).await?;
         let raw_encoded = tx_signed.encoded_2718();
         let tx_signed_reth = TransactionSigned::decode_enveloped(&mut raw_encoded.as_slice())?;
 
-        let slot = genesis_time +
-            (SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() / cfg.chain.slot_time()) +
-            1;
+        let slot = genesis_time
+            + (SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() / cfg.chain.slot_time())
+            + 1;
 
         let block = builder.build_fallback_payload(slot, &[tx_signed_reth]).await?;
         assert_eq!(block.body.len(), 1);

@@ -1,4 +1,13 @@
+use std::{
+    fmt::{self, Display},
+    fs::read_to_string,
+    ops::Deref,
+    path::Path,
+};
+
 use alloy::primitives::U256;
+use blst::min_pk::SecretKey;
+use rand::{Rng, RngCore};
 use reth_primitives::PooledTransactionsElement;
 
 use crate::{
@@ -84,6 +93,82 @@ pub fn validate_transaction(
     }
 
     Ok(())
+}
+
+#[derive(Clone, Debug)]
+pub struct BlsSecretKeyWrapper(pub SecretKey);
+
+impl BlsSecretKeyWrapper {
+    pub fn random() -> Self {
+        let mut rng = rand::thread_rng();
+        let mut ikm = [0u8; 32];
+        rng.fill_bytes(&mut ikm);
+        Self(SecretKey::key_gen(&ikm, &[]).unwrap())
+    }
+}
+
+impl From<&str> for BlsSecretKeyWrapper {
+    fn from(sk: &str) -> Self {
+        let hex_sk = sk.strip_prefix("0x").unwrap_or(sk);
+        let sk = SecretKey::from_bytes(&hex::decode(hex_sk).expect("valid hex")).expect("valid sk");
+        BlsSecretKeyWrapper(sk)
+    }
+}
+
+impl Deref for BlsSecretKeyWrapper {
+    type Target = SecretKey;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl fmt::Display for BlsSecretKeyWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "0x{}", hex::encode(self.0.to_bytes()))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct JwtSecretConfig(pub String);
+
+impl Default for JwtSecretConfig {
+    fn default() -> Self {
+        let random_bytes: [u8; 32] = rand::thread_rng().gen();
+        let secret = hex::encode(random_bytes);
+        Self(secret)
+    }
+}
+
+impl From<&str> for JwtSecretConfig {
+    fn from(jwt: &str) -> Self {
+        let jwt = if jwt.starts_with("0x") {
+            jwt.trim_start_matches("0x").to_string()
+        } else if Path::new(&jwt).exists() {
+            read_to_string(jwt)
+                .unwrap_or_else(|_| panic!("Failed reading JWT secret file: {:?}", jwt))
+                .trim_start_matches("0x")
+                .to_string()
+        } else {
+            jwt.to_string()
+        };
+
+        assert!(jwt.len() == 64, "Engine JWT secret must be a 32 byte hex string");
+
+        Self(jwt)
+    }
+}
+
+impl Deref for JwtSecretConfig {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for JwtSecretConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "0x{}", self.0)
+    }
 }
 
 #[cfg(test)]

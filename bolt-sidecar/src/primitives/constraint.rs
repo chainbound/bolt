@@ -72,7 +72,7 @@ impl SignableBLS for ConstraintsMessage {
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::bls::Signer;
+    use crate::signer::local::LocalSigner;
 
     use super::*;
     use alloy::primitives::bytes;
@@ -138,7 +138,7 @@ mod tests {
 
     #[test]
     fn test_constraints_signature_roundtrip() {
-        let signer = Signer::random();
+        let signer = LocalSigner::random();
 
         let tx_bytes = bytes!("f8678085019dc6838082520894deaddeaddeaddeaddeaddeaddeaddeaddeaddead38808360306ca06664c078fa60bd3ece050903dd295949908dd9686ec8871fa558f868e031cd39a00ed4f0b122b32b73f19230fabe6a726e2d07f84eda5beaa42a1ae1271bdee39f").to_vec();
         let tx = FullTransaction::decode_enveloped(tx_bytes.as_slice()).unwrap();
