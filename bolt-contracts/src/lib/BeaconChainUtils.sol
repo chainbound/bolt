@@ -12,6 +12,9 @@ library BeaconChainUtils {
     /// @notice The duration of a slot in seconds
     uint256 internal constant SLOT_TIME = 12;
 
+    /// @notice The number of slots to wait before considering a block justified by LMD-GHOST.
+    uint256 internal constant JUSTIFICATION_DELAY_SLOTS = 32;
+
     /// @notice The timestamp of the genesis of the eth2 chain
     uint256 internal constant ETH2_GENESIS_TIMESTAMP = 1_606_824_023;
 
