@@ -1,0 +1,24 @@
+[package]
+name = "bolt-delegations-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eyre = "0.6.12"
+clap = { version = "4.5.4", features = ["derive", "env"] }
+thiserror = "1.0"
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.115"
+hex = "0.4.3"
+ethereum-consensus = { git = "https://github.com/ralexstokes/ethereum-consensus", rev = "cf3c404" }
+alloy = { version = "0.2.0", features = [
+  "full",
+  "provider-trace-api",
+  "rpc-types-beacon",
+  "rpc-types-engine",
+] }
+
+# lighthouse
+lighthouse_account_utils = { package = "account_utils", git = "https://github.com/sigp/lighthouse", rev = "a87f19d" }
+lighthouse_eth2_keystore = { package = "eth2_keystore", git = "https://github.com/sigp/lighthouse", rev = "a87f19d" }
+lighthouse_bls = { package = "bls", git = "https://github.com/sigp/lighthouse", rev = "a87f19d" }
