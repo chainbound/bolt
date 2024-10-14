@@ -50,11 +50,11 @@ impl ConstraintsClient {
     }
 
     /// Finds all delegations for the given public key.
-    pub fn find_delegatees(&self, pubkey: &BlsPublicKey) -> Vec<&BlsPublicKey> {
+    pub fn find_delegatees(&self, pubkey: &BlsPublicKey) -> Vec<BlsPublicKey> {
         self.delegations
             .iter()
             .filter(|d| d.message.delegatee_pubkey == *pubkey)
-            .map(|d| &d.message.delegatee_pubkey)
+            .map(|d| d.message.delegatee_pubkey.clone())
             .collect::<Vec<_>>()
     }
 

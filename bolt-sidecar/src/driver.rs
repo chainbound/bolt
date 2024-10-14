@@ -8,6 +8,7 @@ use alloy::{rpc::types::beacon::events::HeadEvent, signers::local::PrivateKeySig
 use beacon_api_client::mainnet::Client as BeaconClient;
 use ethereum_consensus::{
     clock::{self, SlotStream, SystemTimeProvider},
+    crypto::bls::PublicKey as BlsPublicKey,
     phase0::mainnet::SLOTS_PER_EPOCH,
 };
 use futures::StreamExt;
@@ -280,18 +281,8 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
         // Rationale:
         // - If there are no delegatee keys, try to use the validator key directly if available.
         // - If there are delegatee keys, try to use the first one that is available in the list.
-        let pubkey = if delegatees.is_empty() {
-            if available_pubkeys.contains(&validator_pubkey) {
-                validator_pubkey.clone()
-            } else {
-                error!(%target_slot, %validator_pubkey, "No authorized private key available to sign constraints");
-                let _ = response.send(Err(CommitmentError::Internal));
-                return;
-            }
-        } else if let Some(delegatee) = available_pubkeys.iter().find(|k| delegatees.contains(k)) {
-            delegatee.clone()
-        } else {
-            error!(%target_slot, "No delegatee key found, unable to sign constraints");
+        let Some(pubkey) = pick_public_key(validator_pubkey, available_pubkeys, delegatees) else {
+            error!(%target_slot, "No available public key to sign constraints with");
             let _ = response.send(Err(CommitmentError::Internal));
             return;
         };
@@ -398,4 +389,30 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
             error!(err = ?e, "Failed to send payload and bid in response channel");
         }
     }
+}
+
+/// Pick a pubkey to sign constraints with.
+///
+/// Rationale:
+/// - If there are no delegatee keys, try to use the validator key directly if available.
+/// - If there are delegatee keys, try to use the first one that is available in the list.
+fn pick_public_key(
+    validator: BlsPublicKey,
+    available: Vec<BlsPublicKey>,
+    delegatees: Vec<BlsPublicKey>,
+) -> Option<BlsPublicKey> {
+    if delegatees.is_empty() {
+        if available.contains(&validator) {
+            return Some(validator);
+        } else {
+            return None;
+        }
+    } else {
+        for delegatee in delegatees {
+            if available.contains(&delegatee) {
+                return Some(delegatee);
+            }
+        }
+    }
+    None
 }
