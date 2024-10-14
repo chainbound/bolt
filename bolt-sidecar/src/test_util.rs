@@ -1,4 +1,3 @@
-use crate::ChainConfig;
 use alloy::{
     eips::eip2718::Encodable2718,
     network::{EthereumWallet, TransactionBuilder},
@@ -26,7 +25,7 @@ use crate::{
         InclusionRequest, RevocationMessage, SignedConstraints, SignedDelegation, SignedRevocation,
     },
     signer::local::LocalSigner,
-    Opts,
+    ChainConfig, Opts,
 };
 
 /// The URL of the test execution client HTTP API.
