@@ -5,7 +5,8 @@
 use axum::http::StatusCode;
 use beacon_api_client::VersionedValue;
 use ethereum_consensus::{
-    builder::SignedValidatorRegistration, deneb::mainnet::SignedBlindedBeaconBlock, Fork,
+    builder::SignedValidatorRegistration, crypto::PublicKey as BlsPublicKey,
+    deneb::mainnet::SignedBlindedBeaconBlock, Fork,
 };
 use reqwest::Url;
 use tracing::error;
@@ -46,6 +47,15 @@ impl ConstraintsClient {
     /// Adds a list of delegations to the client.
     pub fn add_delegations(&mut self, delegations: Vec<SignedDelegation>) {
         self.delegations.extend(delegations);
+    }
+
+    /// Finds all delegations for the given public key.
+    pub fn find_delegatees(&self, pubkey: &BlsPublicKey) -> Vec<&BlsPublicKey> {
+        self.delegations
+            .iter()
+            .filter(|d| d.message.delegatee_pubkey == *pubkey)
+            .map(|d| &d.message.delegatee_pubkey)
+            .collect::<Vec<_>>()
     }
 
     fn endpoint(&self, path: &str) -> Url {
