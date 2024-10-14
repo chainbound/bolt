@@ -465,6 +465,41 @@ func TestSubscribeProposerConstraints(t *testing.T) {
 	}
 }
 
+func TestDeserializeConstraints(t *testing.T) {
+	jsonStr := `[
+		{
+			"message": {
+				"pubkey": "0xa695ad325dfc7e1191fbc9f186f58eff42a634029731b18380ff89bf42c464a42cb8ca55b200f051f57f1e1893c68759",
+				"slot": 32,
+				"top": true,
+				"transactions": [
+					"0x02f86c870c72dd9d5e883e4d0183408f2382520894d2e2adf7177b7a8afddbc12d1634cf23ea1a71020180c001a08556dcfea479b34675db3fe08e29486fe719c2b22f6b0c1741ecbbdce4575cc6a01cd48009ccafd6b9f1290bbe2ceea268f94101d1d322c787018423ebcbc87ab4"
+				]
+			},
+			"signature": "0xb8d50ee0d4b269db3d4658c1dac784d273a4160d769e16dce723a9684c390afe5865348416b3bf0f1a4f47098bec9024135d0d95f08bed18eb577a3d8a67f5dc78b13cc62515e280786a73fb267d35dfb7ab46a25ac29bf5bc2fa5b07b3e07a6"
+		}
+	]`
+
+	var constraints types.SignedConstraintsList
+	err := json.Unmarshal([]byte(jsonStr), &constraints)
+	require.NoError(t, err)
+
+	jsonStr = `{
+		"message": {
+			"pubkey":"0xb3cd9c9e59730c210bf9b76959bf11e20bb05cf47cfefdcaab74bc17c369d6daefe1219c2b94d743ffd27988edf24b90",
+			"slot":183,
+			"top":false,
+			"transactions": [
+				"0xf8678085019dc6838082520894deaddeaddeaddeaddeaddeaddeaddeaddeaddead04808360306ca0fde9bdf8f1a9fefef7538490242afb21a0160cf19f1686c7b9bddb45de973b62a0318411f2c959d3e6a25434f99850a0eaa6beb617f7a2dbc9683dccded7bd4b10"
+			]
+		},
+		"signature": "0xaa8a47c6398d5862b56d1bbb308352c65e57e62b0bfdda39a36db7fff3a256c3c7066b219a15a013aae5303f42b6f07b025f34ed6d899e6172fec20d40c4ffebeb50f5d0b75a303c1cc916574c3e0f29d53b2211d28234f430fffce62b4ee554"
+	}`
+
+	err = json.Unmarshal([]byte(jsonStr), &constraints)
+	require.NoError(t, err)
+}
+
 func sseConstraintsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")

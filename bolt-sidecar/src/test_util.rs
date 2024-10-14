@@ -11,19 +11,21 @@ use alloy::{
 };
 use alloy_node_bindings::{Anvil, AnvilInstance};
 use blst::min_pk::SecretKey;
+use clap::Parser;
 use ethereum_consensus::crypto::{PublicKey, Signature};
 use rand::Rng;
-use reth_primitives::PooledTransactionsElement;
 use secp256k1::Message;
 use tracing::warn;
 
 use crate::{
-    crypto::{bls::Signer as BlsSigner, ecdsa::SignableECDSA, SignableBLS},
+    common::{BlsSecretKeyWrapper, JwtSecretConfig},
+    crypto::{ecdsa::SignableECDSA, SignableBLS},
     primitives::{
         CommitmentRequest, ConstraintsMessage, DelegationMessage, FullTransaction,
         InclusionRequest, RevocationMessage, SignedConstraints, SignedDelegation, SignedRevocation,
     },
-    Config,
+    signer::local::LocalSigner,
+    ChainConfig, Opts,
 };
 
 /// The URL of the test execution client HTTP API.
@@ -76,25 +78,30 @@ pub(crate) async fn try_get_beacon_api_url() -> Option<&'static str> {
 /// - The default values for the remaining configuration fields.
 ///
 /// If any of the above values can't be found, the function will return `None`.
-pub(crate) async fn get_test_config() -> Option<Config> {
+pub(crate) async fn get_test_config() -> Option<Opts> {
+    std::env::set_var("BOLT_SIDECAR_PRIVATE_KEY", BlsSecretKeyWrapper::random().to_string());
+
     let _ = dotenvy::dotenv();
+
+    let mut opts = Opts::parse();
 
     let Some(jwt) = std::env::var("ENGINE_JWT").ok() else {
         warn!("ENGINE_JWT not found in environment variables");
         return None;
     };
 
-    let execution = try_get_execution_api_url().await?;
-    let beacon = try_get_beacon_api_url().await?;
-    let engine = try_get_engine_api_url().await?;
+    if let Some(url) = try_get_execution_api_url().await {
+        opts.execution_api_url = url.parse().expect("valid URL");
+    }
+    if let Some(url) = try_get_beacon_api_url().await {
+        opts.beacon_api_url = url.parse().expect("valid URL");
+    }
+    if let Some(url) = try_get_engine_api_url().await {
+        opts.engine_api_url = url.parse().expect("valid URL");
+    }
+    opts.jwt_hex = JwtSecretConfig(jwt);
 
-    Some(Config {
-        execution_api_url: execution.parse().ok()?,
-        engine_api_url: engine.parse().ok()?,
-        beacon_api_url: beacon.parse().ok()?,
-        jwt_hex: jwt,
-        ..Default::default()
-    })
+    Some(opts)
 }
 
 /// Launch a local instance of the Anvil test chain.
@@ -157,8 +164,8 @@ pub(crate) async fn create_signed_commitment_request(
     for tx in txs {
         let tx_signed = tx.clone().build(&wallet).await?;
         let raw_encoded = tx_signed.encoded_2718();
-        let tx_pooled = PooledTransactionsElement::decode_enveloped(&mut raw_encoded.as_slice())?;
-        full_txs.push(FullTransaction::from(tx_pooled));
+        let full_tx = FullTransaction::decode_enveloped(raw_encoded.as_slice())?;
+        full_txs.push(full_tx);
     }
     let mut request = InclusionRequest { txs: full_txs, slot, signature: None, signer: None };
 
@@ -188,11 +195,11 @@ fn random_constraints(count: usize) -> Vec<FullTransaction> {
 }
 
 #[tokio::test]
-async fn generate_test_data() {
-    let signer = BlsSigner::random();
+async fn generate_test_data_kurtosis() {
+    let signer = LocalSigner::new(BlsSecretKeyWrapper::random().0, ChainConfig::kurtosis(0, 0));
     let pk = signer.pubkey();
 
-    println!("Validator Public Key: {}", hex::encode(pk.to_bytes()));
+    println!("Validator Public Key: {}", hex::encode(pk.as_ref()));
 
     // Generate a delegatee's BLS secret key and public key
     let delegatee_ikm: [u8; 32] = rand::thread_rng().gen();
@@ -201,35 +208,36 @@ async fn generate_test_data() {
     let delegatee_pk = delegatee_sk.sk_to_pk();
 
     // Prepare a Delegation message
-    let delegation_msg = DelegationMessage {
-        validator_pubkey: PublicKey::try_from(pk.to_bytes().as_slice())
-            .expect("Failed to convert validator public key"),
-        delegatee_pubkey: PublicKey::try_from(delegatee_pk.to_bytes().as_slice())
+    let delegation_msg = DelegationMessage::new(
+        pk.clone(),
+        PublicKey::try_from(delegatee_pk.to_bytes().as_slice())
             .expect("Failed to convert delegatee public key"),
-    };
+    );
 
     let digest = SignableBLS::digest(&delegation_msg);
 
     // Sign the Delegation message
     let delegation_signature = signer.sign_commit_boost_root(digest).unwrap();
+    let blst_sig = blst::min_pk::Signature::from_bytes(delegation_signature.as_ref())
+        .expect("Failed to convert delegation signature");
+    let consensus_sig = Signature::try_from(delegation_signature.as_ref())
+        .expect("Failed to convert delegation signature");
+
+    // Sanity check: verify the signature
+    assert!(signer.verify_commit_boost_root(digest, &blst_sig).is_ok());
 
     // Create SignedDelegation
-    let signed_delegation = SignedDelegation {
-        message: delegation_msg,
-        signature: Signature::try_from(delegation_signature.as_ref())
-            .expect("Failed to convert delegation signature"),
-    };
+    let signed_delegation = SignedDelegation { message: delegation_msg, signature: consensus_sig };
 
     // Output SignedDelegation
     println!("{}", serde_json::to_string_pretty(&signed_delegation).unwrap());
 
     // Prepare a revocation message
-    let revocation_msg = RevocationMessage {
-        validator_pubkey: PublicKey::try_from(pk.to_bytes().as_slice())
-            .expect("Failed to convert validator public key"),
-        delegatee_pubkey: PublicKey::try_from(delegatee_pk.to_bytes().as_slice())
+    let revocation_msg = RevocationMessage::new(
+        pk.clone(),
+        PublicKey::try_from(delegatee_pk.to_bytes().as_slice())
             .expect("Failed to convert delegatee public key"),
-    };
+    );
 
     let digest = SignableBLS::digest(&revocation_msg);
 
@@ -249,13 +257,7 @@ async fn generate_test_data() {
     let transactions = random_constraints(1);
 
     // Prepare a ConstraintsMessage
-    let constraints_msg = ConstraintsMessage {
-        pubkey: PublicKey::try_from(pk.to_bytes().as_slice())
-            .expect("Failed to convert validator public key"),
-        slot: 32,
-        top: true,
-        transactions,
-    };
+    let constraints_msg = ConstraintsMessage { pubkey: pk, slot: 32, top: true, transactions };
 
     let digest = SignableBLS::digest(&constraints_msg);
 

@@ -41,8 +41,8 @@ pub fn verify_multiproofs(
     // Get all the leaves from the saved constraints
     let mut leaves = Vec::with_capacity(proofs.total_leaves());
 
-    // NOTE: Get the leaves from the constraints cache by matching the saved hashes. We need the leaves
-    // in order to verify the multiproof.
+    // NOTE: Get the leaves from the constraints cache by matching the saved hashes. We need the
+    // leaves in order to verify the multiproof.
     for hash in &proofs.transaction_hashes {
         let mut found = false;
         for constraint in constraints {

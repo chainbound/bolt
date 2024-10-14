@@ -379,6 +379,12 @@ impl std::ops::DerefMut for FullTransaction {
 }
 
 impl FullTransaction {
+    /// Convenience method to parse a raw transaction into a `FullTransaction`.
+    pub fn decode_enveloped(data: impl AsRef<[u8]>) -> eyre::Result<Self> {
+        let tx = PooledTransactionsElement::decode_enveloped(&mut data.as_ref())?;
+        Ok(Self { tx, sender: None })
+    }
+
     pub fn into_inner(self) -> PooledTransactionsElement {
         self.tx
     }
@@ -446,21 +452,41 @@ where
 #[error("Invalid signature")]
 pub struct SignatureError;
 
-#[derive(Debug, Clone, Serialize)]
+/// Event types that can be emitted by the validator pubkey to
+/// signal some action on the Bolt protocol.
+#[derive(Debug, Clone, Copy)]
+#[repr(u8)]
+enum SignedMessageAction {
+    /// Signal delegation of a validator pubkey to a delegatee pubkey.
+    Delegation,
+    /// Signal revocation of a previously delegated pubkey.
+    Revocation,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct SignedDelegation {
     pub message: DelegationMessage,
     pub signature: BlsSignature,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct DelegationMessage {
+    action: u8,
     pub validator_pubkey: BlsPublicKey,
     pub delegatee_pubkey: BlsPublicKey,
+}
+
+impl DelegationMessage {
+    /// Create a new delegation message.
+    pub fn new(validator_pubkey: BlsPublicKey, delegatee_pubkey: BlsPublicKey) -> Self {
+        Self { action: SignedMessageAction::Delegation as u8, validator_pubkey, delegatee_pubkey }
+    }
 }
 
 impl SignableBLS for DelegationMessage {
     fn digest(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
+        hasher.update([self.action]);
         hasher.update(self.validator_pubkey.to_vec());
         hasher.update(self.delegatee_pubkey.to_vec());
 
@@ -468,21 +494,30 @@ impl SignableBLS for DelegationMessage {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct SignedRevocation {
     pub message: RevocationMessage,
     pub signature: BlsSignature,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct RevocationMessage {
+    action: u8,
     pub validator_pubkey: BlsPublicKey,
     pub delegatee_pubkey: BlsPublicKey,
+}
+
+impl RevocationMessage {
+    /// Create a new revocation message.
+    pub fn new(validator_pubkey: BlsPublicKey, delegatee_pubkey: BlsPublicKey) -> Self {
+        Self { action: SignedMessageAction::Revocation as u8, validator_pubkey, delegatee_pubkey }
+    }
 }
 
 impl SignableBLS for RevocationMessage {
     fn digest(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
+        hasher.update([self.action]);
         hasher.update(self.validator_pubkey.to_vec());
         hasher.update(self.delegatee_pubkey.to_vec());
 

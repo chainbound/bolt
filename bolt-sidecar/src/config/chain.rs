@@ -92,7 +92,7 @@ impl ChainConfig {
     }
 
     /// Get the domain for signing application-builder messages on the given chain.
-    pub fn builder_domain(&self) -> [u8; 32] {
+    pub fn application_builder_domain(&self) -> [u8; 32] {
         self.compute_domain_from_mask(APPLICATION_BUILDER_DOMAIN_MASK)
     }
 
@@ -174,15 +174,15 @@ mod tests {
         use super::ChainConfig;
 
         let mainnet = ChainConfig::mainnet();
-        assert_eq!(mainnet.builder_domain(), BUILDER_DOMAIN_MAINNET);
+        assert_eq!(mainnet.application_builder_domain(), BUILDER_DOMAIN_MAINNET);
 
         let holesky = ChainConfig::holesky();
-        assert_eq!(holesky.builder_domain(), BUILDER_DOMAIN_HOLESKY);
+        assert_eq!(holesky.application_builder_domain(), BUILDER_DOMAIN_HOLESKY);
 
         let helder = ChainConfig::helder();
-        assert_eq!(helder.builder_domain(), BUILDER_DOMAIN_HELDER);
+        assert_eq!(helder.application_builder_domain(), BUILDER_DOMAIN_HELDER);
 
         let kurtosis = ChainConfig::kurtosis(0, 0);
-        assert_eq!(kurtosis.builder_domain(), BUILDER_DOMAIN_KURTOSIS);
+        assert_eq!(kurtosis.application_builder_domain(), BUILDER_DOMAIN_KURTOSIS);
     }
 }

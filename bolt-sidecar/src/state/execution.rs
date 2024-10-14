@@ -13,7 +13,7 @@ use tracing::{debug, trace};
 use crate::{
     builder::BlockTemplate,
     common::{calculate_max_basefee, max_transaction_cost, validate_transaction},
-    config::Limits,
+    config::limits::LimitsOpts,
     primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot},
 };
 
@@ -154,7 +154,7 @@ pub struct ExecutionState<C> {
     /// The chain ID of the chain (constant).
     chain_id: u64,
     /// The limits set for the sidecar.
-    limits: Limits,
+    limits: LimitsOpts,
     /// The KZG settings for validating blobs.
     kzg_settings: EnvKzgSettings,
     /// The state fetcher client.
@@ -184,7 +184,7 @@ impl Default for ValidationParams {
 impl<C: StateFetcher> ExecutionState<C> {
     /// Creates a new state with the given client, initializing the
     /// basefee and head block number.
-    pub async fn new(client: C, limits: Limits) -> Result<Self, TransportError> {
+    pub async fn new(client: C, limits: LimitsOpts) -> Result<Self, TransportError> {
         let (basefee, blob_basefee, block_number, chain_id) = tokio::try_join!(
             client.get_basefee(None),
             client.get_blob_basefee(None),
@@ -527,7 +527,7 @@ pub struct StateUpdate {
 
 #[cfg(test)]
 mod tests {
-    use crate::builder::template::StateDiff;
+    use crate::{builder::template::StateDiff, signer::local::LocalSigner};
     use std::{num::NonZero, str::FromStr, time::Duration};
 
     use alloy::{
@@ -542,7 +542,7 @@ mod tests {
     use reth_primitives::constants::GWEI_TO_WEI;
 
     use crate::{
-        crypto::{bls::Signer, SignableBLS},
+        crypto::SignableBLS,
         primitives::{ConstraintsMessage, SignedConstraints},
         state::fetcher,
         test_util::{create_signed_commitment_request, default_test_transaction, launch_anvil},
@@ -557,7 +557,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -582,7 +582,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -620,7 +620,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -669,7 +669,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -699,11 +699,11 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
-        let signer = Signer::random();
+        let signer = LocalSigner::random();
 
         // initialize the state by updating the head once
         let slot = client.get_head().await?;
@@ -761,7 +761,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits = Limits {
+        let limits = LimitsOpts {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
             min_priority_fee: NonZero::new(200000000).unwrap(), // 0.2 gwei
@@ -800,7 +800,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits = Limits {
+        let limits = LimitsOpts {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
             min_priority_fee: NonZero::new(2000000000).unwrap(),
@@ -831,7 +831,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits = Limits {
+        let limits = LimitsOpts {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
             min_priority_fee: NonZero::new(2 * GWEI_TO_WEI as u128).unwrap(),
@@ -873,7 +873,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits = Limits {
+        let limits = LimitsOpts {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
             min_priority_fee: NonZero::new(2 * GWEI_TO_WEI as u128).unwrap(),
@@ -920,7 +920,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits = Limits {
+        let limits = LimitsOpts {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
             min_priority_fee: NonZero::new(2 * GWEI_TO_WEI as u128).unwrap(),
@@ -963,7 +963,7 @@ mod tests {
         let client = StateClient::new(anvil.endpoint_url());
         let provider = ProviderBuilder::new().on_http(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -985,7 +985,7 @@ mod tests {
 
         assert!(state.validate_request(&mut request).await.is_ok());
 
-        let bls_signer = Signer::random();
+        let bls_signer = LocalSigner::random();
         let message = ConstraintsMessage::build(Default::default(), inclusion_request);
         let signature = bls_signer.sign_commit_boost_root(message.digest()).unwrap();
         let signed_constraints = SignedConstraints { message, signature };
@@ -1016,7 +1016,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -1033,7 +1033,7 @@ mod tests {
 
         assert!(state.validate_request(&mut request).await.is_ok());
 
-        let bls_signer = Signer::random();
+        let bls_signer = LocalSigner::random();
         let message = ConstraintsMessage::build(Default::default(), inclusion_request);
         let signature = bls_signer.sign_commit_boost_root(message.digest()).unwrap();
         let signed_constraints = SignedConstraints { message, signature };
@@ -1058,7 +1058,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits: Limits = Limits {
+        let limits: LimitsOpts = LimitsOpts {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
             min_priority_fee: NonZero::new(1000000000).unwrap(),
@@ -1080,7 +1080,7 @@ mod tests {
 
         assert!(state.validate_request(&mut request).await.is_ok());
 
-        let bls_signer = Signer::random();
+        let bls_signer = LocalSigner::random();
         let message = ConstraintsMessage::build(Default::default(), inclusion_request);
         let signature = bls_signer.sign_commit_boost_root(message.digest()).unwrap();
         let signed_constraints = SignedConstraints { message, signature };
@@ -1109,7 +1109,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -1136,7 +1136,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -1166,7 +1166,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();

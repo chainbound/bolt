@@ -43,61 +43,61 @@ _restart-sidecar:
 inspect:
 	kurtosis enclave inspect bolt-devnet
 
+bash service:
+    @id=$(docker ps -n 100 | grep {{ service }} | awk -F' ' '{print $1}') && \
+    docker exec -it $id bash
+
+log service:
+    @id=$(docker ps -n 100 | grep {{ service }} | awk -F' ' '{print $1}') && \
+    docker logs -f $id
+
+dump service:
+  @id=$(docker ps -n 100 | grep {{ service }} | awk -F' ' '{print $1}') && \
+  docker logs $id 2>&1 | tee {{ service }}_dump.log
+
 # show the logs for the bolt devnet relay
 relay-logs:
-    @id=$(docker ps -n 100 | grep helix-relay | awk -F' ' '{print $1}') && \
-    docker logs -f $id
+    @just log helix-relay
 
 # show the logs for the bolt devnet builder
 builder-logs:
-    @id=$(docker ps -n 100 | grep bolt-builder | awk -F' ' '{print $1}') && \
-    docker logs -f $id
+    @just log bolt-builder
 
 # show the logs for the bolt devnet bolt-boost sidecar
 boost-logs:
-    @id=$(docker ps -n 100 | grep bolt-boost | awk -F' ' '{print $1}') && \
-    docker logs -f $id
+    @just log bolt-boost
 
 # show the logs for the bolt devnet mev-boost sidecar
 mev-boost-logs:
-    @id=$(docker ps -n 100 | grep bolt-mev-boost | awk -F' ' '{print $1}') && \
-    docker logs -f $id
+    @just log bolt-mev-boost
 
 # show the logs for the bolt devnet bolt-sidecar
 sidecar-logs:
-    @id=$(docker ps -n 100 | grep sidecar | awk -F' ' '{print $1}') && \
-    docker logs -f $id
+    @just log sidecar
 
 # show the logs for the bolt devnet for beacon node
 beacon-logs:
-    @id=$(docker ps -n 100 | grep 'cl-1-lighthouse-geth' | awk -F' ' '{print $1}') && \
-    docker logs -f $id
+    @just log 'cl-1-lighthouse-geth'
 
 # show the logs for the bolt devnet for beacon node
 beacon-dump:
-    @id=$(docker ps -n 100 | grep 'cl-1-lighthouse-geth' | awk -F' ' '{print $1}') && \
-    docker logs $id 2>&1 | tee beacon_dump.log
+    @just dump 'cl-1-lighthouse-geth'
 
 # show the logs for the bolt devnet relay
 relay-dump:
-    @id=$(docker ps -n 100 | grep mev-relay-api | awk -F' ' '{print $1}') && \
-    docker logs $id 2>&1 | tee relay_dump.log
+    @just dump mev-relay-api
 
 # show the logs for the bolt devnet builder
 builder-dump:
-    @id=$(docker ps -n 100 | grep bolt-builder | awk -F' ' '{print $1}') && \
-    docker logs $id 2>&1 | tee builder_dump.log
+    @just dump bolt-builder
 
 # show the logs for the bolt devnet mev-boost sidecar
 boost-dump:
-    @id=$(docker ps -n 100 | grep bolt-mev-boost | awk -F' ' '{print $1}') && \
-    docker logs $id 2>&1 | tee boost_dump.log
+    @just dump bolt-mev-boost
 
 # show the logs for the bolt devnet bolt-sidecar
 sidecar-dump:
-    @id=$(docker ps -n 100 | grep sidecar | awk -F' ' '{print $1}') && \
-    docker logs $id 2>&1 | tee sidecar_dump.log
-
+    @just dump sidecar
 
 # show the logs for the bolt devnet builder
 kill-builder:
@@ -153,23 +153,23 @@ build-images:
 
 # build the docker image for the bolt builder
 _build-builder:
-	cd builder && docker buildx build -t ghcr.io/chainbound/bolt-builder:0.1.0 . --load
+	cd builder && docker build -t ghcr.io/chainbound/bolt-builder:0.1.0 . --load
 
 # build the docker image for the bolt relay
 _build-relay:
-	cd mev-boost-relay && docker buildx build -t ghcr.io/chainbound/bolt-relay:0.1.0 . --load
+	cd mev-boost-relay && docker build -t ghcr.io/chainbound/bolt-relay:0.1.0 . --load
 
 # build the docker image for the bolt sidecar
 _build-sidecar:
-	cd bolt-sidecar && docker buildx build -t ghcr.io/chainbound/bolt-sidecar:0.1.0 . --load
+	cd bolt-sidecar && docker build -t ghcr.io/chainbound/bolt-sidecar:0.1.0 . --load
 
 # build the docker image for the bolt mev-boost sidecar
 _build-mevboost:
-	cd mev-boost && docker buildx build -t ghcr.io/chainbound/bolt-mev-boost:0.1.0 . --load
+	cd mev-boost && docker build -t ghcr.io/chainbound/bolt-mev-boost:0.1.0 . --load
 
 # build the docker image for bolt-boost
 _build-bolt-boost:
-	cd bolt-boost && docker buildx build -t ghcr.io/chainbound/bolt-boost:0.1.0 . --load
+	cd bolt-boost && docker build -t ghcr.io/chainbound/bolt-boost:0.1.0 . --load
 
 # deploy the bolt sidecar to the dev server
 deploy-sidecar-dev:

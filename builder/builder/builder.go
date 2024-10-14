@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"net/http"
 	_ "os"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -362,31 +363,18 @@ func (b *Builder) subscribeToRelayForConstraints(relayBaseEndpoint string) error
 		}
 
 		for _, constraint := range constraintsSigned {
-			// TODO: re-enable this once testing the devnet has ended
-			// oneValidSignature := false
-			// Check if the signature is valid against any of the authorized pubkeys
-			// for _, pubkey := range b.slotConstraintsPubkeys {
-			// 	valid, err := constraint.VerifySignature(pubkey, b.GetConstraintsDomain())
-			// 	if err != nil || !valid {
-			// 		log.Error("Failed to verify constraint signature", "err", err)
-			// 		continue
-			// 	}
-			//
-			// 	oneValidSignature = true
-			// }
+			// Check that the constraints pubkey is authorized to sign constraints
+			if !slices.Contains(b.slotConstraintsPubkeys, constraint.Message.Pubkey) {
+				log.Warn("Received constraint from unauthorized pubkey", "pubkey", constraint.Message.Pubkey)
+				continue
+			}
 
-			// TODO: remove this once testing the devnet has ended, we should check for authorized keys
+			// Verify the signature of the constraints message
 			valid, err := constraint.VerifySignature(constraint.Message.Pubkey, b.GetConstraintsDomain())
 			if err != nil || !valid {
 				log.Error("Failed to verify constraint signature", "err", err)
 				continue
 			}
-
-			// TODO: re-enable this once testing the devnet has ended
-			// If there is no valid signature, continue with the next constraint
-			// if !oneValidSignature {
-			// 	continue
-			// }
 
 			decodedConstraints, err := DecodeConstraints(constraint)
 			if err != nil {

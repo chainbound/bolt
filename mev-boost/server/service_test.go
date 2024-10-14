@@ -311,28 +311,85 @@ func TestRegisterValidator(t *testing.T) {
 	})
 }
 
-func TestParseConstraints(t *testing.T) {
-	jsonStr := `[{
-		"message": {
-			"validator_index": 12345,
-			"slot": 8978583,
-			"constraints": [{
-				"tx": "0x02f871018304a5758085025ff11caf82565f94388c818ca8b9251b393131c08a736a67ccb1929787a41bb7ee22b41380c001a0c8630f734aba7acb4275a8f3b0ce831cf0c7c487fd49ee7bcca26ac622a28939a04c3745096fa0130a188fa249289fd9e60f9d6360854820dba22ae779ea6f573f",
-				"index": null
-			}]
+func TestDelegate(t *testing.T) {
+	path := pathDelegate
+	delegate := SignedDelegation{
+		Message: Delegation{
+			Action:          0,
+			ValidatorPubkey: _HexToPubkey("0xa695ad325dfc7e1191fbc9f186f58eff42a634029731b18380ff89bf42c464a42cb8ca55b200f051f57f1e1893c68759"),
+			DelegateePubkey: _HexToPubkey("0xb8ba260170b9cda2ad54c321d9a8d77e4ca34517106f587eb5ec184bf78f8a0ce4fb55658301b0dc6b129d10adf62391"),
 		},
-		"signature": "0x81510b571e22f89d1697545aac01c9ad0c1e7a3e778b3078bef524efae14990e58a6e960a152abd49de2e18d7fd3081c15d5c25867ccfad3d47beef6b39ac24b6b9fbf2cfa91c88f67aff750438a6841ec9e4a06a94ae41410c4f97b75ab284c"
-	}]`
+		Signature: _HexToSignature("0x8790321eacadd5b869838bc01db2338b0bd88a802d768bff8ddbe12aeff67ebc003af8ecc3bafedfef98d2946e869974075006f22367f77c58ca1f1ba20f0d90bf323d243063db16c631ce4ff89bc4f3f239e0879cc4eb492b9906a16fab6f16"),
+	}
+	payload := delegate
+
+	t.Run("Normal function", func(t *testing.T) {
+		backend := newTestBackend(t, 1, time.Second)
+		rr := backend.request(t, http.MethodPost, path, payload)
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Equal(t, 1, backend.relays[0].GetRequestCount(path))
+	})
+}
+
+func TestRevoke(t *testing.T) {
+	path := pathRevoke
+	revoke := SignedRevocation{
+		Message: Revocation{
+			Action:          1,
+			ValidatorPubkey: _HexToPubkey("0xa695ad325dfc7e1191fbc9f186f58eff42a634029731b18380ff89bf42c464a42cb8ca55b200f051f57f1e1893c68759"),
+			DelegateePubkey: _HexToPubkey("0xb8ba260170b9cda2ad54c321d9a8d77e4ca34517106f587eb5ec184bf78f8a0ce4fb55658301b0dc6b129d10adf62391"),
+		},
+		Signature: _HexToSignature("0x8790321eacadd5b869838bc01db2338b0bd88a802d768bff8ddbe12aeff67ebc003af8ecc3bafedfef98d2946e869974075006f22367f77c58ca1f1ba20f0d90bf323d243063db16c631ce4ff89bc4f3f239e0879cc4eb492b9906a16fab6f16"),
+	}
+	payload := revoke
+
+	t.Run("Normal function", func(t *testing.T) {
+		backend := newTestBackend(t, 1, time.Second)
+		rr := backend.request(t, http.MethodPost, path, payload)
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Equal(t, 1, backend.relays[0].GetRequestCount(path))
+	})
+}
+
+func TestParseSignedDelegation(t *testing.T) {
+	jsonStr := `{
+        "message": {
+            "validator_pubkey": "0xa695ad325dfc7e1191fbc9f186f58eff42a634029731b18380ff89bf42c464a42cb8ca55b200f051f57f1e1893c68759",
+            "delegatee_pubkey": "0xb8ba260170b9cda2ad54c321d9a8d77e4ca34517106f587eb5ec184bf78f8a0ce4fb55658301b0dc6b129d10adf62391"
+        },
+        "signature": "0x8790321eacadd5b869838bc01db2338b0bd88a802d768bff8ddbe12aeff67ebc003af8ecc3bafedfef98d2946e869974075006f22367f77c58ca1f1ba20f0d90bf323d243063db16c631ce4ff89bc4f3f239e0879cc4eb492b9906a16fab6f16"
+        }`
+
+	delegation := SignedDelegation{}
+	err := json.Unmarshal([]byte(jsonStr), &delegation)
+	require.NoError(t, err)
+	require.Equal(t, phase0.BLSPubKey(_HexToBytes("0xa695ad325dfc7e1191fbc9f186f58eff42a634029731b18380ff89bf42c464a42cb8ca55b200f051f57f1e1893c68759")), delegation.Message.ValidatorPubkey)
+	require.Equal(t, phase0.BLSPubKey(_HexToBytes("0xb8ba260170b9cda2ad54c321d9a8d77e4ca34517106f587eb5ec184bf78f8a0ce4fb55658301b0dc6b129d10adf62391")), delegation.Message.DelegateePubkey)
+	require.Equal(t, phase0.BLSSignature(_HexToBytes("0x8790321eacadd5b869838bc01db2338b0bd88a802d768bff8ddbe12aeff67ebc003af8ecc3bafedfef98d2946e869974075006f22367f77c58ca1f1ba20f0d90bf323d243063db16c631ce4ff89bc4f3f239e0879cc4eb492b9906a16fab6f16")), delegation.Signature)
+}
+
+func TestParseConstraints(t *testing.T) {
+	jsonStr := `[
+		{
+		"message": {
+			"pubkey": "0xa695ad325dfc7e1191fbc9f186f58eff42a634029731b18380ff89bf42c464a42cb8ca55b200f051f57f1e1893c68759",
+			"slot": 32,
+			"top": true,
+			"transactions": [
+			"0x02f86c870c72dd9d5e883e4d0183408f2382520894d2e2adf7177b7a8afddbc12d1634cf23ea1a71020180c001a08556dcfea479b34675db3fe08e29486fe719c2b22f6b0c1741ecbbdce4575cc6a01cd48009ccafd6b9f1290bbe2ceea268f94101d1d322c787018423ebcbc87ab4"
+			]
+		},
+		"signature": "0xb8d50ee0d4b269db3d4658c1dac784d273a4160d769e16dce723a9684c390afe5865348416b3bf0f1a4f47098bec9024135d0d95f08bed18eb577a3d8a67f5dc78b13cc62515e280786a73fb267d35dfb7ab46a25ac29bf5bc2fa5b07b3e07a6"
+		}
+	]`
 
 	constraints := BatchedSignedConstraints{}
 	err := json.Unmarshal([]byte(jsonStr), &constraints)
 	require.NoError(t, err)
 	require.Len(t, constraints, 1)
-	require.Equal(t, uint64(12345), constraints[0].Message.ValidatorIndex)
-	require.Equal(t, uint64(8978583), constraints[0].Message.Slot)
-	require.Len(t, constraints[0].Message.Constraints, 1)
-	require.Equal(t, constraints[0].Message.Constraints[0].Tx, Transaction(_HexToBytes("0x02f871018304a5758085025ff11caf82565f94388c818ca8b9251b393131c08a736a67ccb1929787a41bb7ee22b41380c001a0c8630f734aba7acb4275a8f3b0ce831cf0c7c487fd49ee7bcca26ac622a28939a04c3745096fa0130a188fa249289fd9e60f9d6360854820dba22ae779ea6f573f")))
-	require.Nil(t, constraints[0].Message.Constraints[0].Index)
+	require.Equal(t, phase0.BLSPubKey(_HexToBytes("0xa695ad325dfc7e1191fbc9f186f58eff42a634029731b18380ff89bf42c464a42cb8ca55b200f051f57f1e1893c68759")), constraints[0].Message.Pubkey)
+	require.Equal(t, uint64(32), constraints[0].Message.Slot)
+	require.Equal(t, constraints[0].Message.Transactions[0], Transaction(_HexToBytes("0x02f86c870c72dd9d5e883e4d0183408f2382520894d2e2adf7177b7a8afddbc12d1634cf23ea1a71020180c001a08556dcfea479b34675db3fe08e29486fe719c2b22f6b0c1741ecbbdce4575cc6a01cd48009ccafd6b9f1290bbe2ceea268f94101d1d322c787018423ebcbc87ab4")))
 }
 
 func TestConstraintsAndProofs(t *testing.T) {
@@ -344,9 +401,10 @@ func TestConstraintsAndProofs(t *testing.T) {
 
 	payload := BatchedSignedConstraints{&SignedConstraints{
 		Message: ConstraintsMessage{
-			ValidatorIndex: 12345,
-			Slot:           slot,
-			Constraints:    []*Constraint{{Transaction(rawTx), nil}},
+			Pubkey:       phase0.BLSPubKey(_HexToBytes("0x8a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")),
+			Slot:         slot,
+			Top:          false,
+			Transactions: []Transaction{rawTx},
 		},
 		Signature: phase0.BLSSignature(_HexToBytes(
 			"0x81510b571e22f89d1697545aac01c9ad0c1e7a3e778b3078bef524efae14990e58a6e960a152abd49de2e18d7fd3081c15d5c25867ccfad3d47beef6b39ac24b6b9fbf2cfa91c88f67aff750438a6841ec9e4a06a94ae41410c4f97b75ab284c")),
@@ -356,7 +414,7 @@ func TestConstraintsAndProofs(t *testing.T) {
 	hash := _HexToHash("0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7")
 	pubkey := _HexToPubkey(
 		"0x8a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249")
-	getHeaderPath := getHeaderWithProofsPath(slot, hash, pubkey)
+	getHeaderWithProofsPath := getHeaderWithProofsPath(slot, hash, pubkey)
 
 	t.Run("Normal function", func(t *testing.T) {
 		backend := newTestBackend(t, 1, time.Second)
@@ -364,10 +422,9 @@ func TestConstraintsAndProofs(t *testing.T) {
 		require.Equal(t, http.StatusOK, rr.Code)
 		require.Equal(t, 1, backend.relays[0].GetRequestCount(path))
 
-		got, ok := backend.boost.constraints.FindTransactionByHash(common.HexToHash(txHash.String()))
+		tx, ok := backend.boost.constraints.FindTransactionByHash(common.HexToHash(txHash.String()))
 		require.True(t, ok)
-		require.Equal(t, Transaction(rawTx), got.Tx)
-		require.Nil(t, got.Index)
+		require.Equal(t, Transaction(rawTx), *tx)
 	})
 
 	t.Run("Normal function with constraints", func(t *testing.T) {
@@ -389,9 +446,9 @@ func TestConstraintsAndProofs(t *testing.T) {
 		)
 		backend.relays[0].GetHeaderWithProofsResponse = resp
 
-		rr := backend.request(t, http.MethodGet, getHeaderPath, nil)
+		rr := backend.request(t, http.MethodGet, getHeaderWithProofsPath, nil)
 		require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
-		require.Equal(t, 1, backend.relays[0].GetRequestCount(getHeaderPath))
+		require.Equal(t, 1, backend.relays[0].GetRequestCount(getHeaderWithProofsPath))
 	})
 
 	t.Run("No proofs given", func(t *testing.T) {
@@ -409,11 +466,11 @@ func TestConstraintsAndProofs(t *testing.T) {
 		)
 		backend.relays[0].GetHeaderResponse = resp
 
-		rr := backend.request(t, http.MethodGet, getHeaderPath, nil)
+		rr := backend.request(t, http.MethodGet, getHeaderWithProofsPath, nil)
 		// When we have constraints registered, but the relay does not return any proofs, we should return no content.
 		// This will force a locally built block.
 		require.Equal(t, http.StatusNoContent, rr.Code, rr.Body.String())
-		require.Equal(t, 1, backend.relays[0].GetRequestCount(getHeaderPath))
+		require.Equal(t, 1, backend.relays[0].GetRequestCount(getHeaderWithProofsPath))
 	})
 }
 

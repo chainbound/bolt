@@ -1,4 +1,7 @@
-use std::str::FromStr;
+use std::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct ValidatorIndexes(Vec<u64>);
@@ -24,6 +27,10 @@ impl FromStr for ValidatorIndexes {
         let s = s.trim();
         let mut vec = Vec::new();
 
+        if s.is_empty() {
+            return Ok(Self(vec));
+        }
+
         for comma_separated_part in s.split(',') {
             if comma_separated_part.contains("..") {
                 let mut parts = comma_separated_part.split("..");
@@ -48,6 +55,12 @@ impl FromStr for ValidatorIndexes {
 impl From<Vec<u64>> for ValidatorIndexes {
     fn from(vec: Vec<u64>) -> Self {
         Self(vec)
+    }
+}
+
+impl Display for ValidatorIndexes {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0.iter().map(|index| index.to_string()).collect::<Vec<_>>().join(","))
     }
 }
 

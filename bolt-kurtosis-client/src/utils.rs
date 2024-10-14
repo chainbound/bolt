@@ -37,7 +37,7 @@ pub fn generate_random_blob_tx() -> TransactionRequest {
         .with_value(U256::from(100))
         .with_max_fee_per_blob_gas(100u128)
         .max_fee_per_gas(NOICE_GAS_PRICE)
-        .max_priority_fee_per_gas(NOICE_GAS_PRICE / 10)
+        .max_priority_fee_per_gas(NOICE_GAS_PRICE)
         .with_gas_limit(42_000u128)
         .with_blob_sidecar(sidecar)
         .with_input(random_bytes)
