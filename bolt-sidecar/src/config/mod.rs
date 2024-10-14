@@ -34,21 +34,20 @@ pub const DEFAULT_CONSTRAINTS_PROXY_PORT: u16 = 18551;
 #[clap(trailing_var_arg = true)]
 pub struct Opts {
     /// Port to listen on for incoming JSON-RPC requests
-    #[clap(long, env = "BOLT_SIDECAR_PORT",
-        default_value_t = DEFAULT_RPC_PORT)]
+    #[clap(long, env = "BOLT_SIDECAR_PORT", default_value_t = DEFAULT_RPC_PORT)]
     pub port: u16,
-    /// URL for the beacon client
-    #[clap(long, env = "BOLT_SIDECAR_BEACON_API_URL", default_value = "http://localhost:5052")]
-    pub beacon_api_url: Url,
-    /// URL for the Constraint sidecar client to use
-    #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_URL", default_value = "http://localhost:3030")]
-    pub constraints_url: Url,
     /// Execution client API URL
     #[clap(long, env = "BOLT_SIDECAR_EXECUTION_API_URL", default_value = "http://localhost:8545")]
     pub execution_api_url: Url,
+    /// URL for the beacon client
+    #[clap(long, env = "BOLT_SIDECAR_BEACON_API_URL", default_value = "http://localhost:5052")]
+    pub beacon_api_url: Url,
     /// Execution client Engine API URL
     #[clap(long, env = "BOLT_SIDECAR_ENGINE_API_URL", default_value = "http://localhost:8551")]
     pub engine_api_url: Url,
+    /// URL for the Constraint sidecar client to use
+    #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_URL", default_value = "http://localhost:3030")]
+    pub constraints_url: Url,
     /// Constraint proxy server port to use
     #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT", default_value_t = DEFAULT_CONSTRAINTS_PROXY_PORT)]
     pub constraints_proxy_port: u16,
@@ -66,8 +65,7 @@ pub struct Opts {
     #[clap(long, env = "BOLT_SIDECAR_JWT_HEX", default_value_t)]
     pub jwt_hex: JwtSecretConfig,
     /// The fee recipient address for fallback blocks
-    #[clap(long, env = "BOLT_SIDECAR_FEE_RECIPIENT",
-        default_value_t = Address::ZERO)]
+    #[clap(long, env = "BOLT_SIDECAR_FEE_RECIPIENT", default_value_t = Address::ZERO)]
     pub fee_recipient: Address,
     /// Secret BLS key to sign fallback payloads with (If not provided, a random key will be used)
     #[clap(long, env = "BOLT_SIDECAR_BUILDER_PRIVATE_KEY", default_value_t = BlsSecretKeyWrapper::random())]
@@ -108,11 +106,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_url() {
+    fn test_parse_url() {
         let url = "http://0.0.0.0:3030";
         let parsed = url.parse::<Url>().unwrap();
         let socket_addr = parsed.socket_addrs(|| None).unwrap()[0];
         let localhost_socket = "0.0.0.0:3030".parse().unwrap();
         assert_eq!(socket_addr, localhost_socket);
+    }
+
+    #[test]
+    fn test_parse_config_from_toml() {
+        let path = env!("CARGO_MANIFEST_DIR").to_string() + "Config.toml";
+        dbg!(&path);
+
+        if let Ok(config_file) = std::fs::read_to_string(path) {
+            let config = Opts::parse_from_toml(&config_file).expect("Failed to parse config");
+            assert_eq!(config.execution_api_url, Url::parse("http://localhost:8545").unwrap());
+            assert_eq!(config.beacon_api_url, Url::parse("http://localhost:5052").unwrap());
+            assert_eq!(config.engine_api_url, Url::parse("http://localhost:8551").unwrap());
+            assert_eq!(config.constraints_url, Url::parse("http://localhost:3030").unwrap());
+            assert_eq!(config.constraints_proxy_port, 18551);
+        }
     }
 }
