@@ -24,7 +24,7 @@ pub enum Commands {
             hide_env_values = true,
             conflicts_with("keystore_path")
         )]
-        secret_key: Option<Vec<String>>,
+        secret_keys: Option<Vec<String>>,
 
         /// The BLS public key to which the delegation message should be signed.
         #[clap(long, env = "DELEGATEE_PUBKEY")]
@@ -41,7 +41,7 @@ pub enum Commands {
 
     GenerateKeystore {
         /// Path to the keystore file (required if source is keystore).
-        #[clap(long, env = "KEY_PATH", conflicts_with("secret_key"))]
+        #[clap(long, env = "KEYSTORE_PATH", conflicts_with("secret_key"))]
         keystore_path: Option<String>,
 
         /// The password for the keystore files in the path.

@@ -20,8 +20,8 @@ fn main() -> Result<()> {
     let cli = Opts::parse();
 
     match &cli.command {
-        Commands::GenerateLocal { secret_key, delegatee_pubkey, out, chain } => {
-            let secret_keys = secret_key.as_ref().unwrap();
+        Commands::GenerateLocal { secret_keys, delegatee_pubkey, out, chain } => {
+            let secret_keys = secret_keys.as_ref().unwrap();
             let delegatee_pubkey = parse_public_key(delegatee_pubkey)?;
             let signed_delegation = generate_from_local_key(secret_keys, delegatee_pubkey, chain)?;
 
@@ -65,7 +65,7 @@ fn generate_from_local_key(
     let mut signed_delegations = Vec::with_capacity(secret_keys.len());
 
     for sk in secret_keys {
-        let sk = SecretKey::try_from(sk.clone())?;
+        let sk = SecretKey::try_from(sk.trim().to_string())?;
         let delegation = DelegationMessage::new(sk.public_key(), delegatee_pubkey.clone());
 
         let signing_root = compute_signing_root_for_delegation(&delegation, chain)?;
