@@ -107,5 +107,19 @@ contract BoltParameters is OwnableUpgradeable, UUPSUpgradeable {
         ALLOW_UNSAFE_REGISTRATION = allowUnsafeRegistration;
     }
 
-    // ============== VIEW METHODS =============== //
+    /// @notice Set the max challenge duration.
+    /// @param maxChallengeDuration The maximum duration of a challenge before it is automatically considered valid.
+    function setMaxChallengeDuration(
+        uint48 maxChallengeDuration
+    ) public onlyOwner {
+        MAX_CHALLENGE_DURATION = maxChallengeDuration;
+    }
+
+    /// @notice Set the required challenge bond.
+    /// @param challengeBond The challenge bond required to open a challenge.
+    function setChallengeBond(
+        uint256 challengeBond
+    ) public onlyOwner {
+        CHALLENGE_BOND = challengeBond;
+    }
 }
