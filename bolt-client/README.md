@@ -1,6 +1,6 @@
 # Bolt CLI client
 
-This is a simple CLI tool to interact with Bolt.
+This is a CLI tool to interact with Bolt by sending preconfirmation requests.
 
 ## Requirements
 
