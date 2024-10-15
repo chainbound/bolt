@@ -7,6 +7,8 @@ import {BoltParameters} from "../src/contracts/BoltParameters.sol";
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
 import {BLS12381} from "../src/lib/bls/BLS12381.sol";
+import {BoltConfig} from "../src/lib/Config.sol";
+import {Utils} from "./Utils.sol";
 
 contract BoltValidatorsTest is Test {
     using BLS12381 for BLS12381.G1Point;
@@ -22,30 +24,22 @@ contract BoltValidatorsTest is Test {
     address validator = makeAddr("validator");
 
     function setUp() public {
-        uint48 epochDuration = 1 days;
-        uint48 slashingWindow = 7 days;
-        uint48 maxChallengeDuration = 7 days;
-        bool allowUnsafeRegistration = true;
-        uint256 challengeBond = 1 ether;
-        uint256 blockhashEvmLookback = 256;
-        uint256 justificationDelay = 32;
-        uint256 eth2GenesisTimestamp = 1_606_824_023;
-        uint256 slotTime = 12;
+        BoltConfig.ParametersConfig memory config = new Utils().readParameters();
 
         parameters = new BoltParameters();
-
         parameters.initialize(
             admin,
-            epochDuration,
-            slashingWindow,
-            maxChallengeDuration,
-            allowUnsafeRegistration,
-            challengeBond,
-            blockhashEvmLookback,
-            justificationDelay,
-            eth2GenesisTimestamp,
-            slotTime
+            config.epochDuration,
+            config.slashingWindow,
+            config.maxChallengeDuration,
+            config.allowUnsafeRegistration,
+            config.challengeBond,
+            config.blockhashEvmLookback,
+            config.justificationDelay,
+            config.eth2GenesisTimestamp,
+            config.slotTime
         );
+
         validators = new BoltValidators();
         validators.initialize(admin, address(parameters));
     }

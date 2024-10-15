@@ -41,10 +41,10 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     /// associated Bolt Middleware contract.
     EnumerableSet.AddressSet private restakingProtocols;
 
-    // --> Storage layout marker: 4 slots
-
     /// @notice Start timestamp of the first epoch.
     uint48 public START_TIMESTAMP;
+
+    // --> Storage layout marker: 5 slots (26 bytes left)
 
     /**
      * @dev This empty reserved space is put in place to allow future versions to add new
@@ -54,7 +54,7 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
      *
      * Total storage slots: 50
      */
-    uint256[46] private __gap;
+    uint256[45] private __gap;
 
     modifier onlyMiddleware() {
         if (!restakingProtocols.contains(msg.sender)) {

@@ -1,0 +1,11 @@
+{
+    "epochDuration": 86400,
+    "slashingWindow": 604800,
+    "maxChallengeDuration": 604800,
+    "challengeBond": 1000000000000000000,
+    "blockhashEvmLookback": 256,
+    "justificationDelay": 32,
+    "eth2GenesisTimestamp": 1606824023,
+    "slotTime": 12,
+    "allowUnsafeRegistration": true
+}

@@ -6,10 +6,12 @@ import {Test, console} from "forge-std/Test.sol";
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
 import {BoltParameters} from "../src/contracts/BoltParameters.sol";
+import {BoltConfig} from "../src/lib/Config.sol";
 import {BoltEigenLayerMiddleware} from "../src/contracts/BoltEigenLayerMiddleware.sol";
 import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
 import {IBoltManager} from "../src/interfaces/IBoltManager.sol";
 import {IBoltMiddleware} from "../src/interfaces/IBoltMiddleware.sol";
+import {Utils} from "./Utils.sol";
 
 import {AVSDirectoryStorage} from "@eigenlayer/src/contracts/core/AVSDirectoryStorage.sol";
 import {DelegationManagerStorage} from "@eigenlayer/src/contracts/core/DelegationManagerStorage.sol";
@@ -45,34 +47,25 @@ contract BoltManagerEigenLayerTest is Test {
         // Set-up accounts
         (operator, operatorSk) = makeAddrAndKey("operator");
 
-        // vm.setEnv("CHAIN_ID", "100000000");
         // Deploy EigenLayer contracts.
         // This also deploy a `weth` token and `wethStrat` strategy base available as properties of the contract.
         eigenLayerDeployer = new EigenLayerDeployer(staker);
         eigenLayerDeployer.setUp();
 
-        uint48 epochDuration = 1 days;
-        uint48 slashingWindow = 7 days;
-        uint48 maxChallengeDuration = 7 days;
-        bool allowUnsafeRegistration = true;
-        uint256 challengeBond = 1 ether;
-        uint256 blockhashEvmLookback = 256;
-        uint256 justificationDelay = 32;
-        uint256 eth2GenesisTimestamp = 1_606_824_023;
-        uint256 slotTime = 12;
+        BoltConfig.ParametersConfig memory config = new Utils().readParameters();
 
         BoltParameters parameters = new BoltParameters();
         parameters.initialize(
             admin,
-            epochDuration,
-            slashingWindow,
-            maxChallengeDuration,
-            allowUnsafeRegistration,
-            challengeBond,
-            blockhashEvmLookback,
-            justificationDelay,
-            eth2GenesisTimestamp,
-            slotTime
+            config.epochDuration,
+            config.slashingWindow,
+            config.maxChallengeDuration,
+            config.allowUnsafeRegistration,
+            config.challengeBond,
+            config.blockhashEvmLookback,
+            config.justificationDelay,
+            config.eth2GenesisTimestamp,
+            config.slotTime
         );
 
         // Deploy Bolt contracts
