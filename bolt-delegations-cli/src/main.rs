@@ -6,7 +6,7 @@ use eyre::Result;
 use lighthouse_eth2_keystore::Keystore;
 
 pub mod config;
-use config::{Chain, Commands, Opts};
+use config::{Chain, Commands, KeySource, Opts};
 
 pub mod types;
 use types::{DelegationMessage, KeystoreError, SignedDelegation};
@@ -19,35 +19,28 @@ fn main() -> Result<()> {
 
     let cli = Opts::parse();
 
-    match &cli.command {
-        Commands::GenerateLocal { secret_keys, delegatee_pubkey, out, chain } => {
-            let secret_keys = secret_keys.as_ref().unwrap();
-            let delegatee_pubkey = parse_public_key(delegatee_pubkey)?;
-            let signed_delegation = generate_from_local_key(secret_keys, delegatee_pubkey, chain)?;
+    match cli.command {
+        Commands::Generate { delegatee_pubkey, out, chain, source } => match source {
+            KeySource::Local { secret_keys } => {
+                let delegatee_pubkey = parse_public_key(&delegatee_pubkey)?;
+                let delegations = generate_from_local_key(&secret_keys, delegatee_pubkey, &chain)?;
 
-            write_delegations_to_file(out, &signed_delegation)?;
-            println!("Signed delegation messages generated and saved to {}", out);
-        }
-        Commands::GenerateKeystore {
-            keystore_path,
-            keystore_password,
-            delegatee_pubkey,
-            out,
-            chain,
-        } => {
-            let delegatee_pubkey = parse_public_key(delegatee_pubkey)?;
-            let signed_delegation = generate_from_keystore(
-                keystore_path.as_deref(),
-                keystore_password.as_bytes(),
-                delegatee_pubkey,
-                chain,
-            )?;
+                write_delegations_to_file(&out, &delegations)?;
+                println!("Signed delegation messages generated and saved to {}", out);
+            }
+            KeySource::Keystore { keystore_path, keystore_password } => {
+                let signed_delegations = generate_from_keystore(
+                    Some(keystore_path.as_str()),
+                    keystore_password.as_bytes(),
+                    parse_public_key(&delegatee_pubkey)?,
+                    &chain,
+                )?;
 
-            write_delegations_to_file(out, &signed_delegation)?;
-            println!("Signed delegation messages generated and saved to {}", out);
-        }
+                write_delegations_to_file(&out, &signed_delegations)?;
+                println!("Signed delegation messages generated and saved to {}", out);
+            }
+        },
     }
-
     Ok(())
 }
 
@@ -66,15 +59,12 @@ fn generate_from_local_key(
 
     for sk in secret_keys {
         let sk = SecretKey::try_from(sk.trim().to_string())?;
-        let delegation = DelegationMessage::new(sk.public_key(), delegatee_pubkey.clone());
+        let message = DelegationMessage::new(sk.public_key(), delegatee_pubkey.clone());
 
-        let signing_root = compute_signing_root_for_delegation(&delegation, chain)?;
-        let sig = sk.sign(signing_root.0.as_ref());
+        let signing_root = compute_signing_root_for_delegation(&message, chain)?;
+        let signature = sk.sign(signing_root.0.as_ref());
 
-        signed_delegations.push(SignedDelegation {
-            message: delegation,
-            signature: BlsSignature::try_from(sig)?,
-        });
+        signed_delegations.push(SignedDelegation { message, signature });
     }
 
     Ok(signed_delegations)
