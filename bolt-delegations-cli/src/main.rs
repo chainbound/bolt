@@ -6,7 +6,7 @@ use eyre::Result;
 use lighthouse_eth2_keystore::Keystore;
 
 use bolt_delegations_cli::{
-    config::{Commands, Opts, SourceType},
+    config::{Chain, Commands, Opts, SourceType},
     types::{DelegationMessage, SignedDelegation},
     utils::{compute_signing_root_for_delegation, parse_public_key, KEYSTORE_PASSWORD},
 };
@@ -26,37 +26,23 @@ pub enum KeystoreError {
 }
 
 fn main() -> Result<()> {
+    let _ = dotenvy::dotenv();
+
     let cli = Opts::parse();
 
     match &cli.command {
-        Commands::Generate {
-            source,
-            key_path,
-            delegatee_pubkey,
-            out,
-        } => {
-            generate_delegations(source, key_path, delegatee_pubkey, out)?;
+        Commands::Generate { source, key_path, delegatee_pubkey, out, chain } => {
+            let delegatee_pubkey = parse_public_key(delegatee_pubkey)?;
+            let signed_delegation = match source {
+                SourceType::Local => generate_from_local_key(key_path, delegatee_pubkey, chain)?,
+                SourceType::Keystore => generate_from_keystore(key_path, delegatee_pubkey, chain)?,
+            };
+
+            write_delegation_to_file(out, &signed_delegation)?;
+            println!("Delegation message generated and saved to {}", out);
         }
     }
 
-    Ok(())
-}
-
-/// Generate a signed delegation from a provided source
-fn generate_delegations(
-    source: &SourceType,
-    key_path: &str,
-    delegatee_pubkey: &str,
-    out: &str,
-) -> Result<()> {
-    let delegatee_pubkey = parse_public_key(delegatee_pubkey)?;
-    let signed_delegation = match source {
-        SourceType::Local => generate_from_local_key(key_path, delegatee_pubkey)?,
-        SourceType::Keystore => generate_from_keystore(key_path, delegatee_pubkey)?,
-    };
-
-    write_delegation_to_file(out, &signed_delegation)?;
-    println!("Delegation message generated and saved to {}", out);
     Ok(())
 }
 
@@ -64,24 +50,23 @@ fn generate_delegations(
 fn generate_from_local_key(
     key_path: &str,
     delegatee_pubkey: BlsPublicKey,
+    chain: &Chain,
 ) -> Result<SignedDelegation> {
     let sk_hex = fs::read_to_string(key_path)?;
     let sk = SecretKey::try_from(sk_hex)?;
     let delegation = DelegationMessage::new(sk.public_key(), delegatee_pubkey);
 
-    let signing_root = compute_signing_root_for_delegation(&delegation)?;
+    let signing_root = compute_signing_root_for_delegation(&delegation, chain)?;
     let sig = sk.sign(signing_root.0.as_ref());
 
-    Ok(SignedDelegation {
-        message: delegation,
-        signature: sig,
-    })
+    Ok(SignedDelegation { message: delegation, signature: sig })
 }
 
 /// Generate a signed delegation using a keystore file
 fn generate_from_keystore(
     key_path: &str,
     delegatee_pubkey: BlsPublicKey,
+    chain: &Chain,
 ) -> Result<SignedDelegation> {
     let keypair = Keystore::from_json_file(key_path)
         .map_err(|e| KeystoreError::ReadFromJSON(key_path.to_owned(), format!("{e:?}")))?
@@ -93,7 +78,7 @@ fn generate_from_keystore(
         delegatee_pubkey,
     );
 
-    let signing_root = compute_signing_root_for_delegation(&delegation)?;
+    let signing_root = compute_signing_root_for_delegation(&delegation, chain)?;
     let sig = keypair.sk.sign(signing_root.0.into());
 
     Ok(SignedDelegation {

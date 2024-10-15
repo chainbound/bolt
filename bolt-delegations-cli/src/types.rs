@@ -27,15 +27,10 @@ pub struct DelegationMessage {
 impl DelegationMessage {
     /// Create a new delegation message.
     pub fn new(validator_pubkey: BlsPublicKey, delegatee_pubkey: BlsPublicKey) -> Self {
-        Self {
-            action: SignedMessageAction::Delegation as u8,
-            validator_pubkey,
-            delegatee_pubkey,
-        }
+        Self { action: SignedMessageAction::Delegation as u8, validator_pubkey, delegatee_pubkey }
     }
-}
 
-impl DelegationMessage {
+    /// Compute the digest of the delegation message.
     pub fn digest(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
         hasher.update([self.action]);
