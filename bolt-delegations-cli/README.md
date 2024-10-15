@@ -1,6 +1,6 @@
 # Bolt Delegations CLI
 
-`bolt-delegations-cli` is a command-line tool for generating delegation messages signed with a BLS (Boneh–Lynn–Shacham) key. This tool allows node operators to safely generate delegations offline, enabling an air-gapped workflow to secure sensitive information like validator keys.
+`bolt-delegations-cli` is an offline command-line tool for safely generating delegation messages signed with a BLS12-381 key for the [Constraints API](https://docs.boltprotocol.xyz/api/builder) in [Bolt](https://docs.boltprotocol.xyz/).
 
 The tool supports two key sources:
 
