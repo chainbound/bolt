@@ -16,7 +16,7 @@ pub const COMMIT_BOOST_DOMAIN_MASK: [u8; 4] = [109, 109, 111, 67];
 pub fn parse_public_key(delegatee_pubkey: &str) -> Result<BlsPublicKey> {
     let hex_pk = delegatee_pubkey.strip_prefix("0x").unwrap_or(delegatee_pubkey);
     BlsPublicKey::try_from(hex::decode(hex_pk).expect("Failed to decode pubkey").as_slice())
-        .map_err(|e| eyre::eyre!("Failed to parse public key from string '{}': {}", hex_pk, e))
+        .map_err(|e| eyre::eyre!("Failed to parse public key '{}': {}", hex_pk, e))
 }
 
 /// Helper function to compute the signing root for a delegation message

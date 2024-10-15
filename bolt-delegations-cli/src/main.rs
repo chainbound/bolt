@@ -7,23 +7,9 @@ use lighthouse_eth2_keystore::Keystore;
 
 use bolt_delegations_cli::{
     config::{Chain, Commands, Opts, SourceType},
-    types::{DelegationMessage, SignedDelegation},
+    types::{DelegationMessage, KeystoreError, SignedDelegation},
     utils::{compute_signing_root_for_delegation, parse_public_key, KEYSTORE_PASSWORD},
 };
-
-#[derive(Debug, thiserror::Error)]
-pub enum KeystoreError {
-    #[error("Failed to read keystore directory: {0}")]
-    ReadFromDirectory(#[from] std::io::Error),
-    #[error("Failed to read keystore from JSON file {0}: {1}")]
-    ReadFromJSON(String, String),
-    #[error("Failed to decrypt keypair from JSON file {0} with the provided password: {1}")]
-    KeypairDecryption(String, String),
-    #[error("Could not find private key associated with public key {0}")]
-    UnknownPublicKey(String),
-    #[error("Invalid signature key length. Signature: {0}. Message: {1}")]
-    SignatureLength(String, String),
-}
 
 fn main() -> Result<()> {
     let _ = dotenvy::dotenv();
@@ -69,12 +55,13 @@ fn generate_from_keystore(
     chain: &Chain,
 ) -> Result<SignedDelegation> {
     let keypair = Keystore::from_json_file(key_path)
-        .map_err(|e| KeystoreError::ReadFromJSON(key_path.to_owned(), format!("{e:?}")))?
+        .map_err(|e| KeystoreError::ReadFromJSON(key_path.to_string(), format!("{e:?}")))?
         .decrypt_keypair(KEYSTORE_PASSWORD.as_bytes())
-        .map_err(|e| KeystoreError::KeypairDecryption(key_path.to_owned(), format!("{e:?}")))?;
+        .map_err(|e| KeystoreError::KeypairDecryption(key_path.to_string(), format!("{e:?}")))?;
 
     let delegation = DelegationMessage::new(
-        BlsPublicKey::try_from(keypair.pk.to_string().as_ref())?,
+        BlsPublicKey::try_from(keypair.pk.to_string().as_ref())
+            .map_err(|e| KeystoreError::UnknownPublicKey(format!("{e:?}")))?,
         delegatee_pubkey,
     );
 
