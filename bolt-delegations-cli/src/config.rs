@@ -39,24 +39,31 @@ pub enum Commands {
     },
 }
 
+/// The action to perform.
 #[derive(Debug, Clone, ValueEnum, Deserialize)]
 pub enum Action {
+    /// Create a delegation message.
     Delegate,
+    /// Create a revocation message.
     Revoke,
 }
 
 #[derive(Debug, Clone, Parser, Deserialize)]
 pub enum KeySource {
+    /// Use local private keys to generate the signed messages.
     Local {
         /// The private key in hex format (required if source is local).
         /// Multiple secret keys must be seperated by commas.
         #[clap(long, env = "SECRET_KEYS", value_delimiter = ',', hide_env_values = true)]
         secret_keys: Vec<String>,
     },
+
+    /// Use an EIP-2335 keystore folder to generate the signed messages.
     Keystore {
         /// Path to the keystore file.
         #[clap(long, env = "KEYSTORE_PATH")]
         keystore_path: String,
+
         /// The password for the keystore files in the path.
         /// Assumes all keystore files have the same password.
         #[clap(
