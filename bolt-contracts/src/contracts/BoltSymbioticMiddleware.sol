@@ -28,6 +28,8 @@ import {IBoltManager} from "../interfaces/IBoltManager.sol";
 /// @dev This contract is upgradeable using the UUPSProxy pattern. Storage layout remains fixed across upgrades
 /// with the use of storage gaps.
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+/// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
+/// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
 contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
@@ -42,6 +44,9 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
     uint256 public VETO_SLASHER_TYPE = 1;
 
     // ========= STORAGE ========= //
+
+    /// @notice Start timestamp of the first epoch.
+    uint48 public START_TIMESTAMP;
 
     /// @notice Bolt Parameters contract.
     IBoltParameters public parameters;
@@ -68,12 +73,9 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
     /// @notice Address of the Symbiotic Operator Network Opt-In contract.
     address public OPERATOR_NET_OPTIN;
 
-    /// @notice Start timestamp of the first epoch.
-    uint48 public START_TIMESTAMP;
-
     bytes32 public NAME_HASH;
 
-    // --> Storage layout marker: 10 slots
+    // --> Storage layout marker: 14 slots
 
     /**
      * @dev This empty reserved space is put in place to allow future versions to add new
@@ -83,7 +85,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
      *
      * Total storage slots: 50
      */
-    uint256[40] private __gap;
+    uint256[36] private __gap;
 
     // ========= ERRORS =========
 

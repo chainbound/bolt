@@ -28,12 +28,17 @@ import {StrategyManagerStorage} from "@eigenlayer/src/contracts/core/StrategyMan
 /// @dev This contract is upgradeable using the UUPSProxy pattern. Storage layout remains fixed across upgrades
 /// with the use of storage gaps.
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+/// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
+/// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
 contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
 
     // ========= STORAGE =========
+
+    /// @notice Start timestamp of the first epoch.
+    uint48 public START_TIMESTAMP;
 
     /// @notice Bolt Parameters contract.
     IBoltParameters public parameters;
@@ -60,10 +65,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUp
     /// @notice Name hash of the restaking protocol for identifying the instance of `IBoltMiddleware`.
     bytes32 public NAME_HASH;
 
-    // --> Storage layout marker: 8 slots
-
-    /// @notice Start timestamp of the first epoch.
-    uint48 public START_TIMESTAMP;
+    // --> Storage layout marker: 11 slots
 
     /**
      * @dev This empty reserved space is put in place to allow future versions to add new
@@ -73,7 +75,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUp
      *
      * Total storage slots: 50
      */
-    uint256[42] private __gap;
+    uint256[39] private __gap;
 
     // ========= ERRORS =========
 

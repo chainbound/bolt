@@ -21,6 +21,8 @@ import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 /// @dev This contract is upgradeable using the UUPSProxy pattern. Storage layout remains fixed across upgrades
 /// with the use of storage gaps.
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+/// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
+/// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
 contract BoltChallenger is IBoltChallenger, OwnableUpgradeable, UUPSUpgradeable {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
@@ -39,7 +41,7 @@ contract BoltChallenger is IBoltChallenger, OwnableUpgradeable, UUPSUpgradeable 
     /// @notice The mapping of challenge IDs to their respective challenges.
     mapping(bytes32 => Challenge) internal challenges;
 
-    // --> Storage layout marker: 3 slots
+    // --> Storage layout marker: 4 slots
 
     /**
      * @dev This empty reserved space is put in place to allow future versions to add new
@@ -49,7 +51,7 @@ contract BoltChallenger is IBoltChallenger, OwnableUpgradeable, UUPSUpgradeable 
      *
      * Total storage slots: 50
      */
-    uint256[47] private __gap;
+    uint256[46] private __gap;
 
     // ========= INITIALIZER =========
 
