@@ -169,6 +169,13 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
         return status;
     }
 
+    /// @notice Get the amount staked by an operator for a given collateral asset.
+    function getOperatorStake(address operator, address collateral) public view returns (uint256) {
+        Operator memory operatorData = operators.get(operator);
+
+        return IBoltMiddleware(operatorData.middleware).getOperatorStake(operator, collateral);
+    }
+
     /// @notice Get the total amount staked of a given collateral asset.
     function getTotalStake(
         address collateral

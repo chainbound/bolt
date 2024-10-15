@@ -212,16 +212,14 @@ contract BoltManagerEigenLayerTest is Test {
         manager.isOperatorEnabled(operator);
     }
 
-    // TODO:
-    // function test_getEigenLayerOperatorStake() public {
-    //     _eigenLayerOptInRoutine();
+    function testGetOperatorStake() public {
+        _eigenLayerOptInRoutine();
 
-    //     uint256 amount = middleware.getOperatorStake(operator, address(eigenLayerDeployer.weth()));
-    //     // TODO:
-    //     uint256 totalStake = middleware.getTotalStake(2, address(eigenLayerDeployer.weth()));
-    //     assertEq(amount, 1 ether);
-    //     assertEq(totalStake, 1 ether);
-    // }
+        uint256 amount = middleware.getOperatorStake(operator, address(eigenLayerDeployer.weth()));
+        uint256 totalStake = manager.getTotalStake(address(eigenLayerDeployer.weth()));
+        assertEq(amount, 1 ether);
+        assertEq(totalStake, 1 ether);
+    }
 
     function testProposerStatus() public {
         _eigenLayerOptInRoutine();

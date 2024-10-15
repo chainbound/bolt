@@ -315,11 +315,6 @@ contract BoltManagerSymbioticTest is Test {
         assertEq(vault.currentEpoch(), 2);
 
         // it takes 2 epochs to activate the stake
-        // TODO:
-        // assertEq(middleware.getTotalStake(0, address(collateral)), 0);
-        // assertEq(middleware.getTotalStake(1, address(collateral)), 0);
-        // assertEq(middleware.getTotalStake(2, address(collateral)), 1 ether);
-
         stakeFromDelegator = networkRestakeDelegator.stake(subnetwork, operator);
         stakeFromMiddleware = middleware.getOperatorStake(operator, address(collateral));
         assertEq(stakeFromDelegator, stakeFromMiddleware);
