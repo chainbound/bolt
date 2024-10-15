@@ -34,7 +34,14 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
     using Subnetwork for address;
 
-    // ========= STORAGE =========
+    // ========== CONSTANTS ============ //
+    /// @notice Slasher that can instantly slash operators without veto.
+    uint256 public INSTANT_SLASHER_TYPE = 0;
+
+    /// @notice Slasher that can request a veto before actually slashing operators.
+    uint256 public VETO_SLASHER_TYPE = 1;
+
+    // ========= STORAGE ========= //
 
     /// @notice Bolt Parameters contract.
     IBoltParameters public parameters;
@@ -64,15 +71,9 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
     /// @notice Start timestamp of the first epoch.
     uint48 public START_TIMESTAMP;
 
-    /// @notice Slasher that can instantly slash operators without veto.
-    uint256 public INSTANT_SLASHER_TYPE;
-
-    /// @notice Slasher that can request a veto before actually slashing operators.
-    uint256 public VETO_SLASHER_TYPE;
-
     bytes32 public NAME_HASH;
 
-    // --> Storage layout marker: 12 slots
+    // --> Storage layout marker: 10 slots
 
     /**
      * @dev This empty reserved space is put in place to allow future versions to add new
@@ -82,7 +83,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
      *
      * Total storage slots: 50
      */
-    uint256[38] private __gap;
+    uint256[40] private __gap;
 
     // ========= ERRORS =========
 
@@ -117,8 +118,6 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
         OPERATOR_REGISTRY = _symbioticOperatorRegistry;
         OPERATOR_NET_OPTIN = _symbioticOperatorNetOptIn;
         VAULT_REGISTRY = _symbioticVaultRegistry;
-        INSTANT_SLASHER_TYPE = 0;
-        VETO_SLASHER_TYPE = 1;
         NAME_HASH = keccak256("SYMBIOTIC");
     }
 
