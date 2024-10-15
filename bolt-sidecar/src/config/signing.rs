@@ -1,17 +1,16 @@
-use crate::common::{BlsSecretKeyWrapper, JwtSecretConfig};
-use std::{
-    fmt::{self},
-    net::SocketAddr,
-};
+use std::{fmt, net::SocketAddr};
 
 use clap::{ArgGroup, Args};
 use lighthouse_account_utils::ZeroizeString;
+use serde::Deserialize;
+
+use crate::common::{BlsSecretKeyWrapper, JwtSecretConfig};
 
 /// Command-line options for signing
-#[derive(Args)]
+#[derive(Args, Deserialize)]
 #[clap(
     group = ArgGroup::new("signing-opts").required(true)
-        .args(&["private_key", "commit_boost_address", "commit_boost_jwt_hex", "keystore_password"])
+        .args(&["private_key", "commit_boost_address", "keystore_password"])
 )]
 pub struct SigningOpts {
     /// Private key to use for signing preconfirmation requests
@@ -30,6 +29,9 @@ pub struct SigningOpts {
     /// Path to the keystores folder. If not provided, the default path is used.
     #[clap(long, env = "BOLT_SIDECAR_KEYSTORE_PATH", requires("keystore_password"))]
     pub keystore_path: Option<String>,
+    /// Path to the delegations file. If not provided, the default path is used.
+    #[clap(long, env = "BOLT_SIDECAR_DELEGATIONS_PATH")]
+    pub delegations_path: Option<String>,
 }
 
 // Implement Debug manually to hide the keystore_password field
@@ -40,18 +42,8 @@ impl fmt::Debug for SigningOpts {
             .field("commit_boost_url", &self.commit_boost_address)
             .field("commit_boost_jwt_hex", &self.commit_boost_jwt_hex)
             .field("keystore_password", &"********") // Hides the actual password
+            .field("keystore_path", &self.keystore_path)
+            .field("delegations_path", &self.delegations_path)
             .finish()
-    }
-}
-
-impl Default for SigningOpts {
-    fn default() -> Self {
-        Self {
-            private_key: Some(BlsSecretKeyWrapper::random()),
-            commit_boost_address: None,
-            commit_boost_jwt_hex: None,
-            keystore_password: None,
-            keystore_path: None,
-        }
     }
 }

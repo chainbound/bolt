@@ -1678,6 +1678,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "toml 0.5.11",
  "tower-http",
  "tracing",
  "tracing-subscriber",

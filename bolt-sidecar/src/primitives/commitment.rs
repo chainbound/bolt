@@ -3,12 +3,13 @@ use std::str::FromStr;
 
 use alloy::primitives::{keccak256, Address, Signature, B256};
 
-use crate::{
-    crypto::SignerECDSA,
-    primitives::{deserialize_txs, serialize_txs},
-};
+use crate::crypto::SignerECDSA;
 
-use super::{FullTransaction, SignatureError, TransactionExt};
+use super::{deserialize_txs, serialize_txs, FullTransaction, TransactionExt};
+
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid signature")]
+pub struct SignatureError;
 
 /// Commitment requests sent by users or RPC proxies to the sidecar.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -1,6 +1,7 @@
 //! An ERC-2335 keystore signer.
 
 use std::{
+    collections::HashSet,
     ffi::OsString,
     fmt::Debug,
     fs::{self, DirEntry, ReadDir},
@@ -10,6 +11,7 @@ use std::{
 
 use alloy::rpc::types::beacon::constants::BLS_PUBLIC_KEY_BYTES_LEN;
 
+use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
 use lighthouse_bls::Keypair;
 use lighthouse_eth2_keystore::Keystore;
 use ssz::Encode;
@@ -41,6 +43,7 @@ pub struct KeystoreSigner {
 }
 
 impl KeystoreSigner {
+    /// Creates a new `KeystoreSigner` from the keystore files in the `keys_path` directory.
     pub fn new(keys_path: Option<&str>, password: &[u8], chain: ChainConfig) -> SignerResult<Self> {
         let keystores_paths = keystore_paths(keys_path)?;
         let mut keypairs = Vec::with_capacity(keystores_paths.len());
@@ -57,6 +60,17 @@ impl KeystoreSigner {
         Ok(Self { keypairs, chain })
     }
 
+    /// Returns the public keys of the keypairs in the keystore.
+    pub fn pubkeys(&self) -> HashSet<BlsPublicKey> {
+        self.keypairs
+            .iter()
+            .map(|kp| {
+                BlsPublicKey::try_from(kp.pk.serialize().to_vec().as_ref()).expect("valid pubkey")
+            })
+            .collect::<HashSet<_>>()
+    }
+
+    /// Signs a message with the keystore signer and the Commit Boost domain
     pub fn sign_commit_boost_root(
         &self,
         root: [u8; 32],
@@ -65,6 +79,7 @@ impl KeystoreSigner {
         self.sign_root(root, public_key, self.chain.commit_boost_domain())
     }
 
+    /// Signs a message with the keystore signer.
     fn sign_root(
         &self,
         root: [u8; 32],

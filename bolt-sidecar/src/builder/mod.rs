@@ -5,8 +5,6 @@ use ethereum_consensus::{
     deneb::mainnet::ExecutionPayloadHeader,
     ssz::prelude::{List, MerkleizationError},
 };
-use payload_builder::FallbackPayloadBuilder;
-use signature::sign_builder_message;
 
 use crate::{
     common::BlsSecretKeyWrapper,
@@ -23,15 +21,20 @@ pub use template::BlockTemplate;
 
 /// Builder payload signing utilities
 pub mod signature;
+use signature::sign_builder_message;
+
+/// Fallback Payload builder agent that leverages the engine API's
+/// `engine_newPayloadV3` response error to produce a valid payload.
+pub mod payload_builder;
+use payload_builder::FallbackPayloadBuilder;
+
+/// Interface for fetching payloads from the beacon node.
+pub mod payload_fetcher;
 
 /// Compatibility types and utilities between Alloy, Reth,
 /// Ethereum-consensus and other crates.
 #[doc(hidden)]
 mod compat;
-
-/// Fallback Payload builder agent that leverages the engine API's
-/// `engine_newPayloadV3` response error to produce a valid payload.
-pub mod payload_builder;
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]

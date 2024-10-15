@@ -9,6 +9,7 @@ use alloy::primitives::U256;
 use blst::min_pk::SecretKey;
 use rand::{Rng, RngCore};
 use reth_primitives::PooledTransactionsElement;
+use serde::{Deserialize, Deserializer};
 
 use crate::{
     primitives::{AccountState, TransactionExt},
@@ -107,6 +108,16 @@ impl BlsSecretKeyWrapper {
     }
 }
 
+impl<'de> Deserialize<'de> for BlsSecretKeyWrapper {
+    fn deserialize<D>(deserializer: D) -> Result<BlsSecretKeyWrapper, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let sk = String::deserialize(deserializer)?;
+        Ok(BlsSecretKeyWrapper::from(sk.as_str()))
+    }
+}
+
 impl From<&str> for BlsSecretKeyWrapper {
     fn from(sk: &str) -> Self {
         let hex_sk = sk.strip_prefix("0x").unwrap_or(sk);
@@ -155,6 +166,16 @@ impl From<&str> for JwtSecretConfig {
         assert!(jwt.len() == 64, "Engine JWT secret must be a 32 byte hex string");
 
         Self(jwt)
+    }
+}
+
+impl<'de> Deserialize<'de> for JwtSecretConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let jwt = String::deserialize(deserializer)?;
+        Ok(Self::from(jwt.as_str()))
     }
 }
 

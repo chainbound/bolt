@@ -74,7 +74,7 @@ pub enum ValidationError {
     MaxCommittedGasReachedForSlot(u64, u64),
     /// The signature is invalid.
     #[error("Invalid signature")]
-    Signature(#[from] crate::primitives::SignatureError),
+    Signature(#[from] crate::primitives::commitment::SignatureError),
     /// Could not recover signature,
     #[error("Could not recover signer")]
     RecoverSigner,

@@ -1,10 +1,14 @@
-use core::fmt;
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashSet,
+    fmt,
+    time::{Duration, Instant},
+};
 
 use alloy::{rpc::types::beacon::events::HeadEvent, signers::local::PrivateKeySigner};
 use beacon_api_client::mainnet::Client as BeaconClient;
 use ethereum_consensus::{
     clock::{self, SlotStream, SystemTimeProvider},
+    crypto::bls::PublicKey as BlsPublicKey,
     phase0::mainnet::SLOTS_PER_EPOCH,
 };
 use futures::StreamExt;
@@ -12,14 +16,15 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
 use crate::{
+    builder::payload_fetcher::LocalPayloadFetcher,
     commitments::{
         server::{CommitmentsApiServer, Event as CommitmentEvent},
         spec::Error as CommitmentError,
     },
     crypto::{bls::cl_public_key_to_arr, SignableBLS, SignerECDSA},
     primitives::{
-        CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
-        SignedConstraints, TransactionExt,
+        read_signed_delegations_from_file, CommitmentRequest, ConstraintsMessage,
+        FetchPayloadRequest, SignedConstraints, TransactionExt,
     },
     signer::{keystore::KeystoreSigner, local::LocalSigner},
     start_builder_proxy_server,
@@ -30,15 +35,32 @@ use crate::{
 };
 
 /// The driver for the sidecar, responsible for managing the main event loop.
+///
+/// The reponsibilities of the driver include:
+/// - Handling incoming API events
+/// - Updating the execution state based on new beacon chain heads
+/// - Submitting constraints to the constraints service at the commitment deadline
+/// - Building local payloads for the beacon chain
+/// - Responding to requests to fetch a local payload
+/// - Updating the consensus state based on the beacon chain clock
 pub struct SidecarDriver<C, ECDSA> {
+    /// Head tracker for monitoring the beacon chain clock
     head_tracker: HeadTracker,
+    /// Execution state for tracking the current head and block templates
     execution: ExecutionState<C>,
+    /// Consensus state for tracking the current slot and validator indexes
     consensus: ConsensusState,
+    /// Signer for creating constraints
     constraint_signer: SignerBLS,
+    /// Signer for creating commitment responses
     commitment_signer: ECDSA,
+    /// Local block builder for creating local payloads
     local_builder: LocalBuilder,
+    /// Client for interacting with the constraints service
     constraints_client: ConstraintsClient,
+    /// Channel for receiving incoming API events
     api_events_rx: mpsc::Receiver<CommitmentEvent>,
+    /// Channel for receiving requests to fetch a local payload
     payload_requests_rx: mpsc::Receiver<FetchPayloadRequest>,
     /// Stream of slots made from the consensus clock
     slot_stream: SlotStream<SystemTimeProvider>,
@@ -107,20 +129,13 @@ impl SidecarDriver<StateClient, CommitBoostSigner> {
         let state_client = StateClient::new(opts.execution_api_url.clone());
 
         let commit_boost_signer = CommitBoostSigner::new(
-            opts.signing
-                .commit_boost_address
-                .expect("CommitBoost URL must be provided")
-                .to_string(),
-            &opts.signing.commit_boost_jwt_hex.clone().expect("CommitBoost JWT must be provided"),
-        )
-        .await?;
+            opts.signing.commit_boost_address.expect("CommitBoost URL").to_string(),
+            &opts.signing.commit_boost_jwt_hex.clone().expect("CommitBoost JWT"),
+        )?;
 
         let cb_bls_signer = SignerBLS::CommitBoost(commit_boost_signer.clone());
 
-        // Commitment responses are signed with commit-boost signer
-        let commitment_signer = commit_boost_signer.clone();
-
-        Self::from_components(opts, cb_bls_signer, commitment_signer, state_client).await
+        Self::from_components(opts, cb_bls_signer, commit_boost_signer, state_client).await
     }
 }
 
@@ -132,7 +147,6 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
         commitment_signer: ECDSA,
         fetcher: C,
     ) -> eyre::Result<Self> {
-        let constraints_client = ConstraintsClient::new(opts.constraints_url.clone());
         let beacon_client = BeaconClient::new(opts.beacon_api_url.clone());
         let execution = ExecutionState::new(fetcher, opts.limits).await?;
 
@@ -168,6 +182,14 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
         let api_addr = format!("0.0.0.0:{}", opts.port);
         let (api_events_tx, api_events_rx) = mpsc::channel(1024);
         CommitmentsApiServer::new(api_addr).run(api_events_tx).await;
+
+        let mut constraints_client = ConstraintsClient::new(opts.constraints_url.clone());
+
+        // read the delegaitons from disk if they exist and add them to the constraints client
+        if let Some(delegations_file_path) = opts.signing.delegations_path.as_ref() {
+            let delegations = read_signed_delegations_from_file(delegations_file_path)?;
+            constraints_client.add_delegations(delegations);
+        }
 
         Ok(SidecarDriver {
             head_tracker,
@@ -220,7 +242,7 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
         let start = Instant::now();
 
         let validator_pubkey = match self.consensus.validate_request(&request) {
-            Ok(index) => index,
+            Ok(pubkey) => pubkey,
             Err(err) => {
                 error!(?err, "Consensus: failed to validate request");
                 let _ = response.send(Err(CommitmentError::Consensus(err)));
@@ -245,13 +267,13 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
             "Validation against execution state passed"
         );
 
-        // parse the request into constraints and sign them
-        let slot = inclusion_request.slot;
+        let delegatees = self.constraints_client.find_delegatees(&validator_pubkey);
+        let available_pubkeys = self.constraint_signer.available_pubkeys();
 
-        let pubkey = match self.constraint_signer {
-            SignerBLS::Local(ref signer) => signer.pubkey(),
-            SignerBLS::CommitBoost(ref signer) => signer.pubkey(),
-            SignerBLS::Keystore(_) => validator_pubkey.clone(),
+        let Some(pubkey) = pick_public_key(validator_pubkey, available_pubkeys, delegatees) else {
+            error!(%target_slot, "No available public key to sign constraints with");
+            let _ = response.send(Err(CommitmentError::Internal));
+            return;
         };
 
         // NOTE: we iterate over the transactions in the request and generate a signed constraint
@@ -260,7 +282,7 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
         // with no ordering guarantees.
         for tx in inclusion_request.txs {
             let tx_type = tx.tx_type();
-            let message = ConstraintsMessage::from_transaction(pubkey.clone(), slot, tx);
+            let message = ConstraintsMessage::from_transaction(pubkey.clone(), target_slot, tx);
             let digest = message.digest();
 
             let signature = match self.constraint_signer {
@@ -281,12 +303,15 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
             };
 
             ApiMetrics::increment_transactions_preconfirmed(tx_type);
-            self.execution.add_constraint(slot, signed_constraints);
+            self.execution.add_constraint(target_slot, signed_constraints);
         }
 
         // Create a commitment by signing the request
         match request.commit_and_sign(&self.commitment_signer).await {
-            Ok(commitment) => response.send(Ok(commitment)).ok(),
+            Ok(commitment) => {
+                debug!(target_slot, elapsed = ?start.elapsed(), "Commitment signed and sent");
+                response.send(Ok(commitment)).ok()
+            }
             Err(err) => {
                 error!(?err, "Failed to sign commitment");
                 response.send(Err(CommitmentError::Internal)).ok()
@@ -353,4 +378,30 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
             error!(err = ?e, "Failed to send payload and bid in response channel");
         }
     }
+}
+
+/// Pick a pubkey to sign constraints with.
+///
+/// Rationale:
+/// - If there are no delegatee keys, try to use the validator key directly if available.
+/// - If there are delegatee keys, try to use the first one that is available in the list.
+fn pick_public_key(
+    validator: BlsPublicKey,
+    available: HashSet<BlsPublicKey>,
+    delegatees: HashSet<BlsPublicKey>,
+) -> Option<BlsPublicKey> {
+    if delegatees.is_empty() {
+        if available.contains(&validator) {
+            return Some(validator);
+        } else {
+            return None;
+        }
+    } else {
+        for delegatee in delegatees {
+            if available.contains(&delegatee) {
+                return Some(delegatee);
+            }
+        }
+    }
+    None
 }

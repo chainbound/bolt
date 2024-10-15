@@ -40,7 +40,7 @@ pub enum CommitBoostError {
 #[allow(unused)]
 impl CommitBoostSigner {
     /// Create a new [CommitBoostSigner] instance
-    pub async fn new(signer_server_address: String, jwt: &str) -> SignerResult<Self> {
+    pub fn new(signer_server_address: String, jwt: &str) -> SignerResult<Self> {
         let signer_client =
             SignerClient::new(signer_server_address, jwt).map_err(CommitBoostError::Other)?;
 
@@ -178,7 +178,7 @@ mod test {
                 return Ok(());
             }
         };
-        let signer = CommitBoostSigner::new(signer_server_address, &jwt_hex).await.unwrap();
+        let signer = CommitBoostSigner::new(signer_server_address, &jwt_hex).unwrap();
 
         // Generate random data for the test
         let mut rng = rand::thread_rng();
@@ -208,7 +208,7 @@ mod test {
                 return Ok(());
             }
         };
-        let signer = CommitBoostSigner::new(signer_server_address, &jwt_hex).await.unwrap();
+        let signer = CommitBoostSigner::new(signer_server_address, &jwt_hex).unwrap();
         let pubkey = signer.get_proxy_ecdsa_pubkey();
 
         // Generate random data for the test
