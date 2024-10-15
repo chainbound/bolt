@@ -6,6 +6,11 @@ out = "out"
 libs = ["lib"]
 fs_permissions = [{ access = "read-write", path = "./" }]
 gas_reports = ["*"]
+# Required options for the OpenZeppelin Foundry Upgrades toolkit: https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades
+ffi = true
+ast = true
+build_info = true
+extra_output = ["storageLayout"]
 
 # silence some warnings during compilation
 # https://book.getfoundry.sh/reference/config/solidity-compiler#ignored_error_codes
