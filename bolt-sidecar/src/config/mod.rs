@@ -117,7 +117,6 @@ mod tests {
     #[test]
     fn test_parse_config_from_toml() {
         let path = env!("CARGO_MANIFEST_DIR").to_string() + "Config.toml";
-        dbg!(&path);
 
         if let Ok(config_file) = std::fs::read_to_string(path) {
             let config = Opts::parse_from_toml(&config_file).expect("Failed to parse config");
