@@ -52,7 +52,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-/// Generate signed delegations/devocations using local BLS private keys
+/// Generate signed delegations/revocations using local BLS private keys
 ///
 /// - Use the provided private keys from either CLI or env variable
 /// - Create message
