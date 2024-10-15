@@ -320,7 +320,7 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
         // Create a commitment by signing the request
         match request.commit_and_sign(&self.commitment_signer).await {
             Ok(commitment) => {
-                info!(target_slot, elapsed = ?start.elapsed(), "Commitment signed and sent");
+                debug!(target_slot, elapsed = ?start.elapsed(), "Commitment signed and sent");
                 response.send(Ok(commitment)).ok()
             }
             Err(err) => {
