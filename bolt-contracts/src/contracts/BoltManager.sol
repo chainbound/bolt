@@ -209,10 +209,7 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     function pauseOperator(
         address operator
     ) external onlyMiddleware {
-        if (!operators.contains(operator)) {
-            revert OperatorNotRegistered();
-        }
-
+        // SAFETY: This will revert if the operator key is not present.
         operators.disable(operator);
     }
 
@@ -220,10 +217,7 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     function unpauseOperator(
         address operator
     ) external onlyMiddleware {
-        if (!operators.contains(operator)) {
-            revert OperatorNotRegistered();
-        }
-
+        // SAFETY: This will revert if the operator key is not present.
         operators.enable(operator);
     }
 
