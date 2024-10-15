@@ -23,7 +23,7 @@ pub enum LocalSignerError {
 #[derive(Clone)]
 pub struct LocalSigner {
     chain: ChainConfig,
-    key: SecretKey,
+    pub key: SecretKey,
 }
 
 impl Debug for LocalSigner {

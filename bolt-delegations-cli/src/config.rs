@@ -16,12 +16,12 @@ pub enum Commands {
         source: SourceType,
 
         /// Path to the keystore file or private key, depending on the source.
-        #[clap(long)]
+        #[clap(short, long)]
         key_path: String,
 
         /// The BLS public key to which the delegation message should be signed.
-        #[clap(long)]
-        delegated_key: String,
+        #[clap(short, long)]
+        delegatee_pubkey: String,
 
         /// The output file for the delegations.
         #[clap(long, default_value = "delegations.json")]

@@ -1,9 +1,7 @@
-use alloy::{
-    // rpc::types::beacon::{BlsPublicKey, BlsSignature},
-    signers::k256::sha2::{Digest, Sha256},
-};
+use alloy::signers::k256::sha2::{Digest, Sha256};
 use ethereum_consensus::crypto::{PublicKey as BlsPublicKey, Signature as BlsSignature};
-use serde::{de, ser::SerializeSeq, Serialize};
+use serde::Serialize;
+
 /// Event types that can be emitted by the validator pubkey to
 /// signal some action on the Bolt protocol.
 #[derive(Debug, Clone, Copy)]

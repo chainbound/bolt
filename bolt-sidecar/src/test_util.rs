@@ -229,6 +229,8 @@ async fn generate_test_data_kurtosis() {
     // Create SignedDelegation
     let signed_delegation = SignedDelegation { message: delegation_msg, signature: consensus_sig };
 
+    println!("SK: {:?}", hex::encode(signer.key.to_bytes()));
+
     // Output SignedDelegation
     println!("{}", serde_json::to_string_pretty(&signed_delegation).unwrap());
 
