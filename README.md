@@ -119,7 +119,7 @@ In particular, the core components are:
 Additionally, this repository contains the necessary scripts to spin up a [Kurtosis][kurtosis]
 devnet with all the components running.
 
-> [!INFO]
+> [!NOTE]
 > Bolt also works with external components that aren't part of this repository,
 > such as [Helix][helix] by Gattaca, which will replace the MEV-Boost relay soon.
 
@@ -142,7 +142,7 @@ Make sure you have the following requirements on your machine:
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) installed
 - [Rust & Cargo](https://www.rust-lang.org/tools/install) installed
 
-> [!INFO]
+> [!NOTE]
 > The Kurtosis CLI version tested is `0.88.16`. Some issues may arise if you are
 > using a different version.
 >
@@ -199,7 +199,7 @@ just down
 just clean
 ```
 
-> [!INFO]
+> [!NOTE]
 > Remember to shut down the devnet environment when you are done with it, as it
 > consumes significant resources (CPU & RAM) on your machine.
 
