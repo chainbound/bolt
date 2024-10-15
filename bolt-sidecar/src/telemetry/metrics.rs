@@ -3,7 +3,7 @@ use std::time::Duration;
 use metrics::{counter, describe_counter, describe_gauge, describe_histogram, gauge, histogram};
 use reth_primitives::TxType;
 
-use crate::primitives::tx_type_str;
+use crate::primitives::transaction::tx_type_str;
 
 //  Counters ----------------------------------------------------------------
 /// Counter for the total number of HTTP requests received.

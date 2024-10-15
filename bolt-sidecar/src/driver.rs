@@ -1,6 +1,5 @@
-use core::fmt;
 use std::{
-    fs,
+    fmt,
     time::{Duration, Instant},
 };
 
@@ -16,14 +15,15 @@ use tokio::sync::mpsc;
 use tracing::{debug, error, info, warn};
 
 use crate::{
+    builder::payload_fetcher::LocalPayloadFetcher,
     commitments::{
         server::{CommitmentsApiServer, Event as CommitmentEvent},
         spec::Error as CommitmentError,
     },
     crypto::{bls::cl_public_key_to_arr, SignableBLS, SignerECDSA},
     primitives::{
-        CommitmentRequest, ConstraintsMessage, FetchPayloadRequest, LocalPayloadFetcher,
-        SignedConstraints, SignedDelegation, TransactionExt,
+        read_signed_delegations_from_file, CommitmentRequest, ConstraintsMessage,
+        FetchPayloadRequest, SignedConstraints, TransactionExt,
     },
     signer::{keystore::KeystoreSigner, local::LocalSigner},
     start_builder_proxy_server,
@@ -186,15 +186,8 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
 
         // read the delegaitons from disk if they exist and add them to the constraints client
         if let Some(delegations_file_path) = opts.signing.delegations_path.as_ref() {
-            if let Ok(contents) = fs::read_to_string(delegations_file_path) {
-                match serde_json::from_str::<Vec<SignedDelegation>>(&contents) {
-                    Ok(delegations) => {
-                        info!(count = %delegations.len(), "Loaded signed delegations from disk");
-                        constraints_client.add_delegations(delegations);
-                    }
-                    Err(err) => error!(?err, "Failed to parse signed delegations from disk"),
-                }
-            }
+            let delegations = read_signed_delegations_from_file(delegations_file_path)?;
+            constraints_client.add_delegations(delegations);
         }
 
         Ok(SidecarDriver {

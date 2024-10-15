@@ -2,12 +2,9 @@ use alloy::signers::k256::sha2::{Digest, Sha256};
 use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    crypto::{bls::BLSSig, SignableBLS},
-    primitives::{deserialize_txs, serialize_txs},
-};
+use crate::crypto::{bls::BLSSig, SignableBLS};
 
-use super::{FullTransaction, InclusionRequest};
+use super::{deserialize_txs, serialize_txs, FullTransaction, InclusionRequest};
 
 /// The inclusion request transformed into an explicit list of signed constraints
 /// that need to be forwarded to the PBS pipeline to inform block production.

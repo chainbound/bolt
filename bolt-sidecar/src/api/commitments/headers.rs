@@ -3,6 +3,8 @@ use std::str::FromStr;
 use alloy::primitives::{Address, Signature};
 use axum::http::HeaderMap;
 
+use crate::primitives::commitment::SignatureError;
+
 use super::spec::{Error, SIGNATURE_HEADER};
 
 /// Extracts the signature ([SIGNATURE_HEADER]) from the HTTP headers.
@@ -19,8 +21,7 @@ pub fn auth_from_headers(headers: &HeaderMap) -> Result<(Address, Signature), Er
     let address = Address::from_str(address).map_err(|_| Error::MalformedHeader)?;
 
     let sig = split.next().ok_or(Error::MalformedHeader)?;
-    let sig = Signature::from_str(sig)
-        .map_err(|_| Error::InvalidSignature(crate::primitives::SignatureError))?;
+    let sig = Signature::from_str(sig).map_err(|_| Error::InvalidSignature(SignatureError))?;
 
     Ok((address, sig))
 }

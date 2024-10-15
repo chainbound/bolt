@@ -13,21 +13,21 @@ pub const DEFAULT_MIN_PRIORITY_FEE: u128 = 1_000_000_000; // 1 Gwei
 pub struct LimitsOpts {
     /// Max number of commitments to accept per block
     #[clap(
-        long, 
+        long,
         env = "BOLT_SIDECAR_MAX_COMMITMENTS",
         default_value_t = LimitsOpts::default().max_commitments_per_slot
     )]
     pub max_commitments_per_slot: NonZero<usize>,
     /// Max committed gas per slot
     #[clap(
-        long, 
+        long,
         env = "BOLT_SIDECAR_MAX_COMMITTED_GAS",
         default_value_t = LimitsOpts::default().max_committed_gas_per_slot
     )]
     pub max_committed_gas_per_slot: NonZero<u64>,
     /// Min priority fee to accept for a commitment
     #[clap(
-        long, 
+        long,
         env = "BOLT_SIDECAR_MIN_PRIORITY_FEE",
         default_value_t = LimitsOpts::default().min_priority_fee
     )]

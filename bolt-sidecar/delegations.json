@@ -1,0 +1,10 @@
+[
+  {
+    "message": {
+      "action": 0,
+      "validator_pubkey": "0x83b85769a8f2a1a6bd3a609e51b460f6fb897daff1157991479421493926faeffa6670152524403929a8a7e551d345f3",
+      "delegatee_pubkey": "0x8d0edf4fe9c80cd640220ca7a68a48efcbc56a13536d6b274bf3719befaffa13688ebee9f37414b3dddc8c7e77233ce8"
+    },
+    "signature": "0x8dc3f4ea5584fcfecd26e16f9d43789d59a66cfb0860ef88ac2a3e7c6a4054c973c0478809db747c821a8a10e672902012e8dd1830a059a30ec41025d57afa3d5408008a68eca8b1bc2e6fc878c41207accb2df2a3af30f8c64af98006c43ca1"
+  }
+]

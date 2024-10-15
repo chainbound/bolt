@@ -40,7 +40,7 @@ pub enum Error {
     NoSignature,
     /// Invalid signature.
     #[error(transparent)]
-    InvalidSignature(#[from] crate::primitives::SignatureError),
+    InvalidSignature(#[from] crate::primitives::commitment::SignatureError),
     /// Malformed authentication header.
     #[error("Malformed authentication header")]
     MalformedHeader,

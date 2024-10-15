@@ -1,3 +1,5 @@
+use std::{sync::Arc, time::Duration};
+
 use axum::{
     body::{self, Body},
     extract::{Path, Request, State},
@@ -16,7 +18,6 @@ use ethereum_consensus::{
 use parking_lot::Mutex;
 use reqwest::Url;
 use serde::Deserialize;
-use std::{sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::net::TcpListener;
 use tracing::{debug, error, info, warn};
@@ -26,8 +27,9 @@ use super::spec::{
     STATUS_PATH,
 };
 use crate::{
+    builder::payload_fetcher::PayloadFetcher,
     client::constraints_client::ConstraintsClient,
-    primitives::{GetPayloadResponse, PayloadFetcher, SignedBuilderBid},
+    primitives::{GetPayloadResponse, SignedBuilderBid},
     telemetry::ApiMetrics,
 };
 
