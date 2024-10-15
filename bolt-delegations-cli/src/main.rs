@@ -6,7 +6,7 @@ use eyre::Result;
 use lighthouse_eth2_keystore::Keystore;
 
 pub mod config;
-use config::{Chain, Commands, Opts, SourceType};
+use config::{Chain, Commands, Opts};
 
 pub mod types;
 use types::{DelegationMessage, KeystoreError, SignedDelegation};
@@ -20,31 +20,28 @@ fn main() -> Result<()> {
     let cli = Opts::parse();
 
     match &cli.command {
-        Commands::Generate {
-            source,
+        Commands::GenerateLocal { secret_key, delegatee_pubkey, out, chain } => {
+            let secret_keys = secret_key.as_ref().unwrap();
+            let delegatee_pubkey = parse_public_key(delegatee_pubkey)?;
+            let signed_delegation = generate_from_local_key(secret_keys, delegatee_pubkey, chain)?;
+
+            write_delegations_to_file(out, &signed_delegation)?;
+            println!("Signed delegation messages generated and saved to {}", out);
+        }
+        Commands::GenerateKeystore {
             keystore_path,
-            secret_key,
             keystore_password,
             delegatee_pubkey,
             out,
             chain,
         } => {
             let delegatee_pubkey = parse_public_key(delegatee_pubkey)?;
-            let signed_delegation = match source {
-                SourceType::Local => {
-                    // Secret key is expected from CLI argument or env variable
-                    generate_from_local_key(secret_key.as_ref().unwrap(), delegatee_pubkey, chain)?
-                }
-                SourceType::Keystore => {
-                    // Keystore path and password is expected
-                    generate_from_keystore(
-                        keystore_path.as_deref(),
-                        keystore_password.as_bytes(),
-                        delegatee_pubkey,
-                        chain,
-                    )?
-                }
-            };
+            let signed_delegation = generate_from_keystore(
+                keystore_path.as_deref(),
+                keystore_password.as_bytes(),
+                delegatee_pubkey,
+                chain,
+            )?;
 
             write_delegations_to_file(out, &signed_delegation)?;
             println!("Signed delegation messages generated and saved to {}", out);

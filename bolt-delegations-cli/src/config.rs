@@ -13,26 +13,7 @@ pub struct Opts {
 #[derive(Subcommand, Debug, Clone)]
 pub enum Commands {
     /// Generate delegation messages.
-    Generate {
-        /// The source of the validator key (local or keystore).
-        #[clap(long, env = "SOURCE")]
-        source: SourceType,
-
-        /// Path to the keystore file (required if source is keystore).
-        #[clap(long, env = "KEY_PATH", conflicts_with("secret_key"))]
-        keystore_path: Option<String>,
-
-        /// The password for the keystore files in the path.
-        /// Assumes all keystore files have the same password.
-        #[clap(
-            long,
-            env = "KEYSTORE_PASSWORD",
-            hide_env_values = true,
-            conflicts_with("secret_key"),
-            default_value = KEYSTORE_PASSWORD
-        )]
-        keystore_password: String,
-
+    GenerateLocal {
         /// The private key in hex format (required if source is local).
         /// Multiple secret keys must be seperated by commas.
         #[clap(
@@ -40,6 +21,7 @@ pub enum Commands {
             env = "SECRET_KEYS",
             value_parser,
             value_delimiter = ',',
+            hide_env_values = true,
             conflicts_with("keystore_path")
         )]
         secret_key: Option<Vec<String>>,
@@ -56,12 +38,35 @@ pub enum Commands {
         #[clap(long, env = "CHAIN", default_value = "mainnet")]
         chain: Chain,
     },
-}
 
-#[derive(ValueEnum, Debug, Clone)]
-pub enum SourceType {
-    Local,
-    Keystore,
+    GenerateKeystore {
+        /// Path to the keystore file (required if source is keystore).
+        #[clap(long, env = "KEY_PATH", conflicts_with("secret_key"))]
+        keystore_path: Option<String>,
+
+        /// The password for the keystore files in the path.
+        /// Assumes all keystore files have the same password.
+        #[clap(
+            long,
+            env = "KEYSTORE_PASSWORD",
+            hide_env_values = true,
+            conflicts_with("secret_key"),
+            default_value = KEYSTORE_PASSWORD
+        )]
+        keystore_password: String,
+
+        /// The BLS public key to which the delegation message should be signed.
+        #[clap(long, env = "DELEGATEE_PUBKEY")]
+        delegatee_pubkey: String,
+
+        /// The output file for the delegations.
+        #[clap(long, env = "OUTPUT_FILE_PATH", default_value = "delegations.json")]
+        out: String,
+
+        /// The chain for which the delegation message is intended.
+        #[clap(long, env = "CHAIN", default_value = "mainnet")]
+        chain: Chain,
+    },
 }
 
 /// Supported chains for the CLI
