@@ -5,11 +5,14 @@ use ethereum_consensus::crypto::{PublicKey as BlsPublicKey, SecretKey, Signature
 use eyre::Result;
 use lighthouse_eth2_keystore::Keystore;
 
-use bolt_delegations_cli::{
-    config::{Chain, Commands, Opts, SourceType},
-    types::{DelegationMessage, KeystoreError, SignedDelegation},
-    utils::{compute_signing_root_for_delegation, parse_public_key, KEYSTORE_PASSWORD},
-};
+pub mod config;
+use config::{Chain, Commands, Opts, SourceType};
+
+pub mod types;
+use types::{DelegationMessage, KeystoreError, SignedDelegation};
+
+pub mod utils;
+use utils::{compute_signing_root_for_delegation, keystore_paths, parse_public_key};
 
 fn main() -> Result<()> {
     let _ = dotenvy::dotenv();
@@ -17,15 +20,34 @@ fn main() -> Result<()> {
     let cli = Opts::parse();
 
     match &cli.command {
-        Commands::Generate { source, key_path, delegatee_pubkey, out, chain } => {
+        Commands::Generate {
+            source,
+            keystore_path,
+            secret_key,
+            keystore_password,
+            delegatee_pubkey,
+            out,
+            chain,
+        } => {
             let delegatee_pubkey = parse_public_key(delegatee_pubkey)?;
             let signed_delegation = match source {
-                SourceType::Local => generate_from_local_key(key_path, delegatee_pubkey, chain)?,
-                SourceType::Keystore => generate_from_keystore(key_path, delegatee_pubkey, chain)?,
+                SourceType::Local => {
+                    // Secret key is expected from CLI argument or env variable
+                    generate_from_local_key(secret_key.as_ref().unwrap(), delegatee_pubkey, chain)?
+                }
+                SourceType::Keystore => {
+                    // Keystore path and password is expected
+                    generate_from_keystore(
+                        keystore_path.as_deref(),
+                        keystore_password.as_bytes(),
+                        delegatee_pubkey,
+                        chain,
+                    )?
+                }
             };
 
-            write_delegation_to_file(out, &signed_delegation)?;
-            println!("Delegation message generated and saved to {}", out);
+            write_delegations_to_file(out, &signed_delegation)?;
+            println!("Signed delegation messages generated and saved to {}", out);
         }
     }
 
@@ -34,61 +56,77 @@ fn main() -> Result<()> {
 
 /// Generate a signed delegation using a local BLS private key
 ///
-/// - Read the private key from the file
+/// - Use the provided private key from either CLI or env variable
 /// - Create a delegation message
 /// - Compute the signing root and sign the message
 /// - Return the signed delegation
 fn generate_from_local_key(
-    key_path: &str,
+    secret_keys: &Vec<String>,
     delegatee_pubkey: BlsPublicKey,
     chain: &Chain,
-) -> Result<SignedDelegation> {
-    let sk_hex = fs::read_to_string(key_path)?;
-    let sk = SecretKey::try_from(sk_hex)?;
-    let delegation = DelegationMessage::new(sk.public_key(), delegatee_pubkey);
+) -> Result<Vec<SignedDelegation>> {
+    let mut signed_delegations = Vec::with_capacity(secret_keys.len());
 
-    let signing_root = compute_signing_root_for_delegation(&delegation, chain)?;
-    let sig = sk.sign(signing_root.0.as_ref());
+    for sk in secret_keys {
+        let sk = SecretKey::try_from(sk.clone())?;
+        let delegation = DelegationMessage::new(sk.public_key(), delegatee_pubkey.clone());
 
-    Ok(SignedDelegation { message: delegation, signature: sig })
+        let signing_root = compute_signing_root_for_delegation(&delegation, chain)?;
+        let sig = sk.sign(signing_root.0.as_ref());
+
+        signed_delegations.push(SignedDelegation {
+            message: delegation,
+            signature: BlsSignature::try_from(sig)?,
+        });
+    }
+
+    Ok(signed_delegations)
 }
 
 /// Generate a signed delegation using a keystore file
 ///
 /// - Read the keystore file
-/// - Decrypt the keypair using the default password (TODO: make this configurable)
+/// - Decrypt the keypair using the password
 /// - Create a delegation message
 /// - Compute the signing root and sign the message
 /// - Return the signed delegation
 fn generate_from_keystore(
-    key_path: &str,
+    keys_path: Option<&str>,
+    password: &[u8],
     delegatee_pubkey: BlsPublicKey,
     chain: &Chain,
-) -> Result<SignedDelegation> {
-    let keypair = Keystore::from_json_file(key_path)
-        .map_err(|e| KeystoreError::ReadFromJSON(key_path.to_string(), format!("{e:?}")))?
-        .decrypt_keypair(KEYSTORE_PASSWORD.as_bytes())
-        .map_err(|e| KeystoreError::KeypairDecryption(key_path.to_string(), format!("{e:?}")))?;
+) -> Result<Vec<SignedDelegation>> {
+    let keystores_paths = keystore_paths(keys_path)?;
+    let mut signed_delegations = Vec::with_capacity(keystores_paths.len());
 
-    let delegation = DelegationMessage::new(
-        BlsPublicKey::try_from(keypair.pk.to_string().as_ref())
-            .map_err(|e| KeystoreError::UnknownPublicKey(format!("{e:?}")))?,
-        delegatee_pubkey,
-    );
+    for path in keystores_paths {
+        let keypair = Keystore::from_json_file(path.clone());
+        let keypair = keypair
+            .map_err(|e| KeystoreError::ReadFromJSON(path.clone(), format!("{e:?}")))?
+            .decrypt_keypair(password)
+            .map_err(|e| KeystoreError::KeypairDecryption(path.clone(), format!("{e:?}")))?;
 
-    let signing_root = compute_signing_root_for_delegation(&delegation, chain)?;
-    let sig = keypair.sk.sign(signing_root.0.into());
+        let delegation = DelegationMessage::new(
+            BlsPublicKey::try_from(keypair.pk.to_string().as_ref())
+                .map_err(|e| KeystoreError::UnknownPublicKey(format!("{e:?}")))?,
+            delegatee_pubkey.clone(),
+        );
+        let signing_root = compute_signing_root_for_delegation(&delegation, chain)?;
+        let sig = keypair.sk.sign(signing_root.0.into());
 
-    Ok(SignedDelegation {
-        message: delegation,
-        signature: BlsSignature::try_from(sig.serialize().as_ref())?,
-    })
+        signed_delegations.push(SignedDelegation {
+            message: delegation,
+            signature: BlsSignature::try_from(sig.serialize().as_ref())?,
+        });
+    }
+
+    Ok(signed_delegations)
 }
 
 /// Write the signed delegation to an output json file
-fn write_delegation_to_file(out: &str, signed_delegation: &SignedDelegation) -> Result<()> {
+fn write_delegations_to_file(out: &str, signed_delegations: &Vec<SignedDelegation>) -> Result<()> {
     let out_path = PathBuf::from(out);
     let out_file = fs::File::create(out_path)?;
-    serde_json::to_writer_pretty(out_file, &signed_delegation)?;
+    serde_json::to_writer_pretty(out_file, &signed_delegations)?;
     Ok(())
 }

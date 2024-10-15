@@ -1,2 +1,5 @@
+/target
+.env
+.env.*
 delegations.json
 private_key.txt

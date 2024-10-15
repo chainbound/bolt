@@ -1,13 +1,17 @@
+use std::path::PathBuf;
+
 use alloy::signers::k256::sha2::{Digest, Sha256};
 use ethereum_consensus::crypto::{PublicKey as BlsPublicKey, Signature as BlsSignature};
 use serde::Serialize;
 
 #[derive(Debug, thiserror::Error)]
 pub enum KeystoreError {
+    #[error("failed to read keystore directory: {0}")]
+    ReadFromDirectory(#[from] std::io::Error),
     #[error("Failed to read keystore from JSON file {0}: {1}")]
-    ReadFromJSON(String, String),
+    ReadFromJSON(PathBuf, String),
     #[error("Failed to decrypt keypair from JSON file {0} with the provided password: {1}")]
-    KeypairDecryption(String, String),
+    KeypairDecryption(PathBuf, String),
     #[error("Failed to get public key from keypair: {0}")]
     UnknownPublicKey(String),
 }
@@ -16,9 +20,12 @@ pub enum KeystoreError {
 /// signal some action on the Bolt protocol.
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
+#[allow(dead_code)]
 enum SignedMessageAction {
     /// Signal delegation of a validator pubkey to a delegatee pubkey.
     Delegation,
+    /// Signal revocation of a previously delegated pubkey.
+    Revocation,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]

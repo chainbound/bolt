@@ -1,7 +1,10 @@
 use clap::{Parser, Subcommand, ValueEnum};
 
+use crate::utils::KEYSTORE_PASSWORD;
+
 /// A CLI tool to generate signed delegation messages for BLS keys.
 #[derive(Parser, Debug, Clone)]
+#[command(author, version, about, long_about = None)]
 pub struct Opts {
     #[clap(subcommand)]
     pub command: Commands,
@@ -15,9 +18,31 @@ pub enum Commands {
         #[clap(long, env = "SOURCE")]
         source: SourceType,
 
-        /// Path to the keystore file or private key, depending on the source.
-        #[clap(long, env = "KEY_PATH")]
-        key_path: String,
+        /// Path to the keystore file (required if source is keystore).
+        #[clap(long, env = "KEY_PATH", conflicts_with("secret_key"))]
+        keystore_path: Option<String>,
+
+        /// The password for the keystore files in the path.
+        /// Assumes all keystore files have the same password.
+        #[clap(
+            long,
+            env = "KEYSTORE_PASSWORD",
+            hide_env_values = true,
+            conflicts_with("secret_key"),
+            default_value = KEYSTORE_PASSWORD
+        )]
+        keystore_password: String,
+
+        /// The private key in hex format (required if source is local).
+        /// Multiple secret keys must be seperated by commas.
+        #[clap(
+            long,
+            env = "SECRET_KEYS",
+            value_parser,
+            value_delimiter = ',',
+            conflicts_with("keystore_path")
+        )]
+        secret_key: Option<Vec<String>>,
 
         /// The BLS public key to which the delegation message should be signed.
         #[clap(long, env = "DELEGATEE_PUBKEY")]
@@ -39,7 +64,7 @@ pub enum SourceType {
     Keystore,
 }
 
-/// Supported chains for the cli
+/// Supported chains for the CLI
 #[derive(Debug, Clone, Copy, ValueEnum)]
 #[clap(rename_all = "kebab_case")]
 pub enum Chain {
