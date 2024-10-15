@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     fmt,
     time::{Duration, Instant},
 };
@@ -269,11 +270,6 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
         let delegatees = self.constraints_client.find_delegatees(&validator_pubkey);
         let available_pubkeys = self.constraint_signer.available_pubkeys();
 
-        // Pick a pubkey to sign constraints with.
-        //
-        // Rationale:
-        // - If there are no delegatee keys, try to use the validator key directly if available.
-        // - If there are delegatee keys, try to use the first one that is available in the list.
         let Some(pubkey) = pick_public_key(validator_pubkey, available_pubkeys, delegatees) else {
             error!(%target_slot, "No available public key to sign constraints with");
             let _ = response.send(Err(CommitmentError::Internal));
@@ -391,8 +387,8 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
 /// - If there are delegatee keys, try to use the first one that is available in the list.
 fn pick_public_key(
     validator: BlsPublicKey,
-    available: Vec<BlsPublicKey>,
-    delegatees: Vec<BlsPublicKey>,
+    available: HashSet<BlsPublicKey>,
+    delegatees: HashSet<BlsPublicKey>,
 ) -> Option<BlsPublicKey> {
     if delegatees.is_empty() {
         if available.contains(&validator) {

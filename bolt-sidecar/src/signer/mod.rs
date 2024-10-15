@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use ethereum_consensus::crypto::bls::PublicKey as BlsPublicKey;
 
 pub mod commit_boost;
@@ -35,10 +37,10 @@ pub enum SignerBLS {
 
 impl SignerBLS {
     /// Returns all the public keys available for signing.
-    pub fn available_pubkeys(&self) -> Vec<BlsPublicKey> {
+    pub fn available_pubkeys(&self) -> HashSet<BlsPublicKey> {
         match self {
-            SignerBLS::Local(signer) => vec![signer.pubkey()],
-            SignerBLS::CommitBoost(signer) => vec![signer.pubkey()],
+            SignerBLS::Local(signer) => [signer.pubkey()].into(),
+            SignerBLS::CommitBoost(signer) => [signer.pubkey()].into(),
             SignerBLS::Keystore(signer) => signer.pubkeys(),
         }
     }

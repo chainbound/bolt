@@ -42,6 +42,8 @@ impl fmt::Debug for SigningOpts {
             .field("commit_boost_url", &self.commit_boost_address)
             .field("commit_boost_jwt_hex", &self.commit_boost_jwt_hex)
             .field("keystore_password", &"********") // Hides the actual password
+            .field("keystore_path", &self.keystore_path)
+            .field("delegations_path", &self.delegations_path)
             .finish()
     }
 }

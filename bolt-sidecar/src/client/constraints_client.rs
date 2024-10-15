@@ -2,6 +2,8 @@
 //! The Bolt sidecar's main purpose is to sit between the beacon node and Constraints client,
 //! so most requests are simply proxied to its API.
 
+use std::collections::HashSet;
+
 use axum::http::StatusCode;
 use beacon_api_client::VersionedValue;
 use ethereum_consensus::{
@@ -50,12 +52,12 @@ impl ConstraintsClient {
     }
 
     /// Finds all delegations for the given public key.
-    pub fn find_delegatees(&self, pubkey: &BlsPublicKey) -> Vec<BlsPublicKey> {
+    pub fn find_delegatees(&self, pubkey: &BlsPublicKey) -> HashSet<BlsPublicKey> {
         self.delegations
             .iter()
             .filter(|d| d.message.delegatee_pubkey == *pubkey)
             .map(|d| d.message.delegatee_pubkey.clone())
-            .collect::<Vec<_>>()
+            .collect::<HashSet<_>>()
     }
 
     fn endpoint(&self, path: &str) -> Url {

@@ -1,6 +1,7 @@
 //! An ERC-2335 keystore signer.
 
 use std::{
+    collections::HashSet,
     ffi::OsString,
     fmt::Debug,
     fs::{self, DirEntry, ReadDir},
@@ -60,13 +61,13 @@ impl KeystoreSigner {
     }
 
     /// Returns the public keys of the keypairs in the keystore.
-    pub fn pubkeys(&self) -> Vec<BlsPublicKey> {
+    pub fn pubkeys(&self) -> HashSet<BlsPublicKey> {
         self.keypairs
             .iter()
             .map(|kp| {
                 BlsPublicKey::try_from(kp.pk.serialize().to_vec().as_ref()).expect("valid pubkey")
             })
-            .collect::<Vec<_>>()
+            .collect::<HashSet<_>>()
     }
 
     /// Signs a message with the keystore signer and the Commit Boost domain
