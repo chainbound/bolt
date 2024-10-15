@@ -88,3 +88,20 @@ impl SignableBLS for RevocationMessage {
         hasher.finalize().into()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_read_signed_delegations_from_file() {
+        let file = env!("CARGO_MANIFEST_DIR").to_string() + "/test_data/delegations.json";
+
+        let delegations = super::read_signed_delegations_from_file(&file)
+            .expect("Failed to read delegations from file");
+
+        assert_eq!(delegations.len(), 1);
+        assert_eq!(
+            format!("{:?}", delegations[0].message.validator_pubkey), 
+            "0x83b85769a8f2a1a6bd3a609e51b460f6fb897daff1157991479421493926faeffa6670152524403929a8a7e551d345f3"
+        );
+    }
+}
