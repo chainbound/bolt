@@ -39,18 +39,12 @@ pub enum KeySource {
     Local {
         /// The private key in hex format (required if source is local).
         /// Multiple secret keys must be seperated by commas.
-        #[clap(
-            long,
-            env = "SECRET_KEYS",
-            value_delimiter = ',',
-            hide_env_values = true,
-            conflicts_with("keystore_path")
-        )]
+        #[clap(long, env = "SECRET_KEYS", value_delimiter = ',', hide_env_values = true)]
         secret_keys: Vec<String>,
     },
     Keystore {
         /// Path to the keystore file.
-        #[clap(long, env = "KEYSTORE_PATH", conflicts_with("secret_keys"))]
+        #[clap(long, env = "KEYSTORE_PATH")]
         keystore_path: String,
         /// The password for the keystore files in the path.
         /// Assumes all keystore files have the same password.
@@ -58,7 +52,6 @@ pub enum KeySource {
             long,
             env = "KEYSTORE_PASSWORD",
             hide_env_values = true,
-            conflicts_with("secret_keys"),
             default_value = KEYSTORE_PASSWORD
         )]
         keystore_password: String,
@@ -84,5 +77,16 @@ impl Chain {
             Chain::Helder => [16, 0, 0, 0],
             Chain::Kurtosis => [16, 0, 0, 56],
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Opts;
+
+    #[test]
+    pub fn verify_cli() {
+        use clap::CommandFactory;
+        Opts::command().debug_assert()
     }
 }
