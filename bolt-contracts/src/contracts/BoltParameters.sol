@@ -49,7 +49,10 @@ contract BoltParameters is OwnableUpgradeable, UUPSUpgradeable {
 
     /// @notice The duration of a slot in seconds.
     uint256 public SLOT_TIME;
-    // --> Storage layout marker: 6 words
+
+    /// @notice The minimum stake required for an operator to be considered active in wei.
+    uint256 public MINIMUM_OPERATOR_STAKE;
+    // --> Storage layout marker: 7 words
 
     /**
      * @dev This empty reserved space is put in place to allow future versions to add new
@@ -59,7 +62,7 @@ contract BoltParameters is OwnableUpgradeable, UUPSUpgradeable {
      *
      * Total storage slots: 50
      */
-    uint256[44] private __gap;
+    uint256[43] private __gap;
 
     /// @notice Error emitted when a beacon block root is not found
     error BeaconRootNotFound();
@@ -78,7 +81,8 @@ contract BoltParameters is OwnableUpgradeable, UUPSUpgradeable {
         uint256 _blockhashEvmLookback,
         uint256 _justificationDelay,
         uint256 _eth2GenesisTimestamp,
-        uint256 _slotTime
+        uint256 _slotTime,
+        uint256 _minimumOperatorStake
     ) public initializer {
         __Ownable_init(_owner);
 
@@ -91,6 +95,7 @@ contract BoltParameters is OwnableUpgradeable, UUPSUpgradeable {
         JUSTIFICATION_DELAY = _justificationDelay;
         ETH2_GENESIS_TIMESTAMP = _eth2GenesisTimestamp;
         SLOT_TIME = _slotTime;
+        MINIMUM_OPERATOR_STAKE = _minimumOperatorStake;
     }
 
     function _authorizeUpgrade(

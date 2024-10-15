@@ -13,4 +13,5 @@ interface IBoltParameters {
     function SLOT_TIME() external view returns (uint256);
     function ETH2_GENESIS_TIMESTAMP() external view returns (uint256);
     function BEACON_ROOTS_CONTRACT() external view returns (address);
+    function MINIMUM_OPERATOR_STAKE() external view returns (uint256);
 }

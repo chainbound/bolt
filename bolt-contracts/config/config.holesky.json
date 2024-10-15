@@ -7,5 +7,6 @@
     "justificationDelay": 32,
     "eth2GenesisTimestamp": 1694786400,
     "slotTime": 12,
-    "allowUnsafeRegistration": true
+    "allowUnsafeRegistration": true,
+    "minimumOperatorStake": 1000000000000000000
 }

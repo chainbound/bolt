@@ -37,7 +37,8 @@ contract BoltValidatorsTest is Test {
             config.blockhashEvmLookback,
             config.justificationDelay,
             config.eth2GenesisTimestamp,
-            config.slotTime
+            config.slotTime,
+            config.minimumOperatorStake
         );
 
         validators = new BoltValidators();

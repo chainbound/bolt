@@ -20,6 +20,7 @@ contract Utils is Test {
         uint256 justificationDelay = vm.parseJsonUint(json, ".justificationDelay");
         uint256 eth2GenesisTimestamp = vm.parseJsonUint(json, ".eth2GenesisTimestamp");
         uint256 slotTime = vm.parseJsonUint(json, ".slotTime");
+        uint256 minimumOperatorStake = vm.parseJsonUint(json, ".minimumOperatorStake");
 
         return BoltConfig.ParametersConfig({
             epochDuration: epochDuration,
@@ -30,7 +31,8 @@ contract Utils is Test {
             justificationDelay: justificationDelay,
             eth2GenesisTimestamp: eth2GenesisTimestamp,
             slotTime: slotTime,
-            allowUnsafeRegistration: allowUnsafeRegistration
+            allowUnsafeRegistration: allowUnsafeRegistration,
+            minimumOperatorStake: minimumOperatorStake
         });
     }
 }

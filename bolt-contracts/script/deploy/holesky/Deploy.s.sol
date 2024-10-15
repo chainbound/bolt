@@ -11,6 +11,7 @@ import {BoltValidators} from "../../../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../../../src/contracts/BoltManager.sol";
 import {BoltEigenLayerMiddleware} from "../../../src/contracts/BoltEigenLayerMiddleware.sol";
 import {BoltSymbioticMiddleware} from "../../../src/contracts/BoltSymbioticMiddleware.sol";
+import {BoltConfig} from "../../../src/lib/Config.sol";
 
 /// @notice Script to deploy the BoltManager and BoltValidators contracts.
 contract DeployBolt is Script {
@@ -29,29 +30,22 @@ contract DeployBolt is Script {
         // on the contract implementations, as well as upgrade the contracts.
         address admin = msg.sender;
 
-        uint48 epochDuration = 1 days;
-        uint48 slashingWindow = 7 days;
-        uint48 maxChallengeDuration = 7 days;
-        bool allowUnsafeRegistration = true;
-        uint256 challengeBond = 1 ether;
-        uint256 blockhashEvmLookback = 256;
-        uint256 justificationDelay = 32;
-        uint256 eth2GenesisTimestamp = 1_694_786_400;
-        uint256 slotTime = 12;
+        BoltConfig.ParametersConfig memory config = readParameters();
 
         bytes memory initParameters = abi.encodeCall(
             BoltParameters.initialize,
             (
                 admin,
-                epochDuration,
-                slashingWindow,
-                maxChallengeDuration,
-                allowUnsafeRegistration,
-                challengeBond,
-                blockhashEvmLookback,
-                justificationDelay,
-                eth2GenesisTimestamp,
-                slotTime
+                config.epochDuration,
+                config.slashingWindow,
+                config.maxChallengeDuration,
+                config.allowUnsafeRegistration,
+                config.challengeBond,
+                config.blockhashEvmLookback,
+                config.justificationDelay,
+                config.eth2GenesisTimestamp,
+                config.slotTime,
+                config.minimumOperatorStake
             )
         );
         address parametersProxy = Upgrades.deployUUPSProxy("BoltParameters.sol", initParameters);
@@ -99,5 +93,35 @@ contract DeployBolt is Script {
         console.log("BoltSymbioticMiddleware proxy deployed at", address(symbioticMiddlewareProxy));
 
         vm.stopBroadcast();
+    }
+
+    function readParameters() public view returns (BoltConfig.ParametersConfig memory) {
+        string memory root = vm.projectRoot();
+        string memory path = string.concat(root, "/config/config.holesky.json");
+        string memory json = vm.readFile(path);
+
+        uint48 epochDuration = uint48(vm.parseJsonUint(json, ".epochDuration"));
+        uint48 slashingWindow = uint48(vm.parseJsonUint(json, ".slashingWindow"));
+        uint48 maxChallengeDuration = uint48(vm.parseJsonUint(json, ".maxChallengeDuration"));
+        bool allowUnsafeRegistration = vm.parseJsonBool(json, ".allowUnsafeRegistration");
+        uint256 challengeBond = vm.parseJsonUint(json, ".challengeBond");
+        uint256 blockhashEvmLookback = vm.parseJsonUint(json, ".blockhashEvmLookback");
+        uint256 justificationDelay = vm.parseJsonUint(json, ".justificationDelay");
+        uint256 eth2GenesisTimestamp = vm.parseJsonUint(json, ".eth2GenesisTimestamp");
+        uint256 slotTime = vm.parseJsonUint(json, ".slotTime");
+        uint256 minimumOperatorStake = vm.parseJsonUint(json, ".minimumOperatorStake");
+
+        return BoltConfig.ParametersConfig({
+            epochDuration: epochDuration,
+            slashingWindow: slashingWindow,
+            maxChallengeDuration: maxChallengeDuration,
+            challengeBond: challengeBond,
+            blockhashEvmLookback: blockhashEvmLookback,
+            justificationDelay: justificationDelay,
+            eth2GenesisTimestamp: eth2GenesisTimestamp,
+            slotTime: slotTime,
+            allowUnsafeRegistration: allowUnsafeRegistration,
+            minimumOperatorStake: minimumOperatorStake
+        });
     }
 }

@@ -12,5 +12,6 @@ library BoltConfig {
         uint256 eth2GenesisTimestamp;
         uint256 slotTime;
         bool allowUnsafeRegistration;
+        uint256 minimumOperatorStake;
     }
 }
