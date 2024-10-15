@@ -35,6 +35,9 @@ contract DeployBolt is Script {
         bool allowUnsafeRegistration = true;
         uint256 challengeBond = 1 ether;
         uint256 blockhashEvmLookback = 256;
+        uint256 justificationDelay = 32;
+        uint256 eth2GenesisTimestamp = 1_606_824_023;
+        uint256 slotTime = 12;
 
         bytes memory initParameters = abi.encodeCall(
             BoltParameters.initialize,
@@ -45,7 +48,10 @@ contract DeployBolt is Script {
                 maxChallengeDuration,
                 allowUnsafeRegistration,
                 challengeBond,
-                blockhashEvmLookback
+                blockhashEvmLookback,
+                justificationDelay,
+                eth2GenesisTimestamp,
+                slotTime
             )
         );
         address parametersProxy = Upgrades.deployUUPSProxy("BoltParameters.sol", initParameters);

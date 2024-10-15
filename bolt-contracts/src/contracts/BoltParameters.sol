@@ -10,6 +10,12 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeab
 /// with the use of storage gaps.
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 contract BoltParameters is OwnableUpgradeable, UUPSUpgradeable {
+    // =========== CONSTANTS ========= //
+    /// @dev See EIP-4788 for more info
+    address internal constant BEACON_ROOTS_CONTRACT = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;
+
+    /// @notice The EIP-4788 time window in slots
+    uint256 internal constant EIP4788_WINDOW = 8191;
     // =========== STORAGE =========== //
 
     // --> Storage layout marker: 0 bits
@@ -34,7 +40,16 @@ contract BoltParameters is OwnableUpgradeable, UUPSUpgradeable {
 
     /// @notice The maximum number of blocks to look back for block hashes in the EVM.
     uint256 public BLOCKHASH_EVM_LOOKBACK;
-    // --> Storage layout marker: 3 words
+
+    /// @notice The number of slots to wait before considering a block justified by LMD-GHOST.
+    uint256 public JUSTIFICATION_DELAY;
+
+    /// @notice The timestamp of the eth2 genesis block.
+    uint256 public ETH2_GENESIS_TIMESTAMP;
+
+    /// @notice The duration of a slot in seconds.
+    uint256 public SLOT_TIME;
+    // --> Storage layout marker: 6 words
 
     /**
      * @dev This empty reserved space is put in place to allow future versions to add new
@@ -44,7 +59,10 @@ contract BoltParameters is OwnableUpgradeable, UUPSUpgradeable {
      *
      * Total storage slots: 50
      */
-    uint256[47] private __gap;
+    uint256[44] private __gap;
+
+    /// @notice Error emitted when a beacon block root is not found
+    error BeaconRootNotFound();
 
     // ============== INITIALIZER ============== //
 
@@ -57,7 +75,10 @@ contract BoltParameters is OwnableUpgradeable, UUPSUpgradeable {
         uint48 _maxChallengeDuration,
         bool _allowUnsafeRegistration,
         uint256 _challengeBond,
-        uint256 _blockhashEvmLookback
+        uint256 _blockhashEvmLookback,
+        uint256 _justificationDelay,
+        uint256 _eth2GenesisTimestamp,
+        uint256 _slotTime
     ) public initializer {
         __Ownable_init(_owner);
 
@@ -67,6 +88,9 @@ contract BoltParameters is OwnableUpgradeable, UUPSUpgradeable {
         MAX_CHALLENGE_DURATION = _maxChallengeDuration;
         CHALLENGE_BOND = _challengeBond;
         BLOCKHASH_EVM_LOOKBACK = _blockhashEvmLookback;
+        JUSTIFICATION_DELAY = _justificationDelay;
+        ETH2_GENESIS_TIMESTAMP = _eth2GenesisTimestamp;
+        SLOT_TIME = _slotTime;
     }
 
     function _authorizeUpgrade(
@@ -82,4 +106,6 @@ contract BoltParameters is OwnableUpgradeable, UUPSUpgradeable {
     ) public onlyOwner {
         ALLOW_UNSAFE_REGISTRATION = allowUnsafeRegistration;
     }
+
+    // ============== VIEW METHODS =============== //
 }

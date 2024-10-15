@@ -13,7 +13,6 @@ import {RLPWriter} from "../src/lib/rlp/RLPWriter.sol";
 import {BytesUtils} from "../src/lib/BytesUtils.sol";
 import {MerkleTrie} from "../src/lib/trie/MerkleTrie.sol";
 import {SecureMerkleTrie} from "../src/lib/trie/SecureMerkleTrie.sol";
-import {BeaconChainUtils} from "../src/lib/BeaconChainUtils.sol";
 import {TransactionDecoder} from "../src/lib/TransactionDecoder.sol";
 
 // re-export the internal resolver function for testing
@@ -24,6 +23,10 @@ contract BoltChallengerExt is BoltChallenger {
         IBoltChallenger.Proof calldata _proof
     ) external {
         _resolve(_challengeID, _trustedBlockHash, _proof);
+    }
+
+    function _getCurrentSlotExt() external view returns (uint256) {
+        return _getCurrentSlot();
     }
 
     function _decodeBlockHeaderRLPExt(
@@ -59,6 +62,9 @@ contract BoltChallengerTest is Test {
         bool allowUnsafeRegistration = true;
         uint256 challengeBond = 1 ether;
         uint256 blockhashEvmLookback = 256;
+        uint256 justificationDelay = 32;
+        uint256 eth2GenesisTimestamp = 1_606_824_023;
+        uint256 slotTime = 12;
 
         BoltParameters parameters = new BoltParameters();
         parameters.initialize(
@@ -68,7 +74,10 @@ contract BoltChallengerTest is Test {
             maxChallengeDuration,
             allowUnsafeRegistration,
             challengeBond,
-            blockhashEvmLookback
+            blockhashEvmLookback,
+            justificationDelay,
+            eth2GenesisTimestamp,
+            slotTime
         );
 
         boltChallenger = new BoltChallengerExt();
@@ -294,7 +303,7 @@ contract BoltChallengerTest is Test {
         IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
         commitments[0] = _parseTestCommitment();
 
-        commitments[0].slot = uint64(BeaconChainUtils._getCurrentSlot()) + 10;
+        commitments[0].slot = uint64(boltChallenger._getCurrentSlotExt()) + 10;
 
         // Open a challenge with a slot in the future
         vm.resumeGasMetering();
@@ -532,7 +541,7 @@ contract BoltChallengerTest is Test {
         commitment.signedTx = vm.parseJsonBytes(vm.readFile(path), ".raw");
 
         // pick a recent slot, 100 slots behind the current slot
-        commitment.slot = uint64(BeaconChainUtils._getCurrentSlot() - 100);
+        commitment.slot = uint64(boltChallenger._getCurrentSlotExt() - 100);
 
         // sign the new commitment with the target's private key
         bytes32 commitmentID = _computeCommitmentID(commitment.signedTx, commitment.slot);

@@ -57,6 +57,9 @@ contract BoltManagerEigenLayerTest is Test {
         bool allowUnsafeRegistration = true;
         uint256 challengeBond = 1 ether;
         uint256 blockhashEvmLookback = 256;
+        uint256 justificationDelay = 32;
+        uint256 eth2GenesisTimestamp = 1_606_824_023;
+        uint256 slotTime = 12;
 
         BoltParameters parameters = new BoltParameters();
         parameters.initialize(
@@ -66,7 +69,10 @@ contract BoltManagerEigenLayerTest is Test {
             maxChallengeDuration,
             allowUnsafeRegistration,
             challengeBond,
-            blockhashEvmLookback
+            blockhashEvmLookback,
+            justificationDelay,
+            eth2GenesisTimestamp,
+            slotTime
         );
 
         // Deploy Bolt contracts

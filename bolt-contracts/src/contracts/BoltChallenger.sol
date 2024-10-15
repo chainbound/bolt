@@ -12,7 +12,6 @@ import {SecureMerkleTrie} from "../lib/trie/SecureMerkleTrie.sol";
 import {MerkleTrie} from "../lib/trie/MerkleTrie.sol";
 import {RLPReader} from "../lib/rlp/RLPReader.sol";
 import {RLPWriter} from "../lib/rlp/RLPWriter.sol";
-import {BeaconChainUtils} from "../lib/BeaconChainUtils.sol";
 import {TransactionDecoder} from "../lib/TransactionDecoder.sol";
 import {IBoltChallenger} from "../interfaces/IBoltChallenger.sol";
 import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
@@ -146,7 +145,7 @@ contract BoltChallenger is IBoltChallenger, OwnableUpgradeable, UUPSUpgradeable 
         }
 
         uint256 targetSlot = commitments[0].slot;
-        if (targetSlot > BeaconChainUtils._getCurrentSlot() - BeaconChainUtils.JUSTIFICATION_DELAY_SLOTS) {
+        if (targetSlot > _getCurrentSlot() - parameters.JUSTIFICATION_DELAY()) {
             // We cannot open challenges for slots that are not finalized by Ethereum consensus yet.
             // This is admittedly a bit strict, since 32-slot deep reorgs are very unlikely.
             revert BlockIsNotFinalized();
@@ -218,10 +217,7 @@ contract BoltChallenger is IBoltChallenger, OwnableUpgradeable, UUPSUpgradeable 
 
         // The visibility of the BLOCKHASH opcode is limited to the 256 most recent blocks.
         // For simplicity we restrict this to 256 slots even though 256 blocks would be more accurate.
-        if (
-            challenges[challengeID].targetSlot
-                < BeaconChainUtils._getCurrentSlot() - parameters.BLOCKHASH_EVM_LOOKBACK()
-        ) {
+        if (challenges[challengeID].targetSlot < _getCurrentSlot() - parameters.BLOCKHASH_EVM_LOOKBACK()) {
             revert BlockIsTooOld();
         }
 
@@ -513,5 +509,67 @@ contract BoltChallenger is IBoltChallenger, OwnableUpgradeable, UUPSUpgradeable 
         if (!success) {
             revert BondTransferFailed();
         }
+    }
+
+    /// @notice Get the slot number from a given timestamp
+    /// @param _timestamp The timestamp
+    /// @return The slot number
+    function _getSlotFromTimestamp(
+        uint256 _timestamp
+    ) internal view returns (uint256) {
+        return (_timestamp - parameters.ETH2_GENESIS_TIMESTAMP()) / parameters.SLOT_TIME();
+    }
+
+    /// @notice Get the timestamp from a given slot
+    /// @param _slot The slot number
+    /// @return The timestamp
+    function _getTimestampFromSlot(
+        uint256 _slot
+    ) internal view returns (uint256) {
+        return parameters.ETH2_GENESIS_TIMESTAMP() + _slot * parameters.SLOT_TIME();
+    }
+
+    /// @notice Get the beacon block root for a given slot
+    /// @param _slot The slot number
+    /// @return The beacon block root
+    function _getBeaconBlockRootAtSlot(
+        uint256 _slot
+    ) internal view returns (bytes32) {
+        uint256 slotTimestamp = parameters.ETH2_GENESIS_TIMESTAMP() + _slot * parameters.SLOT_TIME();
+        return _getBeaconBlockRootAtTimestamp(slotTimestamp);
+    }
+
+    function _getBeaconBlockRootAtTimestamp(
+        uint256 _timestamp
+    ) internal view returns (bytes32) {
+        (bool success, bytes memory data) = parameters.BEACON_ROOTS_CONTRACT().staticcall(abi.encode(_timestamp));
+
+        if (!success || data.length == 0) {
+            revert BeaconRootNotFound();
+        }
+
+        return abi.decode(data, (bytes32));
+    }
+
+    /// @notice Get the latest beacon block root
+    /// @return The beacon block root
+    function _getLatestBeaconBlockRoot() internal view returns (bytes32) {
+        uint256 latestSlot = _getSlotFromTimestamp(block.timestamp);
+        return _getBeaconBlockRootAtSlot(latestSlot);
+    }
+
+    /// @notice Get the current slot
+    /// @return The current slot
+    function _getCurrentSlot() internal view returns (uint256) {
+        return _getSlotFromTimestamp(block.timestamp);
+    }
+
+    /// @notice Check if a timestamp is within the EIP-4788 window
+    /// @param _timestamp The timestamp
+    /// @return True if the timestamp is within the EIP-4788 window, false otherwise
+    function _isWithinEIP4788Window(
+        uint256 _timestamp
+    ) internal view returns (bool) {
+        return _getSlotFromTimestamp(_timestamp) <= _getCurrentSlot() + parameters.EIP4788_WINDOW();
     }
 }
