@@ -16,10 +16,6 @@ pub struct Opts {
 pub enum Commands {
     /// Generate delegation messages.
     Generate {
-        /// The source of the private key.
-        #[clap(subcommand)]
-        source: KeySource,
-
         /// The BLS public key to which the delegation message should be signed.
         #[clap(long, env = "DELEGATEE_PUBKEY")]
         delegatee_pubkey: String,
@@ -31,7 +27,22 @@ pub enum Commands {
         /// The chain for which the delegation message is intended.
         #[clap(long, env = "CHAIN", default_value = "mainnet")]
         chain: Chain,
+
+        /// The source of the private key.
+        #[clap(subcommand)]
+        source: KeySource,
+
+        /// The action to perform. The tool can be used to generate
+        /// delegation or revocation messages (default: delegate).
+        #[clap(long, default_value = "delegate")]
+        action: Action,
     },
+}
+
+#[derive(Debug, Clone, ValueEnum, Deserialize)]
+pub enum Action {
+    Delegate,
+    Revoke,
 }
 
 #[derive(Debug, Clone, Parser, Deserialize)]
