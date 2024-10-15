@@ -33,6 +33,11 @@ fn main() -> Result<()> {
 }
 
 /// Generate a signed delegation using a local BLS private key
+///
+/// - Read the private key from the file
+/// - Create a delegation message
+/// - Compute the signing root and sign the message
+/// - Return the signed delegation
 fn generate_from_local_key(
     key_path: &str,
     delegatee_pubkey: BlsPublicKey,
@@ -49,6 +54,12 @@ fn generate_from_local_key(
 }
 
 /// Generate a signed delegation using a keystore file
+///
+/// - Read the keystore file
+/// - Decrypt the keypair using the default password (TODO: make this configurable)
+/// - Create a delegation message
+/// - Compute the signing root and sign the message
+/// - Return the signed delegation
 fn generate_from_keystore(
     key_path: &str,
     delegatee_pubkey: BlsPublicKey,
@@ -74,7 +85,7 @@ fn generate_from_keystore(
     })
 }
 
-/// Write the signed delegation to an output file
+/// Write the signed delegation to an output json file
 fn write_delegation_to_file(out: &str, signed_delegation: &SignedDelegation) -> Result<()> {
     let out_path = PathBuf::from(out);
     let out_file = fs::File::create(out_path)?;
