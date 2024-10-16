@@ -11,7 +11,7 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeab
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 /// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
 /// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
-contract BoltParameters is OwnableUpgradeable, UUPSUpgradeable {
+contract BoltParametersV1 is OwnableUpgradeable, UUPSUpgradeable {
     // =========== CONSTANTS ========= //
     /// @dev See EIP-4788 for more info
     address internal constant BEACON_ROOTS_CONTRACT = 0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02;

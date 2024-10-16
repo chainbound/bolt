@@ -23,7 +23,7 @@ import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 /// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
 /// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
-contract BoltChallenger is IBoltChallenger, OwnableUpgradeable, UUPSUpgradeable {
+contract BoltChallengerV1 is IBoltChallenger, OwnableUpgradeable, UUPSUpgradeable {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
     using TransactionDecoder for bytes;

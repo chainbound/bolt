@@ -23,10 +23,10 @@ import {SimpleCollateral} from "@symbiotic/../test/mocks/SimpleCollateral.sol";
 import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
 import {IBoltMiddleware} from "../src/interfaces/IBoltMiddleware.sol";
 
-import {BoltParameters} from "../src/contracts/BoltParameters.sol";
-import {BoltValidators} from "../src/contracts/BoltValidators.sol";
-import {BoltManager} from "../src/contracts/BoltManager.sol";
-import {BoltSymbioticMiddleware} from "../src/contracts/BoltSymbioticMiddleware.sol";
+import {BoltParametersV1} from "../src/contracts/BoltParametersV1.sol";
+import {BoltValidatorsV1} from "../src/contracts/BoltValidatorsV1.sol";
+import {BoltManagerV1} from "../src/contracts/BoltManagerV1.sol";
+import {BoltSymbioticMiddlewareV1} from "../src/contracts/BoltSymbioticMiddlewareV1.sol";
 import {BLS12381} from "../src/lib/bls/BLS12381.sol";
 import {BoltConfig} from "../src/lib/Config.sol";
 import {Utils} from "./Utils.sol";
@@ -42,9 +42,9 @@ contract BoltManagerSymbioticTest is Test {
 
     uint128 public constant PRECONF_MAX_GAS_LIMIT = 5_000_000;
 
-    BoltValidators public validators;
-    BoltManager public manager;
-    BoltSymbioticMiddleware public middleware;
+    BoltValidatorsV1 public validators;
+    BoltManagerV1 public manager;
+    BoltSymbioticMiddlewareV1 public middleware;
 
     IVaultFactory public vaultFactory;
     IDelegatorFactory public delegatorFactory;
@@ -153,9 +153,9 @@ contract BoltManagerSymbioticTest is Test {
 
         // --- Deploy Bolt contracts ---
 
-        BoltConfig.ParametersConfig memory config = new Utils().readParameters();
+        BoltConfig.Parameters memory config = new Utils().readParameters();
 
-        BoltParameters parameters = new BoltParameters();
+        BoltParametersV1 parameters = new BoltParametersV1();
         parameters.initialize(
             admin,
             config.epochDuration,
@@ -170,12 +170,12 @@ contract BoltManagerSymbioticTest is Test {
             config.minimumOperatorStake
         );
 
-        validators = new BoltValidators();
+        validators = new BoltValidatorsV1();
         validators.initialize(admin, address(parameters));
-        manager = new BoltManager();
+        manager = new BoltManagerV1();
         manager.initialize(admin, address(parameters), address(validators));
 
-        middleware = new BoltSymbioticMiddleware();
+        middleware = new BoltSymbioticMiddlewareV1();
 
         middleware.initialize(
             admin,

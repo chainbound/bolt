@@ -6,8 +6,8 @@ import {Utils} from "./Utils.sol";
 
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
-import {BoltParameters} from "../src/contracts/BoltParameters.sol";
-import {BoltChallenger} from "../src/contracts/BoltChallenger.sol";
+import {BoltParametersV1} from "../src/contracts/BoltParametersV1.sol";
+import {BoltChallengerV1} from "../src/contracts/BoltChallengerV1.sol";
 import {BoltConfig} from "../src/lib/Config.sol";
 import {IBoltChallenger} from "../src/interfaces/IBoltChallenger.sol";
 import {RLPReader} from "../src/lib/rlp/RLPReader.sol";
@@ -18,7 +18,7 @@ import {SecureMerkleTrie} from "../src/lib/trie/SecureMerkleTrie.sol";
 import {TransactionDecoder} from "../src/lib/TransactionDecoder.sol";
 
 // re-export the internal resolver function for testing
-contract BoltChallengerExt is BoltChallenger {
+contract BoltChallengerExt is BoltChallengerV1 {
     function _resolveExt(
         bytes32 _challengeID,
         bytes32 _trustedBlockHash,
@@ -58,9 +58,9 @@ contract BoltChallengerTest is Test {
         vm.pauseGasMetering();
         (target, targetPK) = makeAddrAndKey("target");
 
-        BoltConfig.ParametersConfig memory config = new Utils().readParameters();
+        BoltConfig.Parameters memory config = new Utils().readParameters();
 
-        BoltParameters parameters = new BoltParameters();
+        BoltParametersV1 parameters = new BoltParametersV1();
         parameters.initialize(
             admin,
             config.epochDuration,

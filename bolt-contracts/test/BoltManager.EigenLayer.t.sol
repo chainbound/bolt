@@ -3,11 +3,11 @@ pragma solidity 0.8.25;
 
 import {Test, console} from "forge-std/Test.sol";
 
-import {BoltValidators} from "../src/contracts/BoltValidators.sol";
-import {BoltManager} from "../src/contracts/BoltManager.sol";
-import {BoltParameters} from "../src/contracts/BoltParameters.sol";
+import {BoltValidatorsV1} from "../src/contracts/BoltValidatorsV1.sol";
+import {BoltManagerV1} from "../src/contracts/BoltManagerV1.sol";
+import {BoltParametersV1} from "../src/contracts/BoltParametersV1.sol";
+import {BoltEigenLayerMiddlewareV1} from "../src/contracts/BoltEigenLayerMiddlewareV1.sol";
 import {BoltConfig} from "../src/lib/Config.sol";
-import {BoltEigenLayerMiddleware} from "../src/contracts/BoltEigenLayerMiddleware.sol";
 import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
 import {IBoltManager} from "../src/interfaces/IBoltManager.sol";
 import {IBoltMiddleware} from "../src/interfaces/IBoltMiddleware.sol";
@@ -28,9 +28,9 @@ contract BoltManagerEigenLayerTest is Test {
 
     uint48 public constant EPOCH_DURATION = 1 days;
 
-    BoltValidators public validators;
-    BoltManager public manager;
-    BoltEigenLayerMiddleware public middleware;
+    BoltValidatorsV1 public validators;
+    BoltManagerV1 public manager;
+    BoltEigenLayerMiddlewareV1 public middleware;
     EigenLayerDeployer public eigenLayerDeployer;
 
     uint128 public constant PRECONF_MAX_GAS_LIMIT = 5_000_000;
@@ -52,9 +52,9 @@ contract BoltManagerEigenLayerTest is Test {
         eigenLayerDeployer = new EigenLayerDeployer(staker);
         eigenLayerDeployer.setUp();
 
-        BoltConfig.ParametersConfig memory config = new Utils().readParameters();
+        BoltConfig.Parameters memory config = new Utils().readParameters();
 
-        BoltParameters parameters = new BoltParameters();
+        BoltParametersV1 parameters = new BoltParametersV1();
         parameters.initialize(
             admin,
             config.epochDuration,
@@ -70,11 +70,11 @@ contract BoltManagerEigenLayerTest is Test {
         );
 
         // Deploy Bolt contracts
-        validators = new BoltValidators();
+        validators = new BoltValidatorsV1();
         validators.initialize(admin, address(parameters));
-        manager = new BoltManager();
+        manager = new BoltManagerV1();
         manager.initialize(admin, address(parameters), address(validators));
-        middleware = new BoltEigenLayerMiddleware();
+        middleware = new BoltEigenLayerMiddlewareV1();
 
         middleware.initialize(
             address(admin),

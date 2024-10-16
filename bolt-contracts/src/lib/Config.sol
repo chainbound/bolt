@@ -2,7 +2,7 @@
 pragma solidity 0.8.25;
 
 library BoltConfig {
-    struct ParametersConfig {
+    struct Parameters {
         uint48 epochDuration;
         uint48 slashingWindow;
         uint48 maxChallengeDuration;
@@ -13,5 +13,15 @@ library BoltConfig {
         uint256 slotTime;
         bool allowUnsafeRegistration;
         uint256 minimumOperatorStake;
+    }
+
+    struct Deployments {
+        address symbioticNetwork;
+        address symbioticOperatorRegistry;
+        address symbioticOperatorNetOptIn;
+        address symbioticVaultFactory;
+        address eigenLayerAVSDirectory;
+        address eigenLayerDelegationManager;
+        address eigenLayerStrategyManager;
     }
 }

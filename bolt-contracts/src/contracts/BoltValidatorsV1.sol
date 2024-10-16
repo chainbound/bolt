@@ -16,7 +16,7 @@ import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 /// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
 /// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
-contract BoltValidators is IBoltValidators, BLSSignatureVerifier, OwnableUpgradeable, UUPSUpgradeable {
+contract BoltValidatorsV1 is IBoltValidators, BLSSignatureVerifier, OwnableUpgradeable, UUPSUpgradeable {
     using BLS12381 for BLS12381.G1Point;
 
     // ========= STORAGE =========

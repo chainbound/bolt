@@ -66,8 +66,8 @@ tab_width = 4
 runs = 4096
 max_test_rejects = 262144
 
-[etherscan]
-mainnet = { key = "${ETHERSCAN_API_KEY_MAINNET}" }
-holesky = { key = "${ETHERSCAN_API_KEY_HOLESKY}" }
+# [etherscan]
+# mainnet = { key = "${ETHERSCAN_API_KEY_MAINNET}" }
+# holesky = { key = "${ETHERSCAN_API_KEY_HOLESKY}" }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

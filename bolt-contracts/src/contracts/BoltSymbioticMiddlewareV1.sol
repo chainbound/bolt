@@ -30,7 +30,7 @@ import {IBoltManager} from "../interfaces/IBoltManager.sol";
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 /// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
 /// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
-contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpgradeable {
+contract BoltSymbioticMiddlewareV1 is IBoltMiddleware, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
@@ -67,8 +67,8 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
     /// @notice Address of the Symbiotic Operator Registry contract.
     address public OPERATOR_REGISTRY;
 
-    /// @notice Address of the Symbiotic Vault Registry contract.
-    address public VAULT_REGISTRY;
+    /// @notice Address of the Symbiotic Vault Factory contract.
+    address public VAULT_FACTORY;
 
     /// @notice Address of the Symbiotic Operator Network Opt-In contract.
     address public OPERATOR_NET_OPTIN;
@@ -101,7 +101,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
     /// @param _symbioticNetwork The address of the Symbiotic network.
     /// @param _symbioticOperatorRegistry The address of the Symbiotic operator registry.
     /// @param _symbioticOperatorNetOptIn The address of the Symbiotic operator network opt-in contract.
-    /// @param _symbioticVaultRegistry The address of the Symbiotic vault registry.
+    /// @param _symbioticVaultFactory The address of the Symbiotic vault registry.
     function initialize(
         address _owner,
         address _parameters,
@@ -109,7 +109,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
         address _symbioticNetwork,
         address _symbioticOperatorRegistry,
         address _symbioticOperatorNetOptIn,
-        address _symbioticVaultRegistry
+        address _symbioticVaultFactory
     ) public initializer {
         __Ownable_init(_owner);
         parameters = IBoltParameters(_parameters);
@@ -119,7 +119,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
         BOLT_SYMBIOTIC_NETWORK = _symbioticNetwork;
         OPERATOR_REGISTRY = _symbioticOperatorRegistry;
         OPERATOR_NET_OPTIN = _symbioticOperatorNetOptIn;
-        VAULT_REGISTRY = _symbioticVaultRegistry;
+        VAULT_FACTORY = _symbioticVaultFactory;
         NAME_HASH = keccak256("SYMBIOTIC");
     }
 
@@ -234,7 +234,7 @@ contract BoltSymbioticMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpg
             revert AlreadyRegistered();
         }
 
-        if (!IRegistry(VAULT_REGISTRY).isEntity(vault)) {
+        if (!IRegistry(VAULT_FACTORY).isEntity(vault)) {
             revert NotVault();
         }
 

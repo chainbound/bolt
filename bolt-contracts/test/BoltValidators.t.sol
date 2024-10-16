@@ -3,8 +3,8 @@ pragma solidity 0.8.25;
 
 import {Test, console} from "forge-std/Test.sol";
 
-import {BoltParameters} from "../src/contracts/BoltParameters.sol";
-import {BoltValidators} from "../src/contracts/BoltValidators.sol";
+import {BoltParametersV1} from "../src/contracts/BoltParametersV1.sol";
+import {BoltValidatorsV1} from "../src/contracts/BoltValidatorsV1.sol";
 import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
 import {BLS12381} from "../src/lib/bls/BLS12381.sol";
 import {BoltConfig} from "../src/lib/Config.sol";
@@ -13,8 +13,8 @@ import {Utils} from "./Utils.sol";
 contract BoltValidatorsTest is Test {
     using BLS12381 for BLS12381.G1Point;
 
-    BoltParameters public parameters;
-    BoltValidators public validators;
+    BoltParametersV1 public parameters;
+    BoltValidatorsV1 public validators;
 
     uint128 public constant PRECONF_MAX_GAS_LIMIT = 5_000_000;
 
@@ -24,9 +24,9 @@ contract BoltValidatorsTest is Test {
     address validator = makeAddr("validator");
 
     function setUp() public {
-        BoltConfig.ParametersConfig memory config = new Utils().readParameters();
+        BoltConfig.Parameters memory config = new Utils().readParameters();
 
-        parameters = new BoltParameters();
+        parameters = new BoltParametersV1();
         parameters.initialize(
             admin,
             config.epochDuration,
@@ -41,7 +41,7 @@ contract BoltValidatorsTest is Test {
             config.minimumOperatorStake
         );
 
-        validators = new BoltValidators();
+        validators = new BoltValidatorsV1();
         validators.initialize(admin, address(parameters));
     }
 
@@ -52,7 +52,7 @@ contract BoltValidatorsTest is Test {
         vm.prank(validator);
         validators.registerValidatorUnsafe(pubkey, 1_000_000, operator);
 
-        BoltValidators.Validator memory registered = validators.getValidatorByPubkey(pubkey);
+        BoltValidatorsV1.Validator memory registered = validators.getValidatorByPubkey(pubkey);
         assertEq(registered.exists, true);
         assertEq(registered.maxCommittedGasLimit, 1_000_000);
         assertEq(registered.authorizedOperator, operator);

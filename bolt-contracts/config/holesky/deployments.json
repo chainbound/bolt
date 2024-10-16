@@ -1,0 +1,13 @@
+{
+    "symbiotic": {
+        "network": "0x0",
+        "operatorRegistry": "0xAdFC41729fF447974cE27DdFa358A0f2096c3F39",
+        "networkOptInService": "0xF5AFc9FA3Ca63a07E529DDbB6eae55C665cCa83E",
+        "vaultFactory": "0x5035c15F3cb4364CF2cF35ca53E3d6FC45FC8899"
+    },
+    "eigenLayer": {
+        "avsDirectory": "0x055733000064333CaDDbC92763c58BF0192fFeBf",
+        "delegationManager": "0xA44151489861Fe9e3055d95adC98FbD462B948e7",
+        "strategyManager": "0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6"
+    }
+}
