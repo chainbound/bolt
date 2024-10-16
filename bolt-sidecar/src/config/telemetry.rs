@@ -4,9 +4,9 @@ use serde::Deserialize;
 #[derive(Parser, Debug, Clone, Deserialize)]
 pub struct TelemetryOpts {
     /// The port on which to expose Prometheus metrics
-    #[clap(short, long, env = "BOLT_SIDECAR_METRICS_PORT", default_value_t = 3300)]
+    #[clap(long, env = "BOLT_SIDECAR_METRICS_PORT", default_value_t = 3300)]
     metrics_port: u16,
-    #[clap(short, long, env = "BOLT_SIDECAR_DISABLE_METRICS", default_value_t = false)]
+    #[clap(long, env = "BOLT_SIDECAR_DISABLE_METRICS", default_value_t = false)]
     disable_metrics: bool,
 }
 
