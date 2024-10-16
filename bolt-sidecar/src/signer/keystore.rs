@@ -247,7 +247,7 @@ mod tests {
         // Reference: https://eips.ethereum.org/EIPS/eip-2335#test-cases
         let keystore_password = r#"𝔱𝔢𝔰𝔱𝔭𝔞𝔰𝔰𝔴𝔬𝔯𝔡🔑"#;
         let keystore_public_key = "0x9612d7a727c9d0a22e185a1c768478dfe919cada9266988cb32359c11f2b7b27f4ae4040902382ae2910c15e2b420d07";
-        let keystore_publlc_key_bytes: [u8; 48] = [
+        let keystore_public_key_bytes: [u8; 48] = [
             0x96, 0x12, 0xd7, 0xa7, 0x27, 0xc9, 0xd0, 0xa2, 0x2e, 0x18, 0x5a, 0x1c, 0x76, 0x84,
             0x78, 0xdf, 0xe9, 0x19, 0xca, 0xda, 0x92, 0x66, 0x98, 0x8c, 0xb3, 0x23, 0x59, 0xc1,
             0x1f, 0x2b, 0x7b, 0x27, 0xf4, 0xae, 0x40, 0x40, 0x90, 0x23, 0x82, 0xae, 0x29, 0x10,
@@ -312,7 +312,7 @@ mod tests {
 
             let sig_local = local_signer.sign_commit_boost_root([0; 32]).expect("to sign message");
             let sig_keystore = keystore_signer
-                .sign_commit_boost_root([0; 32], keystore_publlc_key_bytes)
+                .sign_commit_boost_root([0; 32], keystore_public_key_bytes)
                 .expect("to sign message");
             assert_eq!(sig_local, sig_keystore);
         }
