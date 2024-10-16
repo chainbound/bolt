@@ -1,4 +1,4 @@
 target/
-.env
-.env.*
+.env*
 !.env.example
+bolt-sidecar*
