@@ -56,6 +56,8 @@ contracts can read from. An overview is given in the table below:
 | `CHALLENGE_BOND`     | 1 ether         | Yes (by admin)           |
 | `ALLOW_UNSAFE_REGISTRATION` | `true`   | Yes (by admin)           |
 
+The values of these parameters can also be found in [`config.holesky.json`](./config/config.holesky.json).
+
 ## Validator Registration: `BoltValidators`
 
 The [`BoltValidators`](./src/contracts/BoltValidators.sol) contract is the only point of entry for
@@ -184,7 +186,7 @@ The steps required are the following:
 3. Register the EigenLayer strategy you are using for restaking _if it has not been done by someone else already_.
    This ensures that your restaked assets are correctly integrated with Bolt’s system.
 
-## Fault Proof Challenge and Slashing: `BoltChallenger`
+## Fault Proof Challenge: `BoltChallenger`
 
 The [`BoltChallenger`](./src/contracts/BoltChallenger.sol) contract is the component responsible
 for handling fault attribution in the case of a validator failing to meet their commitments.
@@ -231,7 +233,9 @@ If no arbitrators respond successfully within the challenge time window, the cha
 `BREACHED` and anyone can call the `resolveExpiredChallenge()` method. The `BoltChallenger` will keep
 track of this information for future reference.
 
-### Slashing of validators
+<!-- ### Slashing of validators
+
+TODO: uncomment when slashing is live
 
 If a challenge is `BREACHED` (as per the above definition), the validator's stake should be slashed to cover
 the cost of a missed commitment. This is done by calling the `slash` function on the correct staking adapter
@@ -242,7 +246,7 @@ which will receive a request to slash a validator's stake and will have a last o
 the slashing request before it is executed on-chain.
 
 Subscribing to breached challenge events from the `BoltChallenger` is a trustless way to determine if a slashing
-request is valid according to Bolt Protocol rules.
+request is valid according to Bolt Protocol rules. -->
 
 ## Testing
 
