@@ -24,7 +24,7 @@ The Bolt smart contracts cover the following components:
 ### Architecture
 A high-level overview of architecture is depicted in the diagram below:
 
-![](./docs/erd.png)
+<img src="./docs/erd.png" width="700"/>
 
 ## Validator Registration: `BoltValidators`
 
