@@ -23,10 +23,7 @@ FROM base AS builder
 RUN apt-get update && apt-get install -y \
   pkg-config \
   libssl-dev \
-  build-essential \
-  perl \
-  gcc \
-  make
+  build-essential
 
 # Copy the generated recipe from the planner stage
 COPY --from=planner /app/recipe.json recipe.json
