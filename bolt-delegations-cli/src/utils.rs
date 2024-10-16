@@ -1,6 +1,7 @@
 use std::{
+    collections::HashMap,
     ffi::OsString,
-    fs::{read_dir, DirEntry},
+    fs::{self, read_dir, DirEntry},
     io,
     path::{Path, PathBuf},
 };
@@ -11,7 +12,7 @@ use ethereum_consensus::{
     crypto::PublicKey as BlsPublicKey,
     deneb::{compute_fork_data_root, compute_signing_root, Root},
 };
-use eyre::Result;
+use eyre::{Context, Result};
 
 use crate::{config::Chain, types::KeystoreError};
 
@@ -22,6 +23,67 @@ pub const COMMIT_BOOST_DOMAIN_MASK: [u8; 4] = [109, 109, 111, 67];
 
 /// The BLS Domain Separator used in Ethereum 2.0.
 pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
+
+pub enum KeystoreSecret {
+    /// When using a unique password for all validators in the keystore
+    /// (e.g. for Prysm keystore)
+    Unique(String),
+    /// When using a directory to hold individual passwords for each validator
+    /// according to the format: secrets/0x{validator_pubkey} = {password}
+    Directory(HashMap<String, String>),
+}
+
+impl KeystoreSecret {
+    /// Load the keystore passwords from a directory containing individual password files.
+    pub fn from_directory(root_dir: String) -> Result<Self> {
+        let mut secrets = HashMap::new();
+        for entry in fs::read_dir(root_dir)? {
+            let entry = entry.wrap_err("Failed to read secrets directory entry")?;
+            let path = entry.path();
+
+            let filename = path.file_name().expect("secret file name").to_string_lossy();
+            let secret = fs::read_to_string(&path).wrap_err("Failed to read secret file")?;
+            secrets.insert(filename.trim_start_matches("0x").to_string(), secret);
+        }
+        Ok(KeystoreSecret::Directory(secrets))
+    }
+
+    /// Set a unique password for all validators in the keystore.
+    pub fn from_unique_password(password: String) -> Self {
+        KeystoreSecret::Unique(password)
+    }
+
+    /// Get the password for the given validator public key.
+    pub fn get(&self, validator_pubkey: &str) -> Option<&str> {
+        match self {
+            KeystoreSecret::Unique(password) => Some(password.as_str()),
+            KeystoreSecret::Directory(secrets) => secrets.get(validator_pubkey).map(|s| s.as_str()),
+        }
+    }
+}
+
+/// Manual drop implementation to clear the password from memory
+/// when the KeystoreSecret is dropped.
+impl Drop for KeystoreSecret {
+    fn drop(&mut self) {
+        match self {
+            KeystoreSecret::Unique(password) => {
+                let bytes = unsafe { password.as_bytes_mut() };
+                for b in bytes.iter_mut() {
+                    *b = 0;
+                }
+            }
+            KeystoreSecret::Directory(secrets) => {
+                for secret in secrets.values_mut() {
+                    let bytes = unsafe { secret.as_bytes_mut() };
+                    for b in bytes.iter_mut() {
+                        *b = 0;
+                    }
+                }
+            }
+        }
+    }
+}
 
 /// Parse the delegated public key from a string
 pub fn parse_public_key(delegatee_pubkey: &str) -> Result<BlsPublicKey> {
@@ -92,8 +154,9 @@ pub fn verify_commit_boost_root(
     pubkey: BlsPublicKey,
     root: [u8; 32],
     signature: &Signature,
+    chain: &Chain,
 ) -> Result<()> {
-    verify_root(pubkey, root, signature, compute_domain_from_mask(COMMIT_BOOST_DOMAIN_MASK))
+    verify_root(pubkey, root, signature, compute_domain_from_mask(chain.fork_version()))
 }
 
 /// Verify the signature of the object with the given public key.

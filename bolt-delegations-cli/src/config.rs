@@ -61,8 +61,8 @@ pub enum KeySource {
     /// Use an EIP-2335 keystore folder to generate the signed messages.
     Keystore {
         /// Path to the keystore file.
-        #[clap(long, env = "KEYSTORE_PATH")]
-        keystore_path: String,
+        #[clap(long, env = "KEYSTORE_PATH", default_value = "validators")]
+        path: String,
 
         /// The password for the keystore files in the path.
         /// Assumes all keystore files have the same password.
@@ -70,9 +70,18 @@ pub enum KeySource {
             long,
             env = "KEYSTORE_PASSWORD",
             hide_env_values = true,
-            default_value = KEYSTORE_PASSWORD
+            default_value = KEYSTORE_PASSWORD,
+            conflicts_with = "password_path"
         )]
-        keystore_password: String,
+        password: Option<String>,
+
+        #[clap(
+            long,
+            env = "KEYSTORE_PASSWORD_PATH",
+            default_value = "secrets",
+            conflicts_with = "password"
+        )]
+        password_path: Option<String>,
     },
 }
 

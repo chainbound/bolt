@@ -10,6 +10,8 @@ pub enum KeystoreError {
     Eth2Keystore(lighthouse_eth2_keystore::Error),
     #[error("Failed to get public key from keypair: {0}")]
     UnknownPublicKey(String),
+    #[error("Missing password for keypair")]
+    MissingPassword,
 }
 
 /// Event types that can be emitted by the validator pubkey to
