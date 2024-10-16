@@ -3,13 +3,17 @@ pragma solidity 0.8.25;
 
 import {Test, console} from "forge-std/Test.sol";
 
+import {BoltParameters} from "../src/contracts/BoltParameters.sol";
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
 import {BLS12381} from "../src/lib/bls/BLS12381.sol";
+import {BoltConfig} from "../src/lib/Config.sol";
+import {Utils} from "./Utils.sol";
 
 contract BoltValidatorsTest is Test {
     using BLS12381 for BLS12381.G1Point;
 
+    BoltParameters public parameters;
     BoltValidators public validators;
 
     uint128 public constant PRECONF_MAX_GAS_LIMIT = 5_000_000;
@@ -20,7 +24,25 @@ contract BoltValidatorsTest is Test {
     address validator = makeAddr("validator");
 
     function setUp() public {
-        validators = new BoltValidators(admin);
+        BoltConfig.ParametersConfig memory config = new Utils().readParameters();
+
+        parameters = new BoltParameters();
+        parameters.initialize(
+            admin,
+            config.epochDuration,
+            config.slashingWindow,
+            config.maxChallengeDuration,
+            config.allowUnsafeRegistration,
+            config.challengeBond,
+            config.blockhashEvmLookback,
+            config.justificationDelay,
+            config.eth2GenesisTimestamp,
+            config.slotTime,
+            config.minimumOperatorStake
+        );
+
+        validators = new BoltValidators();
+        validators.initialize(admin, address(parameters));
     }
 
     function testUnsafeRegistration() public {
@@ -52,7 +74,7 @@ contract BoltValidatorsTest is Test {
         BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
 
         vm.prank(admin);
-        validators.setAllowUnsafeRegistration(false);
+        parameters.setAllowUnsafeRegistration(false);
 
         vm.prank(validator);
         vm.expectRevert(IBoltValidators.UnsafeRegistrationNotAllowed.selector);

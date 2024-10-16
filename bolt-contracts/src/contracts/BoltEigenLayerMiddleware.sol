@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
-import {Time} from "lib/openzeppelin-contracts/contracts/utils/types/Time.sol";
-import {EnumerableMap} from "lib/openzeppelin-contracts/contracts/utils/structs/EnumerableMap.sol";
-import {EnumerableSet} from "lib/openzeppelin-contracts/contracts/utils/structs/EnumerableSet.sol";
-import {IERC20} from "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
+import {EnumerableMap} from "@openzeppelin/contracts/utils/structs/EnumerableMap.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
+import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
 import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
 import {IBoltManager} from "../interfaces/IBoltManager.sol";
@@ -21,19 +23,29 @@ import {AVSDirectoryStorage} from "@eigenlayer/src/contracts/core/AVSDirectorySt
 import {DelegationManagerStorage} from "@eigenlayer/src/contracts/core/DelegationManagerStorage.sol";
 import {StrategyManagerStorage} from "@eigenlayer/src/contracts/core/StrategyManagerStorage.sol";
 
-contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
+/// @title Bolt Manager
+/// @notice This contract is responsible for interfacing with the EigenLayer restaking protocol.
+/// @dev This contract is upgradeable using the UUPSProxy pattern. Storage layout remains fixed across upgrades
+/// with the use of storage gaps.
+/// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+/// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
+/// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
+contract BoltEigenLayerMiddleware is IBoltMiddleware, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
 
     // ========= STORAGE =========
 
+    /// @notice Start timestamp of the first epoch.
+    uint48 public START_TIMESTAMP;
+
+    /// @notice Bolt Parameters contract.
+    IBoltParameters public parameters;
+
     /// @notice Validators registry, where validators are registered via their
     /// BLS pubkey and are assigned a sequence number.
-    IBoltManager public boltManager;
-
-    /// @notice Set of EigenLayer operators addresses that have opted in to Bolt Protocol.
-    EnumerableMap.AddressToUintMap private operators;
+    IBoltManager public manager;
 
     /// @notice Set of EigenLayer protocol strategies that are used in Bolt Protocol.
     EnumerableMap.AddressToUintMap private strategies;
@@ -41,57 +53,65 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     /// @notice Set of EigenLayer collaterals addresses that are allowed.
     EnumerableSet.AddressSet private whitelistedCollaterals;
 
-    // ========= IMMUTABLES =========
-
     /// @notice Address of the EigenLayer AVS Directory contract.
-    AVSDirectoryStorage public immutable AVS_DIRECTORY;
+    AVSDirectoryStorage public AVS_DIRECTORY;
 
     /// @notice Address of the EigenLayer Delegation Manager contract.
-    DelegationManagerStorage public immutable DELEGATION_MANAGER;
+    DelegationManagerStorage public DELEGATION_MANAGER;
 
     /// @notice Address of the EigenLayer Strategy Manager contract.
-    StrategyManagerStorage public immutable STRATEGY_MANAGER;
-
-    /// @notice Start timestamp of the first epoch.
-    uint48 public immutable START_TIMESTAMP;
-
-    // ========= CONSTANTS =========
-
-    /// @notice Duration of an epoch in seconds.
-    uint48 public constant EPOCH_DURATION = 1 days;
-
-    /// @notice Duration of the slashing window in seconds.
-    uint48 public constant SLASHING_WINDOW = 7 days;
+    StrategyManagerStorage public STRATEGY_MANAGER;
 
     /// @notice Name hash of the restaking protocol for identifying the instance of `IBoltMiddleware`.
-    bytes32 public constant NAME_HASH = keccak256("EIGENLAYER");
+    bytes32 public NAME_HASH;
+
+    // --> Storage layout marker: 11 slots
+
+    /**
+     * @dev This empty reserved space is put in place to allow future versions to add new
+     * variables without shifting down storage in the inheritance chain.
+     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+     * This can be validated with the Openzeppelin Foundry Upgrades toolkit.
+     *
+     * Total storage slots: 50
+     */
+    uint256[39] private __gap;
 
     // ========= ERRORS =========
 
     error StrategyNotAllowed();
-    error OperatorNotRegisteredToAVS();
+    error OperatorAlreadyRegisteredToAVS();
 
-    // ========= CONSTRUCTOR =========
+    // ========= INITIALIZER & PROXY FUNCTIONALITY ========= //
 
     /// @notice Constructor for the BoltEigenLayerMiddleware contract.
-    /// @param _boltManager The address of the Bolt Manager contract.
+    /// @param _parameters The address of the Bolt Parameters contract.
+    /// @param _manager The address of the Bolt Manager contract.
     /// @param _eigenlayerAVSDirectory The address of the EigenLayer AVS Directory contract.
     /// @param _eigenlayerDelegationManager The address of the EigenLayer Delegation Manager contract.
     /// @param _eigenlayerStrategyManager The address of the EigenLayer Strategy Manager.
-    constructor(
+    function initialize(
         address _owner,
-        address _boltManager,
+        address _parameters,
+        address _manager,
         address _eigenlayerAVSDirectory,
         address _eigenlayerDelegationManager,
         address _eigenlayerStrategyManager
-    ) Ownable(_owner) {
-        boltManager = IBoltManager(_boltManager);
+    ) public initializer {
+        __Ownable_init(_owner);
+        parameters = IBoltParameters(_parameters);
+        manager = IBoltManager(_manager);
         START_TIMESTAMP = Time.timestamp();
 
         AVS_DIRECTORY = AVSDirectoryStorage(_eigenlayerAVSDirectory);
         DELEGATION_MANAGER = DelegationManagerStorage(_eigenlayerDelegationManager);
         STRATEGY_MANAGER = StrategyManagerStorage(_eigenlayerStrategyManager);
+        NAME_HASH = keccak256("EIGENLAYER");
     }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
 
     // ========= VIEW FUNCTIONS =========
 
@@ -99,33 +119,19 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     function getEpochStartTs(
         uint48 epoch
     ) public view returns (uint48 timestamp) {
-        return START_TIMESTAMP + epoch * EPOCH_DURATION;
+        return START_TIMESTAMP + epoch * parameters.EPOCH_DURATION();
     }
 
     /// @notice Get the epoch at a given timestamp.
     function getEpochAtTs(
         uint48 timestamp
     ) public view returns (uint48 epoch) {
-        return (timestamp - START_TIMESTAMP) / EPOCH_DURATION;
+        return (timestamp - START_TIMESTAMP) / parameters.EPOCH_DURATION();
     }
 
     /// @notice Get the current epoch.
     function getCurrentEpoch() public view returns (uint48 epoch) {
         return getEpochAtTs(Time.timestamp());
-    }
-
-    /// @notice Check if an operator address is authorized to work for a validator,
-    /// given the validator's pubkey hash. This function performs a lookup in the
-    /// validators registry to check if they explicitly authorized the operator.
-    /// @param operator The operator address to check the authorization for.
-    /// @param pubkeyHash The pubkey hash of the validator to check the authorization for.
-    /// @return True if the operator is authorized, false otherwise.
-    function isOperatorAuthorizedForValidator(address operator, bytes32 pubkeyHash) public view returns (bool) {
-        if (operator == address(0) || pubkeyHash == bytes32(0)) {
-            revert InvalidQuery();
-        }
-
-        return boltManager.validators().getValidatorByPubkeyHash(pubkeyHash).authorizedOperator == operator;
     }
 
     /// @notice Get the list of EigenLayer strategies addresses that are allowed.
@@ -164,44 +170,51 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
     // ========= EIGENLAYER MIDDLEWARE LOGIC =========
 
     /// @notice Allow an operator to signal opt-in to Bolt Protocol.
-    /// @param operator The operator address to signal opt-in for.
+    /// @dev This requires calling the EigenLayer AVS Directory contract to register the operator.
+    /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator.
+    /// The msg.sender of this call will be the operator address.
     function registerOperator(
-        address operator
+        string calldata rpc,
+        ISignatureUtils.SignatureWithSaltAndExpiry calldata operatorSignature
     ) public {
-        if (operators.contains(operator)) {
+        if (manager.isOperator(msg.sender)) {
             revert AlreadyRegistered();
         }
 
-        if (!DELEGATION_MANAGER.isOperator(operator)) {
+        if (!DELEGATION_MANAGER.isOperator(msg.sender)) {
             revert NotOperator();
         }
 
-        if (!checkIfOperatorRegisteredToAVS(operator)) {
-            revert OperatorNotRegisteredToAVS();
+        // Register the operator to the AVS directory for this AVS
+        AVS_DIRECTORY.registerOperatorToAVS(msg.sender, operatorSignature);
+
+        // Register the operator in the manager
+        manager.registerOperator(msg.sender, rpc);
+    }
+
+    /// @notice Deregister an EigenLayer operator from working in Bolt Protocol.
+    /// @dev This requires calling the EigenLayer AVS Directory contract to deregister the operator.
+    /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator.
+    function deregisterOperator() public {
+        if (!manager.isOperator(msg.sender)) {
+            revert NotRegistered();
         }
 
-        operators.add(operator);
-        operators.enable(operator);
+        AVS_DIRECTORY.deregisterOperatorFromAVS(msg.sender);
+
+        manager.deregisterOperator(msg.sender);
     }
 
     /// @notice Allow an operator to signal indefinite opt-out from Bolt Protocol.
     /// @dev Pausing activity does not prevent the operator from being slashable for
     /// the current network epoch until the end of the slashing window.
     function pauseOperator() public {
-        if (!operators.contains(msg.sender)) {
-            revert NotRegistered();
-        }
-
-        operators.disable(msg.sender);
+        manager.pauseOperator(msg.sender);
     }
 
     /// @notice Allow a disabled operator to signal opt-in to Bolt Protocol.
     function unpauseOperator() public {
-        if (!operators.contains(msg.sender)) {
-            revert NotRegistered();
-        }
-
-        operators.enable(msg.sender);
+        manager.unpauseOperator(msg.sender);
     }
 
     /// @notice Register a strategy to work in Bolt Protocol.
@@ -253,66 +266,44 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
         return enabledTime != 0 && disabledTime == 0;
     }
 
-    /// @notice Check if an operator is currently enabled to work in Bolt Protocol.
-    /// @param operator The operator address to check the enabled status for.
-    /// @return True if the operator is enabled, false otherwise.
-    function isOperatorEnabled(
+    /// @notice Get the collaterals and amounts staked by an operator across the supported strategies.
+    ///
+    /// @param operator The operator address to get the collaterals and amounts staked for.
+    /// @return collaterals The collaterals staked by the operator.
+    /// @dev Assumes that the operator is registered and enabled.
+    function getOperatorCollaterals(
         address operator
-    ) public view returns (bool) {
-        (uint48 enabledTime, uint48 disabledTime) = operators.getTimes(operator);
-        return enabledTime != 0 && disabledTime == 0;
-    }
-
-    /// @notice Get the status of multiple proposers, given their pubkey hashes.
-    /// @param pubkeyHashes The pubkey hashes of the proposers to get the status for.
-    /// @return statuses The statuses of the proposers, including their operator and active stake.
-    function getProposersStatus(
-        bytes32[] memory pubkeyHashes
-    ) public view returns (IBoltValidators.ProposerStatus[] memory statuses) {
-        statuses = new IBoltValidators.ProposerStatus[](pubkeyHashes.length);
-        for (uint256 i = 0; i < pubkeyHashes.length; ++i) {
-            statuses[i] = getProposerStatus(pubkeyHashes[i]);
-        }
-    }
-
-    /// @notice Get the status of a proposer, given their pubkey hash.
-    /// @param pubkeyHash The pubkey hash of the proposer to get the status for.
-    /// @return status The status of the proposer, including their operator and active stake.
-    function getProposerStatus(
-        bytes32 pubkeyHash
-    ) public view returns (IBoltValidators.ProposerStatus memory status) {
-        if (pubkeyHash == bytes32(0)) {
-            revert InvalidQuery();
-        }
+    ) public view returns (address[] memory, uint256[] memory) {
+        address[] memory collateralTokens = new address[](strategies.length());
+        uint256[] memory amounts = new uint256[](strategies.length());
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
-        IBoltValidators.Validator memory validator = boltManager.validators().getValidatorByPubkeyHash(pubkeyHash);
 
-        address operator = validator.authorizedOperator;
-
-        status.pubkeyHash = pubkeyHash;
-        status.active = validator.exists;
-        status.operator = operator;
-
-        (uint48 enabledTime, uint48 disabledTime) = operators.getTimes(operator);
-        if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
-            return status;
-        }
-
-        status.collaterals = new address[](strategies.length());
-        status.amounts = new uint256[](strategies.length());
+        IStrategy[] memory strategyImpls = new IStrategy[](strategies.length());
 
         for (uint256 i = 0; i < strategies.length(); ++i) {
-            (address strategy, uint48 enabledVaultTime, uint48 disabledVaultTime) = strategies.atWithTimes(i);
+            (address strategy, uint48 enabledTime, uint48 disabledTime) = strategies.atWithTimes(i);
 
-            address collateral = address(IStrategy(strategy).underlyingToken());
-            status.collaterals[i] = collateral;
-            if (!_wasEnabledAt(enabledVaultTime, disabledVaultTime, epochStartTs)) {
+            if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
                 continue;
             }
 
-            status.amounts[i] = getOperatorStake(operator, collateral);
+            IStrategy strategyImpl = IStrategy(strategy);
+
+            address collateral = address(strategyImpl.underlyingToken());
+            collateralTokens[i] = collateral;
+
+            strategyImpls[i] = strategyImpl;
         }
+
+        // NOTE: order is preserved, which is why we can use the same index for both arrays below
+        uint256[] memory shares = DELEGATION_MANAGER.getOperatorShares(operator, strategyImpls);
+
+        for (uint256 i = 0; i < strategyImpls.length; ++i) {
+            amounts[i] = strategyImpls[i].sharesToUnderlyingView(shares[i]);
+        }
+
+        return (collateralTokens, amounts);
     }
 
     /// @notice Get the amount of tokens delegated to an operator across the allowed strategies.
@@ -363,62 +354,7 @@ contract BoltEigenLayerMiddleware is IBoltMiddleware, Ownable {
         return amount;
     }
 
-    /// @notice Get the total stake of all EigenLayer operators at a given epoch for a collateral asset.
-    /// @param epoch The epoch to check the total stake for.
-    /// @param collateral The collateral address to check the total stake for.
-    /// @return totalStake The total stake of all operators at the given epoch, in collateral token.
-    function getTotalStake(uint48 epoch, address collateral) public view returns (uint256 totalStake) {
-        uint48 epochStartTs = getEpochStartTs(epoch);
-
-        // for epoch older than SLASHING_WINDOW total stake can be invalidated
-        // NOTE: not available in EigenLayer yet since slashing is not live
-        // if (
-        //     epochStartTs < SLASHING_WINDOW ||
-        //     epochStartTs < Time.timestamp() - SLASHING_WINDOW ||
-        //     epochStartTs > Time.timestamp()
-        // ) {
-        //     revert InvalidQuery();
-        // }
-
-        for (uint256 i; i < operators.length(); ++i) {
-            (address operator, uint48 enabledTime, uint48 disabledTime) = operators.atWithTimes(i);
-
-            // just skip operator if it was added after the target epoch or paused
-            if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
-                continue;
-            }
-
-            totalStake += getOperatorStake(operator, collateral);
-        }
-    }
-
     // ========= EIGENLAYER AVS FUNCTIONS =========
-
-    /// @notice Register an EigenLayer layer operator to work in Bolt Protocol.
-    /// @dev This requires calling the EigenLayer AVS Directory contract to register the operator.
-    /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator
-    function registerOperatorToAVS(
-        address operator,
-        ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature
-    ) public {
-        AVS_DIRECTORY.registerOperatorToAVS(operator, operatorSignature);
-    }
-
-    /// @notice Check if an operator is registered to work in Bolt Protocol AVS by
-    /// looking up the AVS Directory contract.
-    function checkIfOperatorRegisteredToAVS(
-        address operator
-    ) public view returns (bool registered) {
-        return AVS_DIRECTORY.avsOperatorStatus(address(this), operator)
-            == IAVSDirectory.OperatorAVSRegistrationStatus.REGISTERED;
-    }
-
-    /// @notice Deregister an EigenLayer layer operator from working in Bolt Protocol.
-    /// @dev This requires calling the EigenLayer AVS Directory contract to deregister the operator.
-    /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator.
-    function deregisterOperatorFromAVS() public {
-        AVS_DIRECTORY.deregisterOperatorFromAVS(msg.sender);
-    }
 
     /// @notice emits an `AVSMetadataURIUpdated` event indicating the information has updated.
     /// @param metadataURI The URI for metadata associated with an avs

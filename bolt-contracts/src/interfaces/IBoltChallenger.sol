@@ -87,6 +87,7 @@ interface IBoltChallenger {
     error UnexpectedMixedSigners();
     error UnexpectedNonceOrder();
     error InvalidProofsLength();
+    error BeaconRootNotFound();
 
     event ChallengeOpened(bytes32 indexed challengeId, address indexed challenger, address indexed commitmentSigner);
     event ChallengeDefended(bytes32 indexed challengeId);

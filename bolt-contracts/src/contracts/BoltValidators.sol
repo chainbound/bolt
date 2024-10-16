@@ -1,17 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
+
 import {BLS12381} from "../lib/bls/BLS12381.sol";
 import {BLSSignatureVerifier} from "../lib/bls/BLSSignatureVerifier.sol";
 import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
+import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 
 /// @title Bolt Validators
 /// @notice This contract is responsible for registering validators and managing their configuration
-contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
+/// @dev This contract is upgradeable using the UUPSProxy pattern. Storage layout remains fixed across upgrades
+/// with the use of storage gaps.
+/// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+/// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
+/// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
+contract BoltValidators is IBoltValidators, BLSSignatureVerifier, OwnableUpgradeable, UUPSUpgradeable {
     using BLS12381 for BLS12381.G1Point;
 
     // ========= STORAGE =========
+
+    /// @notice Bolt Parameters contract.
+    IBoltParameters public parameters;
 
     /// @notice Validators (aka Blockspace providers)
     /// @dev For our purpose, validators are blockspace providers for commitments.
@@ -22,11 +33,6 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     /// power to an Operator to make commitments on their behalf.
     mapping(bytes32 => Validator) public VALIDATORS;
 
-    /// @notice Whether to allow unsafe registration of validators
-    /// @dev Until the BLS12_381 precompile is live, we need to allow unsafe registration
-    /// which means we don't check the BLS signature of the validator pubkey.
-    bool public ALLOW_UNSAFE_REGISTRATION = true;
-
     /// @notice Mapping from validator sequence number to validator pubkey hash
     /// @dev This is used internally to easily query the pubkey hash of a validator.
     mapping(uint64 => bytes32) private sequenceNumberToPubkeyHash;
@@ -36,6 +42,18 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     /// It is not related to the `validatorIndex` assigned by the Beacon Chain.
     uint64 internal nextValidatorSequenceNumber;
 
+    // --> Storage layout marker: 4 slots
+
+    /**
+     * @dev This empty reserved space is put in place to allow future versions to add new
+     * variables without shifting down storage in the inheritance chain.
+     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+     * This can be validated with the Openzeppelin Foundry Upgrades toolkit.
+     *
+     * Total storage slots: 50
+     */
+    uint256[46] private __gap;
+
     // ========= EVENTS =========
 
     /// @notice Emitted when a validator is registered
@@ -43,23 +61,20 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
     /// @param validator Validator struct
     event ValidatorRegistered(bytes32 indexed pubkeyHash, Validator validator);
 
-    // ========= CONSTRUCTOR =========
+    // ========= INITIALIZER =========
 
-    /// @notice Constructor
+    /// @notice Initializer
     /// @param _owner Address of the owner of the contract
-    constructor(
-        address _owner
-    ) Ownable(_owner) {}
+    /// @param _parameters Address of the Bolt Parameters contract
+    function initialize(address _owner, address _parameters) public initializer {
+        __Ownable_init(_owner);
 
-    // ========= ADMIN FUNCTIONS =========
-
-    /// @notice Enable or disable the use of the BLS precompile
-    /// @param allowUnsafeRegistration Whether to allow unsafe registration of validators
-    function setAllowUnsafeRegistration(
-        bool allowUnsafeRegistration
-    ) public onlyOwner {
-        ALLOW_UNSAFE_REGISTRATION = allowUnsafeRegistration;
+        parameters = IBoltParameters(_parameters);
     }
+
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
 
     // ========= VIEW FUNCTIONS =========
 
@@ -120,7 +135,7 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
         uint128 maxCommittedGasLimit,
         address authorizedOperator
     ) public {
-        if (!ALLOW_UNSAFE_REGISTRATION) {
+        if (!parameters.ALLOW_UNSAFE_REGISTRATION()) {
             revert UnsafeRegistrationNotAllowed();
         }
 
@@ -198,7 +213,7 @@ contract BoltValidators is IBoltValidators, BLSSignatureVerifier, Ownable {
         uint128 maxCommittedGasLimit,
         address authorizedOperator
     ) public {
-        if (!ALLOW_UNSAFE_REGISTRATION) {
+        if (!parameters.ALLOW_UNSAFE_REGISTRATION()) {
             revert UnsafeRegistrationNotAllowed();
         }
 

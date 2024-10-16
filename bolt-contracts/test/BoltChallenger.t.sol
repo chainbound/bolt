@@ -2,17 +2,19 @@
 pragma solidity 0.8.25;
 
 import {Test, console} from "forge-std/Test.sol";
+import {Utils} from "./Utils.sol";
 
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
+import {BoltParameters} from "../src/contracts/BoltParameters.sol";
 import {BoltChallenger} from "../src/contracts/BoltChallenger.sol";
+import {BoltConfig} from "../src/lib/Config.sol";
 import {IBoltChallenger} from "../src/interfaces/IBoltChallenger.sol";
 import {RLPReader} from "../src/lib/rlp/RLPReader.sol";
 import {RLPWriter} from "../src/lib/rlp/RLPWriter.sol";
 import {BytesUtils} from "../src/lib/BytesUtils.sol";
 import {MerkleTrie} from "../src/lib/trie/MerkleTrie.sol";
 import {SecureMerkleTrie} from "../src/lib/trie/SecureMerkleTrie.sol";
-import {BeaconChainUtils} from "../src/lib/BeaconChainUtils.sol";
 import {TransactionDecoder} from "../src/lib/TransactionDecoder.sol";
 
 // re-export the internal resolver function for testing
@@ -23,6 +25,10 @@ contract BoltChallengerExt is BoltChallenger {
         IBoltChallenger.Proof calldata _proof
     ) external {
         _resolve(_challengeID, _trustedBlockHash, _proof);
+    }
+
+    function _getCurrentSlotExt() external view returns (uint256) {
+        return _getCurrentSlot();
     }
 
     function _decodeBlockHeaderRLPExt(
@@ -41,6 +47,7 @@ contract BoltChallengerTest is Test {
 
     BoltChallengerExt boltChallenger;
 
+    address admin = makeAddr("admin");
     address challenger = makeAddr("challenger");
     address resolver = makeAddr("resolver");
 
@@ -51,7 +58,25 @@ contract BoltChallengerTest is Test {
         vm.pauseGasMetering();
         (target, targetPK) = makeAddrAndKey("target");
 
+        BoltConfig.ParametersConfig memory config = new Utils().readParameters();
+
+        BoltParameters parameters = new BoltParameters();
+        parameters.initialize(
+            admin,
+            config.epochDuration,
+            config.slashingWindow,
+            config.maxChallengeDuration,
+            config.allowUnsafeRegistration,
+            config.challengeBond,
+            config.blockhashEvmLookback,
+            config.justificationDelay,
+            config.eth2GenesisTimestamp,
+            config.slotTime,
+            config.minimumOperatorStake
+        );
+
         boltChallenger = new BoltChallengerExt();
+        boltChallenger.initialize(admin, address(parameters));
 
         vm.deal(challenger, 100 ether);
         vm.deal(resolver, 100 ether);
@@ -273,7 +298,7 @@ contract BoltChallengerTest is Test {
         IBoltChallenger.SignedCommitment[] memory commitments = new IBoltChallenger.SignedCommitment[](1);
         commitments[0] = _parseTestCommitment();
 
-        commitments[0].slot = uint64(BeaconChainUtils._getCurrentSlot()) + 10;
+        commitments[0].slot = uint64(boltChallenger._getCurrentSlotExt()) + 10;
 
         // Open a challenge with a slot in the future
         vm.resumeGasMetering();
@@ -511,7 +536,7 @@ contract BoltChallengerTest is Test {
         commitment.signedTx = vm.parseJsonBytes(vm.readFile(path), ".raw");
 
         // pick a recent slot, 100 slots behind the current slot
-        commitment.slot = uint64(BeaconChainUtils._getCurrentSlot() - 100);
+        commitment.slot = uint64(boltChallenger._getCurrentSlotExt() - 100);
 
         // sign the new commitment with the target's private key
         bytes32 commitmentID = _computeCommitmentID(commitment.signedTx, commitment.slot);

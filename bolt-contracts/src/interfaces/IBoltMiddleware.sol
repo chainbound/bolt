@@ -39,35 +39,15 @@ interface IBoltMiddleware {
         address collateral
     ) external view returns (bool);
 
-    function registerOperator(
-        address operator
-    ) external;
-
-    function pauseOperator() external;
-
-    function unpauseOperator() external;
-
-    function isOperatorEnabled(
-        address operator
-    ) external view returns (bool);
-
-    function getProposersStatus(
-        bytes32[] memory pubkeyHashes
-    ) external view returns (IBoltValidators.ProposerStatus[] memory);
-
-    function getProposerStatus(
-        bytes32 pubkeyHash
-    ) external view returns (IBoltValidators.ProposerStatus memory);
-
-    function isOperatorAuthorizedForValidator(address operator, bytes32 pubkeyHash) external view returns (bool);
-
     function getOperatorStake(address operator, address collateral) external view returns (uint256);
+
+    function getOperatorCollaterals(
+        address operator
+    ) external view returns (address[] memory, uint256[] memory);
 
     function getOperatorStakeAt(
         address operator,
         address collateral,
         uint48 timestamp
     ) external view returns (uint256);
-
-    function getTotalStake(uint48 epoch, address collateral) external view returns (uint256);
 }

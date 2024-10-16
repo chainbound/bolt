@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
+
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {ECDSA} from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
@@ -9,11 +12,18 @@ import {SecureMerkleTrie} from "../lib/trie/SecureMerkleTrie.sol";
 import {MerkleTrie} from "../lib/trie/MerkleTrie.sol";
 import {RLPReader} from "../lib/rlp/RLPReader.sol";
 import {RLPWriter} from "../lib/rlp/RLPWriter.sol";
-import {BeaconChainUtils} from "../lib/BeaconChainUtils.sol";
 import {TransactionDecoder} from "../lib/TransactionDecoder.sol";
 import {IBoltChallenger} from "../interfaces/IBoltChallenger.sol";
+import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 
-contract BoltChallenger is IBoltChallenger {
+/// @title Bolt Challenger
+/// @notice Contract for managing (creating & resolving) challenges for Bolt inclusion commitments.
+/// @dev This contract is upgradeable using the UUPSProxy pattern. Storage layout remains fixed across upgrades
+/// with the use of storage gaps.
+/// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+/// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
+/// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
+contract BoltChallenger is IBoltChallenger, OwnableUpgradeable, UUPSUpgradeable {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
     using TransactionDecoder for bytes;
@@ -22,26 +32,41 @@ contract BoltChallenger is IBoltChallenger {
 
     // ========= STORAGE =========
 
+    /// @notice Bolt Parameters contract.
+    IBoltParameters public parameters;
+
     /// @notice The set of existing unique challenge IDs.
     EnumerableSet.Bytes32Set internal challengeIDs;
 
     /// @notice The mapping of challenge IDs to their respective challenges.
     mapping(bytes32 => Challenge) internal challenges;
 
-    // ========= CONSTANTS =========
+    // --> Storage layout marker: 4 slots
 
-    /// @notice The challenge bond required to open a challenge.
-    uint256 public constant CHALLENGE_BOND = 1 ether;
+    /**
+     * @dev This empty reserved space is put in place to allow future versions to add new
+     * variables without shifting down storage in the inheritance chain.
+     * See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
+     * This can be validated with the Openzeppelin Foundry Upgrades toolkit.
+     *
+     * Total storage slots: 50
+     */
+    uint256[46] private __gap;
 
-    /// @notice The maximum duration of a challenge to be considered valid.
-    uint256 public constant MAX_CHALLENGE_DURATION = 7 days;
+    // ========= INITIALIZER =========
 
-    /// @notice The maximum number of blocks to look back for block hashes in the EVM.
-    uint256 public constant BLOCKHASH_EVM_LOOKBACK = 256;
+    /// @notice Initializer
+    /// @param _owner Address of the owner of the contract
+    /// @param _parameters Address of the Bolt Parameters contract
+    function initialize(address _owner, address _parameters) public initializer {
+        __Ownable_init(_owner);
 
-    // ========= CONSTRUCTOR =========
+        parameters = IBoltParameters(_parameters);
+    }
 
-    constructor() {}
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
 
     // ========= VIEW FUNCTIONS =========
 
@@ -109,7 +134,7 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         // Check that the attached bond amount is correct
-        if (msg.value != CHALLENGE_BOND) {
+        if (msg.value != parameters.CHALLENGE_BOND()) {
             revert IncorrectChallengeBond();
         }
 
@@ -122,7 +147,7 @@ contract BoltChallenger is IBoltChallenger {
         }
 
         uint256 targetSlot = commitments[0].slot;
-        if (targetSlot > BeaconChainUtils._getCurrentSlot() - BeaconChainUtils.JUSTIFICATION_DELAY_SLOTS) {
+        if (targetSlot > _getCurrentSlot() - parameters.JUSTIFICATION_DELAY()) {
             // We cannot open challenges for slots that are not finalized by Ethereum consensus yet.
             // This is admittedly a bit strict, since 32-slot deep reorgs are very unlikely.
             revert BlockIsNotFinalized();
@@ -194,14 +219,17 @@ contract BoltChallenger is IBoltChallenger {
 
         // The visibility of the BLOCKHASH opcode is limited to the 256 most recent blocks.
         // For simplicity we restrict this to 256 slots even though 256 blocks would be more accurate.
-        if (challenges[challengeID].targetSlot < BeaconChainUtils._getCurrentSlot() - BLOCKHASH_EVM_LOOKBACK) {
+        if (challenges[challengeID].targetSlot < _getCurrentSlot() - parameters.BLOCKHASH_EVM_LOOKBACK()) {
             revert BlockIsTooOld();
         }
 
         // Check that the previous block is within the EVM lookback window for block hashes.
         // Clearly, if the previous block is available, the inclusion one will be too.
         uint256 previousBlockNumber = proof.inclusionBlockNumber - 1;
-        if (previousBlockNumber > block.number || previousBlockNumber < block.number - BLOCKHASH_EVM_LOOKBACK) {
+        if (
+            previousBlockNumber > block.number
+                || previousBlockNumber < block.number - parameters.BLOCKHASH_EVM_LOOKBACK()
+        ) {
             revert InvalidBlockNumber();
         }
 
@@ -229,7 +257,7 @@ contract BoltChallenger is IBoltChallenger {
             revert ChallengeAlreadyResolved();
         }
 
-        if (challenge.openedAt + MAX_CHALLENGE_DURATION >= Time.timestamp()) {
+        if (challenge.openedAt + parameters.MAX_CHALLENGE_DURATION() >= Time.timestamp()) {
             revert ChallengeNotExpired();
         }
 
@@ -254,7 +282,7 @@ contract BoltChallenger is IBoltChallenger {
             revert ChallengeAlreadyResolved();
         }
 
-        if (challenge.openedAt + MAX_CHALLENGE_DURATION < Time.timestamp()) {
+        if (challenge.openedAt + parameters.MAX_CHALLENGE_DURATION() < Time.timestamp()) {
             // If the challenge has expired without being resolved, it is considered breached.
             // This should be handled by calling the `resolveExpiredChallenge()` function instead.
             revert ChallengeExpired();
@@ -468,7 +496,7 @@ contract BoltChallenger is IBoltChallenger {
     function _transferFullBond(
         address recipient
     ) internal {
-        (bool success,) = payable(recipient).call{value: CHALLENGE_BOND}("");
+        (bool success,) = payable(recipient).call{value: parameters.CHALLENGE_BOND()}("");
         if (!success) {
             revert BondTransferFailed();
         }
@@ -479,9 +507,71 @@ contract BoltChallenger is IBoltChallenger {
     function _transferHalfBond(
         address recipient
     ) internal {
-        (bool success,) = payable(recipient).call{value: CHALLENGE_BOND / 2}("");
+        (bool success,) = payable(recipient).call{value: parameters.CHALLENGE_BOND() / 2}("");
         if (!success) {
             revert BondTransferFailed();
         }
+    }
+
+    /// @notice Get the slot number from a given timestamp
+    /// @param _timestamp The timestamp
+    /// @return The slot number
+    function _getSlotFromTimestamp(
+        uint256 _timestamp
+    ) internal view returns (uint256) {
+        return (_timestamp - parameters.ETH2_GENESIS_TIMESTAMP()) / parameters.SLOT_TIME();
+    }
+
+    /// @notice Get the timestamp from a given slot
+    /// @param _slot The slot number
+    /// @return The timestamp
+    function _getTimestampFromSlot(
+        uint256 _slot
+    ) internal view returns (uint256) {
+        return parameters.ETH2_GENESIS_TIMESTAMP() + _slot * parameters.SLOT_TIME();
+    }
+
+    /// @notice Get the beacon block root for a given slot
+    /// @param _slot The slot number
+    /// @return The beacon block root
+    function _getBeaconBlockRootAtSlot(
+        uint256 _slot
+    ) internal view returns (bytes32) {
+        uint256 slotTimestamp = parameters.ETH2_GENESIS_TIMESTAMP() + _slot * parameters.SLOT_TIME();
+        return _getBeaconBlockRootAtTimestamp(slotTimestamp);
+    }
+
+    function _getBeaconBlockRootAtTimestamp(
+        uint256 _timestamp
+    ) internal view returns (bytes32) {
+        (bool success, bytes memory data) = parameters.BEACON_ROOTS_CONTRACT().staticcall(abi.encode(_timestamp));
+
+        if (!success || data.length == 0) {
+            revert BeaconRootNotFound();
+        }
+
+        return abi.decode(data, (bytes32));
+    }
+
+    /// @notice Get the latest beacon block root
+    /// @return The beacon block root
+    function _getLatestBeaconBlockRoot() internal view returns (bytes32) {
+        uint256 latestSlot = _getSlotFromTimestamp(block.timestamp);
+        return _getBeaconBlockRootAtSlot(latestSlot);
+    }
+
+    /// @notice Get the current slot
+    /// @return The current slot
+    function _getCurrentSlot() internal view returns (uint256) {
+        return _getSlotFromTimestamp(block.timestamp);
+    }
+
+    /// @notice Check if a timestamp is within the EIP-4788 window
+    /// @param _timestamp The timestamp
+    /// @return True if the timestamp is within the EIP-4788 window, false otherwise
+    function _isWithinEIP4788Window(
+        uint256 _timestamp
+    ) internal view returns (bool) {
+        return _getSlotFromTimestamp(_timestamp) <= _getCurrentSlot() + parameters.EIP4788_WINDOW();
     }
 }

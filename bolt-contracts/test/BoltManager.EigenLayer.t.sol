@@ -5,9 +5,13 @@ import {Test, console} from "forge-std/Test.sol";
 
 import {BoltValidators} from "../src/contracts/BoltValidators.sol";
 import {BoltManager} from "../src/contracts/BoltManager.sol";
+import {BoltParameters} from "../src/contracts/BoltParameters.sol";
+import {BoltConfig} from "../src/lib/Config.sol";
 import {BoltEigenLayerMiddleware} from "../src/contracts/BoltEigenLayerMiddleware.sol";
 import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
+import {IBoltManager} from "../src/interfaces/IBoltManager.sol";
 import {IBoltMiddleware} from "../src/interfaces/IBoltMiddleware.sol";
+import {Utils} from "./Utils.sol";
 
 import {AVSDirectoryStorage} from "@eigenlayer/src/contracts/core/AVSDirectoryStorage.sol";
 import {DelegationManagerStorage} from "@eigenlayer/src/contracts/core/DelegationManagerStorage.sol";
@@ -48,16 +52,43 @@ contract BoltManagerEigenLayerTest is Test {
         eigenLayerDeployer = new EigenLayerDeployer(staker);
         eigenLayerDeployer.setUp();
 
+        BoltConfig.ParametersConfig memory config = new Utils().readParameters();
+
+        BoltParameters parameters = new BoltParameters();
+        parameters.initialize(
+            admin,
+            config.epochDuration,
+            config.slashingWindow,
+            config.maxChallengeDuration,
+            config.allowUnsafeRegistration,
+            config.challengeBond,
+            config.blockhashEvmLookback,
+            config.justificationDelay,
+            config.eth2GenesisTimestamp,
+            config.slotTime,
+            config.minimumOperatorStake
+        );
+
         // Deploy Bolt contracts
-        validators = new BoltValidators(admin);
-        manager = new BoltManager(admin, address(validators));
-        middleware = new BoltEigenLayerMiddleware(
+        validators = new BoltValidators();
+        validators.initialize(admin, address(parameters));
+        manager = new BoltManager();
+        manager.initialize(admin, address(parameters), address(validators));
+        middleware = new BoltEigenLayerMiddleware();
+
+        middleware.initialize(
             address(admin),
+            address(parameters),
             address(manager),
             address(eigenLayerDeployer.avsDirectory()),
             address(eigenLayerDeployer.delegationManager()),
             address(eigenLayerDeployer.strategyManager())
         );
+
+        // Register the middleware in the manager
+        vm.startPrank(admin);
+        manager.addRestakingProtocol(address(middleware));
+        vm.stopPrank();
     }
 
     function _adminRoutine() internal {
@@ -143,8 +174,11 @@ contract BoltManagerEigenLayerTest is Test {
         emit IAVSDirectory.OperatorAVSRegistrationStatusUpdated(
             operator, address(middleware), IAVSDirectory.OperatorAVSRegistrationStatus.REGISTERED
         );
-        middleware.registerOperatorToAVS(operator, operatorSignature);
-        assertEq(middleware.checkIfOperatorRegisteredToAVS(operator), true);
+
+        vm.prank(operator);
+        middleware.registerOperator("https://bolt-rpc.io", operatorSignature);
+
+        assertEq(manager.isOperatorEnabled(operator), true);
 
         // PART 2: Validator and proposer opt into BOLT manager
         //
@@ -160,35 +194,33 @@ contract BoltManagerEigenLayerTest is Test {
 
         // 2. --- Operator and strategy registration into BoltManager (middleware) ---
 
-        middleware.registerOperator(operator);
-        assertEq(middleware.isOperatorEnabled(operator), true);
-
         middleware.registerStrategy(address(eigenLayerDeployer.wethStrat()));
         assertEq(middleware.isStrategyEnabled(address(eigenLayerDeployer.wethStrat())), true);
     }
 
-    function test_deregisterEigenLayerOperatorFromAVS() public {
+    function testDeregisterOperatorFromAVS() public {
         _eigenLayerOptInRoutine();
         vm.prank(operator);
-        middleware.deregisterOperatorFromAVS();
-        assertEq(middleware.checkIfOperatorRegisteredToAVS(operator), false);
+        middleware.deregisterOperator();
+        vm.expectRevert(IBoltManager.OperatorNotRegistered.selector);
+        manager.isOperatorEnabled(operator);
     }
 
-    function test_getEigenLayerOperatorStake() public {
+    function testGetOperatorStake() public {
         _eigenLayerOptInRoutine();
 
         uint256 amount = middleware.getOperatorStake(operator, address(eigenLayerDeployer.weth()));
-        uint256 totalStake = middleware.getTotalStake(2, address(eigenLayerDeployer.weth()));
+        uint256 totalStake = manager.getTotalStake(address(eigenLayerDeployer.weth()));
         assertEq(amount, 1 ether);
         assertEq(totalStake, 1 ether);
     }
 
-    function test_getEigenLayerProposerStatus() public {
+    function testProposerStatus() public {
         _eigenLayerOptInRoutine();
 
         bytes32 pubkeyHash = _pubkeyHash(validatorPubkey);
 
-        IBoltValidators.ProposerStatus memory status = middleware.getProposerStatus(pubkeyHash);
+        IBoltValidators.ProposerStatus memory status = manager.getProposerStatus(pubkeyHash);
         assertEq(status.pubkeyHash, pubkeyHash);
         assertEq(status.operator, operator);
         assertEq(status.active, true);
@@ -213,20 +245,20 @@ contract BoltManagerEigenLayerTest is Test {
             validators.registerValidatorUnsafe(pubkey, PRECONF_MAX_GAS_LIMIT, operator);
         }
 
-        IBoltValidators.ProposerStatus[] memory statuses = middleware.getProposersStatus(pubkeyHashes);
+        IBoltValidators.ProposerStatus[] memory statuses = manager.getProposerStatuses(pubkeyHashes);
         assertEq(statuses.length, 10);
     }
 
-    function testGetNonExistentProposerStatus() public {
+    function testNonExistentProposerStatus() public {
         _eigenLayerOptInRoutine();
 
         bytes32 pubkeyHash = bytes32(uint256(1));
 
         vm.expectRevert(IBoltValidators.ValidatorDoesNotExist.selector);
-        middleware.getProposerStatus(pubkeyHash);
+        manager.getProposerStatus(pubkeyHash);
     }
 
-    function testGetWhitelistedCollaterals() public {
+    function testWhitelistedCollaterals() public {
         _adminRoutine();
         address[] memory collaterals = middleware.getWhitelistedCollaterals();
         assertEq(collaterals.length, 1);

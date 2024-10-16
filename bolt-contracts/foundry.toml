@@ -6,6 +6,11 @@ out = "out"
 libs = ["lib"]
 fs_permissions = [{ access = "read-write", path = "./" }]
 gas_reports = ["*"]
+# Required options for the OpenZeppelin Foundry Upgrades toolkit: https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades
+ffi = true
+ast = true
+build_info = true
+extra_output = ["storageLayout"]
 
 # silence some warnings during compilation
 # https://book.getfoundry.sh/reference/config/solidity-compiler#ignored_error_codes
@@ -21,7 +26,9 @@ remappings = [
   "@relic/=lib/relic-sdk/packages/contracts",
   "@symbiotic/=lib/core/src/",
   "@eigenlayer/=lib/eigenlayer-contracts/",
-  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts",
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+  "@openzeppelin-foundry-upgrades/=lib/openzeppelin-foundry-upgrades/",
 
   # Symbiotic remappings contexts
   "lib/core/:forge-std/=lib/core/lib/forge-std/src/",
@@ -40,6 +47,7 @@ remappings = [
   # OpenZeppelin remappings contexts
   "lib/openzeppelin-contracts/:@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
 ]
+
 
 [rpc_endpoints]
 mainnet = "${ETH_RPC_URL}"
