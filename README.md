@@ -113,7 +113,7 @@ In particular, the core components are:
   Constraints-API and is compatible with the Bolt Sidecar.
 - [**Bolt client**](./bolt-client/): A CLI tool to send preconfirmations on enabled test networks.
 - [**Bolt Kurtosis client**](./bolt-kurtosis-client/): A CLI tool to send preconfirmations on our Kurtosis devnet.
-- [**Bolt delegations CLI**](./bolt-delegations-cli/): A CLI tool to generate signed delegation messages for ETH validators.
+- [**Bolt delegations CLI**](./bolt-delegations-cli/): A CLI tool to generate signed delegation and revocation messages for ETH validators.
 - [**Testnets**](./testnets/): A set of guides and scripts to deploy the Bolt contracts on testnets.
 
 Additionally, this repository contains the necessary scripts to spin up a [Kurtosis][kurtosis]
