@@ -1182,6 +1182,7 @@ version = "0.1.0"
 dependencies = [
  "account_utils",
  "alloy",
+ "blst",
  "clap",
  "dotenvy",
  "eth2_keystore",
@@ -1190,6 +1191,7 @@ dependencies = [
  "hex",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
 ]
 

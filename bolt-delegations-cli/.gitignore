@@ -2,6 +2,5 @@
 .env
 .env.*
 delegations.json
-private_key.txt
 !.env.local.example
 !.env.keystore.example

@@ -6,6 +6,7 @@ use std::{
 };
 
 use alloy::primitives::FixedBytes;
+use blst::{min_pk::Signature, BLST_ERROR};
 use ethereum_consensus::{
     crypto::PublicKey as BlsPublicKey,
     deneb::{compute_fork_data_root, compute_signing_root, Root},
@@ -23,6 +24,9 @@ pub const KEYSTORE_PASSWORD: &str = r#"𝔱𝔢𝔰𝔱𝔭𝔞𝔰𝔰𝔴𝔬�
 pub const KEYSTORES_DEFAULT_PATH: &str = "keys";
 
 pub const COMMIT_BOOST_DOMAIN_MASK: [u8; 4] = [109, 109, 111, 67];
+
+/// The BLS Domain Separator used in Ethereum 2.0.
+pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
 
 /// Parse the delegated public key from a string
 pub fn parse_public_key(delegatee_pubkey: &str) -> Result<BlsPublicKey> {
@@ -93,4 +97,31 @@ pub fn compute_domain_from_mask(fork_version: [u8; 4]) -> [u8; 32] {
     domain[..4].copy_from_slice(&COMMIT_BOOST_DOMAIN_MASK);
     domain[4..].copy_from_slice(&fork_data_root[..28]);
     domain
+}
+
+/// Verify the signature with the public key of the signer using the Commit Boost domain.
+pub fn verify_commit_boost_root(
+    pubkey: BlsPublicKey,
+    root: [u8; 32],
+    signature: &Signature,
+) -> Result<()> {
+    verify_root(pubkey, root, signature, compute_domain_from_mask(COMMIT_BOOST_DOMAIN_MASK))
+}
+
+/// Verify the signature of the object with the given public key.
+pub fn verify_root(
+    pubkey: BlsPublicKey,
+    root: [u8; 32],
+    signature: &Signature,
+    domain: [u8; 32],
+) -> Result<()> {
+    let signing_root = compute_signing_root(&root, domain)?;
+    let pk = blst::min_pk::PublicKey::from_bytes(pubkey.as_ref()).unwrap();
+
+    let res = signature.verify(true, signing_root.as_ref(), BLS_DST_PREFIX, &[], &pk, true);
+    if res == BLST_ERROR::BLST_SUCCESS {
+        Ok(())
+    } else {
+        Err(eyre::eyre!("bls verification failed"))
+    }
 }
