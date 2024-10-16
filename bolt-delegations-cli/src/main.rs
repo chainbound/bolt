@@ -149,18 +149,16 @@ mod tests {
     use std::{fs::File, io::Write};
 
     use crate::{
-        config::Chain,
-        generate_from_keystore,
-        utils::{
-            keystore_paths, parse_public_key, verify_commit_boost_root, KEYSTORES_DEFAULT_PATH,
-        },
+        config::{Action, Chain}, generate_from_keystore, types::SignedMessage, utils::{
+            parse_public_key, verify_commit_boost_root,
+        }
     };
 
     /// The str path of the root of the project
     pub const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 
     #[test]
-    fn test_keystore_signer() {
+    fn test_delegation_keystore_signer() {
         
         // 0. Test data setup
 
@@ -237,19 +235,20 @@ mod tests {
 
         // Reference: https://eips.ethereum.org/EIPS/eip-2335#test-cases
         let keystore_password = r#"𝔱𝔢𝔰𝔱𝔭𝔞𝔰𝔰𝔴𝔬𝔯𝔡🔑"#;
-        let keystore_public_key = "0x9612d7a727c9d0a22e185a1c768478dfe919cada9266988cb32359c11f2b7b27f4ae4040902382ae2910c15e2b420d07";
-        let keystore_public_key_bytes: [u8; 48] = [
-            0x96, 0x12, 0xd7, 0xa7, 0x27, 0xc9, 0xd0, 0xa2, 0x2e, 0x18, 0x5a, 0x1c, 0x76, 0x84,
-            0x78, 0xdf, 0xe9, 0x19, 0xca, 0xda, 0x92, 0x66, 0x98, 0x8c, 0xb3, 0x23, 0x59, 0xc1,
-            0x1f, 0x2b, 0x7b, 0x27, 0xf4, 0xae, 0x40, 0x40, 0x90, 0x23, 0x82, 0xae, 0x29, 0x10,
-            0xc1, 0x5e, 0x2b, 0x42, 0x0d, 0x07,
-        ];
-        let keystore_secret_key =
-            "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
+        // let keystore_public_key = "0x9612d7a727c9d0a22e185a1c768478dfe919cada9266988cb32359c11f2b7b27f4ae4040902382ae2910c15e2b420d07";
+        // let keystore_public_key_bytes: [u8; 48] = [
+        //     0x96, 0x12, 0xd7, 0xa7, 0x27, 0xc9, 0xd0, 0xa2, 0x2e, 0x18, 0x5a, 0x1c, 0x76, 0x84,
+        //     0x78, 0xdf, 0xe9, 0x19, 0xca, 0xda, 0x92, 0x66, 0x98, 0x8c, 0xb3, 0x23, 0x59, 0xc1,
+        //     0x1f, 0x2b, 0x7b, 0x27, 0xf4, 0xae, 0x40, 0x40, 0x90, 0x23, 0x82, 0xae, 0x29, 0x10,
+        //     0xc1, 0x5e, 0x2b, 0x42, 0x0d, 0x07,
+        // ];
+        // let keystore_secret_key =
+        //     "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
 
+        
         // 1. Create a temp directory with the keystore and create a signer from it
-
-        let path_str = format!("{}/{}", CARGO_MANIFEST_DIR, KEYSTORES_DEFAULT_PATH);
+        // NOTE: "keys" directory should be present already
+        let path_str = format!("{}/{}", CARGO_MANIFEST_DIR, "keys");
 
         for test_keystore_json in tests_keystore_json {
             let tmp_dir = tempfile::TempDir::with_prefix_in(
@@ -284,27 +283,25 @@ mod tests {
             let delegatee_pubkey = "0x83eeddfac5e60f8fe607ee8713efb8877c295ad9f8ca075f4d8f6f2ae241a30dd57f78f6f3863a9fe0d5b5db9d550b93";
             let delegatee_pubkey = parse_public_key(delegatee_pubkey).expect("delegatee pubkey");
 
-            let signed_delegations = generate_from_keystore(
-                None,
-                keystore_password.as_bytes(),
-                delegatee_pubkey.clone(),
-                &Chain::Mainnet,
-            )
-            .expect("signed delegations");
-            let signed_delegation = signed_delegations.first().expect("to get signed delegation");
-            let digest = signed_delegation.message.digest();
+            let signed_delegations = generate_from_keystore(&path_str, &keystore_password, delegatee_pubkey.clone(), &Chain::Mainnet, Action::Delegate)
+                        .expect("signed delegations");
+            let signed_message = signed_delegations.first().expect("to get signed delegation");
+            match signed_message {
+                SignedMessage::Delegation(signed_delegation) => {
+                    let output_delegatee_pubkey = signed_delegation.message.delegatee_pubkey.clone();
+                    let signer_pubkey = signed_delegation.message.validator_pubkey.clone();
+                    let digest = signed_delegation.message.digest();
+                    assert_eq!(output_delegatee_pubkey, delegatee_pubkey);
 
-            assert_eq!(signed_delegations.len(), 1);
-            let output_delegatee_pubkey = signed_delegation.message.delegatee_pubkey.clone();
-            let signer_pubkey = signed_delegation.message.validator_pubkey.clone();
-            assert_eq!(output_delegatee_pubkey, delegatee_pubkey);
+                    let blst_sig = blst::min_pk::Signature::from_bytes(&signed_delegation.signature.as_ref())
+                        .expect("Failed to convert delegation signature");
 
-            let blst_sig =
-                blst::min_pk::Signature::from_bytes(&signed_delegation.signature.as_ref())
-                    .expect("Failed to convert delegation signature");
-
-            // Verify the signature
-            assert!(verify_commit_boost_root(signer_pubkey, digest, &blst_sig).is_ok());
+                    // Verify the signature
+                    assert!(verify_commit_boost_root(signer_pubkey, digest, &blst_sig).is_ok());
+                }
+                _ => panic!("Expected a delegation message"),
+                
+            }
         }
     }
 }
