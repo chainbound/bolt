@@ -42,18 +42,18 @@ contract DeployBolt is Script {
                 config.minimumOperatorStake
             )
         );
-        address parametersProxy = Upgrades.deployUUPSProxy("BoltParameters.sol", initParameters);
-        console.log("BoltParameters proxy deployed at", parametersProxy);
+        address parametersProxy = Upgrades.deployUUPSProxy("BoltParametersV1.sol", initParameters);
+        console.log("BoltParametersV1 proxy deployed at", parametersProxy);
 
         // Generate the `initialize` call data for the contract.
         bytes memory initValidators = abi.encodeCall(BoltValidatorsV1.initialize, (admin, parametersProxy));
         // Deploy the UUPSProxy through the `Upgrades` library, with the correct `initialize` call data.
-        address validatorsProxy = Upgrades.deployUUPSProxy("BoltValidators.sol", initValidators);
-        console.log("BoltValidators proxy deployed at", validatorsProxy);
+        address validatorsProxy = Upgrades.deployUUPSProxy("BoltValidatorsV1.sol", initValidators);
+        console.log("BoltValidatorsV1 proxy deployed at", validatorsProxy);
 
         bytes memory initManager = abi.encodeCall(BoltManagerV1.initialize, (admin, parametersProxy, validatorsProxy));
-        address managerProxy = Upgrades.deployUUPSProxy("BoltManager.sol", initManager);
-        console.log("BoltManager proxy deployed at", managerProxy);
+        address managerProxy = Upgrades.deployUUPSProxy("BoltManagerV1.sol", initManager);
+        console.log("BoltManagerV1 proxy deployed at", managerProxy);
 
         bytes memory initEigenLayerMiddleware = abi.encodeCall(
             BoltEigenLayerMiddlewareV1.initialize,
@@ -67,8 +67,8 @@ contract DeployBolt is Script {
             )
         );
         address eigenLayerMiddlewareProxy =
-            Upgrades.deployUUPSProxy("BoltEigenLayerMiddleware.sol", initEigenLayerMiddleware);
-        console.log("BoltEigenLayerMiddleware proxy deployed at", eigenLayerMiddlewareProxy);
+            Upgrades.deployUUPSProxy("BoltEigenLayerMiddlewareV1.sol", initEigenLayerMiddleware);
+        console.log("BoltEigenLayerMiddlewareV1 proxy deployed at", eigenLayerMiddlewareProxy);
 
         bytes memory initSymbioticMiddleware = abi.encodeCall(
             BoltSymbioticMiddlewareV1.initialize,
@@ -83,8 +83,8 @@ contract DeployBolt is Script {
             )
         );
         address symbioticMiddlewareProxy =
-            Upgrades.deployUUPSProxy("BoltSymbioticMiddleware.sol", initSymbioticMiddleware);
-        console.log("BoltSymbioticMiddleware proxy deployed at", address(symbioticMiddlewareProxy));
+            Upgrades.deployUUPSProxy("BoltSymbioticMiddlewareV1.sol", initSymbioticMiddleware);
+        console.log("BoltSymbioticMiddlewareV1 proxy deployed at", address(symbioticMiddlewareProxy));
 
         vm.stopBroadcast();
     }
