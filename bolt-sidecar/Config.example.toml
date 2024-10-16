@@ -1,20 +1,33 @@
-# ports
-port = 8000
-metrics_port = 3300
+# Node + PBS URLs
+port=
+execution_api_url=
+beacon_api_url=
+engine_api_url=
+constraints_url=
+constraints_proxy_port=
+validator_indexes=
+jwt_hex=
+fee_recipient=
+builder_private_key=
 
-# node urls
-execution_api_url = "http://localhost:8545"
-beacon_api_url = "http://localhost:5052"
-engine_api_url = "http://localhost:8551"
+# Commitments configs 
+max_commitments=
+max_committed_gas=
+min_priority_fee=
+commitment_deadline=
 
-# constraints options
-constraints_url = "http://localhost:3030"
-constraints_proxy_port = 18551
+# Chain configs
+chain=
+slot_time=
 
-# chain options
-chain = "kurtosis"
-slot_time = 2
+# Signing options
+private_key=
+cb_signer_url=
+cb_jwt_hex=
+keystore_password=
+keystore_path=
+delegations_path=
 
-# signing options
-private_key = "0x359c156600e1f5715a58c9e09f17c8d04e7ee3a9f88b39f6e489ffca0148fabe"
-delegations_path = "./delegations.json"
+# Metrics
+metrics_port=
+disable_metrics=
