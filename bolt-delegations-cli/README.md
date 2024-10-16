@@ -17,7 +17,7 @@ Features:
 
 ## Usage
 
-```bash
+```text
 A CLI tool to generate signed delegation messages for BLS keys
 
 Usage: bolt-delegations-cli <COMMAND>
@@ -35,26 +35,34 @@ Options:
 
 1. Using a local BLS private key:
 
-   ```shell
+   ```text
    bolt-delegations-cli generate \
        --delegatee-pubkey 0x7890ab... \
        --out my_delegations.json \
        --chain kurtosis \
        local \
-       --secret-key 0xabc123... , 0xdef456..
+       --secret-keys 0xabc123...,0xdef456..
    ```
 
 2. Using an Ethereum keystore file:
 
-   ```shell
+   ```text
    bolt-delegations-cli generate \
        --delegatee-pubkey 0x7890ab... \
        --out my_delegations.json \
        --chain kurtosis \
         keystore \
-       --keystore-path /keys \
-       --keystore-password myS3cr3tP@ssw0rd
+       --path /keys \
+       --password myS3cr3tP@ssw0rd
    ```
+
+When using the `keystore` key source, the `--path` flag should point to the directory
+containing the encrypted keypair directories.
+
+In case of validator-specific passwords (e.g. Lighthouse format) the `--password-path`
+flag must be used instead of `--password`, pointing to the directory containing the password files.
+
+You can find a reference Lighthouse keystore [here](./test_data/lighthouse/).
 
 ### Supported Chains
 

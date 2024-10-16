@@ -28,14 +28,14 @@ pub enum Commands {
         #[clap(long, env = "CHAIN", default_value = "mainnet")]
         chain: Chain,
 
+        /// The action to perform. The tool can be used to generate
+        /// delegation or revocation messages (default: delegate).
+        #[clap(long, env = "ACTION", default_value = "delegate")]
+        action: Action,
+
         /// The source of the private key.
         #[clap(subcommand)]
         source: KeySource,
-
-        /// The action to perform. The tool can be used to generate
-        /// delegation or revocation messages (default: delegate).
-        #[clap(long, default_value = "delegate")]
-        action: Action,
     },
 }
 
