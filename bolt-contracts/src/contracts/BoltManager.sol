@@ -130,7 +130,7 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     /// @notice Get the status of multiple proposers, given their pubkey hashes.
     /// @param pubkeyHashes The pubkey hashes of the proposers to get the status for.
     /// @return statuses The statuses of the proposers, including their operator and active stake.
-    function getProposersStatus(
+    function getProposerStatuses(
         bytes32[] calldata pubkeyHashes
     ) public view returns (IBoltValidators.ProposerStatus[] memory statuses) {
         statuses = new IBoltValidators.ProposerStatus[](pubkeyHashes.length);
@@ -150,12 +150,12 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
         }
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
+        // NOTE: this will revert when the proposer does not exist.
         IBoltValidators.Validator memory validator = validators.getValidatorByPubkeyHash(pubkeyHash);
 
         Operator memory operator = operators.get(validator.authorizedOperator);
 
         status.pubkeyHash = pubkeyHash;
-        status.active = validator.exists;
         status.operator = validator.authorizedOperator;
         status.operatorRPC = operator.rpc;
 
@@ -166,6 +166,19 @@ contract BoltManager is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
 
         (status.collaterals, status.amounts) =
             IBoltMiddleware(operator.middleware).getOperatorCollaterals(validator.authorizedOperator);
+
+        // NOTE: check if the sum of the collaterals covers the minimum operator stake required.
+
+        uint256 totalOperatorStake = 0;
+        for (uint256 i = 0; i < status.amounts.length; ++i) {
+            totalOperatorStake += status.amounts[i];
+        }
+
+        if (totalOperatorStake < parameters.MINIMUM_OPERATOR_STAKE()) {
+            status.active = false;
+        } else {
+            status.active = true;
+        }
 
         return status;
     }

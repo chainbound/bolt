@@ -19,12 +19,19 @@ interface IBoltValidators {
         address controller;
     }
 
+    /// @notice Proposer status info.
     struct ProposerStatus {
+        // The pubkey hash of the validator.
         bytes32 pubkeyHash;
+        // Whether the corresponding operator is active based on collateral requirements.
         bool active;
+        // The operator address that is authorized to make & sign commitments on behalf of the validator.
         address operator;
+        // The operator RPC endpoint.
         string operatorRPC;
+        // The addresses of the collateral tokens.
         address[] collaterals;
+        // The corresponding amounts of the collateral tokens.
         uint256[] amounts;
     }
 

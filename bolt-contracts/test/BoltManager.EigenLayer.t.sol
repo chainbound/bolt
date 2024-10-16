@@ -245,7 +245,7 @@ contract BoltManagerEigenLayerTest is Test {
             validators.registerValidatorUnsafe(pubkey, PRECONF_MAX_GAS_LIMIT, operator);
         }
 
-        IBoltValidators.ProposerStatus[] memory statuses = manager.getProposersStatus(pubkeyHashes);
+        IBoltValidators.ProposerStatus[] memory statuses = manager.getProposerStatuses(pubkeyHashes);
         assertEq(statuses.length, 10);
     }
 

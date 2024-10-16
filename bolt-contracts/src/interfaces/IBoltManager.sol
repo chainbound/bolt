@@ -8,6 +8,7 @@ interface IBoltManager {
     error OperatorAlreadyRegistered();
     error OperatorNotRegistered();
     error UnauthorizedMiddleware();
+    error InactiveOperator();
 
     struct Operator {
         string rpc;
@@ -34,6 +35,14 @@ interface IBoltManager {
     ) external view returns (bool);
 
     function validators() external view returns (IBoltValidators);
+
+    function getProposerStatus(
+        bytes32 pubkeyHash
+    ) external view returns (IBoltValidators.ProposerStatus memory status);
+
+    function getProposerStatuses(
+        bytes32[] calldata pubkeyHashes
+    ) external view returns (IBoltValidators.ProposerStatus[] memory statuses);
 
     function isOperatorAuthorizedForValidator(address operator, bytes32 pubkeyHash) external view returns (bool);
 

@@ -360,7 +360,7 @@ contract BoltManagerSymbioticTest is Test {
         vm.warp(block.timestamp + EPOCH_DURATION * 2 + 1);
         assertEq(vault.currentEpoch(), 2);
 
-        IBoltValidators.ProposerStatus[] memory statuses = manager.getProposersStatus(pubkeyHashes);
+        IBoltValidators.ProposerStatus[] memory statuses = manager.getProposerStatuses(pubkeyHashes);
         assertEq(statuses.length, 10);
     }
 
