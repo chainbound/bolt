@@ -21,6 +21,11 @@ The Bolt smart contracts cover the following components:
 - Flexible restaking integrations for staking pools and node operators
 - (WIP) Fault proof challenge and slashing logic for validators
 
+### Architecture
+A high-level overview of architecture is depicted in the diagram below:
+
+![](./docs/erd.png)
+
 ## Validator Registration: `BoltValidators`
 
 The [`BoltValidators`](./src/contracts/BoltValidators.sol) contract is the only point of entry for
