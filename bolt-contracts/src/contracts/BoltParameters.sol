@@ -129,4 +129,20 @@ contract BoltParameters is OwnableUpgradeable, UUPSUpgradeable {
     ) public onlyOwner {
         CHALLENGE_BOND = challengeBond;
     }
+
+    /// @notice Set the minimum operator stake.
+    /// @param minimumOperatorStake The minimum stake required for an operator to be considered active in wei.
+    function setMinimumOperatorStake(
+        uint256 minimumOperatorStake
+    ) public onlyOwner {
+        MINIMUM_OPERATOR_STAKE = minimumOperatorStake;
+    }
+
+    /// @notice Set the justification delay.
+    /// @param justificationDelay The number of slots to wait before considering a block final.
+    function setJustificationDelay(
+        uint256 justificationDelay
+    ) public onlyOwner {
+        JUSTIFICATION_DELAY = justificationDelay;
+    }
 }
