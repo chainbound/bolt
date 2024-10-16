@@ -3,6 +3,8 @@
 ## Table of Contents
 
 - [Overview](#overview)
+  - [Architecture](#architecture)
+- [Admin Privileges](#admin-privileges)
 - [Validator Registration: `BoltValidators`](#validator-registration-boltvalidators)
 - [Bolt Network Entrypoint: `BoltManager`](#bolt-network-entrypoint-boltmanager)
   - [Symbiotic Integration guide for Staking Pools](#symbiotic-integration-guide-for-staking-pools)
@@ -18,13 +20,41 @@
 The Bolt smart contracts cover the following components:
 
 - Registration and delegation logic for validators to authenticate and opt-in to Bolt
-- Flexible restaking integrations for staking pools and node operators
-- (WIP) Fault proof challenge and slashing logic for validators
+- Operator registration and collateral deposits through flexible restaking protocol integrations (EigenLayer & Symbiotic)
+- Fault proof challenges and resolution *without slashing*
 
 ### Architecture
 A high-level overview of architecture is depicted in the diagram below:
 
 <img src="./docs/erd.png" width="700"/>
+
+**Notes**
+- All contracts are upgradeable by implementing [ERC1967Proxy](https://docs.openzeppelin.com/contracts/4.x/api/proxy#erc1967).
+- Storage layout safety is maintained with the use of [storage gaps](https://docs.openzeppelin.com/upgrades-plugins/1.x/writing-upgradeable#storage-gaps) and validated with the [OpenZeppelin Foundry Upgrades toolkit](https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades). 
+- There is a single admin address operated by the Bolt team to facilitate upgrades and update system-wide parameters.
+
+## Admin Privileges
+
+The smart contracts are deployed with a single administrator account operated by the Bolt team. In this testnet deployment, all contracts are upgradeable
+and multiple system-wide parameters can be changed by this administrator in the case of bugs, hacks, or other critical events.
+
+## System-wide Parameters: `BoltParameters`
+
+[`BoltParameters`](./src/contracts/BoltParameters.sol) is an upgradeable storage contract that stores system-wide parameters that the other
+contracts can read from. An overview is given in the table below:
+
+| Parameter            | Initial Value   | Mutable after deployment |
+| -------------------- | --------------- | ------------------------ |
+| `EPOCH_DURATION`     | 86400 (1 day)   | No                       |
+| `SLASHING_WINDOW`    | 604800 (1 week) | No                       |
+| `BLOCKHASH_EVM_LOOKBACK` | 256         | No                       |
+| `ETH2_GENESIS_TIMESTAMP` | 1694786400  | No                       | 
+| `SLOT_TIME` | 12  | No                       | 
+| `JUSTIFICATION_DELAY` | 32             | Yes (by admin)                       |
+| `MINIMUM_OPERATOR_STAKE`    | 1 ether | Yes (by admin)            |
+| `MAX_CHALLENGE_DURATION` | 604800 (1 week) | Yes (by admin)       |
+| `CHALLENGE_BOND`     | 1 ether         | Yes (by admin)           |
+| `ALLOW_UNSAFE_REGISTRATION` | `true`   | Yes (by admin)           |
 
 ## Validator Registration: `BoltValidators`
 
