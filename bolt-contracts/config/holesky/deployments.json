@@ -1,6 +1,6 @@
 {
     "symbiotic": {
-        "network": "0x0",
+        "network": "0xAdFC41729fF447974cE27DdFa358A0f2096c3F39",
         "operatorRegistry": "0xAdFC41729fF447974cE27DdFa358A0f2096c3F39",
         "networkOptInService": "0xF5AFc9FA3Ca63a07E529DDbB6eae55C665cCa83E",
         "vaultFactory": "0x5035c15F3cb4364CF2cF35ca53E3d6FC45FC8899"

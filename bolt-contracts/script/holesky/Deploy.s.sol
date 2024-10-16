@@ -128,7 +128,7 @@ contract DeployBolt is Script {
             symbioticNetwork: vm.parseJsonAddress(json, ".symbiotic.network"),
             symbioticOperatorRegistry: vm.parseJsonAddress(json, ".symbiotic.operatorRegistry"),
             symbioticOperatorNetOptIn: vm.parseJsonAddress(json, ".symbiotic.networkOptInService"),
-            symbioticVaultFactory: vm.parseJsonAddress(json, ".symbiotic.vaultRegistry"),
+            symbioticVaultFactory: vm.parseJsonAddress(json, ".symbiotic.vaultFactory"),
             eigenLayerAVSDirectory: vm.parseJsonAddress(json, ".eigenLayer.avsDirectory"),
             eigenLayerDelegationManager: vm.parseJsonAddress(json, ".eigenLayer.delegationManager"),
             eigenLayerStrategyManager: vm.parseJsonAddress(json, ".eigenLayer.strategyManager")

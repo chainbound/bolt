@@ -8,7 +8,7 @@ import {BoltConfig} from "../src/lib/Config.sol";
 contract Utils is Test {
     function readParameters() public view returns (BoltConfig.Parameters memory) {
         string memory root = vm.projectRoot();
-        string memory path = string.concat(root, "/config/config.test.json");
+        string memory path = string.concat(root, "/config/test/parameters.json");
         string memory json = vm.readFile(path);
 
         uint48 epochDuration = uint48(vm.parseJsonUint(json, ".epochDuration"));
