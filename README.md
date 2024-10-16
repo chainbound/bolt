@@ -15,10 +15,10 @@
 </div>
 
 > [!IMPORTANT]
-> Bolt is an implementation of _permissionless proposer commitments through
-> PBS_. In its essence, it consists in a fork of the MEV-Boost stack that allows
-> users to request **preconfirmations** from proposers, and then adds a way for
-> proposers to commit to transaction inclusion in a way that is verifiable on-chain.
+> Bolt is an implementation of permissionless proposer commitments that is fully compatible with PBS.
+> In its essence, it consists in a fork of the MEV-Boost stack that allows users to request commitments
+> like preconfirmations from proposers, and then adds a way for proposers to commit to transaction
+> inclusion in a way that is verifiable on-chain.
 
 <!-- vim-markdown-toc Marked -->
 
@@ -122,6 +122,8 @@ devnet with all the components running.
 > [!NOTE]
 > Bolt also works with external components that aren't part of this repository,
 > such as [Helix][helix] by Gattaca, which will replace the MEV-Boost relay soon.
+>
+> You can find the forked version of Helix [here](https://github.com/chainbound/helix).
 
 ## Kurtosis Devnet
 
@@ -166,8 +168,6 @@ just build-images
 # spin up the kurtosis devnet on your machine
 just up
 ```
-
-The web demo will be available on your browser at [`http://localhost:3000`](http://localhost:3000).
 
 **Commit-Boost support**
 
