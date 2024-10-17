@@ -108,11 +108,23 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
         // The default state client simply uses the execution API URL to fetch state updates.
         let state_client = StateClient::new(opts.execution_api_url.clone());
 
-        let keystore_signer = SignerBLS::Keystore(KeystoreSigner::new(
-            opts.signing.keystore_path.as_deref(),
-            opts.signing.keystore_password.as_ref().expect("keystore password").as_ref(),
-            opts.chain,
-        )?);
+        let keystore_opts = opts.signing.keystore.as_ref().expect("keystore is some");
+
+        let keystore = if let Some(psw) = keystore_opts.keystore_password.as_ref() {
+            KeystoreSigner::from_password(
+                keystore_opts.keystore_path.as_ref(),
+                psw.as_ref(),
+                opts.chain,
+            )?
+        } else {
+            KeystoreSigner::from_secrets_directory(
+                keystore_opts.keystore_path.as_ref(),
+                keystore_opts.keystore_secrets_path.as_ref(),
+                opts.chain,
+            )?
+        };
+
+        let keystore_signer = SignerBLS::Keystore(keystore);
 
         // Commitment responses are signed with a regular Ethereum wallet private key.
         // This is now generated randomly because slashing is not yet implemented.
