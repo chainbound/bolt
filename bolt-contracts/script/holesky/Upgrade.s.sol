@@ -14,5 +14,9 @@ import {BoltSymbioticMiddlewareV1} from "../../../src/contracts/BoltSymbioticMid
 import {BoltConfig} from "../../../src/lib/Config.sol";
 
 contract UpgradeBolt is Script {
-    function run() public {}
+    function run() public {
+        // TODO: Validate upgrades with Upgrades.validateUpgrade
+
+        // TODO: Upgrade contracts with Upgrades.upgradeProxy
+    }
 }
