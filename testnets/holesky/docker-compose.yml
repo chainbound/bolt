@@ -1,0 +1,58 @@
+services:
+  bolt-sidecar:
+    image: ghcr.io/chainbound/bolt-sidecar:v0.3.0-alpha-rc.1
+    container_name: bolt-sidecar
+    restart: unless-stopped
+    ports:
+      - "${BOLT_SIDECAR_PORT}:${BOLT_SIDECAR_PORT}" # Bolt RPC port (this should be opened on your firewall!)
+      - "${BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT}:${BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT}"
+    env_file: ./bolt-sidecar.env
+    entrypoint: /bin/sh -c /bolt-sidecar
+
+  mev-boost:
+    image: ghcr.io/chainbound/bolt-mev-boost:v0.3.0-alpha-rc.1
+    container_name: mev-boost
+    restart: unless-stopped
+    env_file: ./mev-boost.env
+    entrypoint: /bin/sh -c '/app/mev-boost'
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - 9090:9090
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./targets.json:/etc/prometheus/targets.json
+      - prometheus-data:/prometheus
+    networks:
+      - monitoring_network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: cb_grafana
+    ports:
+      - 3000:3000
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+      - grafana-data:/var/lib/grafana
+    networks:
+      - monitoring_network
+    depends_on:
+      - prometheus
+    logging:
+      driver: none
+
+volumes:
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+networks:
+  monitoring_network:
+    driver: bridge
+  signer_network:
+    driver: bridge
