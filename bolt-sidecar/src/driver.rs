@@ -21,12 +21,16 @@ use crate::{
         server::{CommitmentsApiServer, Event as CommitmentEvent},
         spec::Error as CommitmentError,
     },
+    common::parse_path,
     crypto::{bls::cl_public_key_to_arr, SignableBLS, SignerECDSA},
     primitives::{
         read_signed_delegations_from_file, CommitmentRequest, ConstraintsMessage,
         FetchPayloadRequest, SignedConstraints, TransactionExt,
     },
-    signer::{keystore::KeystoreSigner, local::LocalSigner},
+    signer::{
+        keystore::{KeystoreSigner, KEYSTORES_DEFAULT_PATH, KEYSTORES_SECRETS_DEFAULT_PATH},
+        local::LocalSigner,
+    },
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
     telemetry::ApiMetrics,
@@ -108,11 +112,26 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
         // The default state client simply uses the execution API URL to fetch state updates.
         let state_client = StateClient::new(opts.execution_api_url.clone());
 
-        let keystore_signer = SignerBLS::Keystore(KeystoreSigner::new(
-            opts.signing.keystore_path.as_deref(),
-            opts.signing.keystore_password.as_ref().expect("keystore password").as_ref(),
-            opts.chain,
-        )?);
+        let keystore_opts = opts.signing.keystore.as_ref().expect("keystore is some");
+
+        let keystore = if let Some(psw) = keystore_opts.keystore_password.as_ref() {
+            KeystoreSigner::from_password(
+                &parse_path(keystore_opts.keystore_path.as_ref(), KEYSTORES_DEFAULT_PATH),
+                psw.as_ref(),
+                opts.chain,
+            )?
+        } else {
+            KeystoreSigner::from_secrets_directory(
+                &parse_path(keystore_opts.keystore_path.as_ref(), KEYSTORES_DEFAULT_PATH),
+                &parse_path(
+                    keystore_opts.keystore_secrets_path.as_ref(),
+                    KEYSTORES_SECRETS_DEFAULT_PATH,
+                ),
+                opts.chain,
+            )?
+        };
+
+        let keystore_signer = SignerBLS::Keystore(keystore);
 
         // Commitment responses are signed with a regular Ethereum wallet private key.
         // This is now generated randomly because slashing is not yet implemented.

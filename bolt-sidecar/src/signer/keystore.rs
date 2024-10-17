@@ -6,7 +6,7 @@ use std::{
     fmt::Debug,
     fs::{self, DirEntry, ReadDir},
     io,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use alloy::rpc::types::beacon::constants::BLS_PUBLIC_KEY_BYTES_LEN;
@@ -21,6 +21,7 @@ use crate::{builder::signature::compute_signing_root, crypto::bls::BLSSig, Chain
 use super::SignerResult;
 
 pub const KEYSTORES_DEFAULT_PATH: &str = "keys";
+pub const KEYSTORES_SECRETS_DEFAULT_PATH: &str = "keys";
 
 #[derive(Debug, thiserror::Error)]
 pub enum KeystoreError {
@@ -28,6 +29,8 @@ pub enum KeystoreError {
     ReadFromDirectory(#[from] std::io::Error),
     #[error("failed to read keystore from JSON file {0}: {1}")]
     ReadFromJSON(PathBuf, String),
+    #[error("failed to read keystore secret from file: {0}")]
+    ReadFromSecretFile(String),
     #[error("failed to decrypt keypair from JSON file {0} with the provided password: {1}")]
     KeypairDecryption(PathBuf, String),
     #[error("could not find private key associated to public key {0}")]
@@ -44,15 +47,55 @@ pub struct KeystoreSigner {
 
 impl KeystoreSigner {
     /// Creates a new `KeystoreSigner` from the keystore files in the `keys_path` directory.
-    pub fn new(keys_path: Option<&str>, password: &[u8], chain: ChainConfig) -> SignerResult<Self> {
-        let keystores_paths = keystore_paths(keys_path)?;
+    pub fn from_password(
+        keys_path: &PathBuf,
+        password: &[u8],
+        chain: ChainConfig,
+    ) -> SignerResult<Self> {
+        // Create the path to the keystore directory, starting from the root of the project
+        let keystores_paths = find_json_keystores(keys_path)?;
         let mut keypairs = Vec::with_capacity(keystores_paths.len());
 
         for path in keystores_paths {
-            let keypair = Keystore::from_json_file(path.clone());
-            let keypair = keypair
-                .map_err(|e| KeystoreError::ReadFromJSON(path.clone(), format!("{e:?}")))?
+            let keystore = Keystore::from_json_file(path.clone())
+                .map_err(|e| KeystoreError::ReadFromJSON(path.clone(), format!("{e:?}")))?;
+            let keypair = keystore
                 .decrypt_keypair(password)
+                .map_err(|e| KeystoreError::KeypairDecryption(path.clone(), format!("{e:?}")))?;
+            keypairs.push(keypair);
+        }
+
+        Ok(Self { keypairs, chain })
+    }
+
+    #[allow(clippy::ptr_arg)]
+    pub fn from_secrets_directory(
+        keys_path: &PathBuf,
+        secrets_path: &PathBuf,
+        chain: ChainConfig,
+    ) -> SignerResult<Self> {
+        let keystores_paths = find_json_keystores(keys_path)?;
+
+        println!("keystores_paths: {:?}", keystores_paths);
+
+        let mut keypairs = Vec::with_capacity(keystores_paths.len());
+
+        for path in keystores_paths {
+            let keystore = Keystore::from_json_file(path.clone())
+                .map_err(|e| KeystoreError::ReadFromJSON(path.clone(), format!("{e:?}")))?;
+
+            let pubkey = format!("0x{}", keystore.pubkey());
+
+            let mut secret_path = secrets_path.clone();
+            secret_path.push(pubkey);
+
+            dbg!(secret_path.clone());
+
+            let password = fs::read_to_string(secret_path)
+                .map_err(|e| KeystoreError::ReadFromSecretFile(format!("{e:?}")))?;
+
+            let keypair = keystore
+                .decrypt_keypair(password.as_bytes())
                 .map_err(|e| KeystoreError::KeypairDecryption(path.clone(), format!("{e:?}")))?;
             keypairs.push(keypair);
         }
@@ -121,15 +164,7 @@ impl Debug for KeystoreSigner {
 /// -- 0x1234.../validator.json
 /// -- 0x5678.../validator.json
 /// -- ...
-fn keystore_paths(keys_path: Option<&str>) -> SignerResult<Vec<PathBuf>> {
-    // Create the path to the keystore directory, starting from the root of the project
-    let keys_path = if let Some(keys_path) = keys_path {
-        Path::new(&keys_path).to_path_buf()
-    } else {
-        let project_root = env!("CARGO_MANIFEST_DIR");
-        Path::new(project_root).join(keys_path.unwrap_or(KEYSTORES_DEFAULT_PATH))
-    };
-
+fn find_json_keystores(keys_path: &PathBuf) -> SignerResult<Vec<PathBuf>> {
     let json_extension = OsString::from("json");
 
     let mut keystores_paths = vec![];
@@ -137,7 +172,7 @@ fn keystore_paths(keys_path: Option<&str>) -> SignerResult<Vec<PathBuf>> {
     for entry in read_dir(keys_path)? {
         let path = read_path(entry)?;
         if path.is_dir() {
-            for entry in read_dir(path)? {
+            for entry in read_dir(&path)? {
                 let path = read_path(entry)?;
                 if path.is_file() && path.extension() == Some(&json_extension) {
                     keystores_paths.push(path);
@@ -149,7 +184,7 @@ fn keystore_paths(keys_path: Option<&str>) -> SignerResult<Vec<PathBuf>> {
     Ok(keystores_paths)
 }
 
-fn read_dir(path: PathBuf) -> SignerResult<ReadDir> {
+fn read_dir(path: &PathBuf) -> SignerResult<ReadDir> {
     Ok(fs::read_dir(path).map_err(KeystoreError::ReadFromDirectory)?)
 }
 
@@ -159,15 +194,18 @@ fn read_path(entry: std::result::Result<DirEntry, io::Error>) -> SignerResult<Pa
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, io::Write};
+    use std::{fs::File, io::Write, path::PathBuf};
 
     use blst::min_pk::SecretKey;
 
-    use crate::{signer::local::LocalSigner, ChainConfig};
+    use crate::{common::parse_path, signer::local::LocalSigner, ChainConfig};
 
-    use super::{KeystoreSigner, KEYSTORES_DEFAULT_PATH};
+    use super::KeystoreSigner;
     /// The str path of the root of the project
     pub const CARGO_MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
+
+    const KEYSTORES_DEFAULT_PATH_TEST: &str = "test_data/keys";
+    const KEYSTORES_SECRETS_DEFAULT_PATH_TEST: &str = "test_data/secrets";
 
     #[test]
     fn test_keystore_signer() {
@@ -245,74 +283,85 @@ mod tests {
         ];
 
         // Reference: https://eips.ethereum.org/EIPS/eip-2335#test-cases
-        let keystore_password = r#"𝔱𝔢𝔰𝔱𝔭𝔞𝔰𝔰𝔴𝔬𝔯𝔡🔑"#;
-        let keystore_public_key = "0x9612d7a727c9d0a22e185a1c768478dfe919cada9266988cb32359c11f2b7b27f4ae4040902382ae2910c15e2b420d07";
-        let keystore_public_key_bytes: [u8; 48] = [
+        let password = r#"𝔱𝔢𝔰𝔱𝔭𝔞𝔰𝔰𝔴𝔬𝔯𝔡🔑"#;
+        let public_key = "0x9612d7a727c9d0a22e185a1c768478dfe919cada9266988cb32359c11f2b7b27f4ae4040902382ae2910c15e2b420d07";
+        let public_key_bytes: [u8; 48] = [
             0x96, 0x12, 0xd7, 0xa7, 0x27, 0xc9, 0xd0, 0xa2, 0x2e, 0x18, 0x5a, 0x1c, 0x76, 0x84,
             0x78, 0xdf, 0xe9, 0x19, 0xca, 0xda, 0x92, 0x66, 0x98, 0x8c, 0xb3, 0x23, 0x59, 0xc1,
             0x1f, 0x2b, 0x7b, 0x27, 0xf4, 0xae, 0x40, 0x40, 0x90, 0x23, 0x82, 0xae, 0x29, 0x10,
             0xc1, 0x5e, 0x2b, 0x42, 0x0d, 0x07,
         ];
-        let keystore_secret_key =
-            "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
+        let secret_key = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f";
         let chain_config = ChainConfig::mainnet();
 
-        // 1. Create a temp directory with the keystore and create a signer from it
-
-        let path_str = format!("{}/{}", CARGO_MANIFEST_DIR, KEYSTORES_DEFAULT_PATH);
+        let keystore_path =
+            format!("{}/{}/{}", CARGO_MANIFEST_DIR, KEYSTORES_DEFAULT_PATH_TEST, public_key);
+        let keystore_path = PathBuf::from(keystore_path);
 
         for test_keystore_json in tests_keystore_json {
-            let tmp_dir = tempfile::TempDir::with_prefix_in(
-                "0xdeadbeefdeadbeefdeadbeefdeadbeef",
-                path_str.clone(),
-            )
-            .expect("to create temp dir");
+            // 1. Write the keystore in a `test-voting-keystore.json` file so we test both scrypt and PBDKF2
 
-            // NOTE: it is sufficient to create a temp dir, then we can create a file as usual and
-            // it will be dropped correctly
-            let mut tmp_file = File::create_new(tmp_dir.path().join("voting-keystore.json"))
-                .expect("to create new file");
+            let mut tmp_keystore_file =
+                File::create(keystore_path.join("test-voting-keystore.json"))
+                    .expect("to create new keystore file");
 
-            tmp_file.write_all(test_keystore_json.as_bytes()).expect("to write to temp file");
+            tmp_keystore_file
+                .write_all(test_keystore_json.as_bytes())
+                .expect("to write to temp file");
 
-            for entry in tmp_dir.path().read_dir().expect("to read tmp dir") {
-                let mut path = entry.expect("to read entry").path();
-                println!("inside loop: {:?}", path);
-                let extenstion = path
-                    .extension()
-                    .expect("to get extension")
-                    .to_str()
-                    .expect("to convert to str");
+            // Create a file for the secret, we are going to test it as well
+            let keystores_secrets_path = parse_path(None, KEYSTORES_SECRETS_DEFAULT_PATH_TEST);
+            let mut tmp_secret_file = File::create(keystores_secrets_path.join(public_key))
+                .expect("to create secret file");
 
-                if extenstion.contains("tmp") {
-                    path.set_extension("json");
-                    println!("path: {:?}", path);
-                    break;
-                }
-            }
+            tmp_secret_file.write_all(password.as_bytes()).expect("to write to temp file");
 
-            let keystore_signer =
-                KeystoreSigner::new(None, keystore_password.as_bytes(), chain_config)
-                    .expect("to create keystore signer");
+            let keys_path = parse_path(None, KEYSTORES_DEFAULT_PATH_TEST);
+            let keystore_signer_from_password =
+                KeystoreSigner::from_password(&keys_path, password.as_bytes(), chain_config)
+                    .expect("to create keystore signer from password");
 
-            assert_eq!(keystore_signer.keypairs.len(), 1);
+            assert_eq!(keystore_signer_from_password.keypairs.len(), 3);
             assert_eq!(
-                keystore_signer.keypairs.first().expect("to get keypair").pk.to_string(),
-                keystore_public_key
+                keystore_signer_from_password
+                    .keypairs
+                    .first()
+                    .expect("to get keypair")
+                    .pk
+                    .to_string(),
+                public_key
+            );
+
+            let keystore_signer_from_directory = KeystoreSigner::from_secrets_directory(
+                &keys_path,
+                &keystores_secrets_path,
+                chain_config,
+            )
+            .expect("to create keystore signer from secrets dir");
+
+            assert_eq!(keystore_signer_from_directory.keypairs.len(), 3);
+            assert_eq!(
+                keystore_signer_from_directory
+                    .keypairs
+                    .first()
+                    .expect("to get keypair")
+                    .pk
+                    .to_string(),
+                public_key
             );
 
             // 2. Sign a message with the signer and check the signature
 
             let keystore_sk_bls = SecretKey::from_bytes(
-                hex::decode(keystore_secret_key).expect("to decode secret key").as_slice(),
+                hex::decode(secret_key).expect("to decode secret key").as_slice(),
             )
             .expect("to create secret key");
 
             let local_signer = LocalSigner::new(keystore_sk_bls, chain_config);
 
             let sig_local = local_signer.sign_commit_boost_root([0; 32]).expect("to sign message");
-            let sig_keystore = keystore_signer
-                .sign_commit_boost_root([0; 32], keystore_public_key_bytes)
+            let sig_keystore = keystore_signer_from_password
+                .sign_commit_boost_root([0; 32], public_key_bytes)
                 .expect("to sign message");
             assert_eq!(sig_local, sig_keystore);
         }
