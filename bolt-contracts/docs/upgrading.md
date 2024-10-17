@@ -9,7 +9,8 @@ validate the safety of the upgrade. You MUST add this reference when upgrading a
 ```solidity
 Options memory opts;
 opts.referenceContract = "BoltManagerV1.sol";
-Upgrades.upgradeProxy(proxy, "BoltManagerV2.sol", "", opts);
+bytes memory initManager = abi.encodeCall(BoltManagerV2.initialize, (params));
+Upgrades.upgradeProxy(proxy, "BoltManagerV2.sol", initManager, opts);
 ```
 
 Before an upgrade, update the [`Upgrade.s.sol`](../script/holesky/Upgrade.s.sol) script to include the correct contracts, references and configurations.
