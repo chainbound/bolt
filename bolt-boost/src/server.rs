@@ -145,10 +145,10 @@ async fn submit_constraints(
 #[tracing::instrument(skip_all)]
 async fn delegate(
     State(state): State<PbsState<BuilderState>>,
-    Json(delegation): Json<SignedDelegation>,
+    Json(delegations): Json<Vec<SignedDelegation>>,
 ) -> Result<impl IntoResponse, PbsClientError> {
-    info!(delegatee = %delegation.message.delegatee_pubkey, validator = %delegation.message.validator_pubkey, "Delegating signing rights");
-    post_request(state, DELEGATE_PATH, &delegation).await?;
+    info!(count = %delegations.len(), "Delegating signing rights");
+    post_request(state, DELEGATE_PATH, &delegations).await?;
     Ok(StatusCode::OK)
 }
 
@@ -157,10 +157,10 @@ async fn delegate(
 #[tracing::instrument(skip_all)]
 async fn revoke(
     State(state): State<PbsState<BuilderState>>,
-    Json(revocation): Json<SignedRevocation>,
+    Json(revocations): Json<Vec<SignedRevocation>>,
 ) -> Result<impl IntoResponse, PbsClientError> {
-    info!(delegatee = %revocation.message.delegatee_pubkey, validator = %revocation.message.validator_pubkey, "Revoking signing rights");
-    post_request(state, REVOKE_PATH, &revocation).await?;
+    info!(count = %revocations.len(), "Revoking signing rights");
+    post_request(state, REVOKE_PATH, &revocations).await?;
     Ok(StatusCode::OK)
 }
 
