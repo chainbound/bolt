@@ -21,6 +21,7 @@ use crate::{builder::signature::compute_signing_root, crypto::bls::BLSSig, Chain
 use super::SignerResult;
 
 pub const KEYSTORES_DEFAULT_PATH: &str = "keys";
+pub const KEYSTORES_SECRETS_DEFAULT_PATH: &str = "keys";
 
 #[derive(Debug, thiserror::Error)]
 pub enum KeystoreError {
@@ -28,6 +29,8 @@ pub enum KeystoreError {
     ReadFromDirectory(#[from] std::io::Error),
     #[error("failed to read keystore from JSON file {0}: {1}")]
     ReadFromJSON(PathBuf, String),
+    #[error("failed to read keystore secret from file: {0}")]
+    ReadFromSecretFile(String),
     #[error("failed to decrypt keypair from JSON file {0} with the provided password: {1}")]
     KeypairDecryption(PathBuf, String),
     #[error("could not find private key associated to public key {0}")]
@@ -44,15 +47,50 @@ pub struct KeystoreSigner {
 
 impl KeystoreSigner {
     /// Creates a new `KeystoreSigner` from the keystore files in the `keys_path` directory.
-    pub fn new(keys_path: Option<&str>, password: &[u8], chain: ChainConfig) -> SignerResult<Self> {
+    pub fn from_password(
+        keys_path: Option<&PathBuf>,
+        password: &[u8],
+        chain: ChainConfig,
+    ) -> SignerResult<Self> {
         let keystores_paths = keystore_paths(keys_path)?;
         let mut keypairs = Vec::with_capacity(keystores_paths.len());
 
         for path in keystores_paths {
-            let keypair = Keystore::from_json_file(path.clone());
-            let keypair = keypair
-                .map_err(|e| KeystoreError::ReadFromJSON(path.clone(), format!("{e:?}")))?
+            let keystore = Keystore::from_json_file(path.clone())
+                .map_err(|e| KeystoreError::ReadFromJSON(path.clone(), format!("{e:?}")))?;
+            let keypair = keystore
                 .decrypt_keypair(password)
+                .map_err(|e| KeystoreError::KeypairDecryption(path.clone(), format!("{e:?}")))?;
+            keypairs.push(keypair);
+        }
+
+        Ok(Self { keypairs, chain })
+    }
+
+    pub fn from_secrets_directory(
+        keys_path: Option<&PathBuf>,
+        secrets_path: Option<&PathBuf>,
+        chain: ChainConfig,
+    ) -> SignerResult<Self> {
+        let keystores_paths = keystore_paths(keys_path)?;
+        let keystore_secrets_path = parse_path(secrets_path, KEYSTORES_SECRETS_DEFAULT_PATH);
+
+        let mut keypairs = Vec::with_capacity(keystores_paths.len());
+
+        for path in keystores_paths {
+            let keystore = Keystore::from_json_file(path.clone())
+                .map_err(|e| KeystoreError::ReadFromJSON(path.clone(), format!("{e:?}")))?;
+
+            let pubkey = keystore.pubkey();
+
+            let mut secret_path = keystore_secrets_path.clone();
+            secret_path.push(pubkey);
+
+            let password = fs::read_to_string(secret_path)
+                .map_err(|e| KeystoreError::ReadFromSecretFile(format!("{e:?}")))?;
+
+            let keypair = keystore
+                .decrypt_keypair(password.as_bytes())
                 .map_err(|e| KeystoreError::KeypairDecryption(path.clone(), format!("{e:?}")))?;
             keypairs.push(keypair);
         }
@@ -121,14 +159,9 @@ impl Debug for KeystoreSigner {
 /// -- 0x1234.../validator.json
 /// -- 0x5678.../validator.json
 /// -- ...
-fn keystore_paths(keys_path: Option<&str>) -> SignerResult<Vec<PathBuf>> {
+fn keystore_paths(keys_path: Option<&PathBuf>) -> SignerResult<Vec<PathBuf>> {
     // Create the path to the keystore directory, starting from the root of the project
-    let keys_path = if let Some(keys_path) = keys_path {
-        Path::new(&keys_path).to_path_buf()
-    } else {
-        let project_root = env!("CARGO_MANIFEST_DIR");
-        Path::new(project_root).join(keys_path.unwrap_or(KEYSTORES_DEFAULT_PATH))
-    };
+    let keys_path = parse_path(keys_path, KEYSTORES_DEFAULT_PATH);
 
     let json_extension = OsString::from("json");
 
@@ -147,6 +180,15 @@ fn keystore_paths(keys_path: Option<&str>) -> SignerResult<Vec<PathBuf>> {
     }
 
     Ok(keystores_paths)
+}
+
+fn parse_path(path: Option<&PathBuf>, fallback_relative_path: &str) -> PathBuf {
+    if let Some(path) = path {
+        path.clone()
+    } else {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        Path::new(project_root).join(fallback_relative_path)
+    }
 }
 
 fn read_dir(path: PathBuf) -> SignerResult<ReadDir> {
@@ -292,7 +334,7 @@ mod tests {
             }
 
             let keystore_signer =
-                KeystoreSigner::new(None, keystore_password.as_bytes(), chain_config)
+                KeystoreSigner::from_password(None, keystore_password.as_bytes(), chain_config)
                     .expect("to create keystore signer");
 
             assert_eq!(keystore_signer.keypairs.len(), 1);

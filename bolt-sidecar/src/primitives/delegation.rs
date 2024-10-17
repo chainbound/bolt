@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, path::PathBuf};
 
 use alloy::signers::k256::sha2::{Digest, Sha256};
 use ethereum_consensus::crypto::{PublicKey as BlsPublicKey, Signature as BlsSignature};
@@ -48,7 +48,9 @@ impl SignableBLS for DelegationMessage {
 }
 
 /// read the delegaitons from disk if they exist and add them to the constraints client
-pub fn read_signed_delegations_from_file(file_path: &str) -> eyre::Result<Vec<SignedDelegation>> {
+pub fn read_signed_delegations_from_file(
+    file_path: &PathBuf,
+) -> eyre::Result<Vec<SignedDelegation>> {
     match fs::read_to_string(file_path) {
         Ok(contents) => match serde_json::from_str::<Vec<SignedDelegation>>(&contents) {
             Ok(delegations) => Ok(delegations),
@@ -91,11 +93,14 @@ impl SignableBLS for RevocationMessage {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     #[test]
     fn test_read_signed_delegations_from_file() {
-        let file = env!("CARGO_MANIFEST_DIR").to_string() + "/test_data/delegations.json";
+        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        path.push("test_data/delegations.json");
 
-        let delegations = super::read_signed_delegations_from_file(&file)
+        let delegations = super::read_signed_delegations_from_file(&path)
             .expect("Failed to read delegations from file");
 
         assert_eq!(delegations.len(), 1);
