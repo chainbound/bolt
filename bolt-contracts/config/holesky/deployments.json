@@ -3,7 +3,10 @@
         "network": "0xAdFC41729fF447974cE27DdFa358A0f2096c3F39",
         "operatorRegistry": "0xAdFC41729fF447974cE27DdFa358A0f2096c3F39",
         "networkOptInService": "0xF5AFc9FA3Ca63a07E529DDbB6eae55C665cCa83E",
-        "vaultFactory": "0x5035c15F3cb4364CF2cF35ca53E3d6FC45FC8899"
+        "vaultFactory": "0x5035c15F3cb4364CF2cF35ca53E3d6FC45FC8899",
+        "networkRegistry": "0xac5acD8A105C8305fb980734a5AD920b5920106A",
+        "networkMiddlewareService": "0x683F470440964E353b389391CdDDf8df381C282f",
+        "networkMiddleware": ""
     },
     "eigenLayer": {
         "avsDirectory": "0x055733000064333CaDDbC92763c58BF0192fFeBf",

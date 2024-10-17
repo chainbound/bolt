@@ -24,4 +24,9 @@ library BoltConfig {
         address eigenLayerDelegationManager;
         address eigenLayerStrategyManager;
     }
+
+    struct SymbioticDeployments {
+        address symbioticNetworkRegistry;
+        address symbioticNetworkMiddlewareService;
+    }
 }
