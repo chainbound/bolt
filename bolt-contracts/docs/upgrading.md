@@ -6,7 +6,7 @@ For example, when upgrading `BoltManagerV1`, copy it into a new file called `Bol
 This is needed to reference check the new contracts with the old contracts so that the OpenZeppelin Upgrades library can
 validate the safety of the upgrade. You MUST add this reference when upgrading a contract:
 
-```sol
+```solidity
 Options memory opts;
 opts.referenceContract = "BoltManagerV1.sol";
 Upgrades.upgradeProxy(proxy, "BoltManagerV2.sol", "", opts);
