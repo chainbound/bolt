@@ -358,21 +358,22 @@ func (m *BoostService) handleDelegate(w http.ResponseWriter, req *http.Request) 
 	log := m.log.WithField("method", "delegate")
 	log.Debug("delegate:", req.Body)
 
-	payload := SignedDelegation{}
+	payload := make([]SignedDelegation, 0)
 	if err := DecodeJSON(req.Body, &payload); err != nil {
 		m.respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if payload.Message.Action != 0 {
-		m.respondError(w, http.StatusBadRequest, "invalid action, expected 0 for delegate")
-		return
+
+	for _, signedDelegation := range payload {
+		if signedDelegation.Message.Action != 0 {
+			m.respondError(w, http.StatusBadRequest, "invalid action, expected 0 for delegate")
+			return
+		}
 	}
 
 	ua := UserAgent(req.Header.Get("User-Agent"))
 	log = log.WithFields(logrus.Fields{
-		"validatorPubkey": payload.Message.ValidatorPubkey.String(),
-		"delegateePubkey": payload.Message.DelegateePubkey.String(),
-		"ua":              ua,
+		"ua": ua,
 	})
 
 	relayRespCh := make(chan error, len(m.relays))
@@ -406,20 +407,21 @@ func (m *BoostService) handleRevoke(w http.ResponseWriter, req *http.Request) {
 	log := m.log.WithField("method", "revoke")
 	log.Debug("revoke:", req.Body)
 
-	payload := SignedRevocation{}
+	payload := make([]SignedRevocation, 0)
 	if err := DecodeJSON(req.Body, &payload); err != nil {
 		m.respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if payload.Message.Action != 1 {
-		m.respondError(w, http.StatusBadRequest, "invalid action, expected 1 for revoke")
+
+	for _, signedRevocation := range payload {
+		if signedRevocation.Message.Action != 1 {
+			m.respondError(w, http.StatusBadRequest, "invalid action, expected 1 for revoke")
+		}
 	}
 
 	ua := UserAgent(req.Header.Get("User-Agent"))
 	log = log.WithFields(logrus.Fields{
-		"validatorPubkey": payload.Message.ValidatorPubkey.String(),
-		"delegateePubkey": payload.Message.DelegateePubkey.String(),
-		"ua":              ua,
+		"ua": ua,
 	})
 
 	relayRespCh := make(chan error, len(m.relays))
