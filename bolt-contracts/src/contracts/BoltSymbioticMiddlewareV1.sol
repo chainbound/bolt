@@ -171,6 +171,18 @@ contract BoltSymbioticMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UUP
         vaults.enable(vault);
     }
 
+    /// @notice Deregister a vault from working in Bolt Protocol.
+    /// @param vault The vault address to deregister.
+    function deregisterVault(
+        address vault
+    ) public onlyOwner {
+        if (!vaults.contains(vault)) {
+            revert NotRegistered();
+        }
+
+        vaults.remove(vault);
+    }
+
     // ========= SYMBIOTIC MIDDLEWARE LOGIC =========
 
     /// @notice Allow an operator to signal opt-in to Bolt Protocol.

@@ -153,6 +153,18 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UU
         strategies.enable(strategy);
     }
 
+    /// @notice Deregister a strategy from working in Bolt Protocol.
+    /// @param strategy The EigenLayer strategy address.
+    function deregisterStrategy(
+        address strategy
+    ) public onlyOwner {
+        if (!strategies.contains(strategy)) {
+            revert NotRegistered();
+        }
+
+        strategies.remove(strategy);
+    }
+
     // ========= EIGENLAYER MIDDLEWARE LOGIC =========
 
     /// @notice Allow an operator to signal opt-in to Bolt Protocol.
