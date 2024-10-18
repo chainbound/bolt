@@ -43,7 +43,7 @@ impl fmt::Debug for ConstraintSigningOpts {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SigningOpts")
             .field("constraint_private_key", &"********") // Hides the actual private key
-            .field("commit_boost_url", &self.commit_boost_signer_url)
+            .field("commit_boost_signer_url", &self.commit_boost_signer_url)
             .field("commit_boost_jwt_hex", &self.commit_boost_jwt_hex)
             .field("keystore_password", &"********") // Hides the actual password
             .field("keystore_path", &self.keystore_path)
