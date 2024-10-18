@@ -4,3 +4,4 @@
 delegations.json
 !.env.local.example
 !.env.keystore.example
+bolt-delegations-cli*
