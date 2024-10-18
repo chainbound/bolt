@@ -53,7 +53,11 @@ pub struct Opts {
     )]
     pub constraints_api_url: Url,
     /// Constraint proxy server port to use
-    #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT", default_value_t = DEFAULT_CONSTRAINTS_PROXY_PORT)]
+    #[clap(
+        long,
+        env = "BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT",
+        default_value_t = DEFAULT_CONSTRAINTS_PROXY_PORT
+    )]
     pub constraints_proxy_port: u16,
     /// Validator indexes of connected validators that the sidecar
     /// should accept commitments on behalf of. Accepted values:
@@ -66,13 +70,13 @@ pub struct Opts {
     ///
     /// It can either be a hex-encoded string or a file path to a file
     /// containing the hex-encoded secret.
-    #[clap(long, env = "BOLT_SIDECAR_ENGINE_JWT_HEX", default_value_t)]
+    #[clap(long, env = "BOLT_SIDECAR_ENGINE_JWT_HEX")]
     pub engine_jwt_hex: JwtSecretConfig,
     /// The fee recipient address for fallback blocks
-    #[clap(long, env = "BOLT_SIDECAR_FEE_RECIPIENT", default_value_t = Address::ZERO)]
+    #[clap(long, env = "BOLT_SIDECAR_FEE_RECIPIENT")]
     pub fee_recipient: Address,
     /// Secret BLS key to sign fallback payloads with (If not provided, a random key will be used)
-    #[clap(long, env = "BOLT_SIDECAR_BUILDER_PRIVATE_KEY", default_value_t = BlsSecretKeyWrapper::random())]
+    #[clap(long, env = "BOLT_SIDECAR_BUILDER_PRIVATE_KEY")]
     pub builder_private_key: BlsSecretKeyWrapper,
     /// Secret ECDSA key to sign commitment messages with
     #[clap(long, env = "BOLT_SIDECAR_COMMITMENT_PRIVATE_KEY")]
