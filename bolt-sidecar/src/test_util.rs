@@ -20,7 +20,7 @@ use secp256k1::Message;
 use tracing::warn;
 
 use crate::{
-    common::{BlsSecretKeyWrapper, JwtSecretConfig},
+    common::{BlsSecretKeyWrapper, EcdsaSecretKeyWrapper, JwtSecretConfig},
     crypto::{ecdsa::SignableECDSA, SignableBLS},
     primitives::{
         CommitmentRequest, ConstraintsMessage, DelegationMessage, FullTransaction,
@@ -82,9 +82,14 @@ pub(crate) async fn try_get_beacon_api_url() -> Option<&'static str> {
 /// If any of the above values can't be found, the function will return `None`.
 pub(crate) async fn get_test_config() -> Option<Opts> {
     env::set_var("BOLT_SIDECAR_PRIVATE_KEY", BlsSecretKeyWrapper::random().to_string());
-    env::set_var("BOLT_SIDECAR_JWT_HEX", JwtSecretConfig::default().to_string());
+    env::set_var("BOLT_SIDECAR_ENGINE_JWT_HEX", JwtSecretConfig::default().to_string());
     env::set_var("BOLT_SIDECAR_FEE_RECIPIENT", Address::ZERO.to_string());
     env::set_var("BOLT_SIDECAR_BUILDER_PRIVATE_KEY", BlsSecretKeyWrapper::random().to_string());
+    env::set_var("BOLT_SIDECAR_CONSTRAINT_PRIVATE_KEY", BlsSecretKeyWrapper::random().to_string());
+    env::set_var(
+        "BOLT_SIDECAR_COMMITMENT_PRIVATE_KEY",
+        EcdsaSecretKeyWrapper::random().to_string(),
+    );
 
     let _ = dotenvy::dotenv();
 

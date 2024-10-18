@@ -169,6 +169,12 @@ impl From<&str> for EcdsaSecretKeyWrapper {
     }
 }
 
+impl Display for EcdsaSecretKeyWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "0x{}", hex::encode(self.0.to_bytes()))
+    }
+}
+
 impl Deref for EcdsaSecretKeyWrapper {
     type Target = SigningKey;
 
