@@ -10,7 +10,7 @@ use crate::common::{BlsSecretKeyWrapper, JwtSecretConfig};
 #[derive(Args, Deserialize, Debug)]
 #[clap(
     group = ArgGroup::new("signing-opts").required(true)
-        .args(&["private_key", "commit_boost_address", "keystore_opts"])
+        .args(&["private_key", "commit_boost_address", "keystore"])
 )]
 pub struct SigningOpts {
     /// Private key to use for signing preconfirmation requests
@@ -24,7 +24,7 @@ pub struct SigningOpts {
     pub commit_boost_jwt_hex: Option<JwtSecretConfig>,
     /// Options for the ERC-2335 keystore
     #[clap(flatten)]
-    pub keystore: Option<KeystoreOps>,
+    pub keystore: Option<KeystoreOpts>,
     /// Path to the delegations file. If not provided, the default path is used.
     #[clap(long, env = "BOLT_SIDECAR_DELEGATIONS_PATH")]
     pub delegations_path: Option<PathBuf>,
@@ -35,7 +35,7 @@ pub struct SigningOpts {
     group = ArgGroup::new("keystore-opts").required(true)
         .args(&["keystore_password", "keystore_secrets_path"])
 )]
-pub struct KeystoreOps {
+pub struct KeystoreOpts {
     /// The password for the ERC-2335 keystore.
     /// Reference: https://eips.ethereum.org/EIPS/eip-2335
     #[clap(long, env = "BOLT_SIDECAR_KEYSTORE_PASSWORD")]
@@ -50,7 +50,7 @@ pub struct KeystoreOps {
 }
 
 // Implement Debug manually to hide the keystore_password field
-impl fmt::Debug for KeystoreOps {
+impl fmt::Debug for KeystoreOpts {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SigningOpts")
             .field("keystore_password", &"********") // Hides the actual password
