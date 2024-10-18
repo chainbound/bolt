@@ -35,23 +35,15 @@ pub enum CommitBoostError {
     #[error("failed to create signer client: {0}")]
     SignerClientError(#[from] SignerClientError),
     #[error("error in commit boost signer: {0}")]
-    Other(String),
+    Other(eyre::Report),
 }
 
 #[allow(unused)]
 impl CommitBoostSigner {
     /// Create a new [CommitBoostSigner] instance
     pub fn new(signer_url: Url, jwt: &str) -> SignerResult<Self> {
-        let Some(hostname) = signer_url.host_str() else {
-            return Err(CommitBoostError::Other("Invalid signer host".to_string()).into());
-        };
-
-        let signer_server_address = format!("{}:{}", hostname, signer_url.port().unwrap_or(80));
-
-        let signer_client = match SignerClient::new(signer_server_address, jwt) {
-            Ok(client) => client,
-            Err(e) => return Err(CommitBoostError::Other(e.to_string()).into()),
-        };
+        let socket_addr = parse_address_from_url(signer_url).map_err(CommitBoostError::Other)?;
+        let signer_client = SignerClient::new(socket_addr, jwt).map_err(CommitBoostError::Other)?;
 
         let client = Self {
             signer_client,
@@ -167,11 +159,33 @@ impl SignerECDSA for CommitBoostSigner {
     }
 }
 
+fn parse_address_from_url(url: Url) -> eyre::Result<String> {
+    let str = url.as_str();
+
+    // take the host out of the URL, e.g. "http://localhost:425" -> localhost:425
+    // and also "remotehost:2425" -> remotehost:2425
+    let without_base = url.as_str().split("://").last().unwrap_or(str);
+    let hostname = without_base.split(':').next().unwrap_or(without_base);
+    let port = without_base.split(':').last().ok_or_else(|| eyre::eyre!("No port found"))?;
+    let port = port.trim_end_matches('/');
+
+    Ok(format!("{}:{}", hostname, port))
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use rand::Rng;
     use tracing::warn;
+
+    #[test]
+    fn test_url_parse_address() {
+        let url = Url::parse("http://localhost:8080").unwrap();
+        assert_eq!(parse_address_from_url(url).unwrap(), "localhost:8080");
+
+        let url = Url::parse("remotehost:2425").unwrap();
+        assert_eq!(parse_address_from_url(url).unwrap(), "remotehost:2425");
+    }
 
     #[tokio::test]
     async fn test_bls_commit_boost_signer() -> eyre::Result<()> {

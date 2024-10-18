@@ -17,7 +17,7 @@ pub struct ConstraintSigningOpts {
     /// Private key to use for signing constraint messages
     #[clap(long, env = "BOLT_SIDECAR_CONSTRAINT_PRIVATE_KEY")]
     pub constraint_private_key: Option<BlsSecretKeyWrapper>,
-    /// Socket address for the commit-boost sidecar
+    /// URL for the commit-boost sidecar
     #[clap(long, env = "BOLT_SIDECAR_CB_SIGNER_URL", requires("commit_boost_jwt_hex"))]
     pub commit_boost_signer_url: Option<Url>,
     /// JWT in hexadecimal format for authenticating with the commit-boost service
