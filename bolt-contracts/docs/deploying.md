@@ -37,7 +37,7 @@ export ADMIN_PRIVATE_KEY=0x...
 Register a Symbiotic network for Bolt with the Symbiotic `NetworkRegistry`. The private key with which the script is run will determine the network address. This private key will also need to be used later.
 
 ```bash
-forge script script/holesky/helpers/Symbiotic.s.sol $HOLESKY_RPC --private-key $NETWORK_PRIVATE_KEY --broadcast -vvvv --sig "run(string memory arg)" registerNetwork
+forge script script/holesky/admin/helpers/Symbiotic.s.sol $HOLESKY_RPC --private-key $NETWORK_PRIVATE_KEY --broadcast -vvvv --sig "run(string memory arg)" registerNetwork
 ```
 
 Make sure `deployments.json` contains the correct address for the Symbiotic network.
@@ -46,7 +46,7 @@ Make sure `deployments.json` contains the correct address for the Symbiotic netw
 
 Run the following script to deploy Bolt V1:
 ```bash
-forge script script/holesky/Deploy.s.sol --rpc-url $HOLESKY_RPC --private-key $ADMIN_PRIVATE_KEY --broadcast -vvvv
+forge script script/holesky/admin/Deploy.s.sol --rpc-url $HOLESKY_RPC --private-key $ADMIN_PRIVATE_KEY --broadcast -vvvv
 ```
 
 This will deploy all the contracts. The address corresponding to the private key will be the system admin.
@@ -60,12 +60,12 @@ Register the deployed `SymbioticMiddleware` with the Symbiotic `NetworkMiddlewar
 to be run with the network private key!
 
 ```bash
-forge script script/holesky/helpers/Symbiotic.s.sol --rpc-url $HOLESKY_RPC --private-key $NETWORK_PRIVATE_KEY --broadcast -vvvv --sig "run(string memory arg)" registerMiddleware
+forge script script/holesky/admin/helpers/Symbiotic.s.sol --rpc-url $HOLESKY_RPC --private-key $NETWORK_PRIVATE_KEY --broadcast -vvvv --sig "run(string memory arg)" registerMiddleware
 ```
 
 Also set the AVS metadata in the EigenLayer AVS Directory, needs to be run with the **admin private key** used at deployment.
 
 ```bash
-forge script script/holesky/helpers/RegisterAVS.s.sol --rpc-url $HOLESKY_RPC --private-key $ADMIN_PRIVATE_KEY --broadcast -vvvv 
+forge script script/holesky/admin/helpers/RegisterAVS.s.sol --rpc-url $HOLESKY_RPC --private-key $ADMIN_PRIVATE_KEY --broadcast -vvvv 
 ```
 

@@ -3,7 +3,7 @@ pragma solidity 0.8.25;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {BoltEigenLayerMiddlewareV1} from "../../../src/contracts/BoltEigenLayerMiddlewareV1.sol";
+import {BoltEigenLayerMiddlewareV1} from "../../../../src/contracts/BoltEigenLayerMiddlewareV1.sol";
 
 contract RegisterAVS is Script {
     function run() public {

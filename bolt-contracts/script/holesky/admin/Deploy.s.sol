@@ -10,12 +10,12 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IVault} from "@symbiotic/interfaces/vault/IVault.sol";
 import {IStrategy} from "@eigenlayer/src/contracts/interfaces/IStrategy.sol";
 
-import {BoltParametersV1} from "../../src/contracts/BoltParametersV1.sol";
-import {BoltValidatorsV1} from "../../src/contracts/BoltValidatorsV1.sol";
-import {BoltManagerV1} from "../../src/contracts/BoltManagerV1.sol";
-import {BoltEigenLayerMiddlewareV1} from "../../src/contracts/BoltEigenLayerMiddlewareV1.sol";
-import {BoltSymbioticMiddlewareV1} from "../../src/contracts/BoltSymbioticMiddlewareV1.sol";
-import {BoltConfig} from "../../src/lib/Config.sol";
+import {BoltParametersV1} from "../../../src/contracts/BoltParametersV1.sol";
+import {BoltValidatorsV1} from "../../../src/contracts/BoltValidatorsV1.sol";
+import {BoltManagerV1} from "../../../src/contracts/BoltManagerV1.sol";
+import {BoltEigenLayerMiddlewareV1} from "../../../src/contracts/BoltEigenLayerMiddlewareV1.sol";
+import {BoltSymbioticMiddlewareV1} from "../../../src/contracts/BoltSymbioticMiddlewareV1.sol";
+import {BoltConfig} from "../../../src/lib/Config.sol";
 
 /// @notice Script to deploy the Bolt contracts.
 contract DeployBolt is Script {
