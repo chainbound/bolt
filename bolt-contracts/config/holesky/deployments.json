@@ -3,7 +3,7 @@
         "network": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
         "operatorRegistry": "0xAdFC41729fF447974cE27DdFa358A0f2096c3F39",
         "networkOptInService": "0xF5AFc9FA3Ca63a07E529DDbB6eae55C665cCa83E",
-        "vaultFactory": "0x5035c15F3cb4364CF2cF35ca53E3d6FC45FC8899",
+        "vaultFactory": "0x18C659a269a7172eF78BBC19Fe47ad2237Be0590",
         "networkRegistry": "0xac5acD8A105C8305fb980734a5AD920b5920106A",
         "networkMiddlewareService": "0x683F470440964E353b389391CdDDf8df381C282f",
         "networkMiddleware": "0x61B626A562d39439Ab60fCbF19678Dac036D1209",
@@ -18,10 +18,11 @@
         "strategyManager": "0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6",
         "networkMiddleware": "0x2575d6D30767149c99589cce743656fA3866ca2e",
         "supportedStrategies": [
-            "0x54945180dB7943c0ed0FEE7EdaB2Bd24620256bc",
-            "0x93c4b944D05dfe6df7645A86cd2206016c51564D",
-            "0x1BeE69b7dFFfA4E2d53C2a2Df135C388AD25dCD2",
-            "0x298aFB19A105D59E74658C4C334Ff360BadE6dd2"
+            "0x7D704507b76571a51d9caE8AdDAbBFd0ba0e63d3",
+            "0x3A8fBdf9e77DFc25d09741f51d3E181b25d0c4E0",
+            "0x80528D6e9A2BAbFc766965E0E26d5aB08D9CFaF9",
+            "0x70EB4D3c164a6B4A5f908D4FBb5a9cAfFb66bAB6",
+            "0xaccc5A86732BE85b5012e8614AF237801636F8e5"
         ]
     }
 }
