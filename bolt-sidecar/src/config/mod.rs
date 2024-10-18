@@ -46,8 +46,12 @@ pub struct Opts {
     #[clap(long, env = "BOLT_SIDECAR_ENGINE_API_URL", default_value = "http://localhost:8551")]
     pub engine_api_url: Url,
     /// URL for the Constraint sidecar client to use
-    #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_URL", default_value = "http://localhost:3030")]
-    pub constraints_url: Url,
+    #[clap(
+        long,
+        env = "BOLT_SIDECAR_CONSTRAINTS_API_URL",
+        default_value = "http://localhost:3030"
+    )]
+    pub constraints_api_url: Url,
     /// Constraint proxy server port to use
     #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT", default_value_t = DEFAULT_CONSTRAINTS_PROXY_PORT)]
     pub constraints_proxy_port: u16,
@@ -62,8 +66,8 @@ pub struct Opts {
     ///
     /// It can either be a hex-encoded string or a file path to a file
     /// containing the hex-encoded secret.
-    #[clap(long, env = "BOLT_SIDECAR_JWT_HEX", default_value_t)]
-    pub jwt_hex: JwtSecretConfig,
+    #[clap(long, env = "BOLT_SIDECAR_ENGINE_JWT_HEX", default_value_t)]
+    pub engine_jwt_hex: JwtSecretConfig,
     /// The fee recipient address for fallback blocks
     #[clap(long, env = "BOLT_SIDECAR_FEE_RECIPIENT", default_value_t = Address::ZERO)]
     pub fee_recipient: Address,
@@ -133,7 +137,7 @@ mod tests {
             assert_eq!(config.execution_api_url, Url::parse("http://localhost:8545").unwrap());
             assert_eq!(config.beacon_api_url, Url::parse("http://localhost:5052").unwrap());
             assert_eq!(config.engine_api_url, Url::parse("http://localhost:8551").unwrap());
-            assert_eq!(config.constraints_url, Url::parse("http://localhost:3030").unwrap());
+            assert_eq!(config.constraints_api_url, Url::parse("http://localhost:3030").unwrap());
             assert_eq!(config.constraints_proxy_port, 18551);
         }
     }

@@ -99,7 +99,7 @@ pub(crate) async fn get_test_config() -> Option<Opts> {
     if let Some(url) = try_get_engine_api_url().await {
         opts.engine_api_url = url.parse().expect("valid URL");
     }
-    opts.jwt_hex = JwtSecretConfig(jwt);
+    opts.engine_jwt_hex = JwtSecretConfig(jwt);
 
     Some(opts)
 }

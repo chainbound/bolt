@@ -181,7 +181,7 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
 
         let (payload_requests_tx, payload_requests_rx) = mpsc::channel(16);
         let builder_proxy_cfg = BuilderProxyConfig {
-            constraints_url: opts.constraints_url.clone(),
+            constraints_url: opts.constraints_api_url.clone(),
             server_port: opts.constraints_proxy_port,
         };
 
@@ -198,7 +198,7 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
         let (api_events_tx, api_events_rx) = mpsc::channel(1024);
         CommitmentsApiServer::new(api_addr).run(api_events_tx).await;
 
-        let mut constraints_client = ConstraintsClient::new(opts.constraints_url.clone());
+        let mut constraints_client = ConstraintsClient::new(opts.constraints_api_url.clone());
 
         // read the delegaitons from disk if they exist and add them to the constraints client
         if let Some(delegations_file_path) = opts.constraint_signing.delegations_path.as_ref() {
