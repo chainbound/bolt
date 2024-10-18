@@ -6,7 +6,7 @@ default-run = "bolt-sidecar"
 
 [dependencies]
 # core
-clap = { version = "4.5.4", features = ["derive", "env"] }
+clap = { version = "4.5.20", features = ["derive", "env"] }
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.7", features = ["macros"] }
 tower-http = { version = "0.5.2", features = ["timeout"] }
@@ -79,7 +79,6 @@ cb-common = { git = "https://github.com/Commit-Boost/commit-boost-client", rev =
 
 [dev-dependencies]
 alloy-node-bindings = "0.2.0"
-tempfile = "3.13.0"
 
 
 [[bin]]

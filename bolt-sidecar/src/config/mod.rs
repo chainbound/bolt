@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read};
+use std::fs;
 
 use alloy::primitives::Address;
 use clap::Parser;
@@ -12,8 +12,8 @@ pub use validator_indexes::ValidatorIndexes;
 pub mod chain;
 pub use chain::ChainConfig;
 
-pub mod signing;
-pub use signing::SigningOpts;
+pub mod constraint_signing;
+pub use constraint_signing::ConstraintSigningOpts;
 
 pub mod telemetry;
 use telemetry::TelemetryOpts;
@@ -21,7 +21,7 @@ use telemetry::TelemetryOpts;
 pub mod limits;
 use limits::LimitsOpts;
 
-use crate::common::{BlsSecretKeyWrapper, JwtSecretConfig};
+use crate::common::{BlsSecretKeyWrapper, EcdsaSecretKeyWrapper, JwtSecretConfig};
 
 /// Default port for the JSON-RPC server exposed by the sidecar.
 pub const DEFAULT_RPC_PORT: u16 = 8000;
@@ -45,11 +45,21 @@ pub struct Opts {
     /// Execution client Engine API URL
     #[clap(long, env = "BOLT_SIDECAR_ENGINE_API_URL", default_value = "http://localhost:8551")]
     pub engine_api_url: Url,
-    /// URL for the Constraint sidecar client to use
-    #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_URL", default_value = "http://localhost:3030")]
-    pub constraints_url: Url,
-    /// Constraint proxy server port to use
-    #[clap(long, env = "BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT", default_value_t = DEFAULT_CONSTRAINTS_PROXY_PORT)]
+    /// URL to forward the constraints produced by the Bolt sidecar to a server supporting the
+    /// Constraints API, such as an MEV-Boost fork.
+    #[clap(
+        long,
+        env = "BOLT_SIDECAR_CONSTRAINTS_API_URL",
+        default_value = "http://localhost:3030"
+    )]
+    pub constraints_api_url: Url,
+    /// The port from which the Bolt sidecar will receive Builder-API requests from the
+    /// Beacon client
+    #[clap(
+        long,
+        env = "BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT",
+        default_value_t = DEFAULT_CONSTRAINTS_PROXY_PORT
+    )]
     pub constraints_proxy_port: u16,
     /// Validator indexes of connected validators that the sidecar
     /// should accept commitments on behalf of. Accepted values:
@@ -62,41 +72,43 @@ pub struct Opts {
     ///
     /// It can either be a hex-encoded string or a file path to a file
     /// containing the hex-encoded secret.
-    #[clap(long, env = "BOLT_SIDECAR_JWT_HEX", default_value_t)]
-    pub jwt_hex: JwtSecretConfig,
+    #[clap(long, env = "BOLT_SIDECAR_ENGINE_JWT_HEX")]
+    pub engine_jwt_hex: JwtSecretConfig,
     /// The fee recipient address for fallback blocks
-    #[clap(long, env = "BOLT_SIDECAR_FEE_RECIPIENT", default_value_t = Address::ZERO)]
+    #[clap(long, env = "BOLT_SIDECAR_FEE_RECIPIENT")]
     pub fee_recipient: Address,
     /// Secret BLS key to sign fallback payloads with (If not provided, a random key will be used)
-    #[clap(long, env = "BOLT_SIDECAR_BUILDER_PRIVATE_KEY", default_value_t = BlsSecretKeyWrapper::random())]
+    #[clap(long, env = "BOLT_SIDECAR_BUILDER_PRIVATE_KEY")]
     pub builder_private_key: BlsSecretKeyWrapper,
+    /// Secret ECDSA key to sign commitment messages with
+    #[clap(long, env = "BOLT_SIDECAR_COMMITMENT_PRIVATE_KEY")]
+    pub commitment_private_key: EcdsaSecretKeyWrapper,
     /// Operating limits for the sidecar
     #[clap(flatten)]
+    #[serde(default)]
     pub limits: LimitsOpts,
     /// Chain config for the chain on which the sidecar is running
     #[clap(flatten)]
     pub chain: ChainConfig,
-    /// Commitment signing options.
+    /// Constraint signing options
     #[clap(flatten)]
-    pub signing: SigningOpts,
+    pub constraint_signing: ConstraintSigningOpts,
     /// Telemetry options
     #[clap(flatten)]
     pub telemetry: TelemetryOpts,
+
     /// Additional unrecognized arguments. Useful for CI and testing
     /// to avoid issues on potential extra flags provided (e.g. "--exact" from cargo nextest).
     #[cfg(test)]
     #[clap(allow_hyphen_values = true)]
+    #[serde(default)]
     pub extra_args: Vec<String>,
 }
 
 impl Opts {
     /// Parse the configuration from a TOML file.
     pub fn parse_from_toml(file_path: &str) -> eyre::Result<Self> {
-        let mut file = File::open(file_path).wrap_err("Unable to open file")?;
-
-        let mut contents = String::new();
-        file.read_to_string(&mut contents).wrap_err("Unable to read file")?;
-
+        let contents = fs::read_to_string(file_path).wrap_err("Unable to read file")?;
         toml::from_str(&contents).wrap_err("Error parsing the TOML file")
     }
 }
@@ -104,6 +116,12 @@ impl Opts {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_validate_cli_flags() {
+        use clap::CommandFactory;
+        Opts::command().debug_assert();
+    }
 
     #[test]
     fn test_parse_url() {
@@ -116,15 +134,13 @@ mod tests {
 
     #[test]
     fn test_parse_config_from_toml() {
-        let path = env!("CARGO_MANIFEST_DIR").to_string() + "Config.toml";
+        let path = env!("CARGO_MANIFEST_DIR").to_string() + "/Config.example.toml";
 
-        if let Ok(config_file) = std::fs::read_to_string(path) {
-            let config = Opts::parse_from_toml(&config_file).expect("Failed to parse config");
-            assert_eq!(config.execution_api_url, Url::parse("http://localhost:8545").unwrap());
-            assert_eq!(config.beacon_api_url, Url::parse("http://localhost:5052").unwrap());
-            assert_eq!(config.engine_api_url, Url::parse("http://localhost:8551").unwrap());
-            assert_eq!(config.constraints_url, Url::parse("http://localhost:3030").unwrap());
-            assert_eq!(config.constraints_proxy_port, 18551);
-        }
+        let config = Opts::parse_from_toml(&path).expect("Failed to parse config from TOML");
+        assert_eq!(config.execution_api_url, Url::parse("http://localhost:8545").unwrap());
+        assert_eq!(config.beacon_api_url, Url::parse("http://localhost:5052").unwrap());
+        assert_eq!(config.engine_api_url, Url::parse("http://localhost:8551").unwrap());
+        assert_eq!(config.constraints_api_url, Url::parse("http://localhost:3030").unwrap());
+        assert_eq!(config.constraints_proxy_port, 18551);
     }
 }

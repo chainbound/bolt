@@ -1,0 +1,12 @@
+[Unit]
+Description=Bolt Sidecar Development Service for Helder
+After=network.target
+
+[Service]
+User=shared
+ExecStart=/usr/local/bin/bolt-sidecar-helder
+Restart=on-failure
+EnvironmentFile=/home/shared/helder/bolt_sidecar/.env.helder.dev
+
+[Install]
+WantedBy=multi-user.target

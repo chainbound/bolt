@@ -28,7 +28,7 @@ pub struct LocalSigner {
 
 impl Debug for LocalSigner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Signer")
+        f.debug_struct("LocalSigner")
             .field("pubkey", &self.pubkey())
             .field("chain", &self.chain.name())
             .finish()
