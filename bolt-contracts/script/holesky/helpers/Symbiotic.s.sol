@@ -17,11 +17,6 @@ contract SymbioticHelper is Script {
 
         vm.startBroadcast(networkAdmin);
 
-        console.log(arg);
-        console.logBytes32(keccak256(abi.encode(arg)));
-        console.logBytes32(keccak256(abi.encode("registerNetwork")));
-        console.logBytes32(keccak256(abi.encode("registerMiddleware")));
-
         if (keccak256(abi.encode(arg)) == keccak256(abi.encode("registerNetwork"))) {
             INetworkRegistry networkRegistry = INetworkRegistry(readNetworkRegistry());
 
