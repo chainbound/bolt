@@ -21,16 +21,12 @@ use crate::{
         server::{CommitmentsApiServer, Event as CommitmentEvent},
         spec::Error as CommitmentError,
     },
-    common::parse_path,
     crypto::{bls::cl_public_key_to_arr, SignableBLS, SignerECDSA},
     primitives::{
         read_signed_delegations_from_file, CommitmentRequest, ConstraintsMessage,
         FetchPayloadRequest, SignedConstraints, TransactionExt,
     },
-    signer::{
-        keystore::{KeystoreSigner, KEYSTORES_DEFAULT_PATH, KEYSTORES_SECRETS_DEFAULT_PATH},
-        local::LocalSigner,
-    },
+    signer::{keystore::KeystoreSigner, local::LocalSigner},
     start_builder_proxy_server,
     state::{fetcher::StateFetcher, ConsensusState, ExecutionState, HeadTracker, StateClient},
     telemetry::ApiMetrics,
@@ -116,17 +112,14 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
 
         let keystore = if let Some(psw) = signing_opts.keystore_password.as_ref() {
             KeystoreSigner::from_password(
-                &parse_path(signing_opts.keystore_path.as_ref(), KEYSTORES_DEFAULT_PATH),
+                signing_opts.keystore_path.as_ref().expect("keystore path"),
                 psw.as_ref(),
                 opts.chain,
             )?
         } else {
             KeystoreSigner::from_secrets_directory(
-                &parse_path(signing_opts.keystore_path.as_ref(), KEYSTORES_DEFAULT_PATH),
-                &parse_path(
-                    signing_opts.keystore_secrets_path.as_ref(),
-                    KEYSTORES_SECRETS_DEFAULT_PATH,
-                ),
+                signing_opts.keystore_path.as_ref().expect("keystore path"),
+                signing_opts.keystore_secrets_path.as_ref().expect("keystore secrets path"),
                 opts.chain,
             )?
         };

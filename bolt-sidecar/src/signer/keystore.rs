@@ -20,9 +20,6 @@ use crate::{builder::signature::compute_signing_root, crypto::bls::BLSSig, Chain
 
 use super::SignerResult;
 
-pub const KEYSTORES_DEFAULT_PATH: &str = "keys";
-pub const KEYSTORES_SECRETS_DEFAULT_PATH: &str = "keys";
-
 #[derive(Debug, thiserror::Error)]
 pub enum KeystoreError {
     #[error("failed to read keystore directory: {0}")]
@@ -76,8 +73,6 @@ impl KeystoreSigner {
     ) -> SignerResult<Self> {
         let keystores_paths = find_json_keystores(keys_path)?;
 
-        println!("keystores_paths: {:?}", keystores_paths);
-
         let mut keypairs = Vec::with_capacity(keystores_paths.len());
 
         for path in keystores_paths {
@@ -88,8 +83,6 @@ impl KeystoreSigner {
 
             let mut secret_path = secrets_path.clone();
             secret_path.push(pubkey);
-
-            dbg!(secret_path.clone());
 
             let password = fs::read_to_string(secret_path)
                 .map_err(|e| KeystoreError::ReadFromSecretFile(format!("{e:?}")))?;
@@ -194,11 +187,15 @@ fn read_path(entry: std::result::Result<DirEntry, io::Error>) -> SignerResult<Pa
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, io::Write, path::PathBuf};
+    use std::{
+        fs::File,
+        io::Write,
+        path::{Path, PathBuf},
+    };
 
     use blst::min_pk::SecretKey;
 
-    use crate::{common::parse_path, signer::local::LocalSigner, ChainConfig};
+    use crate::{signer::local::LocalSigner, ChainConfig};
 
     use super::KeystoreSigner;
     /// The str path of the root of the project
@@ -206,6 +203,13 @@ mod tests {
 
     const KEYSTORES_DEFAULT_PATH_TEST: &str = "test_data/keys";
     const KEYSTORES_SECRETS_DEFAULT_PATH_TEST: &str = "test_data/secrets";
+
+    /// If `path` is `Some`, returns a clone of it. Otherwise, returns the path to the `fallback_relative_path`
+    /// starting from the root of the cargo project.
+    fn make_path(relative_path: &str) -> PathBuf {
+        let project_root = env!("CARGO_MANIFEST_DIR");
+        Path::new(project_root).join(relative_path)
+    }
 
     #[test]
     fn test_keystore_signer() {
@@ -310,13 +314,13 @@ mod tests {
                 .expect("to write to temp file");
 
             // Create a file for the secret, we are going to test it as well
-            let keystores_secrets_path = parse_path(None, KEYSTORES_SECRETS_DEFAULT_PATH_TEST);
+            let keystores_secrets_path = make_path(KEYSTORES_SECRETS_DEFAULT_PATH_TEST);
             let mut tmp_secret_file = File::create(keystores_secrets_path.join(public_key))
                 .expect("to create secret file");
 
             tmp_secret_file.write_all(password.as_bytes()).expect("to write to temp file");
 
-            let keys_path = parse_path(None, KEYSTORES_DEFAULT_PATH_TEST);
+            let keys_path = make_path(KEYSTORES_DEFAULT_PATH_TEST);
             let keystore_signer_from_password =
                 KeystoreSigner::from_password(&keys_path, password.as_bytes(), chain_config)
                     .expect("to create keystore signer from password");

@@ -2,7 +2,7 @@ use std::{
     fmt::{self, Display},
     fs::read_to_string,
     ops::Deref,
-    path::{Path, PathBuf},
+    path::Path,
 };
 
 use alloy::primitives::U256;
@@ -94,19 +94,6 @@ pub fn validate_transaction(
     }
 
     Ok(())
-}
-
-/// If `path` is `Some`, returns a clone of it. Otherwise, returns the path to the `fallback_relative_path`
-/// starting from the root of the cargo project.
-pub fn parse_path(path: Option<&PathBuf>, fallback_relative_path: &str) -> PathBuf {
-    let path = if let Some(path) = path {
-        path.clone()
-    } else {
-        let project_root = env!("CARGO_MANIFEST_DIR");
-        Path::new(project_root).join(fallback_relative_path)
-    };
-    dbg!(&path);
-    path
 }
 
 #[derive(Clone, Debug)]
