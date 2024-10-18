@@ -1,3 +1,5 @@
+use std::env;
+
 use alloy::{
     eips::eip2718::Encodable2718,
     network::{EthereumWallet, TransactionBuilder},
@@ -79,13 +81,16 @@ pub(crate) async fn try_get_beacon_api_url() -> Option<&'static str> {
 ///
 /// If any of the above values can't be found, the function will return `None`.
 pub(crate) async fn get_test_config() -> Option<Opts> {
-    std::env::set_var("BOLT_SIDECAR_PRIVATE_KEY", BlsSecretKeyWrapper::random().to_string());
+    env::set_var("BOLT_SIDECAR_PRIVATE_KEY", BlsSecretKeyWrapper::random().to_string());
+    env::set_var("BOLT_SIDECAR_JWT_HEX", JwtSecretConfig::default().to_string());
+    env::set_var("BOLT_SIDECAR_FEE_RECIPIENT", Address::ZERO.to_string());
+    env::set_var("BOLT_SIDECAR_BUILDER_PRIVATE_KEY", BlsSecretKeyWrapper::random().to_string());
 
     let _ = dotenvy::dotenv();
 
     let mut opts = Opts::parse();
 
-    let Some(jwt) = std::env::var("ENGINE_JWT").ok() else {
+    let Some(jwt) = env::var("ENGINE_JWT").ok() else {
         warn!("ENGINE_JWT not found in environment variables");
         return None;
     };
