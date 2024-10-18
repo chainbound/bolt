@@ -1,4 +1,4 @@
-# Deploying
+# Deployment Guide
 
 **This should only be done once with the `V1` contracts. For upgrades, refer to the [upgrading doc](./upgrading.md).**
 

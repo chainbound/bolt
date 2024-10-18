@@ -1,4 +1,4 @@
-# Upgrading
+# Upgrading Guide
 
 When upgrading contracts, always keep the old implementation of the contracts around and increment the version number.
 For example, when upgrading `BoltManagerV1`, copy it into a new file called `BoltManagerV2` and make your changes.
