@@ -3,7 +3,7 @@ pragma solidity 0.8.25;
 
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
-import {IBoltManager} from "../interfaces/IBoltManager.sol";
+import {IBoltManagerV1} from "../interfaces/IBoltManagerV1.sol";
 
 library EnumerableMap {
     using EnumerableSet for EnumerableSet.Bytes32Set;
@@ -13,10 +13,10 @@ library EnumerableMap {
     struct OperatorMap {
         // Storage of keys
         EnumerableSet.Bytes32Set _keys;
-        mapping(bytes32 key => IBoltManager.Operator) _values;
+        mapping(bytes32 key => IBoltManagerV1.Operator) _values;
     }
 
-    function set(OperatorMap storage self, address key, IBoltManager.Operator memory value) internal returns (bool) {
+    function set(OperatorMap storage self, address key, IBoltManagerV1.Operator memory value) internal returns (bool) {
         bytes32 keyBytes = bytes32(uint256(uint160(key)));
         self._values[keyBytes] = value;
         return self._keys.add(keyBytes);
@@ -41,12 +41,12 @@ library EnumerableMap {
     function at(
         OperatorMap storage self,
         uint256 index
-    ) internal view returns (address, IBoltManager.Operator memory) {
+    ) internal view returns (address, IBoltManagerV1.Operator memory) {
         bytes32 key = self._keys.at(index);
         return (address(uint160(uint256(key))), self._values[key]);
     }
 
-    function get(OperatorMap storage self, address key) internal view returns (IBoltManager.Operator memory) {
+    function get(OperatorMap storage self, address key) internal view returns (IBoltManagerV1.Operator memory) {
         if (!contains(self, key)) {
             revert KeyNotFound();
         }

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-import {IBoltValidators} from "./IBoltValidators.sol";
+import {IBoltValidatorsV1} from "./IBoltValidatorsV1.sol";
 
-interface IBoltManager {
+interface IBoltManagerV1 {
     error InvalidQuery();
     error OperatorAlreadyRegistered();
     error OperatorNotRegistered();
@@ -34,15 +34,15 @@ interface IBoltManager {
         address operator
     ) external view returns (bool);
 
-    function validators() external view returns (IBoltValidators);
+    function validators() external view returns (IBoltValidatorsV1);
 
     function getProposerStatus(
         bytes32 pubkeyHash
-    ) external view returns (IBoltValidators.ProposerStatus memory status);
+    ) external view returns (IBoltValidatorsV1.ProposerStatus memory status);
 
     function getProposerStatuses(
         bytes32[] calldata pubkeyHashes
-    ) external view returns (IBoltValidators.ProposerStatus[] memory statuses);
+    ) external view returns (IBoltValidatorsV1.ProposerStatus[] memory statuses);
 
     function isOperatorAuthorizedForValidator(address operator, bytes32 pubkeyHash) external view returns (bool);
 

@@ -6,8 +6,8 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeab
 
 import {BLS12381} from "../lib/bls/BLS12381.sol";
 import {BLSSignatureVerifier} from "../lib/bls/BLSSignatureVerifier.sol";
-import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
-import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
+import {IBoltValidatorsV1} from "../interfaces/IBoltValidatorsV1.sol";
+import {IBoltParametersV1} from "../interfaces/IBoltParametersV1.sol";
 
 /// @title Bolt Validators
 /// @notice This contract is responsible for registering validators and managing their configuration
@@ -16,13 +16,13 @@ import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 /// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
 /// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
-contract BoltValidatorsV1 is IBoltValidators, BLSSignatureVerifier, OwnableUpgradeable, UUPSUpgradeable {
+contract BoltValidatorsV1 is IBoltValidatorsV1, BLSSignatureVerifier, OwnableUpgradeable, UUPSUpgradeable {
     using BLS12381 for BLS12381.G1Point;
 
     // ========= STORAGE =========
 
     /// @notice Bolt Parameters contract.
-    IBoltParameters public parameters;
+    IBoltParametersV1 public parameters;
 
     /// @notice Validators (aka Blockspace providers)
     /// @dev For our purpose, validators are blockspace providers for commitments.
@@ -69,7 +69,7 @@ contract BoltValidatorsV1 is IBoltValidators, BLSSignatureVerifier, OwnableUpgra
     function initialize(address _owner, address _parameters) public initializer {
         __Ownable_init(_owner);
 
-        parameters = IBoltParameters(_parameters);
+        parameters = IBoltParametersV1(_parameters);
     }
 
     function _authorizeUpgrade(

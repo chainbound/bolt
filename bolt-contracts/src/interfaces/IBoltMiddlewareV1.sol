@@ -2,9 +2,9 @@
 pragma solidity 0.8.25;
 
 import {BLS12381} from "../lib/bls/BLS12381.sol";
-import {IBoltValidators} from "./IBoltValidators.sol";
+import {IBoltValidatorsV1} from "./IBoltValidatorsV1.sol";
 
-interface IBoltMiddleware {
+interface IBoltMiddlewareV1 {
     error InvalidQuery();
     error AlreadyRegistered();
     error NotRegistered();

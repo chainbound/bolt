@@ -13,8 +13,8 @@ import {MerkleTrie} from "../lib/trie/MerkleTrie.sol";
 import {RLPReader} from "../lib/rlp/RLPReader.sol";
 import {RLPWriter} from "../lib/rlp/RLPWriter.sol";
 import {TransactionDecoder} from "../lib/TransactionDecoder.sol";
-import {IBoltChallenger} from "../interfaces/IBoltChallenger.sol";
-import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
+import {IBoltChallengerV1} from "../interfaces/IBoltChallengerV1.sol";
+import {IBoltParametersV1} from "../interfaces/IBoltParametersV1.sol";
 
 /// @title Bolt Challenger
 /// @notice Contract for managing (creating & resolving) challenges for Bolt inclusion commitments.
@@ -23,7 +23,7 @@ import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 /// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
 /// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
-contract BoltChallengerV1 is IBoltChallenger, OwnableUpgradeable, UUPSUpgradeable {
+contract BoltChallengerV1 is IBoltChallengerV1, OwnableUpgradeable, UUPSUpgradeable {
     using RLPReader for bytes;
     using RLPReader for RLPReader.RLPItem;
     using TransactionDecoder for bytes;
@@ -33,7 +33,7 @@ contract BoltChallengerV1 is IBoltChallenger, OwnableUpgradeable, UUPSUpgradeabl
     // ========= STORAGE =========
 
     /// @notice Bolt Parameters contract.
-    IBoltParameters public parameters;
+    IBoltParametersV1 public parameters;
 
     /// @notice The set of existing unique challenge IDs.
     EnumerableSet.Bytes32Set internal challengeIDs;
@@ -61,7 +61,7 @@ contract BoltChallengerV1 is IBoltChallenger, OwnableUpgradeable, UUPSUpgradeabl
     function initialize(address _owner, address _parameters) public initializer {
         __Ownable_init(_owner);
 
-        parameters = IBoltParameters(_parameters);
+        parameters = IBoltParametersV1(_parameters);
     }
 
     function _authorizeUpgrade(

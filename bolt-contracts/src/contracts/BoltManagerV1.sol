@@ -9,10 +9,10 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import {OperatorMapWithTime} from "../lib/OperatorMapWithTime.sol";
 import {EnumerableMap} from "../lib/EnumerableMap.sol";
-import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
-import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
-import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
-import {IBoltManager} from "../interfaces/IBoltManager.sol";
+import {IBoltValidatorsV1} from "../interfaces/IBoltValidatorsV1.sol";
+import {IBoltParametersV1} from "../interfaces/IBoltParametersV1.sol";
+import {IBoltMiddlewareV1} from "../interfaces/IBoltMiddlewareV1.sol";
+import {IBoltManagerV1} from "../interfaces/IBoltManagerV1.sol";
 
 /// @title Bolt Manager
 /// @notice The Bolt Manager contract is responsible for managing operators & restaking middlewares, and is the
@@ -22,7 +22,7 @@ import {IBoltManager} from "../interfaces/IBoltManager.sol";
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 /// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
 /// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
-contract BoltManagerV1 is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
+contract BoltManagerV1 is IBoltManagerV1, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.OperatorMap;
     using OperatorMapWithTime for EnumerableMap.OperatorMap;
@@ -32,11 +32,11 @@ contract BoltManagerV1 is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     uint48 public START_TIMESTAMP;
 
     /// @notice Bolt Parameters contract.
-    IBoltParameters public parameters;
+    IBoltParametersV1 public parameters;
 
     /// @notice Validators registry, where validators are registered via their
     /// BLS pubkey and are assigned a sequence number.
-    IBoltValidators public validators;
+    IBoltValidatorsV1 public validators;
 
     /// @notice Set of operator addresses that have opted in to Bolt Protocol.
     EnumerableMap.OperatorMap private operators;
@@ -71,8 +71,8 @@ contract BoltManagerV1 is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     function initialize(address _owner, address _parameters, address _validators) public initializer {
         __Ownable_init(_owner);
 
-        parameters = IBoltParameters(_parameters);
-        validators = IBoltValidators(_validators);
+        parameters = IBoltParametersV1(_parameters);
+        validators = IBoltValidatorsV1(_validators);
 
         START_TIMESTAMP = Time.timestamp();
     }
@@ -132,8 +132,8 @@ contract BoltManagerV1 is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     /// @return statuses The statuses of the proposers, including their operator and active stake.
     function getProposerStatuses(
         bytes32[] calldata pubkeyHashes
-    ) public view returns (IBoltValidators.ProposerStatus[] memory statuses) {
-        statuses = new IBoltValidators.ProposerStatus[](pubkeyHashes.length);
+    ) public view returns (IBoltValidatorsV1.ProposerStatus[] memory statuses) {
+        statuses = new IBoltValidatorsV1.ProposerStatus[](pubkeyHashes.length);
         for (uint256 i = 0; i < pubkeyHashes.length; ++i) {
             statuses[i] = getProposerStatus(pubkeyHashes[i]);
         }
@@ -144,14 +144,14 @@ contract BoltManagerV1 is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     /// @return status The status of the proposer, including their operator and active stake.
     function getProposerStatus(
         bytes32 pubkeyHash
-    ) public view returns (IBoltValidators.ProposerStatus memory status) {
+    ) public view returns (IBoltValidatorsV1.ProposerStatus memory status) {
         if (pubkeyHash == bytes32(0)) {
             revert InvalidQuery();
         }
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
         // NOTE: this will revert when the proposer does not exist.
-        IBoltValidators.Validator memory validator = validators.getValidatorByPubkeyHash(pubkeyHash);
+        IBoltValidatorsV1.Validator memory validator = validators.getValidatorByPubkeyHash(pubkeyHash);
 
         Operator memory operator = operators.get(validator.authorizedOperator);
 
@@ -165,7 +165,7 @@ contract BoltManagerV1 is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
         }
 
         (status.collaterals, status.amounts) =
-            IBoltMiddleware(operator.middleware).getOperatorCollaterals(validator.authorizedOperator);
+            IBoltMiddlewareV1(operator.middleware).getOperatorCollaterals(validator.authorizedOperator);
 
         // NOTE: check if the sum of the collaterals covers the minimum operator stake required.
 
@@ -187,7 +187,7 @@ contract BoltManagerV1 is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     function getOperatorStake(address operator, address collateral) public view returns (uint256) {
         Operator memory operatorData = operators.get(operator);
 
-        return IBoltMiddleware(operatorData.middleware).getOperatorStake(operator, collateral);
+        return IBoltMiddlewareV1(operatorData.middleware).getOperatorStake(operator, collateral);
     }
 
     /// @notice Get the total amount staked of a given collateral asset.
@@ -196,8 +196,8 @@ contract BoltManagerV1 is IBoltManager, OwnableUpgradeable, UUPSUpgradeable {
     ) public view returns (uint256 amount) {
         // Loop over all of the operators, get their middleware, and retrieve their staked amount.
         for (uint256 i = 0; i < operators.length(); ++i) {
-            (address operator, IBoltManager.Operator memory operatorData) = operators.at(i);
-            amount += IBoltMiddleware(operatorData.middleware).getOperatorStake(operator, collateral);
+            (address operator, IBoltManagerV1.Operator memory operatorData) = operators.at(i);
+            amount += IBoltMiddlewareV1(operatorData.middleware).getOperatorStake(operator, collateral);
         }
 
         return amount;

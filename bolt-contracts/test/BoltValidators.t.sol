@@ -5,7 +5,7 @@ import {Test, console} from "forge-std/Test.sol";
 
 import {BoltParametersV1} from "../src/contracts/BoltParametersV1.sol";
 import {BoltValidatorsV1} from "../src/contracts/BoltValidatorsV1.sol";
-import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
+import {IBoltValidatorsV1} from "../src/interfaces/IBoltValidatorsV1.sol";
 import {BLS12381} from "../src/lib/bls/BLS12381.sol";
 import {BoltConfig} from "../src/lib/Config.sol";
 import {Utils} from "./Utils.sol";
@@ -66,7 +66,7 @@ contract BoltValidatorsTest is Test {
         validators.registerValidatorUnsafe(pubkey, PRECONF_MAX_GAS_LIMIT, operator);
 
         vm.prank(validator);
-        vm.expectRevert(IBoltValidators.ValidatorAlreadyExists.selector);
+        vm.expectRevert(IBoltValidatorsV1.ValidatorAlreadyExists.selector);
         validators.registerValidatorUnsafe(pubkey, PRECONF_MAX_GAS_LIMIT, operator);
     }
 
@@ -77,7 +77,7 @@ contract BoltValidatorsTest is Test {
         parameters.setAllowUnsafeRegistration(false);
 
         vm.prank(validator);
-        vm.expectRevert(IBoltValidators.UnsafeRegistrationNotAllowed.selector);
+        vm.expectRevert(IBoltValidatorsV1.UnsafeRegistrationNotAllowed.selector);
         validators.registerValidatorUnsafe(pubkey, PRECONF_MAX_GAS_LIMIT, operator);
     }
 
@@ -85,7 +85,7 @@ contract BoltValidatorsTest is Test {
         BLS12381.G1Point memory pubkey = BLS12381.generatorG1();
 
         vm.prank(validator);
-        vm.expectRevert(IBoltValidators.InvalidAuthorizedOperator.selector);
+        vm.expectRevert(IBoltValidatorsV1.InvalidAuthorizedOperator.selector);
         validators.registerValidatorUnsafe(pubkey, PRECONF_MAX_GAS_LIMIT, address(0));
     }
 }

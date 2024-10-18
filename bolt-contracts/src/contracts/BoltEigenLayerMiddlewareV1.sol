@@ -9,10 +9,10 @@ import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/Own
 import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
-import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
-import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
-import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
-import {IBoltManager} from "../interfaces/IBoltManager.sol";
+import {IBoltParametersV1} from "../interfaces/IBoltParametersV1.sol";
+import {IBoltValidatorsV1} from "../interfaces/IBoltValidatorsV1.sol";
+import {IBoltMiddlewareV1} from "../interfaces/IBoltMiddlewareV1.sol";
+import {IBoltManagerV1} from "../interfaces/IBoltManagerV1.sol";
 
 import {IStrategyManager} from "@eigenlayer/src/contracts/interfaces/IStrategyManager.sol";
 import {IAVSDirectory} from "@eigenlayer/src/contracts/interfaces/IAVSDirectory.sol";
@@ -30,7 +30,7 @@ import {StrategyManagerStorage} from "@eigenlayer/src/contracts/core/StrategyMan
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 /// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
 /// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
-contract BoltEigenLayerMiddlewareV1 is IBoltMiddleware, OwnableUpgradeable, UUPSUpgradeable {
+contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
@@ -41,11 +41,11 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddleware, OwnableUpgradeable, UUPS
     uint48 public START_TIMESTAMP;
 
     /// @notice Bolt Parameters contract.
-    IBoltParameters public parameters;
+    IBoltParametersV1 public parameters;
 
     /// @notice Validators registry, where validators are registered via their
     /// BLS pubkey and are assigned a sequence number.
-    IBoltManager public manager;
+    IBoltManagerV1 public manager;
 
     /// @notice Set of EigenLayer protocol strategies that are used in Bolt Protocol.
     EnumerableMap.AddressToUintMap private strategies;
@@ -99,8 +99,8 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddleware, OwnableUpgradeable, UUPS
         address _eigenlayerStrategyManager
     ) public initializer {
         __Ownable_init(_owner);
-        parameters = IBoltParameters(_parameters);
-        manager = IBoltManager(_manager);
+        parameters = IBoltParametersV1(_parameters);
+        manager = IBoltManagerV1(_manager);
         START_TIMESTAMP = Time.timestamp();
 
         AVS_DIRECTORY = IAVSDirectory(_eigenlayerAVSDirectory);

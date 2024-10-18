@@ -20,8 +20,8 @@ import {IMigratablesFactory} from "@symbiotic/interfaces/common/IMigratablesFact
 import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
 import {SimpleCollateral} from "@symbiotic/../test/mocks/SimpleCollateral.sol";
 
-import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
-import {IBoltMiddleware} from "../src/interfaces/IBoltMiddleware.sol";
+import {IBoltValidatorsV1} from "../src/interfaces/IBoltValidatorsV1.sol";
+import {IBoltMiddlewareV1} from "../src/interfaces/IBoltMiddlewareV1.sol";
 
 import {BoltParametersV1} from "../src/contracts/BoltParametersV1.sol";
 import {BoltValidatorsV1} from "../src/contracts/BoltValidatorsV1.sol";
@@ -332,7 +332,7 @@ contract BoltManagerSymbioticTest is Test {
         vm.warp(block.timestamp + EPOCH_DURATION * 2 + 1);
         assertEq(vault.currentEpoch(), 2);
 
-        IBoltValidators.ProposerStatus memory status = manager.getProposerStatus(pubkeyHash);
+        IBoltValidatorsV1.ProposerStatus memory status = manager.getProposerStatus(pubkeyHash);
         assertEq(status.pubkeyHash, pubkeyHash);
         assertEq(status.operator, operator);
         assertEq(status.active, true);
@@ -360,7 +360,7 @@ contract BoltManagerSymbioticTest is Test {
         vm.warp(block.timestamp + EPOCH_DURATION * 2 + 1);
         assertEq(vault.currentEpoch(), 2);
 
-        IBoltValidators.ProposerStatus[] memory statuses = manager.getProposerStatuses(pubkeyHashes);
+        IBoltValidatorsV1.ProposerStatus[] memory statuses = manager.getProposerStatuses(pubkeyHashes);
         assertEq(statuses.length, 10);
     }
 
@@ -369,7 +369,7 @@ contract BoltManagerSymbioticTest is Test {
 
         bytes32 pubkeyHash = bytes32(uint256(1));
 
-        vm.expectRevert(IBoltValidators.ValidatorDoesNotExist.selector);
+        vm.expectRevert(IBoltValidatorsV1.ValidatorDoesNotExist.selector);
         manager.getProposerStatus(pubkeyHash);
     }
 
@@ -384,7 +384,7 @@ contract BoltManagerSymbioticTest is Test {
         middleware.removeWhitelistedCollateral(address(collateral));
 
         vm.prank(vaultAdmin);
-        vm.expectRevert(IBoltMiddleware.CollateralNotWhitelisted.selector);
+        vm.expectRevert(IBoltMiddlewareV1.CollateralNotWhitelisted.selector);
         middleware.registerVault(address(vault));
     }
 }

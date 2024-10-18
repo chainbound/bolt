@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.25;
 
-interface IBoltChallenger {
+interface IBoltChallengerV1 {
     enum ChallengeStatus {
         Open,
         Defended,

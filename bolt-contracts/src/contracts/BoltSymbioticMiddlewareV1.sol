@@ -18,10 +18,10 @@ import {IVetoSlasher} from "@symbiotic/interfaces/slasher/IVetoSlasher.sol";
 import {IEntity} from "@symbiotic/interfaces/common/IEntity.sol";
 
 import {MapWithTimeData} from "../lib/MapWithTimeData.sol";
-import {IBoltValidators} from "../interfaces/IBoltValidators.sol";
-import {IBoltParameters} from "../interfaces/IBoltParameters.sol";
-import {IBoltMiddleware} from "../interfaces/IBoltMiddleware.sol";
-import {IBoltManager} from "../interfaces/IBoltManager.sol";
+import {IBoltValidatorsV1} from "../interfaces/IBoltValidatorsV1.sol";
+import {IBoltParametersV1} from "../interfaces/IBoltParametersV1.sol";
+import {IBoltMiddlewareV1} from "../interfaces/IBoltMiddlewareV1.sol";
+import {IBoltManagerV1} from "../interfaces/IBoltManagerV1.sol";
 
 /// @title Bolt Symbiotic Middleware
 /// @notice This contract is responsible for interfacing with the Symbiotic restaking protocol.
@@ -30,7 +30,7 @@ import {IBoltManager} from "../interfaces/IBoltManager.sol";
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 /// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
 /// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
-contract BoltSymbioticMiddlewareV1 is IBoltMiddleware, OwnableUpgradeable, UUPSUpgradeable {
+contract BoltSymbioticMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
@@ -49,11 +49,11 @@ contract BoltSymbioticMiddlewareV1 is IBoltMiddleware, OwnableUpgradeable, UUPSU
     uint48 public START_TIMESTAMP;
 
     /// @notice Bolt Parameters contract.
-    IBoltParameters public parameters;
+    IBoltParametersV1 public parameters;
 
     /// @notice Validators registry, where validators are registered via their
     /// BLS pubkey and are assigned a sequence number.
-    IBoltManager public manager;
+    IBoltManagerV1 public manager;
 
     /// @notice Set of Symbiotic protocol vaults that are used in Bolt Protocol.
     EnumerableMap.AddressToUintMap private vaults;
@@ -112,8 +112,8 @@ contract BoltSymbioticMiddlewareV1 is IBoltMiddleware, OwnableUpgradeable, UUPSU
         address _symbioticVaultFactory
     ) public initializer {
         __Ownable_init(_owner);
-        parameters = IBoltParameters(_parameters);
-        manager = IBoltManager(_manager);
+        parameters = IBoltParametersV1(_parameters);
+        manager = IBoltManagerV1(_manager);
         START_TIMESTAMP = Time.timestamp();
 
         BOLT_SYMBIOTIC_NETWORK = _symbioticNetwork;

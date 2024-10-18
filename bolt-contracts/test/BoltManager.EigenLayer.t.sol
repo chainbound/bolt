@@ -8,9 +8,9 @@ import {BoltManagerV1} from "../src/contracts/BoltManagerV1.sol";
 import {BoltParametersV1} from "../src/contracts/BoltParametersV1.sol";
 import {BoltEigenLayerMiddlewareV1} from "../src/contracts/BoltEigenLayerMiddlewareV1.sol";
 import {BoltConfig} from "../src/lib/Config.sol";
-import {IBoltValidators} from "../src/interfaces/IBoltValidators.sol";
-import {IBoltManager} from "../src/interfaces/IBoltManager.sol";
-import {IBoltMiddleware} from "../src/interfaces/IBoltMiddleware.sol";
+import {IBoltValidatorsV1} from "../src/interfaces/IBoltValidatorsV1.sol";
+import {IBoltManagerV1} from "../src/interfaces/IBoltManagerV1.sol";
+import {IBoltMiddlewareV1} from "../src/interfaces/IBoltMiddlewareV1.sol";
 import {Utils} from "./Utils.sol";
 
 import {AVSDirectoryStorage} from "@eigenlayer/src/contracts/core/AVSDirectoryStorage.sol";
@@ -202,7 +202,7 @@ contract BoltManagerEigenLayerTest is Test {
         _eigenLayerOptInRoutine();
         vm.prank(operator);
         middleware.deregisterOperator();
-        vm.expectRevert(IBoltManager.OperatorNotRegistered.selector);
+        vm.expectRevert(IBoltManagerV1.OperatorNotRegistered.selector);
         manager.isOperatorEnabled(operator);
     }
 
@@ -220,7 +220,7 @@ contract BoltManagerEigenLayerTest is Test {
 
         bytes32 pubkeyHash = _pubkeyHash(validatorPubkey);
 
-        IBoltValidators.ProposerStatus memory status = manager.getProposerStatus(pubkeyHash);
+        IBoltValidatorsV1.ProposerStatus memory status = manager.getProposerStatus(pubkeyHash);
         assertEq(status.pubkeyHash, pubkeyHash);
         assertEq(status.operator, operator);
         assertEq(status.active, true);
@@ -245,7 +245,7 @@ contract BoltManagerEigenLayerTest is Test {
             validators.registerValidatorUnsafe(pubkey, PRECONF_MAX_GAS_LIMIT, operator);
         }
 
-        IBoltValidators.ProposerStatus[] memory statuses = manager.getProposerStatuses(pubkeyHashes);
+        IBoltValidatorsV1.ProposerStatus[] memory statuses = manager.getProposerStatuses(pubkeyHashes);
         assertEq(statuses.length, 10);
     }
 
@@ -254,7 +254,7 @@ contract BoltManagerEigenLayerTest is Test {
 
         bytes32 pubkeyHash = bytes32(uint256(1));
 
-        vm.expectRevert(IBoltValidators.ValidatorDoesNotExist.selector);
+        vm.expectRevert(IBoltValidatorsV1.ValidatorDoesNotExist.selector);
         manager.getProposerStatus(pubkeyHash);
     }
 
@@ -273,7 +273,7 @@ contract BoltManagerEigenLayerTest is Test {
 
         address strat = address(eigenLayerDeployer.wethStrat());
         vm.startPrank(admin);
-        vm.expectRevert(IBoltMiddleware.CollateralNotWhitelisted.selector);
+        vm.expectRevert(IBoltMiddlewareV1.CollateralNotWhitelisted.selector);
         middleware.registerStrategy(strat);
         vm.stopPrank();
     }
