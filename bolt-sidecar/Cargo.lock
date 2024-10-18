@@ -1675,7 +1675,6 @@ dependencies = [
  "serde",
  "serde_json",
  "ssz_rs 0.9.0 (git+https://github.com/ralexstokes/ssz-rs)",
- "tempfile",
  "thiserror",
  "tokio",
  "toml 0.5.11",

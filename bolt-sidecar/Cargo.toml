@@ -79,7 +79,6 @@ cb-common = { git = "https://github.com/Commit-Boost/commit-boost-client", rev =
 
 [dev-dependencies]
 alloy-node-bindings = "0.2.0"
-tempfile = "3.13.0"
 
 
 [[bin]]
