@@ -99,19 +99,16 @@ Options:
           It can either be a hex-encoded string or a file path to a file containing the hex-encoded secret.
 
           [env: BOLT_SIDECAR_JWT_HEX=]
-          [default: 0xcc68d8051627b89005165f38a351242848e4c53be38d398069967ba62970edf0]
 
       --fee-recipient <FEE_RECIPIENT>
           The fee recipient address for fallback blocks
 
           [env: BOLT_SIDECAR_FEE_RECIPIENT=]
-          [default: 0x0000000000000000000000000000000000000000]
 
       --builder-private-key <BUILDER_PRIVATE_KEY>
-          Secret BLS key to sign fallback payloads with (If not provided, a random key will be used)
+          Secret BLS key to sign fallback payloads with.
 
           [env: BOLT_SIDECAR_BUILDER_PRIVATE_KEY=]
-          [default: 0x240872ca0812e33503482a886e05dfe30ae9cf757bf5c040e70eac685e419c6e]
 
       --max-commitments-per-slot <MAX_COMMITMENTS_PER_SLOT>
           Max number of commitments to accept per block

@@ -62,13 +62,13 @@ pub struct Opts {
     ///
     /// It can either be a hex-encoded string or a file path to a file
     /// containing the hex-encoded secret.
-    #[clap(long, env = "BOLT_SIDECAR_JWT_HEX", default_value_t)]
+    #[clap(long, env = "BOLT_SIDECAR_JWT_HEX")]
     pub jwt_hex: JwtSecretConfig,
     /// The fee recipient address for fallback blocks
-    #[clap(long, env = "BOLT_SIDECAR_FEE_RECIPIENT", default_value_t = Address::ZERO)]
+    #[clap(long, env = "BOLT_SIDECAR_FEE_RECIPIENT")]
     pub fee_recipient: Address,
-    /// Secret BLS key to sign fallback payloads with (If not provided, a random key will be used)
-    #[clap(long, env = "BOLT_SIDECAR_BUILDER_PRIVATE_KEY", default_value_t = BlsSecretKeyWrapper::random())]
+    /// Secret BLS key to sign fallback payloads with.
+    #[clap(long, env = "BOLT_SIDECAR_BUILDER_PRIVATE_KEY")]
     pub builder_private_key: BlsSecretKeyWrapper,
     /// Operating limits for the sidecar
     #[clap(flatten)]
