@@ -90,13 +90,17 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
 
         // Constraints are signed with a BLS private key
         let constraint_signer = SignerBLS::Local(LocalSigner::new(
-            opts.signing.private_key.clone().expect("local signer").0,
+            opts.constraint_signing
+                .constraint_private_key
+                .clone()
+                .expect("local constraint signing key")
+                .0,
             opts.chain,
         ));
 
         // Commitment responses are signed with a regular Ethereum wallet private key.
-        // This is now generated randomly because slashing is not yet implemented.
-        let commitment_signer = PrivateKeySigner::random();
+        let commitment_key = opts.commitment_private_key.0.clone();
+        let commitment_signer = PrivateKeySigner::from_signing_key(commitment_key);
 
         Self::from_components(opts, constraint_signer, commitment_signer, state_client).await
     }
@@ -108,18 +112,16 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
         // The default state client simply uses the execution API URL to fetch state updates.
         let state_client = StateClient::new(opts.execution_api_url.clone());
 
-        let signing_opts = &opts.signing;
-
-        let keystore = if let Some(psw) = signing_opts.keystore_password.as_ref() {
+        let keystore = if let Some(psw) = opts.constraint_signing.keystore_password.as_ref() {
             KeystoreSigner::from_password(
-                signing_opts.keystore_path.as_ref().expect("keystore path"),
+                opts.constraint_signing.keystore_path.as_ref().expect("keystore path"),
                 psw.as_ref(),
                 opts.chain,
             )?
         } else {
             KeystoreSigner::from_secrets_directory(
-                signing_opts.keystore_path.as_ref().expect("keystore path"),
-                signing_opts.keystore_secrets_path.as_ref().expect("keystore secrets path"),
+                opts.constraint_signing.keystore_path.as_ref().expect("keystore path"),
+                opts.constraint_signing.keystore_secrets_path.as_ref().expect("keystore secrets"),
                 opts.chain,
             )?
         };
@@ -127,8 +129,8 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
         let keystore_signer = SignerBLS::Keystore(keystore);
 
         // Commitment responses are signed with a regular Ethereum wallet private key.
-        // This is now generated randomly because slashing is not yet implemented.
-        let commitment_signer = PrivateKeySigner::random();
+        let commitment_key = opts.commitment_private_key.0.clone();
+        let commitment_signer = PrivateKeySigner::from_signing_key(commitment_key);
 
         Self::from_components(opts, keystore_signer, commitment_signer, state_client).await
     }
@@ -141,8 +143,8 @@ impl SidecarDriver<StateClient, CommitBoostSigner> {
         let state_client = StateClient::new(opts.execution_api_url.clone());
 
         let commit_boost_signer = CommitBoostSigner::new(
-            opts.signing.commit_boost_address.expect("CommitBoost URL").to_string(),
-            &opts.signing.commit_boost_jwt_hex.clone().expect("CommitBoost JWT"),
+            opts.constraint_signing.commit_boost_signer_url.clone().expect("CommitBoost URL"),
+            &opts.constraint_signing.commit_boost_jwt_hex.clone().expect("CommitBoost JWT"),
         )?;
 
         let cb_bls_signer = SignerBLS::CommitBoost(commit_boost_signer.clone());
@@ -178,7 +180,7 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
 
         let (payload_requests_tx, payload_requests_rx) = mpsc::channel(16);
         let builder_proxy_cfg = BuilderProxyConfig {
-            constraints_url: opts.constraints_url.clone(),
+            constraints_url: opts.constraints_api_url.clone(),
             server_port: opts.constraints_proxy_port,
         };
 
@@ -195,10 +197,10 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
         let (api_events_tx, api_events_rx) = mpsc::channel(1024);
         CommitmentsApiServer::new(api_addr).run(api_events_tx).await;
 
-        let mut constraints_client = ConstraintsClient::new(opts.constraints_url.clone());
+        let mut constraints_client = ConstraintsClient::new(opts.constraints_api_url.clone());
 
         // read the delegaitons from disk if they exist and add them to the constraints client
-        if let Some(delegations_file_path) = opts.signing.delegations_path.as_ref() {
+        if let Some(delegations_file_path) = opts.constraint_signing.delegations_path.as_ref() {
             let delegations = read_signed_delegations_from_file(delegations_file_path)?;
             constraints_client.add_delegations(delegations);
         }

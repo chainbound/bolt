@@ -57,7 +57,7 @@ impl FallbackPayloadBuilder {
     pub fn new(config: &Opts, beacon_api_client: BeaconClient, genesis_time: u64) -> Self {
         let engine_hinter = EngineHinter {
             client: reqwest::Client::new(),
-            jwt_hex: config.jwt_hex.to_string(),
+            jwt_hex: config.engine_jwt_hex.to_string(),
             engine_rpc_url: config.engine_api_url.clone(),
         };
 
