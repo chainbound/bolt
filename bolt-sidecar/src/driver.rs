@@ -99,8 +99,8 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
         ));
 
         // Commitment responses are signed with a regular Ethereum wallet private key.
-        // This is now generated randomly because slashing is not yet implemented.
-        let commitment_signer = PrivateKeySigner::from_slice("".as_bytes().to_vec().as_slice())?;
+        let commitment_key = opts.commitment_private_key.0.clone();
+        let commitment_signer = PrivateKeySigner::from_signing_key(commitment_key);
 
         Self::from_components(opts, constraint_signer, commitment_signer, state_client).await
     }
@@ -129,7 +129,6 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
         let keystore_signer = SignerBLS::Keystore(keystore);
 
         // Commitment responses are signed with a regular Ethereum wallet private key.
-        // This is now generated randomly because slashing is not yet implemented.
         let commitment_key = opts.commitment_private_key.0.clone();
         let commitment_signer = PrivateKeySigner::from_signing_key(commitment_key);
 
@@ -144,7 +143,7 @@ impl SidecarDriver<StateClient, CommitBoostSigner> {
         let state_client = StateClient::new(opts.execution_api_url.clone());
 
         let commit_boost_signer = CommitBoostSigner::new(
-            opts.constraint_signing.commit_boost_signer_url.expect("CommitBoost URL").to_string(),
+            opts.constraint_signing.commit_boost_signer_url.clone().expect("CommitBoost URL"),
             &opts.constraint_signing.commit_boost_jwt_hex.clone().expect("CommitBoost JWT"),
         )?;
 

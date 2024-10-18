@@ -45,14 +45,16 @@ pub struct Opts {
     /// Execution client Engine API URL
     #[clap(long, env = "BOLT_SIDECAR_ENGINE_API_URL", default_value = "http://localhost:8551")]
     pub engine_api_url: Url,
-    /// URL for the Constraint sidecar client to use
+    /// URL to forward the constraints produced by the Bolt sidecar to a server supporting the
+    /// Constraints API, such as an MEV-Boost fork.
     #[clap(
         long,
         env = "BOLT_SIDECAR_CONSTRAINTS_API_URL",
         default_value = "http://localhost:3030"
     )]
     pub constraints_api_url: Url,
-    /// Constraint proxy server port to use
+    /// The port from which the Bolt sidecar will receive Builder-API requests from the
+    /// Beacon client
     #[clap(
         long,
         env = "BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT",

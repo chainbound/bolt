@@ -8,6 +8,7 @@ use cb_common::{
 use commit_boost::prelude::SignProxyRequest;
 use ethereum_consensus::crypto::bls::PublicKey as BlsPublicKey;
 use parking_lot::RwLock;
+use reqwest::Url;
 use thiserror::Error;
 use tracing::{debug, error, info};
 
@@ -34,15 +35,23 @@ pub enum CommitBoostError {
     #[error("failed to create signer client: {0}")]
     SignerClientError(#[from] SignerClientError),
     #[error("error in commit boost signer: {0}")]
-    Other(#[from] eyre::Report),
+    Other(String),
 }
 
 #[allow(unused)]
 impl CommitBoostSigner {
     /// Create a new [CommitBoostSigner] instance
-    pub fn new(signer_server_address: String, jwt: &str) -> SignerResult<Self> {
-        let signer_client =
-            SignerClient::new(signer_server_address, jwt).map_err(CommitBoostError::Other)?;
+    pub fn new(signer_url: Url, jwt: &str) -> SignerResult<Self> {
+        let Some(hostname) = signer_url.host_str() else {
+            return Err(CommitBoostError::Other("Invalid signer host".to_string()).into());
+        };
+
+        let signer_server_address = format!("{}:{}", hostname, signer_url.port().unwrap_or(80));
+
+        let signer_client = match SignerClient::new(signer_server_address, jwt) {
+            Ok(client) => client,
+            Err(e) => return Err(CommitBoostError::Other(e.to_string()).into()),
+        };
 
         let client = Self {
             signer_client,
@@ -178,7 +187,7 @@ mod test {
                 return Ok(());
             }
         };
-        let signer = CommitBoostSigner::new(signer_server_address, &jwt_hex).unwrap();
+        let signer = CommitBoostSigner::new(signer_server_address.parse()?, &jwt_hex).unwrap();
 
         // Generate random data for the test
         let mut rng = rand::thread_rng();
@@ -208,7 +217,7 @@ mod test {
                 return Ok(());
             }
         };
-        let signer = CommitBoostSigner::new(signer_server_address, &jwt_hex).unwrap();
+        let signer = CommitBoostSigner::new(signer_server_address.parse()?, &jwt_hex).unwrap();
         let pubkey = signer.get_proxy_ecdsa_pubkey();
 
         // Generate random data for the test

@@ -177,7 +177,7 @@ deploy-sidecar-dev chain:
 
 # Check the status of the sidecar service on the dev server
 status-sidecar-dev chain:
-    ssh shared@remotebeast "sudo systemctl status bolt_sidecar{{chain}}" | less
+    ssh shared@remotebeast "sudo systemctl status bolt_sidecar_{{chain}}" | less
 
 # Tail the logs of the service on the dev server
 logs-sidecar-dev chain:

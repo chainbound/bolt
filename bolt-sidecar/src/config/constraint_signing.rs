@@ -1,7 +1,8 @@
-use std::{fmt, net::SocketAddr, path::PathBuf};
+use std::{fmt, path::PathBuf};
 
 use clap::{ArgGroup, Args};
 use lighthouse_account_utils::ZeroizeString;
+use reqwest::Url;
 use serde::Deserialize;
 
 use crate::common::{BlsSecretKeyWrapper, JwtSecretConfig};
@@ -18,7 +19,7 @@ pub struct ConstraintSigningOpts {
     pub constraint_private_key: Option<BlsSecretKeyWrapper>,
     /// Socket address for the commit-boost sidecar
     #[clap(long, env = "BOLT_SIDECAR_CB_SIGNER_URL", requires("commit_boost_jwt_hex"))]
-    pub commit_boost_signer_url: Option<SocketAddr>,
+    pub commit_boost_signer_url: Option<Url>,
     /// JWT in hexadecimal format for authenticating with the commit-boost service
     #[clap(long, env = "BOLT_SIDECAR_CB_JWT_HEX", requires("commit_boost_signer_url"))]
     pub commit_boost_jwt_hex: Option<JwtSecretConfig>,
