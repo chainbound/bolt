@@ -5,8 +5,8 @@
 ## Configuration
 
 There are 2 JSON configuration files:
-- [`config/holesky/deployments.json`](../config/holesky/deployments.json): contains deployment addresses of EigenLayer ([here](https://github.com/Layr-Labs/eigenlayer-contracts/blob/dev/README.md#deployments)) and Symbiotic ([here](https://docs.symbiotic.fi/deployments)). 
-- [`config/holesky/parameters.json`](../config/holesky/parameters.json): contains the launch parameters for `BoltParameters`.
+- [`config/holesky/deployments.json`](../../config/holesky/deployments.json): contains deployment addresses of EigenLayer ([here](https://github.com/Layr-Labs/eigenlayer-contracts/blob/dev/README.md#deployments)) and Symbiotic ([here](https://docs.symbiotic.fi/deployments)). 
+- [`config/holesky/parameters.json`](../../config/holesky/parameters.json): contains the launch parameters for `BoltParameters`.
 
 
 
@@ -37,7 +37,7 @@ export ADMIN_PRIVATE_KEY=0x...
 Register a Symbiotic network for Bolt with the Symbiotic `NetworkRegistry`. The private key with which the script is run will determine the network address. This private key will also need to be used later.
 
 ```bash
-forge script script/holesky/admin/helpers/Symbiotic.s.sol $HOLESKY_RPC --private-key $NETWORK_PRIVATE_KEY --broadcast -vvvv --sig "run(string memory arg)" registerNetwork
+forge script script/holesky/admin/helpers/Symbiotic.s.sol --rpc-url $HOLESKY_RPC --private-key $NETWORK_PRIVATE_KEY --broadcast -vvvv --sig "run(string memory arg)" registerNetwork
 ```
 
 Make sure `deployments.json` contains the correct address for the Symbiotic network.
