@@ -50,9 +50,6 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UU
     /// @notice Set of EigenLayer protocol strategies that are used in Bolt Protocol.
     EnumerableMap.AddressToUintMap private strategies;
 
-    /// @notice Set of EigenLayer collaterals addresses that are allowed.
-    EnumerableSet.AddressSet private whitelistedCollaterals;
-
     /// @notice Address of the EigenLayer AVS Directory contract.
     IAVSDirectory public AVS_DIRECTORY;
 
@@ -65,7 +62,7 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UU
     /// @notice Name hash of the restaking protocol for identifying the instance of `IBoltMiddleware`.
     bytes32 public NAME_HASH;
 
-    // --> Storage layout marker: 11 slots
+    // --> Storage layout marker: 9 slots
 
     /**
      * @dev This empty reserved space is put in place to allow future versions to add new
@@ -75,7 +72,7 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UU
      *
      * Total storage slots: 50
      */
-    uint256[39] private __gap;
+    uint256[41] private __gap;
 
     // ========= ERRORS =========
 
@@ -134,37 +131,26 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UU
         return getEpochAtTs(Time.timestamp());
     }
 
-    /// @notice Get the list of EigenLayer strategies addresses that are allowed.
-    /// @return _strategies The list of strategies addresses that are allowed.
-    function getWhitelistedCollaterals() public view returns (address[] memory _strategies) {
-        return whitelistedCollaterals.values();
-    }
-
-    /// @notice Check if an EigenLayer strategy address is allowed.
-    /// @param strategy The strategy address to check if it is allowed.
-    /// @return true if the strategy address is allowed, false otherwise.
-    function isCollateralWhitelisted(
-        address strategy
-    ) public view returns (bool) {
-        return whitelistedCollaterals.contains(strategy);
+    function getWhitelistedStrategies() public view returns (address[] memory) {
+        return strategies.keys();
     }
 
     // ========= ADMIN FUNCTIONS =========
-
-    /// @notice Add a collateral address to the whitelist.
-    /// @param collateral The collateral address to add to the whitelist.
-    function addWhitelistedCollateral(
-        address collateral
+    /// @notice Register a strategy to work in Bolt Protocol.
+    /// @param strategy The EigenLayer strategy address
+    function registerStrategy(
+        address strategy
     ) public onlyOwner {
-        whitelistedCollaterals.add(collateral);
-    }
+        if (strategies.contains(strategy)) {
+            revert AlreadyRegistered();
+        }
 
-    /// @notice Remove a collateral address from the whitelist.
-    /// @param collateral The collateral address to remove from the whitelist.
-    function removeWhitelistedCollateral(
-        address collateral
-    ) public onlyOwner {
-        whitelistedCollaterals.remove(collateral);
+        if (!STRATEGY_MANAGER.strategyIsWhitelistedForDeposit(IStrategy(strategy))) {
+            revert StrategyNotAllowed();
+        }
+
+        strategies.add(strategy);
+        strategies.enable(strategy);
     }
 
     // ========= EIGENLAYER MIDDLEWARE LOGIC =========
@@ -215,27 +201,6 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UU
     /// @notice Allow a disabled operator to signal opt-in to Bolt Protocol.
     function unpauseOperator() public {
         manager.unpauseOperator(msg.sender);
-    }
-
-    /// @notice Register a strategy to work in Bolt Protocol.
-    /// @param strategy The EigenLayer strategy address
-    function registerStrategy(
-        address strategy
-    ) public {
-        if (strategies.contains(strategy)) {
-            revert AlreadyRegistered();
-        }
-
-        if (!STRATEGY_MANAGER.strategyIsWhitelistedForDeposit(IStrategy(strategy))) {
-            revert StrategyNotAllowed();
-        }
-
-        if (!isCollateralWhitelisted(address(IStrategy(strategy).underlyingToken()))) {
-            revert CollateralNotWhitelisted();
-        }
-
-        strategies.add(strategy);
-        strategies.enable(strategy);
     }
 
     /// @notice Allow a strategy to signal indefinite opt-out from Bolt Protocol.

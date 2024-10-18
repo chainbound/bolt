@@ -6,12 +6,22 @@
         "vaultFactory": "0x5035c15F3cb4364CF2cF35ca53E3d6FC45FC8899",
         "networkRegistry": "0xac5acD8A105C8305fb980734a5AD920b5920106A",
         "networkMiddlewareService": "0x683F470440964E353b389391CdDDf8df381C282f",
-        "networkMiddleware": "0x61B626A562d39439Ab60fCbF19678Dac036D1209"
+        "networkMiddleware": "0x61B626A562d39439Ab60fCbF19678Dac036D1209",
+        "supportedVaults": [
+            "0x1df2fbfcD600ADd561013f44B2D055E2e974f605",
+            "0xf427d00c34609053d97167352061DD2F0F27F853"
+        ]
     },
     "eigenLayer": {
         "avsDirectory": "0x055733000064333CaDDbC92763c58BF0192fFeBf",
         "delegationManager": "0xA44151489861Fe9e3055d95adC98FbD462B948e7",
         "strategyManager": "0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6",
-        "networkMiddleware": "0x2575d6D30767149c99589cce743656fA3866ca2e"
+        "networkMiddleware": "0x2575d6D30767149c99589cce743656fA3866ca2e",
+        "supportedStrategies": [
+            "0x54945180dB7943c0ed0FEE7EdaB2Bd24620256bc",
+            "0x93c4b944D05dfe6df7645A86cd2206016c51564D",
+            "0x1BeE69b7dFFfA4E2d53C2a2Df135C388AD25dCD2",
+            "0x298aFB19A105D59E74658C4C334Ff360BadE6dd2"
+        ]
     }
 }

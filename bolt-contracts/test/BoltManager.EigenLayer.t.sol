@@ -93,11 +93,11 @@ contract BoltManagerEigenLayerTest is Test {
 
     function _adminRoutine() internal {
         // PART 0: Admin setup -- Collateral whitelist
-        vm.startPrank(admin);
-        middleware.addWhitelistedCollateral(address(eigenLayerDeployer.weth()));
-        vm.stopPrank();
-        assertEq(middleware.getWhitelistedCollaterals().length, 1);
-        assertEq(middleware.getWhitelistedCollaterals()[0], address(eigenLayerDeployer.weth()));
+        // vm.startPrank(admin);
+        // middleware.addWhitelistedCollateral(address(eigenLayerDeployer.weth()));
+        // vm.stopPrank();
+        // assertEq(middleware.getWhitelistedCollaterals().length, 1);
+        // assertEq(middleware.getWhitelistedCollaterals()[0], address(eigenLayerDeployer.weth()));
     }
 
     function _eigenLayerOptInRoutine() internal {
@@ -194,7 +194,9 @@ contract BoltManagerEigenLayerTest is Test {
 
         // 2. --- Operator and strategy registration into BoltManager (middleware) ---
 
+        vm.startPrank(admin);
         middleware.registerStrategy(address(eigenLayerDeployer.wethStrat()));
+        vm.stopPrank();
         assertEq(middleware.isStrategyEnabled(address(eigenLayerDeployer.wethStrat())), true);
     }
 
@@ -256,26 +258,6 @@ contract BoltManagerEigenLayerTest is Test {
 
         vm.expectRevert(IBoltValidatorsV1.ValidatorDoesNotExist.selector);
         manager.getProposerStatus(pubkeyHash);
-    }
-
-    function testWhitelistedCollaterals() public {
-        _adminRoutine();
-        address[] memory collaterals = middleware.getWhitelistedCollaterals();
-        assertEq(collaterals.length, 1);
-        assertEq(collaterals[0], address(eigenLayerDeployer.weth()));
-    }
-
-    function testNonWhitelistedCollateral() public {
-        _adminRoutine();
-        vm.startPrank(admin);
-        middleware.removeWhitelistedCollateral(address(eigenLayerDeployer.weth()));
-        vm.stopPrank();
-
-        address strat = address(eigenLayerDeployer.wethStrat());
-        vm.startPrank(admin);
-        vm.expectRevert(IBoltMiddlewareV1.CollateralNotWhitelisted.selector);
-        middleware.registerStrategy(strat);
-        vm.stopPrank();
     }
 
     /// @notice Compute the hash of a BLS public key

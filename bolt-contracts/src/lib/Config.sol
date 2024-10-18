@@ -20,9 +20,11 @@ library BoltConfig {
         address symbioticOperatorRegistry;
         address symbioticOperatorNetOptIn;
         address symbioticVaultFactory;
+        address[] supportedVaults;
         address eigenLayerAVSDirectory;
         address eigenLayerDelegationManager;
         address eigenLayerStrategyManager;
+        address[] supportedStrategies;
     }
 
     struct SymbioticDeployments {

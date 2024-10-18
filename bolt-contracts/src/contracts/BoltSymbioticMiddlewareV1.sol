@@ -58,9 +58,6 @@ contract BoltSymbioticMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UUP
     /// @notice Set of Symbiotic protocol vaults that are used in Bolt Protocol.
     EnumerableMap.AddressToUintMap private vaults;
 
-    /// @notice Set of Symbiotic collateral addresses that are whitelisted.
-    EnumerableSet.AddressSet private whitelistedCollaterals;
-
     /// @notice Address of the Bolt network in Symbiotic Protocol.
     address public BOLT_SYMBIOTIC_NETWORK;
 
@@ -75,7 +72,7 @@ contract BoltSymbioticMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UUP
 
     bytes32 public NAME_HASH;
 
-    // --> Storage layout marker: 14 slots
+    // --> Storage layout marker: 12 slots
 
     /**
      * @dev This empty reserved space is put in place to allow future versions to add new
@@ -85,7 +82,7 @@ contract BoltSymbioticMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UUP
      *
      * Total storage slots: 50
      */
-    uint256[36] private __gap;
+    uint256[38] private __gap;
 
     // ========= ERRORS =========
 
@@ -148,37 +145,30 @@ contract BoltSymbioticMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UUP
         return getEpochAtTs(Time.timestamp());
     }
 
-    /// @notice Get the list of collateral addresses that are whitelisted.
-    /// @return collaterals The list of collateral addresses that are whitelisted.
-    function getWhitelistedCollaterals() public view returns (address[] memory collaterals) {
-        return whitelistedCollaterals.values();
+    /// @notice Get the whitelisted vaults.
+    function getWhitelistedVaults() public view returns (address[] memory) {
+        return vaults.keys();
     }
 
-    /// @notice Check if a collateral address is whitelisted.
-    /// @param collateral The collateral address to check the whitelist status for.
-    /// @return True if the collateral address is whitelisted, false otherwise.
-    function isCollateralWhitelisted(
-        address collateral
-    ) public view returns (bool) {
-        return whitelistedCollaterals.contains(collateral);
-    }
+    // =========== ADMIN FUNCTIONS ============ //
 
-    // ========= ADMIN FUNCTIONS =========
-
-    /// @notice Add a collateral address to the whitelist.
-    /// @param collateral The collateral address to add to the whitelist.
-    function addWhitelistedCollateral(
-        address collateral
+    /// @notice Allow a vault to signal opt-in to Bolt Protocol.
+    /// @param vault The vault address to signal opt-in for.
+    function registerVault(
+        address vault
     ) public onlyOwner {
-        whitelistedCollaterals.add(collateral);
-    }
+        if (vaults.contains(vault)) {
+            revert AlreadyRegistered();
+        }
 
-    /// @notice Remove a collateral address from the whitelist.
-    /// @param collateral The collateral address to remove from the whitelist.
-    function removeWhitelistedCollateral(
-        address collateral
-    ) public onlyOwner {
-        whitelistedCollaterals.remove(collateral);
+        if (!IRegistry(VAULT_FACTORY).isEntity(vault)) {
+            revert NotVault();
+        }
+
+        // TODO: check slashing conditions and veto duration
+
+        vaults.add(vault);
+        vaults.enable(vault);
     }
 
     // ========= SYMBIOTIC MIDDLEWARE LOGIC =========
@@ -223,29 +213,6 @@ contract BoltSymbioticMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UUP
     /// @notice Allow a disabled operator to signal opt-in to Bolt Protocol.
     function unpauseOperator() public {
         manager.unpauseOperator(msg.sender);
-    }
-
-    /// @notice Allow a vault to signal opt-in to Bolt Protocol.
-    /// @param vault The vault address to signal opt-in for.
-    function registerVault(
-        address vault
-    ) public {
-        if (vaults.contains(vault)) {
-            revert AlreadyRegistered();
-        }
-
-        if (!IRegistry(VAULT_FACTORY).isEntity(vault)) {
-            revert NotVault();
-        }
-
-        if (!isCollateralWhitelisted(IVault(vault).collateral())) {
-            revert CollateralNotWhitelisted();
-        }
-
-        // TODO: check slashing conditions and veto duration
-
-        vaults.add(vault);
-        vaults.enable(vault);
     }
 
     /// @notice Allow a vault to signal indefinite opt-out from Bolt Protocol.

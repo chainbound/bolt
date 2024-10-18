@@ -189,7 +189,7 @@ contract BoltManagerSymbioticTest is Test {
 
         // --- Whitelist collateral in BoltSymbioticMiddleware ---
         vm.startPrank(admin);
-        middleware.addWhitelistedCollateral(address(collateral));
+        middleware.registerVault(address(vault));
         manager.addRestakingProtocol(address(middleware));
         vm.stopPrank();
     }
@@ -230,8 +230,6 @@ contract BoltManagerSymbioticTest is Test {
         assertEq(operatorVaultOptInService.isOptedIn(operator, address(vault)), true);
 
         // --- Register Vault and Operator in BoltManager (middleware) ---
-
-        middleware.registerVault(address(vault));
         assertEq(middleware.isVaultEnabled(address(vault)), true);
 
         vm.prank(operator);
@@ -371,20 +369,5 @@ contract BoltManagerSymbioticTest is Test {
 
         vm.expectRevert(IBoltValidatorsV1.ValidatorDoesNotExist.selector);
         manager.getProposerStatus(pubkeyHash);
-    }
-
-    function testGetWhitelistedCollaterals() public view {
-        address[] memory collaterals = middleware.getWhitelistedCollaterals();
-        assertEq(collaterals.length, 1);
-        assertEq(collaterals[0], address(collateral));
-    }
-
-    function testNonWhitelistedCollateral() public {
-        vm.prank(admin);
-        middleware.removeWhitelistedCollateral(address(collateral));
-
-        vm.prank(vaultAdmin);
-        vm.expectRevert(IBoltMiddlewareV1.CollateralNotWhitelisted.selector);
-        middleware.registerVault(address(vault));
     }
 }

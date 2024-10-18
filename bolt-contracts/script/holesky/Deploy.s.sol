@@ -5,6 +5,10 @@ import {Script, console} from "forge-std/Script.sol";
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {Upgrades, Options} from "@openzeppelin-foundry-upgrades/src/Upgrades.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+import {IVault} from "@symbiotic/interfaces/vault/IVault.sol";
+import {IStrategy} from "@eigenlayer/src/contracts/interfaces/IStrategy.sol";
 
 import {BoltParametersV1} from "../../src/contracts/BoltParametersV1.sol";
 import {BoltValidatorsV1} from "../../src/contracts/BoltValidatorsV1.sol";
@@ -96,7 +100,26 @@ contract DeployBolt is Script {
         BoltManagerV1(managerProxy).addRestakingProtocol(address(eigenLayerMiddlewareProxy));
         BoltManagerV1(managerProxy).addRestakingProtocol(address(symbioticMiddlewareProxy));
 
-        console.log("Whitelisted middleware contracts in BoltManager, adding supported collateral...");
+        console.log("Whitelisted middleware contracts in BoltManager");
+        console.log("Registering supported Symbiotic Vaults...");
+
+        for (uint256 i = 0; i < deployments.supportedVaults.length; i++) {
+            IVault vault = IVault(deployments.supportedVaults[i]);
+            console.log("Registering vault with collateral: %s (address: %s)", vault.collateral(), address(vault));
+            BoltSymbioticMiddlewareV1(symbioticMiddlewareProxy).registerVault(address(deployments.supportedVaults[i]));
+        }
+
+        console.log("Registering supported EigenLayer Strategies...");
+
+        for (uint256 i = 0; i < deployments.supportedStrategies.length; i++) {
+            IStrategy strategy = IStrategy(deployments.supportedStrategies[i]);
+            console.log(
+                "Registering strategy with collateral: %s (address: %s)",
+                address(strategy.underlyingToken()),
+                address(strategy)
+            );
+            BoltEigenLayerMiddlewareV1(eigenLayerMiddlewareProxy).registerStrategy(address(strategy));
+        }
 
         vm.stopBroadcast();
     }
@@ -141,9 +164,11 @@ contract DeployBolt is Script {
             symbioticOperatorRegistry: vm.parseJsonAddress(json, ".symbiotic.operatorRegistry"),
             symbioticOperatorNetOptIn: vm.parseJsonAddress(json, ".symbiotic.networkOptInService"),
             symbioticVaultFactory: vm.parseJsonAddress(json, ".symbiotic.vaultFactory"),
+            supportedVaults: vm.parseJsonAddressArray(json, ".symbiotic.supportedVaults"),
             eigenLayerAVSDirectory: vm.parseJsonAddress(json, ".eigenLayer.avsDirectory"),
             eigenLayerDelegationManager: vm.parseJsonAddress(json, ".eigenLayer.delegationManager"),
-            eigenLayerStrategyManager: vm.parseJsonAddress(json, ".eigenLayer.strategyManager")
+            eigenLayerStrategyManager: vm.parseJsonAddress(json, ".eigenLayer.strategyManager"),
+            supportedStrategies: vm.parseJsonAddressArray(json, ".eigenLayer.supportedStrategies")
         });
     }
 }

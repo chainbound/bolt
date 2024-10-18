@@ -10,7 +10,6 @@ interface IBoltMiddlewareV1 {
     error NotRegistered();
     error OperatorNotOptedIn();
     error NotOperator();
-    error CollateralNotWhitelisted();
     error NotAllowed();
 
     function NAME_HASH() external view returns (bytes32);
@@ -24,20 +23,6 @@ interface IBoltMiddlewareV1 {
     ) external view returns (uint48);
 
     function getCurrentEpoch() external view returns (uint48);
-
-    function addWhitelistedCollateral(
-        address collateral
-    ) external;
-
-    function removeWhitelistedCollateral(
-        address collateral
-    ) external;
-
-    function getWhitelistedCollaterals() external view returns (address[] memory);
-
-    function isCollateralWhitelisted(
-        address collateral
-    ) external view returns (bool);
 
     function getOperatorStake(address operator, address collateral) external view returns (uint256);
 
