@@ -1,4 +1,4 @@
-use std::{fs::File, io::Read};
+use std::fs;
 
 use alloy::primitives::Address;
 use clap::Parser;
@@ -83,6 +83,7 @@ pub struct Opts {
     pub commitment_private_key: EcdsaSecretKeyWrapper,
     /// Operating limits for the sidecar
     #[clap(flatten)]
+    #[serde(default)]
     pub limits: LimitsOpts,
     /// Chain config for the chain on which the sidecar is running
     #[clap(flatten)]
@@ -98,17 +99,14 @@ pub struct Opts {
     /// to avoid issues on potential extra flags provided (e.g. "--exact" from cargo nextest).
     #[cfg(test)]
     #[clap(allow_hyphen_values = true)]
+    #[serde(default)]
     pub extra_args: Vec<String>,
 }
 
 impl Opts {
     /// Parse the configuration from a TOML file.
     pub fn parse_from_toml(file_path: &str) -> eyre::Result<Self> {
-        let mut file = File::open(file_path).wrap_err("Unable to open file")?;
-
-        let mut contents = String::new();
-        file.read_to_string(&mut contents).wrap_err("Unable to read file")?;
-
+        let contents = fs::read_to_string(file_path).wrap_err("Unable to read file")?;
         toml::from_str(&contents).wrap_err("Error parsing the TOML file")
     }
 }
@@ -134,15 +132,13 @@ mod tests {
 
     #[test]
     fn test_parse_config_from_toml() {
-        let path = env!("CARGO_MANIFEST_DIR").to_string() + "Config.toml";
+        let path = env!("CARGO_MANIFEST_DIR").to_string() + "/Config.example.toml";
 
-        if let Ok(config_file) = std::fs::read_to_string(path) {
-            let config = Opts::parse_from_toml(&config_file).expect("Failed to parse config");
-            assert_eq!(config.execution_api_url, Url::parse("http://localhost:8545").unwrap());
-            assert_eq!(config.beacon_api_url, Url::parse("http://localhost:5052").unwrap());
-            assert_eq!(config.engine_api_url, Url::parse("http://localhost:8551").unwrap());
-            assert_eq!(config.constraints_api_url, Url::parse("http://localhost:3030").unwrap());
-            assert_eq!(config.constraints_proxy_port, 18551);
-        }
+        let config = Opts::parse_from_toml(&path).expect("Failed to parse config from TOML");
+        assert_eq!(config.execution_api_url, Url::parse("http://localhost:8545").unwrap());
+        assert_eq!(config.beacon_api_url, Url::parse("http://localhost:5052").unwrap());
+        assert_eq!(config.engine_api_url, Url::parse("http://localhost:8551").unwrap());
+        assert_eq!(config.constraints_api_url, Url::parse("http://localhost:3030").unwrap());
+        assert_eq!(config.constraints_proxy_port, 18551);
     }
 }
