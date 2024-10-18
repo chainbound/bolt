@@ -6,7 +6,7 @@ use std::{
     fmt::Debug,
     fs::{self, DirEntry, ReadDir},
     io,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use alloy::rpc::types::beacon::constants::BLS_PUBLIC_KEY_BYTES_LEN;
@@ -65,10 +65,9 @@ impl KeystoreSigner {
         Ok(Self { keypairs, chain })
     }
 
-    #[allow(clippy::ptr_arg)]
     pub fn from_secrets_directory(
         keys_path: &PathBuf,
-        secrets_path: &PathBuf,
+        secrets_path: &Path,
         chain: ChainConfig,
     ) -> SignerResult<Self> {
         let keystores_paths = find_json_keystores(keys_path)?;
@@ -81,7 +80,7 @@ impl KeystoreSigner {
 
             let pubkey = format!("0x{}", keystore.pubkey());
 
-            let mut secret_path = secrets_path.clone();
+            let mut secret_path = secrets_path.to_path_buf();
             secret_path.push(pubkey);
 
             let password = fs::read_to_string(secret_path)
