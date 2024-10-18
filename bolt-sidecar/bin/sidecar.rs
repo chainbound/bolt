@@ -25,18 +25,18 @@ async fn main() -> Result<()> {
                 bail!("Failed to initialize the sidecar driver with local signer: {:?}", err)
             }
         }
-    } else if opts.signing.keystore.is_some() {
-        match SidecarDriver::with_keystore_signer(&opts).await {
-            Ok(driver) => driver.run_forever().await,
-            Err(err) => {
-                bail!("Failed to initialize the sidecar driver with keystore signer: {:?}", err)
-            }
-        }
-    } else {
+    } else if opts.signing.commit_boost_jwt_hex.is_some() {
         match SidecarDriver::with_commit_boost_signer(&opts).await {
             Ok(driver) => driver.run_forever().await,
             Err(err) => {
                 bail!("Failed to initialize the sidecar driver with commit boost: {:?}", err)
+            }
+        }
+    } else {
+        match SidecarDriver::with_keystore_signer(&opts).await {
+            Ok(driver) => driver.run_forever().await,
+            Err(err) => {
+                bail!("Failed to initialize the sidecar driver with keystore signer: {:?}", err)
             }
         }
     }

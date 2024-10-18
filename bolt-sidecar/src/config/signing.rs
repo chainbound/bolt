@@ -7,10 +7,10 @@ use serde::Deserialize;
 use crate::common::{BlsSecretKeyWrapper, JwtSecretConfig};
 
 /// Command-line options for signing
-#[derive(Args, Deserialize, Debug)]
+#[derive(Args, Deserialize)]
 #[clap(
     group = ArgGroup::new("signing-opts").required(true)
-        .args(&["private_key", "commit_boost_address", "keystore"])
+        .args(&["private_key", "commit_boost_address", "keystore_password", "keystore_secrets_path"])
 )]
 pub struct SigningOpts {
     /// Private key to use for signing preconfirmation requests
@@ -22,20 +22,6 @@ pub struct SigningOpts {
     /// JWT in hexadecimal format for authenticating with the commit-boost service
     #[clap(long, env = "BOLT_SIDECAR_CB_JWT_HEX", requires("commit_boost_address"))]
     pub commit_boost_jwt_hex: Option<JwtSecretConfig>,
-    /// Options for the ERC-2335 keystore
-    #[clap(flatten)]
-    pub keystore: Option<KeystoreOpts>,
-    /// Path to the delegations file. If not provided, the default path is used.
-    #[clap(long, env = "BOLT_SIDECAR_DELEGATIONS_PATH")]
-    pub delegations_path: Option<PathBuf>,
-}
-
-#[derive(Args, Deserialize)]
-#[clap(
-    group = ArgGroup::new("keystore-opts").required(true)
-        .args(&["keystore_password", "keystore_secrets_path"])
-)]
-pub struct KeystoreOpts {
     /// The password for the ERC-2335 keystore.
     /// Reference: https://eips.ethereum.org/EIPS/eip-2335
     #[clap(long, env = "BOLT_SIDECAR_KEYSTORE_PASSWORD")]
@@ -47,12 +33,18 @@ pub struct KeystoreOpts {
     /// Path to the keystores folder. If not provided, the default path is used.
     #[clap(long, env = "BOLT_SIDECAR_KEYSTORE_PATH")]
     pub keystore_path: Option<PathBuf>,
+    /// Path to the delegations file. If not provided, the default path is used.
+    #[clap(long, env = "BOLT_SIDECAR_DELEGATIONS_PATH")]
+    pub delegations_path: Option<PathBuf>,
 }
 
 // Implement Debug manually to hide the keystore_password field
-impl fmt::Debug for KeystoreOpts {
+impl fmt::Debug for SigningOpts {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SigningOpts")
+            .field("private_key", &self.private_key)
+            .field("commit_boost_address", &self.commit_boost_address)
+            .field("commit_boost_jwt_hex", &self.commit_boost_jwt_hex)
             .field("keystore_password", &"********") // Hides the actual password
             .field("keystore_path", &self.keystore_path)
             .field("keystore_secrets_path", &self.keystore_secrets_path)

@@ -112,19 +112,19 @@ impl SidecarDriver<StateClient, PrivateKeySigner> {
         // The default state client simply uses the execution API URL to fetch state updates.
         let state_client = StateClient::new(opts.execution_api_url.clone());
 
-        let keystore_opts = opts.signing.keystore.as_ref().expect("keystore is some");
+        let signing_opts = &opts.signing;
 
-        let keystore = if let Some(psw) = keystore_opts.keystore_password.as_ref() {
+        let keystore = if let Some(psw) = signing_opts.keystore_password.as_ref() {
             KeystoreSigner::from_password(
-                &parse_path(keystore_opts.keystore_path.as_ref(), KEYSTORES_DEFAULT_PATH),
+                &parse_path(signing_opts.keystore_path.as_ref(), KEYSTORES_DEFAULT_PATH),
                 psw.as_ref(),
                 opts.chain,
             )?
         } else {
             KeystoreSigner::from_secrets_directory(
-                &parse_path(keystore_opts.keystore_path.as_ref(), KEYSTORES_DEFAULT_PATH),
+                &parse_path(signing_opts.keystore_path.as_ref(), KEYSTORES_DEFAULT_PATH),
                 &parse_path(
-                    keystore_opts.keystore_secrets_path.as_ref(),
+                    signing_opts.keystore_secrets_path.as_ref(),
                     KEYSTORES_SECRETS_DEFAULT_PATH,
                 ),
                 opts.chain,
