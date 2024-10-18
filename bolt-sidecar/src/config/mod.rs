@@ -12,8 +12,8 @@ pub use validator_indexes::ValidatorIndexes;
 pub mod chain;
 pub use chain::ChainConfig;
 
-pub mod signing;
-pub use signing::SigningOpts;
+pub mod constraint_signing;
+pub use constraint_signing::ConstraintSigningOpts;
 
 pub mod telemetry;
 use telemetry::TelemetryOpts;
@@ -21,7 +21,7 @@ use telemetry::TelemetryOpts;
 pub mod limits;
 use limits::LimitsOpts;
 
-use crate::common::{BlsSecretKeyWrapper, JwtSecretConfig};
+use crate::common::{BlsSecretKeyWrapper, EcdsaSecretKeyWrapper, JwtSecretConfig};
 
 /// Default port for the JSON-RPC server exposed by the sidecar.
 pub const DEFAULT_RPC_PORT: u16 = 8000;
@@ -70,18 +70,22 @@ pub struct Opts {
     /// Secret BLS key to sign fallback payloads with (If not provided, a random key will be used)
     #[clap(long, env = "BOLT_SIDECAR_BUILDER_PRIVATE_KEY", default_value_t = BlsSecretKeyWrapper::random())]
     pub builder_private_key: BlsSecretKeyWrapper,
+    /// Secret ECDSA key to sign commitment messages with
+    #[clap(long, env = "BOLT_SIDECAR_COMMITMENT_PRIVATE_KEY")]
+    pub commitment_private_key: EcdsaSecretKeyWrapper,
     /// Operating limits for the sidecar
     #[clap(flatten)]
     pub limits: LimitsOpts,
     /// Chain config for the chain on which the sidecar is running
     #[clap(flatten)]
     pub chain: ChainConfig,
-    /// Commitment signing options.
+    /// Constraint signing options
     #[clap(flatten)]
-    pub signing: SigningOpts,
+    pub constraint_signing: ConstraintSigningOpts,
     /// Telemetry options
     #[clap(flatten)]
     pub telemetry: TelemetryOpts,
+
     /// Additional unrecognized arguments. Useful for CI and testing
     /// to avoid issues on potential extra flags provided (e.g. "--exact" from cargo nextest).
     #[cfg(test)]
@@ -104,6 +108,12 @@ impl Opts {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_validate_cli_flags() {
+        use clap::CommandFactory;
+        Opts::command().debug_assert();
+    }
 
     #[test]
     fn test_parse_url() {

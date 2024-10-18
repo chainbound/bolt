@@ -141,7 +141,7 @@ impl KeystoreSigner {
 
 impl Debug for KeystoreSigner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Signer")
+        f.debug_struct("KeystoreSigner")
             .field(
                 "pubkeys",
                 &self.keypairs.iter().map(|kp| kp.pk.as_hex_string()).collect::<Vec<_>>(),

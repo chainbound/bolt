@@ -5,7 +5,7 @@ use std::{
     path::Path,
 };
 
-use alloy::primitives::U256;
+use alloy::{primitives::U256, signers::k256::ecdsa::SigningKey};
 use blst::min_pk::SecretKey;
 use rand::{Rng, RngCore};
 use reth_primitives::PooledTransactionsElement;
@@ -136,6 +136,44 @@ impl Deref for BlsSecretKeyWrapper {
 impl fmt::Display for BlsSecretKeyWrapper {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "0x{}", hex::encode(self.0.to_bytes()))
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EcdsaSecretKeyWrapper(pub SigningKey);
+
+impl EcdsaSecretKeyWrapper {
+    /// Generate a new random ECDSA secret key.
+    #[allow(dead_code)]
+    pub fn random() -> Self {
+        Self(SigningKey::random(&mut rand::thread_rng()))
+    }
+}
+
+impl<'de> Deserialize<'de> for EcdsaSecretKeyWrapper {
+    fn deserialize<D>(deserializer: D) -> Result<EcdsaSecretKeyWrapper, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let sk = String::deserialize(deserializer)?;
+        Ok(EcdsaSecretKeyWrapper::from(sk.as_str()))
+    }
+}
+
+impl From<&str> for EcdsaSecretKeyWrapper {
+    fn from(sk: &str) -> Self {
+        let hex_sk = sk.strip_prefix("0x").unwrap_or(sk);
+        let bytes = hex::decode(hex_sk).expect("valid hex");
+        let sk = SigningKey::from_slice(&bytes).expect("valid sk");
+        EcdsaSecretKeyWrapper(sk)
+    }
+}
+
+impl Deref for EcdsaSecretKeyWrapper {
+    type Target = SigningKey;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
