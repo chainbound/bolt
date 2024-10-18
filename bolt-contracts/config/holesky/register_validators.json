@@ -1,0 +1,15 @@
+{
+  "boltValidators": "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
+  "maxCommittedGasLimit": 10000000,
+  "authorizedOperator": "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984",
+  "pubkeys": [
+    {
+      "x": [1, 2],
+      "y": [3, 4]
+    },
+    {
+      "x": [5, 6],
+      "y": [7, 8]
+    }
+  ]
+}
