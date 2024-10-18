@@ -25,22 +25,33 @@ anvil --fork-url $HOLESKY_RPC
 > [!IMPORTANT]  
 > Run everything on the local Anvil fork first! This requires just replacing the $HOLESKY_RPC with the $ANVIL_RPC.
 
+Also set your private keys as environment variables:
+
+```bash
+export NETWORK_PRIVATE_KEY=0x...
+export ADMIN_PRIVATE_KEY=0x...
+```
+
 ### Pre-deployment
 
 Register a Symbiotic network for Bolt with the Symbiotic `NetworkRegistry`. The private key with which the script is run will determine the network address. This private key will also need to be used later.
 
 ```bash
-forge script script/holesky/SymbioticSetup.s.sol $HOLESKY_RPC --private-key $NETWORK_PRIVATE_KEY --broadcast -vvvv --sig "run(string memory arg)" registerNetwork
+forge script script/holesky/helpers/Symbiotic.s.sol $HOLESKY_RPC --private-key $NETWORK_PRIVATE_KEY --broadcast -vvvv --sig "run(string memory arg)" registerNetwork
 ```
+
+Make sure `deployments.json` contains the correct address for the Symbiotic network.
 
 ### Deployment
 
 Run the following script to deploy Bolt V1:
 ```bash
-forge script script/holesky/Deploy.s.sol --rpc-url $HOLESKY_RPC --private-key $PRIVATE_KEY --broadcast -vvvv
+forge script script/holesky/Deploy.s.sol --rpc-url $HOLESKY_RPC --private-key $ADMIN_PRIVATE_KEY --broadcast -vvvv
 ```
 
-This will deploy all the contracts. Now update `deployments.json` with the Symbiotic middleware, because we'll need to register it
+This will deploy all the contracts. The address corresponding to the private key will be the system admin.
+
+Now update `deployments.json` with the Symbiotic and EigenLayer middleware contracts, because we'll need to register it
 in the next step.
 
 ### Post-deployment
@@ -49,5 +60,12 @@ Register the deployed `SymbioticMiddleware` with the Symbiotic `NetworkMiddlewar
 to be run with the network private key!
 
 ```bash
-forge script script/holesky/SymbioticSetup.s.sol $HOLESKY_RPC --private-key $NETWORK_PRIVATE_KEY --broadcast -vvvv --sig "run(string memory arg)" registerMiddleware
+forge script script/holesky/helpers/Symbiotic.s.sol --rpc-url $HOLESKY_RPC --private-key $NETWORK_PRIVATE_KEY --broadcast -vvvv --sig "run(string memory arg)" registerMiddleware
 ```
+
+Also set the AVS metadata in the EigenLayer AVS Directory, needs to be run with the **admin private key** used at deployment.
+
+```bash
+forge script script/holesky/helpers/RegisterAVS.s.sol --rpc-url $HOLESKY_RPC --private-key $ADMIN_PRIVATE_KEY --broadcast -vvvv 
+```
+

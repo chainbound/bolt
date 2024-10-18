@@ -4,7 +4,7 @@ pragma solidity 0.8.25;
 import {Script, console} from "forge-std/Script.sol";
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
-import {Upgrades} from "@openzeppelin-foundry-upgrades/src/Upgrades.sol";
+import {Upgrades, Options} from "@openzeppelin-foundry-upgrades/src/Upgrades.sol";
 
 import {BoltParametersV1} from "../../src/contracts/BoltParametersV1.sol";
 import {BoltValidatorsV1} from "../../src/contracts/BoltValidatorsV1.sol";
@@ -16,15 +16,19 @@ import {BoltConfig} from "../../src/lib/Config.sol";
 /// @notice Script to deploy the Bolt contracts.
 contract DeployBolt is Script {
     function run() public {
-        vm.startBroadcast();
-
         // The admin address will be authorized to call the adminOnly functions
         // on the contract implementations, as well as upgrade the contracts.
-        address admin = 0xB5d6600D2B4C18E828C5E345Ed094F56d36c3c2F;
+        address admin = msg.sender;
         console.log("Deploying with admin", admin);
 
         BoltConfig.Parameters memory config = readParameters();
         BoltConfig.Deployments memory deployments = readDeployments();
+
+        vm.startBroadcast(admin);
+
+        // TODO: Fix safe deploy, currently failing with `ASTDereferencerError` from openzeppelin
+        Options memory opts;
+        opts.unsafeSkipAllChecks = true;
 
         bytes memory initParameters = abi.encodeCall(
             BoltParametersV1.initialize,
@@ -42,17 +46,17 @@ contract DeployBolt is Script {
                 config.minimumOperatorStake
             )
         );
-        address parametersProxy = Upgrades.deployUUPSProxy("BoltParametersV1.sol", initParameters);
+        address parametersProxy = Upgrades.deployUUPSProxy("BoltParametersV1.sol", initParameters, opts);
         console.log("BoltParametersV1 proxy deployed at", parametersProxy);
 
         // Generate the `initialize` call data for the contract.
         bytes memory initValidators = abi.encodeCall(BoltValidatorsV1.initialize, (admin, parametersProxy));
         // Deploy the UUPSProxy through the `Upgrades` library, with the correct `initialize` call data.
-        address validatorsProxy = Upgrades.deployUUPSProxy("BoltValidatorsV1.sol", initValidators);
+        address validatorsProxy = Upgrades.deployUUPSProxy("BoltValidatorsV1.sol", initValidators, opts);
         console.log("BoltValidatorsV1 proxy deployed at", validatorsProxy);
 
         bytes memory initManager = abi.encodeCall(BoltManagerV1.initialize, (admin, parametersProxy, validatorsProxy));
-        address managerProxy = Upgrades.deployUUPSProxy("BoltManagerV1.sol", initManager);
+        address managerProxy = Upgrades.deployUUPSProxy("BoltManagerV1.sol", initManager, opts);
         console.log("BoltManagerV1 proxy deployed at", managerProxy);
 
         bytes memory initEigenLayerMiddleware = abi.encodeCall(
@@ -67,7 +71,7 @@ contract DeployBolt is Script {
             )
         );
         address eigenLayerMiddlewareProxy =
-            Upgrades.deployUUPSProxy("BoltEigenLayerMiddlewareV1.sol", initEigenLayerMiddleware);
+            Upgrades.deployUUPSProxy("BoltEigenLayerMiddlewareV1.sol", initEigenLayerMiddleware, opts);
         console.log("BoltEigenLayerMiddlewareV1 proxy deployed at", eigenLayerMiddlewareProxy);
 
         bytes memory initSymbioticMiddleware = abi.encodeCall(
@@ -83,8 +87,16 @@ contract DeployBolt is Script {
             )
         );
         address symbioticMiddlewareProxy =
-            Upgrades.deployUUPSProxy("BoltSymbioticMiddlewareV1.sol", initSymbioticMiddleware);
+            Upgrades.deployUUPSProxy("BoltSymbioticMiddlewareV1.sol", initSymbioticMiddleware, opts);
         console.log("BoltSymbioticMiddlewareV1 proxy deployed at", address(symbioticMiddlewareProxy));
+
+        console.log("Core contracts deployed succesfully, whitelisting middleware contracts in BoltManager...");
+        console.log("EigenLayer middleware:", address(eigenLayerMiddlewareProxy));
+        console.log("Symbiotic middleware:", address(symbioticMiddlewareProxy));
+        BoltManagerV1(managerProxy).addRestakingProtocol(address(eigenLayerMiddlewareProxy));
+        BoltManagerV1(managerProxy).addRestakingProtocol(address(symbioticMiddlewareProxy));
+
+        console.log("Whitelisted middleware contracts in BoltManager, adding supported collateral...");
 
         vm.stopBroadcast();
     }

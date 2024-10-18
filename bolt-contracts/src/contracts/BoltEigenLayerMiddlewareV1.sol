@@ -54,7 +54,7 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddleware, OwnableUpgradeable, UUPS
     EnumerableSet.AddressSet private whitelistedCollaterals;
 
     /// @notice Address of the EigenLayer AVS Directory contract.
-    AVSDirectoryStorage public AVS_DIRECTORY;
+    IAVSDirectory public AVS_DIRECTORY;
 
     /// @notice Address of the EigenLayer Delegation Manager contract.
     DelegationManagerStorage public DELEGATION_MANAGER;
@@ -103,7 +103,7 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddleware, OwnableUpgradeable, UUPS
         manager = IBoltManager(_manager);
         START_TIMESTAMP = Time.timestamp();
 
-        AVS_DIRECTORY = AVSDirectoryStorage(_eigenlayerAVSDirectory);
+        AVS_DIRECTORY = IAVSDirectory(_eigenlayerAVSDirectory);
         DELEGATION_MANAGER = DelegationManagerStorage(_eigenlayerDelegationManager);
         STRATEGY_MANAGER = StrategyManagerStorage(_eigenlayerStrategyManager);
         NAME_HASH = keccak256("EIGENLAYER");
