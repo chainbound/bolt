@@ -20,6 +20,7 @@ contract RegisterSymbioticOperator is Script {
 
         vm.startBroadcast(operatorSk);
         middleware.registerOperator(rpc);
+        console.log("Successfully registered Symbiotic operator");
 
         vm.stopBroadcast();
     }

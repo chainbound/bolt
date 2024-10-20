@@ -61,6 +61,6 @@ contract SymbioticHelper is Script {
         string memory path = string.concat(root, "/config/holesky/deployments.json");
         string memory json = vm.readFile(path);
 
-        return vm.parseJsonAddress(json, ".symbiotic.networkMiddleware");
+        return vm.parseJsonAddress(json, ".symbiotic.middleware");
     }
 }

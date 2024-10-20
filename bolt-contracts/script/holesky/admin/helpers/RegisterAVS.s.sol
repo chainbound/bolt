@@ -26,6 +26,6 @@ contract RegisterAVS is Script {
         string memory path = string.concat(root, "/config/holesky/deployments.json");
         string memory json = vm.readFile(path);
 
-        return vm.parseJsonAddress(json, ".eigenLayer.networkMiddleware");
+        return vm.parseJsonAddress(json, ".eigenLayer.middleware");
     }
 }

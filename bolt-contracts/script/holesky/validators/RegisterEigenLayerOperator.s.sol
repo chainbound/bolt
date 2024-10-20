@@ -6,7 +6,11 @@ import {Script, console} from "forge-std/Script.sol";
 import {IAVSDirectory} from "@eigenlayer/src/contracts/interfaces/IAVSDirectory.sol";
 import {ISignatureUtils} from "@eigenlayer/src/contracts/interfaces/ISignatureUtils.sol";
 
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
 import {BoltEigenLayerMiddlewareV1} from "../../../src/contracts/BoltEigenLayerMiddlewareV1.sol";
+import {IBoltMiddlewareV1} from "../../../src/interfaces/IBoltMiddlewareV1.sol";
 
 contract RegisterEigenLayerOperator is Script {
     struct OperatorConfig {
@@ -28,8 +32,6 @@ contract RegisterEigenLayerOperator is Script {
         console.log("Operator address:", operator);
         console.log("Operator RPC:", config.rpc);
 
-        vm.startBroadcast(operatorSk);
-
         bytes32 digest = avsDirectory.calculateOperatorAVSRegistrationDigestHash({
             operator: operator,
             avs: address(middleware),
@@ -43,7 +45,10 @@ contract RegisterEigenLayerOperator is Script {
         ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature =
             ISignatureUtils.SignatureWithSaltAndExpiry(rawSignature, config.salt, config.expiry);
 
+        vm.startBroadcast(operatorSk);
+
         middleware.registerOperator(config.rpc, operatorSignature);
+        console.log("Successfully registered EigenLayer operator");
 
         vm.stopBroadcast();
     }
