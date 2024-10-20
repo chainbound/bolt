@@ -1,0 +1,8 @@
+{
+    "maxCommittedGasLimit": 10000000,
+    "authorizedOperator": "0x",
+    "pubkeys": [
+        "0xad02df40e24e8534dc4c175163f7a034f99f2e81c43b7ea19904006cb05d001b5301d3444f1812b101803b7f72e340fa",
+        "0xa4c0a8b5dd70d0fe8f05580143bea4c40badb176c2b0c20001cddf897a11bb832137fa4050af1d0420a7dc27568697df"
+    ]
+}

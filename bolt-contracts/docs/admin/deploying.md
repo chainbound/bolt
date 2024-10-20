@@ -51,8 +51,7 @@ forge script script/holesky/admin/Deploy.s.sol --rpc-url $HOLESKY_RPC --private-
 
 This will deploy all the contracts. The address corresponding to the private key will be the system admin.
 
-Now update `deployments.json` with the Symbiotic and EigenLayer middleware contracts, because we'll need to register it
-in the next step.
+Now update `deployments.json` with the Symbiotic and EigenLayer middleware contracts, because we'll need to register it in the next step. Also update the `bolt` section with the correct addresses.
 
 ### Post-deployment
 
@@ -68,4 +67,7 @@ Also set the AVS metadata in the EigenLayer AVS Directory, needs to be run with 
 ```bash
 forge script script/holesky/admin/helpers/RegisterAVS.s.sol --rpc-url $HOLESKY_RPC --private-key $ADMIN_PRIVATE_KEY --broadcast -vvvv 
 ```
+
+> [!IMPORTANT]
+> After the `deployments.json` file has been fully updated with the correct contract addresses, push it to Github.
 

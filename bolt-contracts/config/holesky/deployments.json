@@ -1,4 +1,7 @@
 {
+    "bolt": {
+        "validators": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+    },
     "symbiotic": {
         "network": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
         "operatorRegistry": "0xAdFC41729fF447974cE27DdFa358A0f2096c3F39",
