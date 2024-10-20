@@ -26,6 +26,7 @@ contract RegisterEigenLayerOperator is Script {
 
         console.log("Registering EigenLayer operator");
         console.log("Operator address:", operator);
+        console.log("Operator RPC:", config.rpc);
 
         vm.startBroadcast(operatorSk);
 
@@ -52,7 +53,7 @@ contract RegisterEigenLayerOperator is Script {
         string memory path = string.concat(root, "/config/holesky/deployments.json");
         string memory json = vm.readFile(path);
 
-        return BoltEigenLayerMiddlewareV1(vm.parseJsonAddress(json, ".eigenLayer.networkMiddleware"));
+        return BoltEigenLayerMiddlewareV1(vm.parseJsonAddress(json, ".eigenLayer.middleware"));
     }
 
     function _readAvsDirectory() public view returns (IAVSDirectory) {
