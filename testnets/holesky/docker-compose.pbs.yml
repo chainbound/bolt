@@ -1,0 +1,69 @@
+volumes:
+  psql_data:
+    driver: local
+  chaindata:
+    driver: local
+
+services:
+  redis:
+    image: redis
+    restart: unless-stopped
+
+  db:
+    image: timescale/timescaledb-ha:pg16
+    restart: unless-stopped
+    volumes:
+      - "psql_data:/var/lib/postgresql/data"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: helixdb
+
+  adminer:
+    image: adminer
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "48093:8080"
+    environment:
+      ADMINER_PLUGINS: tables-filter tinymce
+
+  builder:
+    image: ghcr.io/chainbound/bolt-builder:v0.3.0-alpha.rc1
+    restart: unless-stopped
+    volumes:
+      - "chaindata:/var/lib/chaindata"
+      - "./shared:/var/lib/shared"
+      - "./scripts/run-builder.sh:/scripts/run-builder.sh"
+    environment:
+      BUILDER_TX_SIGNING_KEY: "0x53321db7c1e331d93a11a41d16f004d7ff63972ec8ec7c25db329728ceeb1710"
+    ports:
+      - "30367:30303/tcp"
+      - "30367:30303/udp"
+    # entrypoint is builder
+    entrypoint: /scripts/run-builder.sh
+
+  beacon:
+    image: sigp/lighthouse:latest
+    restart: unless-stopped
+    volumes:
+      - "chaindata:/var/lib/chaindata"
+      - "./shared:/var/lib/shared"
+      - "./scripts/run-bn.sh:/scripts/run-bn.sh"
+    ports:
+      - "41050:50050/tcp"
+      - "41050:50050/udp"
+    entrypoint: /scripts/run-bn.sh
+
+  helix-relay:
+    image: ghcr.io/chainbound/helix:v0.3.0-alpha.rc1
+    restart: unless-stopped
+    volumes:
+      - "./helix-config.yml:/helix-config.yml"
+    ports:
+      - "44040:4040"
+    environment:
+      - RELAY_KEY=0x607a11b45a7219cc61a3d9c5fd08c7eebd602a6a19a977f8d3771d5711a550f2
+      - RUST_LOG=helix_cmd=debug,helix_api=debug,helix_common=debug,helix_datastore=debug,helix_housekeeper=debug,helix_database=debug,helix_beacon_client=debug
+    command: --config /helix-config.yml
