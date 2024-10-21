@@ -1,6 +1,6 @@
 services:
   bolt-sidecar:
-    image: ghcr.io/chainbound/bolt-sidecar:v0.3.0-alpha-rc.1
+    image: ghcr.io/chainbound/bolt-sidecar:v0.3.0-alpha.rc1
     container_name: bolt-sidecar
     restart: unless-stopped
     ports:
@@ -10,7 +10,7 @@ services:
     entrypoint: /bin/sh -c /bolt-sidecar
 
   mev-boost:
-    image: ghcr.io/chainbound/bolt-mev-boost:v0.3.0-alpha-rc.1
+    image: ghcr.io/chainbound/bolt-mev-boost:v0.3.0-alpha.rc1
     container_name: mev-boost
     restart: unless-stopped
     env_file: ./mev-boost.env
