@@ -33,7 +33,8 @@ pub const DEFAULT_CONSTRAINTS_PROXY_PORT: u16 = 18551;
 #[derive(Debug, Parser, Deserialize)]
 #[clap(trailing_var_arg = true)]
 pub struct Opts {
-    /// Port to listen on for incoming JSON-RPC requests
+    /// Port to listen on for incoming JSON-RPC requests of the Commitments API.
+    /// This port should be open on your firewall in order to receive external requests!
     #[clap(long, env = "BOLT_SIDECAR_PORT", default_value_t = DEFAULT_RPC_PORT)]
     pub port: u16,
     /// Execution client API URL
@@ -42,7 +43,8 @@ pub struct Opts {
     /// URL for the beacon client
     #[clap(long, env = "BOLT_SIDECAR_BEACON_API_URL", default_value = "http://localhost:5052")]
     pub beacon_api_url: Url,
-    /// Execution client Engine API URL
+    /// Execution client Engine API URL. This is needed for fallback block building and must be a
+    /// synced Geth node.
     #[clap(long, env = "BOLT_SIDECAR_ENGINE_API_URL", default_value = "http://localhost:8551")]
     pub engine_api_url: Url,
     /// URL to forward the constraints produced by the Bolt sidecar to a server supporting the
@@ -77,10 +79,11 @@ pub struct Opts {
     /// The fee recipient address for fallback blocks
     #[clap(long, env = "BOLT_SIDECAR_FEE_RECIPIENT")]
     pub fee_recipient: Address,
-    /// Secret BLS key to sign fallback payloads with (If not provided, a random key will be used)
+    /// Secret BLS key to sign fallback payloads with
     #[clap(long, env = "BOLT_SIDECAR_BUILDER_PRIVATE_KEY")]
     pub builder_private_key: BlsSecretKeyWrapper,
-    /// Secret ECDSA key to sign commitment messages with
+    /// Secret ECDSA key to sign commitment messages with. The public key associated to it must be
+    /// then used when registering the operator in the `BoltManager` contract.
     #[clap(long, env = "BOLT_SIDECAR_COMMITMENT_PRIVATE_KEY")]
     pub commitment_private_key: EcdsaSecretKeyWrapper,
     /// Operating limits for the sidecar

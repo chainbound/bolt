@@ -1,34 +1,37 @@
-# ports
+# Ethereum Node Connections + PBS URLs
 port = 8000
-metrics_port = 3300
-
-# node urls
-execution_api_url = "http://localhost:8545"
-beacon_api_url = "http://localhost:5052"
-engine_api_url = "http://localhost:8551"
-engine_jwt_hex = "0x573300d0cd9a8e253429998a3ceecf358aa4868d96772d1344a80144d3b7b593"
-
-# constraints options
-constraints_api_url = "http://localhost:3030"
+execution_api_url = "http://localhost:4485"
+beacon_api_url = "http://localhost:4400"
+engine_api_url = "http://localhost:4451"
+constraints_url = "http://localhost:19550"
 constraints_proxy_port = 18551
-
 validator_indexes = "0..64"
-fee_recipient = "0x0155ef0C0fE550C297c1216585e0DE1478EA30e4"
+jwt_hex = "0x0000000000000000000000000000000000000000000000000000000000000000"
+fee_recipient = "0x0000000000000000000000000000000000000000"
+builder_private_key = "0x0000000000000000000000000000000000000000000000000000000000000000"
 
-builder_private_key = "0x359c156600e1f5715a58c9e09f17c8d04e7ee3a9f88b39f6e489ffca0148fabe"
-commitment_private_key = "0x359c156600e1f5715a58c9e09f17c8d04e7ee3a9f88b39f6e489ffca0148fabe"
+# Commitments configs 
+max_commitments = 128
+max_committed_gas = 10000000
+min_priority_fee = 5000000
 
-# chain options
+# Chain configs
 [chain]
-chain = "Kurtosis"
-slot_time = 2
+chain = "Holesky"
+slot_time = 12
 commitment_deadline = 8000
 
-[telemetry]
-metrics_port = 3300
-disable_metrics = false
-
-# signing options
+# Signing options
 [constraint_signing]
-constraint_private_key = "0x359c156600e1f5715a58c9e09f17c8d04e7ee3a9f88b39f6e489ffca0148fabe"
+constraint_private_key = "0x0000000000000000000000000000000000000000000000000000000000000000"
+commitment_private_key = "0x0000000000000000000000000000000000000000000000000000000000000000"
+cb_signer_url = "http://localhost:18550"
+cb_jwt_hex = "0x0000000000000000000000000000000000000000000000000000000000000000"
+keystore_password = "password"
+keystore_path = "./keys"
 delegations_path = "./delegations.json"
+
+# Metrics
+[telemetry]
+metrics_port = 8001
+disable_metrics = false

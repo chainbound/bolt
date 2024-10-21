@@ -37,7 +37,9 @@ impl KeystoreSecret {
     /// Load the keystore passwords from a directory containing individual password files.
     pub fn from_directory(root_dir: String) -> Result<Self> {
         let mut secrets = HashMap::new();
-        for entry in fs::read_dir(root_dir)? {
+        for entry in fs::read_dir(&root_dir)
+            .wrap_err(format!("failed to read secrets directory. path: {}", &root_dir))?
+        {
             let entry = entry.wrap_err("Failed to read secrets directory entry")?;
             let path = entry.path();
 
@@ -101,12 +103,14 @@ pub fn parse_public_key(delegatee_pubkey: &str) -> Result<BlsPublicKey> {
 /// -- ...
 /// Reference: https://github.com/chainbound/bolt/blob/4634ff905561009e4e74f9921dfdabf43717010f/bolt-sidecar/src/signer/keystore.rs#L109
 pub fn keystore_paths(keys_path: &str) -> Result<Vec<PathBuf>> {
-    let keys_path = Path::new(keys_path).to_path_buf();
+    let keys_path_buf = Path::new(keys_path).to_path_buf();
     let json_extension = OsString::from("json");
 
     let mut keystores_paths = vec![];
     // Iter over the `keys` directory
-    for entry in read_dir(keys_path)? {
+    for entry in read_dir(keys_path_buf)
+        .wrap_err(format!("failed to read keys directory. path: {keys_path}"))?
+    {
         let path = read_path(entry)?;
         if path.is_dir() {
             for entry in read_dir(path)? {
