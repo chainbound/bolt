@@ -7,7 +7,7 @@ services:
       - "${BOLT_SIDECAR_PORT}:${BOLT_SIDECAR_PORT}" # Bolt RPC port (this should be opened on your firewall!)
       - "${BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT}:${BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT}"
     env_file: ./bolt-sidecar.env
-    entrypoint: /bin/sh -c /bolt-sidecar
+    entrypoint: /bin/sh -c /usr/local/bin/bolt-sidecar
 
   bolt-mev-boost-holesky:
     image: ghcr.io/chainbound/bolt-mev-boost:v0.3.0-alpha.rc1
