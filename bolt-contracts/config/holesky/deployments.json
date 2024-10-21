@@ -3,13 +3,13 @@
         "validators": "0x05275a4799cd1B07D81319390fC62Bc7BDbDf269"
     },
     "symbiotic": {
-        "network": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "network": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
         "operatorRegistry": "0xAdFC41729fF447974cE27DdFa358A0f2096c3F39",
         "networkOptInService": "0xF5AFc9FA3Ca63a07E529DDbB6eae55C665cCa83E",
         "vaultFactory": "0x18C659a269a7172eF78BBC19Fe47ad2237Be0590",
         "networkRegistry": "0xac5acD8A105C8305fb980734a5AD920b5920106A",
         "networkMiddlewareService": "0x683F470440964E353b389391CdDDf8df381C282f",
-        "middleware": "",
+        "middleware": "0x76Ab811E448174b2C2fD7D421984e2eAb6716578",
         "supportedVaults": [
             "0x1df2fbfcD600ADd561013f44B2D055E2e974f605",
             "0xf427d00c34609053d97167352061DD2F0F27F853"
@@ -19,7 +19,7 @@
         "avsDirectory": "0x055733000064333CaDDbC92763c58BF0192fFeBf",
         "delegationManager": "0xA44151489861Fe9e3055d95adC98FbD462B948e7",
         "strategyManager": "0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6",
-        "middleware": "",
+        "middleware": "0x279F5be63FD1D0A32d77258028933a7e3E75fF08",
         "supportedStrategies": [
             "0x7D704507b76571a51d9caE8AdDAbBFd0ba0e63d3",
             "0x3A8fBdf9e77DFc25d09741f51d3E181b25d0c4E0",
