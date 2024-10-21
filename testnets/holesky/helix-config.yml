@@ -12,6 +12,6 @@ simulator:
   url: http://builder:8545
 
 beacon_clients:
-  - url: http://beacon:50050
+  - url: http://beacon:4000
 
 network_config: !Holesky
