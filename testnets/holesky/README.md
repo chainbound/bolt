@@ -5,7 +5,7 @@ This document provides instructions for running the Bolt sidecar on the Holesky 
 <!-- vim-markdown-toc Marked -->
 
 * [Prerequisites](#prerequisites)
-* [Setup](#setup)
+* [Off-Chain Setup](#off-chain-setup)
   * [Docker Mode (recommended)](#docker-mode-(recommended))
   * [Commit-Boost Mode](#commit-boost-mode)
   * [Native Mode (advanced)](#native-mode-(advanced))
@@ -13,7 +13,7 @@ This document provides instructions for running the Bolt sidecar on the Holesky 
     * [Building and running the Bolt sidecar binary](#building-and-running-the-bolt-sidecar-binary)
       * [Configuration file](#configuration-file)
     * [Observability](#observability)
-* [Register your validators on-chain on the Bolt Registry](#register-your-validators-on-chain-on-the-bolt-registry)
+* [On-Chain Registration](#on-chain-registration)
   * [Validator Registration](#validator-registration)
   * [Bolt Network Entrypoint](#bolt-network-entrypoint)
     * [Symbiotic Integration guide for Staking Pools](#symbiotic-integration-guide-for-staking-pools)
@@ -33,7 +33,7 @@ This document provides instructions for running the Bolt sidecar on the Holesky 
 
 # Prerequisites
 
-In order to run Bolt you need some components already installed and running in
+In order to run Bolt you need some components already installed and running on
 your system.
 
 **A synced Geth client:**
@@ -76,13 +76,7 @@ client implementations to download and run them.
 The Bolt sidecar requires signing keys from active Ethereum validators, or
 authorized delegates acting on their behalf, to issue and sign preconfirmations.
 
-**LST collateral:**
-
-For Holesky in order to provide credible proposer commitments it is necessary to
-restake 1 ether worth of ETH derivatives per validator in either the Symbiotic
-or the EigenLayer protocol.
-
-# Setup
+# Off-Chain Setup
 
 There are various way to run the Bolt Sidecar depending on what infrastructure
 you want to use and your preferred signing methods:
@@ -157,8 +151,7 @@ cd testnets/holesky && docker compose up -d
 ```
 
 The docker compose setup comes with various observability tools, such as
-Prometheus and Grafana. It also comes with some pre-built dashboards, which can
-be found in the `grafana` directory.
+Prometheus and Grafana. It also comes with some pre-built dashboards which you can find at `http://localhost:3000`.
 
 ## Commit-Boost Mode
 
@@ -344,7 +337,7 @@ To update these dashboards, run the following command:
 In this directory, you can also find a Bolt dashboard, which will be launched
 alongside the other dashboards.
 
-# Register your validators on-chain on the Bolt Registry
+# On-Chain Registration
 
 Once you are successfully running the Bolt sidecar you need to register on-chain
 on the Bolt Registry to successfully receive preconfirmation requests from users
