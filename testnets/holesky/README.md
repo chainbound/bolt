@@ -350,10 +350,10 @@ on the Bolt Registry to successfully receive preconfirmation requests from users
 and RPCs. This step is needed to provide economic security to your
 commitments.
 
-In order to do that you need some collateral in the form of whitelisted Liquid
-Staking Token (LST) that needs to be restaked in either the Symbiotic or
-EigenLayer protocol. Bolt is compatible with ETH derivatives on Holesky. Here
-are references to the supported tokens on both restaking protocols:
+In order to do that you need some collateral in the form of whitelisted ETH derivative
+tokens that need to be restaked in either the Symbiotic or
+EigenLayer protocol. Bolt is compatible with the following ETH derivative tokens
+on Holesky:
 
 - [Symbiotic Vaults](https://docs.symbiotic.fi/deployments#vaults)
   - [`wstETH`](https://holesky.etherscan.io/address/0x8d09a4502Cc8Cf1547aD300E066060D043f6982D)
@@ -376,6 +376,24 @@ protocols.
 > public key associated to the private key used to sign commitments with the
 > Bolt Sidecar (the `--commitment-private-key` flag).
 
+## Prerequisites
+
+- Install the Foundry tools:
+
+```bash
+curl -L https://foundry.paradigm.xyz | bash
+source $HOME/.bashrc
+foundryup
+```
+
+- Clone the Bolt repo and navigate to the [contracts](https://github.com/chainbound/bolt/tree/unstable/bolt-contracts) directory:
+
+```bash
+git clone https://github.com/chainbound/bolt
+cd bolt-contracts
+forge install
+```
+
 ## Validator Registration
 
 The [`BoltValidators`](./src/contracts/BoltValidators.sol) contract is the only point of entry for
@@ -394,6 +412,35 @@ The registration process includes the following steps:
 Until the Pectra hard-fork will be activated, the contract will also expose a `registerValidatorUnsafe` function
 that will not check the BLS signature. This is gated by a feature flag that will be turned off post-Pectra and
 will allow us to test the registration flow in a controlled environment.
+
+Note that the account initiating the registration will be the `controller` account for those validators. Only the `controller` can then
+deregister validator or change any preferences.
+
+### Registration Steps
+
+> [!NOTE]
+> All of these scripts can be simulated on a Holesky fork using Anvil with the following command: 
+> ```bash
+> anvil --fork-url https://holesky.drpc.org
+> ```
+> In order to use this local fork, replace `$HOLESKY_RPC` with localhost:8545 in all of the `forge` commands below.
+
+To register your validators, we provide the following Foundry script: [`RegisterValidators.s.sol`](../../bolt-contracts/script/RegisterValidators.s.sol). 
+Note that in order to run these scripts, you must be in the `bolt-contracts` directory.
+
+- First, configure [`bolt-contracts/config/holesky/validators.json`](../../bolt-contracts/config/holesky/validators.json) to your requirements. Note that
+both `maxCommittedGasLimit` and `authorizedOperator` must reflect the values specified in previous steps, during the configuration of the sidecar.
+`pubkeys` should be configured with all of the validator public keys that you wish to register.
+
+- Next up, decide on a controller account and save the key in an environment variable: `export CONTROLLER_KEY=0x...`. 
+This controller key will be used to run the script and will mark the corresponding account as the controller account for these validators. 
+
+- Finally, run the script:
+```bash
+forge script script/holesky/validators/RegisterValidators.s.sol -vvvv --rpc-url $HOLESKY_RPC --private-key $CONTROLLER_KEY --broadcast
+```
+
+If the script executed succesfully, your validators were registered.
 
 ## Bolt Network Entrypoint
 
