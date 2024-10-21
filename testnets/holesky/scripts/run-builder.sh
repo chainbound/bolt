@@ -1,7 +1,7 @@
 #!/bin/sh
 
 geth --datadir=/var/lib/chaindata/geth \
-        --network=holesky \
+        --holesky \
         --syncmode=full \
         --gcmode=archive \
         --state.scheme=hash \
@@ -26,7 +26,7 @@ geth --datadir=/var/lib/chaindata/geth \
         --metrics.port=6060 \
         --port=30303 \
         --builder \
-        --builder.remote_relay_endpoint=http://relay-api:9062 \
+        --builder.remote_relay_endpoint=http://helix-relay:4040 \
         --builder.beacon_endpoints=http://beacon:4000 \
         --miner.etherbase=0x614561D2d143621E126e87831AEF287678B442b8 \
         --miner.extradata="Bolt Builder"

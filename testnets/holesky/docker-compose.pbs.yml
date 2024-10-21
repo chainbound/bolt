@@ -3,6 +3,8 @@ volumes:
     driver: local
   chaindata:
     driver: local
+  shared:
+    driver: local
 
 services:
   redis:
@@ -34,31 +36,41 @@ services:
     restart: unless-stopped
     volumes:
       - "chaindata:/var/lib/chaindata"
-      - "./shared:/var/lib/shared"
+      - "shared:/var/lib/shared"
       - "./scripts/run-builder.sh:/scripts/run-builder.sh"
     environment:
       BUILDER_TX_SIGNING_KEY: "0x53321db7c1e331d93a11a41d16f004d7ff63972ec8ec7c25db329728ceeb1710"
     ports:
       - "30367:30303/tcp"
       - "30367:30303/udp"
-    # entrypoint is builder
-    entrypoint: /scripts/run-builder.sh
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        "chmod +x /scripts/run-builder.sh && /scripts/run-builder.sh",
+      ]
 
   beacon:
     image: sigp/lighthouse:latest
     restart: unless-stopped
     volumes:
       - "chaindata:/var/lib/chaindata"
-      - "./shared:/var/lib/shared"
+      - "shared:/var/lib/shared"
       - "./scripts/run-bn.sh:/scripts/run-bn.sh"
     ports:
       - "41050:50050/tcp"
       - "41050:50050/udp"
-    entrypoint: /scripts/run-bn.sh
+    entrypoint:
+      ["/bin/sh", "-c", "chmod +x /scripts/run-bn.sh && /scripts/run-bn.sh"]
 
   helix-relay:
     image: ghcr.io/chainbound/helix:v0.3.0-alpha.rc1
     restart: unless-stopped
+    depends_on:
+      - db
+      - redis
+      - builder
+      - beacon
     volumes:
       - "./helix-config.yml:/helix-config.yml"
     ports:
@@ -66,4 +78,5 @@ services:
     environment:
       - RELAY_KEY=0x607a11b45a7219cc61a3d9c5fd08c7eebd602a6a19a977f8d3771d5711a550f2
       - RUST_LOG=helix_cmd=debug,helix_api=debug,helix_common=debug,helix_datastore=debug,helix_housekeeper=debug,helix_database=debug,helix_beacon_client=debug
+      - RUST_BACKTRACE=1
     command: --config /helix-config.yml
