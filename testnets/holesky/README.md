@@ -67,6 +67,9 @@ client implementations to download and run them.
 >    --builder-fallback-disable-checks
 >    ```
 >
+> In other clients like Vouch, the same can be achieved by setting the `builder-boost-factor` to a large value
+> like 18446744073709551615.
+>
 > It might be necessary to restart your beacon node depending on your existing
 > setup. See the [Avoid Restarting the Beacon
 > Node](#avoid-restarting-the-beacon-node) for more details.
@@ -124,17 +127,20 @@ containing the necessary environment variables:
    cp ./bolt-sidecar/Config.example.toml ./testnets/holesky/bolt-sidecar.toml
    ```
 
-   For proper configuration of the signing
-   options, please refer to the [Delegations and
+   Next up, fill out all the values that are required. For proper configuration
+   of the signing options, please refer to the [Delegations and
    Signing](#delegations-and-signing-options-for-native-and-docker-compose-mode)
    section of this guide.
 
 2. **MEV-Boost Configuration:**
 
-   Similarly, create a `mev-boost.env` file in the
-   `testnets/holesky` folder to configure the MEV-Boost service. If you need a
-   reference, you can use the `.env.example` file in the `mev-boost` directory as a
-   starting point.
+   Copy over the example environment file:
+
+   ```bash
+   cp ../../mev-boost/.env.example mev-boost.env
+   ```
+
+   Then configure the file accordingly.
 
    ```bash
    cp ./mev-boost/.env.example ./testnets/holesky/mev-boost.env
