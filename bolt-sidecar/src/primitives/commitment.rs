@@ -3,12 +3,13 @@ use std::str::FromStr;
 
 use alloy::primitives::{keccak256, Address, Signature, B256};
 
-use crate::{
-    crypto::SignerECDSA,
-    primitives::{deserialize_txs, serialize_txs},
-};
+use crate::crypto::SignerECDSA;
 
-use super::{FullTransaction, SignatureError, TransactionExt};
+use super::{deserialize_txs, serialize_txs, FullTransaction, TransactionExt};
+
+#[derive(Debug, thiserror::Error)]
+#[error("Invalid signature")]
+pub struct SignatureError;
 
 /// Commitment requests sent by users or RPC proxies to the sidecar.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -143,17 +144,26 @@ impl InclusionRequest {
         true
     }
 
-    pub fn validate_priority_fee(&self) -> bool {
+    /// Validates the priority fee against the max fee per gas.
+    /// Returns true if the fee is less than or equal to the max fee per gas, false otherwise.
+    /// Ref: https://github.com/paradigmxyz/reth/blob/2d592125128c3742ff97b321884f93f9063abcb2/crates/transaction-pool/src/validate/eth.rs#L242
+    pub fn validate_max_priority_fee(&self) -> bool {
         for tx in &self.txs {
-            if tx
-                .max_priority_fee_per_gas()
-                .is_some_and(|max_priority_fee| max_priority_fee > tx.max_fee_per_gas())
-            {
+            if tx.max_priority_fee_per_gas() > Some(tx.max_fee_per_gas()) {
                 return false;
             }
         }
 
         true
+    }
+
+    /// Validates the priority fee against a minimum priority fee.
+    /// Returns `true` if the "effective priority fee" is greater than or equal to the set minimum
+    /// priority fee, `false` otherwise.
+    pub fn validate_min_priority_fee(&self, max_base_fee: u128, min_priority_fee: u128) -> bool {
+        self.txs.iter().all(|tx| {
+            tx.effective_tip_per_gas(max_base_fee).map_or(false, |tip| tip >= min_priority_fee)
+        })
     }
 
     /// Returns the total gas limit of all transactions in this request.

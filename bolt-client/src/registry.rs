@@ -72,7 +72,7 @@ impl BoltRegistry {
         }
     }
 
-    /// Gets the next pre-confirmation slot and proposer RPC URL from the registry contract
+    /// Gets the next preconfirmation slot and proposer RPC URL from the registry contract
     ///
     /// Returns Ok(None) if no registered validators are found in the lookahead
     pub async fn next_preconfer_from_registry(
@@ -89,7 +89,7 @@ impl BoltRegistry {
                     next_preconfer_slot = duty.slot;
                     proposer_rpc = token_raw.metadata.rpc;
                     info!(
-                        "pre-confirmation will be sent for slot {} to validator with index {} at url {}",
+                        "preconfirmation will be sent for slot {} to validator with index {} at url {}",
                         duty.slot,
                         duty.validator_index,
                         proposer_rpc,

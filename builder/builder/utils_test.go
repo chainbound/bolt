@@ -57,7 +57,7 @@ func TestGenerateMerkleMultiProofs(t *testing.T) {
 
 			constraints := make(types.HashToConstraintDecoded)
 			for _, tx := range chosenConstraintTransactions {
-				constraints[tx.Hash()] = &types.ConstraintDecoded{Tx: tx}
+				constraints[tx.Hash()] = tx
 			}
 
 			inclusionProof, root, err := CalculateMerkleMultiProofs(payloadTransactions, constraints)
@@ -67,15 +67,15 @@ func TestGenerateMerkleMultiProofs(t *testing.T) {
 			leaves := make([][]byte, len(constraints))
 
 			i := 0
-			for _, constraint := range constraints {
-				if constraint == nil || constraint.Tx == nil {
-					t.Logf("nil constraint or transaction!")
+			for _, tx := range constraints {
+				if tx == nil {
+					t.Logf("nil constraint transaction!")
 				}
 
-				// Compute the hash tree root for the raw preconfirmed transaction
+				// Compute the hash tree root for the raw committed transaction
 				// and use it as "Leaf" in the proof to be verified against
 
-				withoutBlob, err := constraint.Tx.WithoutBlobTxSidecar().MarshalBinary()
+				withoutBlob, err := tx.WithoutBlobTxSidecar().MarshalBinary()
 				if err != nil {
 					t.Logf("error marshalling transaction without blob tx sidecar: %v", err)
 				}

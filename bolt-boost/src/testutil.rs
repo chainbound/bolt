@@ -1,5 +1,5 @@
 use alloy::primitives::{Bytes, B256};
-use ssz::Decode;
+use ssz_compat::Decode;
 use types::{ExecPayload, MainnetEthSpec, SignedBeaconBlockDeneb};
 
 const TEST_BLOCK: &[u8] = include_bytes!(concat!(

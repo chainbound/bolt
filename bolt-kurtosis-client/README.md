@@ -1,6 +1,6 @@
-## A pre-confirmation spammer for the Helder testnet
+## A preconfirmation sender for the Kurtosis devnet
 
-To run the spammer, make sure to set the following environment variables in a `.env` file:
+To run the tool, make sure to set the following environment variables in a `.env` file:
 
 ```text
 EL_PROVIDER_URL=https://rpc.helder-devnets.xyz
@@ -12,6 +12,10 @@ REGISTRY_ABI_PATH=./registry_abi.json
 
 This template can be found in the `env.example` file.
 
-Then, just run the spammer with `cargo run`. It will fetch all the validators of the current epoch,
-and try to send a pre-confirmation to the first one registered on the Bolt registry.
-If no validators are found, the program will gracefully exit. Please try again in the next epoch!
+Then, just run the tool with `cargo run`.
+
+It will fetch all the validators of the current epoch, and try to send a
+preconfirmation to the first one registered on the Bolt registry.
+
+If no validators are found, the program will gracefully exit.
+Please try again in the next epoch!

@@ -65,8 +65,8 @@ impl ConstraintsCache {
     }
 
     /// Inserts the constraints for the given slot. Also decodes the raw transactions to save their
-    /// transaction hashes and hash tree roots for later use. Will first check for conflicts, and return
-    /// an error if there are any.
+    /// transaction hashes and hash tree roots for later use. Will first check for conflicts, and
+    /// return an error if there are any.
     pub fn insert(&self, slot: u64, constraints: ConstraintsMessage) -> Result<(), Error> {
         if let Some(conflict) = self.conflicts_with(&slot, &constraints) {
             return Err(conflict.into());
@@ -74,7 +74,8 @@ impl ConstraintsCache {
 
         let message_with_data = ConstraintsWithProofData::try_from(constraints)?;
 
-        if let Some(cs) = self.cache.write().get_mut(&slot) {
+        let mut cache = self.cache.write();
+        if let Some(cs) = cache.get_mut(&slot) {
             if cs.len() >= MAX_CONSTRAINTS_PER_SLOT {
                 error!("Max constraints per slot reached for slot {}", slot);
                 return Err(Error::LimitReached(slot));
@@ -82,7 +83,7 @@ impl ConstraintsCache {
 
             cs.push(message_with_data);
         } else {
-            self.cache.write().insert(slot, vec![message_with_data]);
+            cache.insert(slot, vec![message_with_data]);
         }
 
         metrics::CONSTRAINTS_CACHE_SIZE.inc();
@@ -105,5 +106,37 @@ impl ConstraintsCache {
 
     fn total_constraints(&self) -> usize {
         self.cache.read().values().map(|v| v.len()).sum()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy::{primitives::bytes, rpc::types::beacon::BlsPublicKey};
+
+    use super::*;
+
+    #[test]
+    fn test_constraints_cache_conflict() {
+        let cache = ConstraintsCache::new();
+
+        let tx = bytes!("f86481d8088302088a808090435b8080556001015a6161a8106001578718e5bb3abd109fa0ea5ad6553fb67639cec694e6697ac7b718bd7044fcdf5608fa64f6058e67db93a03953b5792d7d9ef7fc602fbe260e7a290760e8adc634f99ab1896e2c0d55afcb");
+
+        let constraints = ConstraintsMessage {
+            pubkey: BlsPublicKey::default(),
+            slot: 0,
+            top: false,
+            transactions: vec![tx],
+        };
+
+        assert!(cache.conflicts_with(&0, &constraints).is_none());
+
+        cache.insert(0, constraints.clone()).unwrap();
+
+        assert!(matches!(
+            cache.conflicts_with(&0, &constraints),
+            Some(Conflict::DuplicateTransaction)
+        ));
+
+        assert!(cache.conflicts_with(&1, &constraints).is_none());
     }
 }

@@ -1,31 +1,42 @@
-use bolt_sidecar::{telemetry::init_telemetry_stack, Config, SidecarDriver};
+use clap::Parser;
 use eyre::{bail, Result};
 use tracing::info;
 
+use bolt_sidecar::{telemetry::init_telemetry_stack, Opts, SidecarDriver};
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = match Config::parse_from_cli() {
-        Ok(config) => config,
-        Err(err) => bail!("Failed to parse CLI arguments: {:?}", err),
+    let opts = if let Ok(config_path) = std::env::var("BOLT_SIDECAR_CONFIG_PATH") {
+        Opts::parse_from_toml(config_path.as_str())?
+    } else {
+        Opts::parse()
     };
 
-    let metrics_port = if !config.disable_metrics { Some(config.metrics_port) } else { None };
-    if let Err(err) = init_telemetry_stack(metrics_port) {
+    if let Err(err) = init_telemetry_stack(opts.telemetry.metrics_port()) {
         bail!("Failed to initialize telemetry stack: {:?}", err)
     }
 
-    info!(chain = config.chain.name(), "Starting Bolt sidecar");
+    info!(chain = opts.chain.name(), "Starting Bolt sidecar");
 
-    if config.private_key.is_some() {
-        match SidecarDriver::with_local_signer(config).await {
+    if opts.constraint_signing.constraint_private_key.is_some() {
+        match SidecarDriver::with_local_signer(&opts).await {
             Ok(driver) => driver.run_forever().await,
-            Err(err) => bail!("Failed to initialize the sidecar driver: {:?}", err),
+            Err(err) => {
+                bail!("Failed to initialize the sidecar driver with local signer: {:?}", err)
+            }
         }
-    } else {
-        match SidecarDriver::with_commit_boost_signer(config).await {
+    } else if opts.constraint_signing.commit_boost_signer_url.is_some() {
+        match SidecarDriver::with_commit_boost_signer(&opts).await {
             Ok(driver) => driver.run_forever().await,
             Err(err) => {
                 bail!("Failed to initialize the sidecar driver with commit boost: {:?}", err)
+            }
+        }
+    } else {
+        match SidecarDriver::with_keystore_signer(&opts).await {
+            Ok(driver) => driver.run_forever().await,
+            Err(err) => {
+                bail!("Failed to initialize the sidecar driver with keystore signer: {:?}", err)
             }
         }
     }

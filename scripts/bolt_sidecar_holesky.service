@@ -1,0 +1,12 @@
+[Unit]
+Description=Bolt Sidecar Development Service for Holesky
+After=network.target
+
+[Service]
+User=shared
+ExecStart=/usr/local/bin/bolt-sidecar-holesky
+Restart=on-failure
+EnvironmentFile=/home/shared/holesky/bolt_sidecar/.env.holesky.dev
+
+[Install]
+WantedBy=multi-user.target

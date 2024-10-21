@@ -2,7 +2,7 @@
   <picture>
     <source srcset="./.github/assets/bolt-logo-wm-dark.png" media="(prefers-color-scheme: dark)">
     <source srcset="./.github/assets/bolt-logo-wm-light.png" media="(prefers-color-scheme: light)">
-    <img src="./.github/assets/bolt-logo-wm-light.png" alt="BOLT" width="600px">
+    <img src="./.github/assets/bolt-logo-wm-light.png" alt="BOLT" width="450px">
   </picture>
 </div>
 
@@ -15,45 +15,47 @@
 </div>
 
 > [!IMPORTANT]
-> Bolt is an implementation of _permissionless proposer commitments through
-> PBS_. In its essence, it consists in a light fork of the current MEV-Boost
-> stack that allows users to request **preconfirmations** from proposers, and
-> then adds a way for proposers to commit to transaction inclusion in a way that
-> is easily verifiable.
+> Bolt is an implementation of permissionless proposer commitments that is fully compatible with PBS.
+> In its essence, it consists in a fork of the MEV-Boost stack that allows users to request commitments
+> like preconfirmations from proposers, and then adds a way for proposers to commit to transaction
+> inclusion in a way that is verifiable on-chain.
 
 <!-- vim-markdown-toc Marked -->
 
-* [How it works](#how-it-works)
-* [Scope of this repository](#scope-of-this-repository)
-* [Devnet and demo app](#devnet-and-demo-app)
-  * [Requirements and setup](#requirements-and-setup)
-  * [Running the devnet and demo](#running-the-devnet-and-demo)
-  * [Stopping the devnet and demo](#stopping-the-devnet-and-demo)
-* [Telemetry & Metrics](#telemetry-&-metrics)
-* [License](#license)
+- [How it works](#how-it-works)
+- [Repository structure](#repository-structure)
+- [Kurtosis Devnet](#kurtosis-devnet)
+  - [Requirements and setup](#requirements-and-setup)
+  - [Running the devnet](#running-the-devnet-and-demo)
+  - [Stopping the devnet](#stopping-the-devnet-and-demo)
+- [Telemetry & Metrics](#telemetry-&-metrics)
+- [License](#license)
 
 <!-- vim-markdown-toc -->
 
 ## How it works
 
-The flow of Bolt can be summarized in the following steps:
+The technical flow of Bolt can be summarized in the following steps:
 
 1. Users submit transactions to an RPC endpoint that will forward them to the
-   proposer opted-in to Bolt in the consensus lookahead window.
-2. The proposer can accept this request and turn it into a "constraint" on the block
-   that it is going to propose. This constraint acts as guarantee of inclusion of
+   proposer opted-in to Bolt in the beacon chain lookahead window.
+2. The proposer can accept this request and turn it into a _commitment_ relative to the
+   block that it is going to propose. This commitment acts as guarantee of inclusion of
    the transaction in the block, also known as a _preconfirmation_.
-3. Builders subscribe to proposer constraints in real time through a new relay
-   streaming endpoint to keep informed about the preconfirmations.
-4. Builders build valid blocks that adhere to all constraints, and append inclusion
-   proofs together with the bids to the relay.
-5. When it's time to propose a block, the proposer will fetch the best valid bid
+3. Near the time of block proposal, the proposer will share the list of committed transactions
+   with the relays that are connected to block builders. This list is called a _constraint_.
+4. Builders subscribe to proposer constraints in real time through a new relay
+   streaming endpoint to keep informed about the outstanding preconfirmations.
+5. Builders build valid blocks that adhere to all _constraints_, and append inclusion
+   proofs together with the bids to the relay for trustless verification.
+6. When it's time to propose a block, the proposer will fetch the best valid bid
    from the relay, and verify its inclusion proofs locally before signing the header.
-6. If the constraints are respected, the proposer can propose the payload as usual
+7. If the constraints are respected, the proposer can propose the payload as usual
    by sending the signed header back to the relay. If not, the proposer can self-build
    a payload and propose it directly instead.
 
-The following diagram illustrates the flow:
+<details>
+<summary>Here is a diagram illustrating the flow explained above:</summary>
 
 ```mermaid
 sequenceDiagram
@@ -85,20 +87,21 @@ sequenceDiagram
     end
 ```
 
-## Scope of this repository
+</details>
 
-This repository contains all the necessary components to illustrate the flow
-described above. It can be thought of a reference implementation.
+## Repository structure
+
+This monorepo contains all the necessary components of the Bolt protocol stack.
 In particular, the core components are:
 
 - [**Bolt Sidecar**](./bolt-sidecar/): New validator software (akin to [mev-boost][fb-mev-boost])
   that handles the receipt of preconfirmation requests from users, translates them
-  into constraints, and forwards them to relays. Additionally, it handles the
+  into _constraints_, and forwards them to relays. Additionally, it handles the
   fallback logic to produce a block locally when relays send invalid inclusion proofs.
 - [**Builder**](./builder/): A fork of the [Flashbots builder][fb-builder] that
   subscribes to new constraints from relays, builds blocks that respect them, and
-  includes the necessary proofs of inclusion in the bid submitted to relays.
-- [**Relay**](./mev-boost-relay/): A fork of the [Flashbots relay][fb-relay] that
+  includes the necessary proofs of inclusion in the bids submitted to relays.
+- [**MEV-Boost Relay**](./mev-boost-relay/): A fork of the [Flashbots relay][fb-relay] that
   receives constraints from proposers, and forwards them to builders. It also
   receives bids with proofs of inclusion from builders, verifies them and forwards
   the best bid to proposers for block proposal.
@@ -106,13 +109,25 @@ In particular, the core components are:
   that includes new API endpoints to proxy requests from the Bolt Sidecar to the connected relays.
 - [**Bolt Contracts**](./bolt-contracts/): A set of smart contracts for peripheral functionality
   such as proposer registration and permissionless dispute resolution for attributable faults.
+- [**Bolt Boost**](./bolt-boost/): A [Commit-Boost][commit-boost] module that implements the
+  Constraints-API and is compatible with the Bolt Sidecar.
+- [**Bolt client**](./bolt-client/): A CLI tool to send preconfirmations on enabled test networks.
+- [**Bolt Kurtosis client**](./bolt-kurtosis-client/): A CLI tool to send preconfirmations on our Kurtosis devnet.
+- [**Bolt delegations CLI**](./bolt-delegations-cli/): A CLI tool to generate signed delegation and revocation messages for ETH validators.
+- [**Testnets**](./testnets/): A set of guides and scripts to deploy the Bolt contracts on testnets.
 
-Additionally, this repository contains the necessary scripts to spin up a [Kurtosis][kurtosis] devnet
-with all the components running, and a simple [web demo](./bolt-web-demo/) to showcase the preconfirmation flow.
+Additionally, this repository contains the necessary scripts to spin up a [Kurtosis][kurtosis]
+devnet with all the components running.
 
-## Devnet and demo app
+> [!NOTE]
+> Bolt also works with external components that aren't part of this repository,
+> such as [Helix][helix] by Gattaca, which will replace the MEV-Boost relay soon.
+>
+> You can find the forked version of Helix [here](https://github.com/chainbound/helix).
 
-We are using a full [Kurtosis][kurtosis] devnet stack, with custom Docker images
+## Kurtosis Devnet
+
+We are using a forked [Kurtosis][kurtosis] devnet stack, with custom Docker images
 for the core components outlined above. The exact version of the Ethereum-package used
 in our devnet can be seen [here](https://github.com/chainbound/ethereum-package).
 
@@ -127,10 +142,13 @@ Make sure you have the following requirements on your machine:
 - [Just](https://github.com/casey/just) installed
 - [Kurtosis CLI](https://docs.kurtosis.com/install/) installed
 - [Foundry](https://book.getfoundry.sh/getting-started/installation) installed
+- [Rust & Cargo](https://www.rust-lang.org/tools/install) installed
 
-> [!WARNING]
+> [!NOTE]
 > The Kurtosis CLI version tested is `0.88.16`. Some issues may arise if you are
-> using a different version. Please make sure to install the correct version.
+> using a different version.
+>
+> [Please make sure to install the correct version](https://docs.kurtosis.com/install-historical/).
 
 Then, clone this repository and navigate to the root directory of the project:
 
@@ -138,9 +156,9 @@ Then, clone this repository and navigate to the root directory of the project:
 git clone git@github.com:chainbound/bolt.git && cd bolt
 ```
 
-### Running the devnet and demo
+### Running the devnet
 
-Running the devnet and demo is straightforward once you have the requirements
+Running the devnet is straightforward once you have the requirements
 installed. Just run the following commands in your terminal:
 
 ```shell
@@ -149,17 +167,27 @@ just build-images
 
 # spin up the kurtosis devnet on your machine
 just up
-
-# run the web demo servers.
-just demo
 ```
 
-The web demo will be available on your browser at [`http://localhost:3000`](http://localhost:3000).
+**Commit-Boost support**
 
-### Stopping the devnet and demo
+The devnet by default will run using a fork of MEV-Boost which supports
+the [Constraints-API](https://docs.boltprotocol.xyz/api/builder). Bolt also
+supports [Commit-Boost][commit-boost] by providing a compatible MEV-Boost module
+called _Bolt-Boost_ that implements the Constraints-API. To use it in the devnet
+add the appropriate `bolt_boost_image` in the `kurtosis_config.yaml` file:
 
-The demo app will remain open until you press `Ctrl+C` in the terminal where
-you ran the `just demo` command.
+```yaml
+# ... the rest of the file
+mev_params:
+  # Bolt-specific images:
+  # Adding the `bolt_boost_image` will start the devnet with Bolt-Boost
+  # instead of MEV-Boost
+  bolt_boost_image: ghcr.io/chainbound/bolt-boost:0.1.0
+  # ... the rest of the `mev_params`
+```
+
+### Stopping the devnet
 
 To stop the devnet, run the following command:
 
@@ -171,28 +199,23 @@ just down
 just clean
 ```
 
-> [!WARNING]
+> [!NOTE]
 > Remember to shut down the devnet environment when you are done with it, as it
 > consumes significant resources (CPU & RAM) on your machine.
+
+## License
+
+MIT. Forked repositories have their own licenses.
 
 <!-- Links -->
 
 [twitter]: https://twitter.com/chainbound_
 [discord]: https://discord.gg/pK8GgjxYQS
-[docs]: https://chainbound.github.io/bolt-docs/
+[docs]: https://docs.boltprotocol.xyz/
 [new-issue]: https://github.com/chainbound/bolt/issues/new
 [fb-mev-boost]: https://github.com/flashbots/mev-boost
 [fb-relay]: https://github.com/flashbots/mev-boost-relay
 [fb-builder]: https://github.com/flashbots/builder
 [kurtosis]: https://www.kurtosis.com/
-
-## Telemetry & Metrics
-
-The Bolt sidecar offers an optional set of metrics that can be scraped by a Prometheus server, and shown in Grafana dashboards.
-They show various informations such as the number of constraints received, the number of blocks proposed, etc.
-
-These metrics are enabled by default but can be disabled by setting running the sidecar with the `--metrics` flag set to `false`.
-
-## License
-
-MIT. Forked repositories have their own licenses.
+[helix]: https://github.com/gattaca-com/helix
+[commit-boost]: https://commit-boost.github.io/commit-boost-client/

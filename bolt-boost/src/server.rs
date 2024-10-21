@@ -11,6 +11,16 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use eyre::Result;
+use futures::{future::join_all, stream::FuturesUnordered, StreamExt};
+use serde::Serialize;
+use std::{
+    collections::HashMap,
+    time::{Duration, Instant},
+};
+use tokio::time::sleep;
+use tracing::{debug, error, info, warn, Instrument};
+
 use cb_common::{
     config::PbsConfig,
     constants::APPLICATION_BUILDER_DOMAIN,
@@ -21,18 +31,9 @@ use cb_common::{
     },
     signature::verify_signed_message,
     types::Chain,
-    utils::{get_user_agent_with_version, ms_into_slot},
+    utils::{get_user_agent, get_user_agent_with_version, ms_into_slot, utcnow_ms},
 };
-use commit_boost::prelude::*;
-use eyre::Result;
-use futures::{future::join_all, stream::FuturesUnordered, StreamExt};
-use serde::Serialize;
-use std::{
-    collections::HashMap,
-    time::{Duration, Instant},
-};
-use tokio::time::sleep;
-use tracing::{debug, error, info, warn, Instrument};
+use cb_pbs::{register_validator, BuilderApi, BuilderApiState, PbsState};
 
 use crate::metrics::{
     GET_HEADER_WP_TAG, RELAY_INVALID_BIDS, RELAY_LATENCY, RELAY_STATUS_CODE, TIMEOUT_ERROR_CODE_STR,
@@ -144,10 +145,10 @@ async fn submit_constraints(
 #[tracing::instrument(skip_all)]
 async fn delegate(
     State(state): State<PbsState<BuilderState>>,
-    Json(delegation): Json<SignedDelegation>,
+    Json(delegations): Json<Vec<SignedDelegation>>,
 ) -> Result<impl IntoResponse, PbsClientError> {
-    info!(pubkey = %delegation.message.pubkey, validator_index = delegation.message.validator_index, "Delegating signing rights");
-    post_request(state, DELEGATE_PATH, &delegation).await?;
+    info!(count = %delegations.len(), "Delegating signing rights");
+    post_request(state, DELEGATE_PATH, &delegations).await?;
     Ok(StatusCode::OK)
 }
 
@@ -156,10 +157,10 @@ async fn delegate(
 #[tracing::instrument(skip_all)]
 async fn revoke(
     State(state): State<PbsState<BuilderState>>,
-    Json(revocation): Json<SignedRevocation>,
+    Json(revocations): Json<Vec<SignedRevocation>>,
 ) -> Result<impl IntoResponse, PbsClientError> {
-    info!(pubkey = %revocation.message.pubkey, validator_index = revocation.message.validator_index, "Revoking signing rights");
-    post_request(state, REVOKE_PATH, &revocation).await?;
+    info!(count = %revocations.len(), "Revoking signing rights");
+    post_request(state, REVOKE_PATH, &revocations).await?;
     Ok(StatusCode::OK)
 }
 
@@ -171,7 +172,13 @@ async fn get_header_with_proofs(
     Path(params): Path<GetHeaderParams>,
     req_headers: HeaderMap,
 ) -> Result<impl IntoResponse, PbsClientError> {
+    let slot_uuid = state.get_or_update_slot_uuid(params.slot);
+
+    let ua = get_user_agent(&req_headers);
     let ms_into_slot = ms_into_slot(params.slot, state.config.chain);
+
+    info!(ua, parent_hash=%params.parent_hash, validator_pubkey=%params.pubkey, ms_into_slot);
+
     let max_timeout_ms = state
         .pbs_config()
         .timeout_get_header_ms
@@ -186,8 +193,6 @@ async fn get_header_with_proofs(
 
         return Ok(StatusCode::NO_CONTENT.into_response());
     }
-
-    let (_, slot_uuid) = state.get_slot_and_uuid();
 
     // prepare headers, except for start time which is set in `send_one_get_header`
     let mut send_headers = HeaderMap::new();
@@ -444,7 +449,7 @@ async fn send_one_get_header(
     debug!(
         latency = ?request_latency,
         block_hash = %get_header_response.data.message.header.block_hash,
-        value_eth = format_ether(get_header_response.data.message.value()),
+        value_eth = format_ether(get_header_response.data.message.value),
         "received new header"
     );
 
@@ -471,7 +476,7 @@ fn validate_header(
     let block_hash = signed_header.message.header.block_hash;
     let received_relay_pubkey = signed_header.message.pubkey;
     let tx_root = signed_header.message.header.transactions_root;
-    let value = signed_header.message.value();
+    let value = signed_header.message.value;
 
     if block_hash == B256::ZERO {
         return Err(ValidationError::EmptyBlockhash);
@@ -538,13 +543,9 @@ where
             Ok(response) => {
                 let url = response.url().clone();
                 let status = response.status();
-                let body = response.text().await.ok();
                 if status != StatusCode::OK {
-                    error!(
-                        %status,
-                        %url,
-                        "Failed to POST to relay: {body:?}"
-                    )
+                    let body = response.text().await.ok();
+                    error!(%status, %url, "Failed to POST to relay: {body:?}");
                 } else {
                     debug!(%url, "Successfully sent POST request to relay");
                     success = true;

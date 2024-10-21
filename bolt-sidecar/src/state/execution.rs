@@ -13,7 +13,7 @@ use tracing::{debug, trace};
 use crate::{
     builder::BlockTemplate,
     common::{calculate_max_basefee, max_transaction_cost, validate_transaction},
-    config::Limits,
+    config::limits::LimitsOpts,
     primitives::{AccountState, CommitmentRequest, SignedConstraints, Slot},
 };
 
@@ -21,8 +21,7 @@ use super::fetcher::StateFetcher;
 
 /// Possible commitment validation errors.
 ///
-/// NOTE: unfortuntately it cannot implement `Clone` due to `BlobTransactionValidationError`
-/// not implementing it
+/// NOTE: `Clone` not implementable due to `BlobTransactionValidationError`
 #[derive(Debug, Error)]
 pub enum ValidationError {
     /// The transaction fee is too low to cover the maximum base fee.
@@ -55,6 +54,9 @@ pub enum ValidationError {
     /// Max priority fee per gas is greater than max fee per gas.
     #[error("Max priority fee per gas is greater than max fee per gas")]
     MaxPriorityFeePerGasTooHigh,
+    /// Max priority fee per gas is less than min priority fee.
+    #[error("Max priority fee per gas is less than min priority fee")]
+    MaxPriorityFeePerGasTooLow,
     /// The sender does not have enough balance to pay for the transaction.
     #[error("Not enough balance to pay for value + maximum fee")]
     InsufficientBalance,
@@ -72,7 +74,7 @@ pub enum ValidationError {
     MaxCommittedGasReachedForSlot(u64, u64),
     /// The signature is invalid.
     #[error("Invalid signature")]
-    Signature(#[from] crate::primitives::SignatureError),
+    Signature(#[from] crate::primitives::commitment::SignatureError),
     /// Could not recover signature,
     #[error("Could not recover signer")]
     RecoverSigner,
@@ -103,6 +105,7 @@ impl ValidationError {
             ValidationError::GasLimitTooHigh => "gas_limit_too_high",
             ValidationError::TransactionSizeTooHigh => "transaction_size_too_high",
             ValidationError::MaxPriorityFeePerGasTooHigh => "max_priority_fee_per_gas_too_high",
+            ValidationError::MaxPriorityFeePerGasTooLow => "max_priority_fee_per_gas_too_low",
             ValidationError::InsufficientBalance => "insufficient_balance",
             ValidationError::Eip4844Limit => "eip4844_limit",
             ValidationError::SlotTooLow(_) => "slot_too_low",
@@ -151,7 +154,7 @@ pub struct ExecutionState<C> {
     /// The chain ID of the chain (constant).
     chain_id: u64,
     /// The limits set for the sidecar.
-    limits: Limits,
+    limits: LimitsOpts,
     /// The KZG settings for validating blobs.
     kzg_settings: EnvKzgSettings,
     /// The state fetcher client.
@@ -181,7 +184,7 @@ impl Default for ValidationParams {
 impl<C: StateFetcher> ExecutionState<C> {
     /// Creates a new state with the given client, initializing the
     /// basefee and head block number.
-    pub async fn new(client: C, limits: Limits) -> Result<Self, TransportError> {
+    pub async fn new(client: C, limits: LimitsOpts) -> Result<Self, TransportError> {
         let (basefee, blob_basefee, block_number, chain_id) = tokio::try_join!(
             client.get_basefee(None),
             client.get_blob_basefee(None),
@@ -277,7 +280,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         }
 
         // Ensure max_priority_fee_per_gas is less than max_fee_per_gas
-        if !req.validate_priority_fee() {
+        if !req.validate_max_priority_fee() {
             return Err(ValidationError::MaxPriorityFeePerGasTooHigh);
         }
 
@@ -293,6 +296,11 @@ impl<C: StateFetcher> ExecutionState<C> {
         // Validate the base fee
         if !req.validate_basefee(max_basefee) {
             return Err(ValidationError::BaseFeeTooLow(max_basefee));
+        }
+
+        // Ensure max_priority_fee_per_gas is greater than or equal to min_priority_fee
+        if !req.validate_min_priority_fee(max_basefee, self.limits.min_priority_fee.get()) {
+            return Err(ValidationError::MaxPriorityFeePerGasTooLow);
         }
 
         if target_slot < self.slot {
@@ -519,7 +527,7 @@ pub struct StateUpdate {
 
 #[cfg(test)]
 mod tests {
-    use crate::builder::template::StateDiff;
+    use crate::{builder::template::StateDiff, signer::local::LocalSigner};
     use std::{num::NonZero, str::FromStr, time::Duration};
 
     use alloy::{
@@ -531,9 +539,10 @@ mod tests {
         signers::local::PrivateKeySigner,
     };
     use fetcher::{StateClient, StateFetcher};
+    use reth_primitives::constants::GWEI_TO_WEI;
 
     use crate::{
-        crypto::{bls::Signer, SignableBLS, SignerBLS},
+        crypto::SignableBLS,
         primitives::{ConstraintsMessage, SignedConstraints},
         state::fetcher,
         test_util::{create_signed_commitment_request, default_test_transaction, launch_anvil},
@@ -548,7 +557,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -573,7 +582,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -611,7 +620,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -660,7 +669,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -690,11 +699,11 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
-        let signer = Signer::random();
+        let signer = LocalSigner::random();
 
         // initialize the state by updating the head once
         let slot = client.get_head().await?;
@@ -723,8 +732,11 @@ mod tests {
 
         assert!(state.validate_request(&mut request).await.is_ok());
 
-        let message = ConstraintsMessage::build(0, request.as_inclusion_request().unwrap().clone());
-        let signature = signer.sign(&message.digest()).await?;
+        let message = ConstraintsMessage::build(
+            Default::default(),
+            request.as_inclusion_request().unwrap().clone(),
+        );
+        let signature = signer.sign_commit_boost_root(message.digest())?;
         let signed_constraints = SignedConstraints { message, signature };
         state.add_constraint(10, signed_constraints);
 
@@ -749,7 +761,13 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let limits = LimitsOpts {
+            max_commitments_per_slot: NonZero::new(10).unwrap(),
+            max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
+            min_priority_fee: NonZero::new(200000000).unwrap(), // 0.2 gwei
+        };
+
+        let mut state = ExecutionState::new(client.clone(), limits).await?;
 
         let basefee = state.basefee();
 
@@ -782,9 +800,10 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits: Limits = Limits {
+        let limits = LimitsOpts {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
+            min_priority_fee: NonZero::new(2000000000).unwrap(),
         };
         let mut state = ExecutionState::new(client.clone(), limits).await?;
 
@@ -808,6 +827,135 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_invalid_inclusion_request_min_priority_fee() -> eyre::Result<()> {
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let limits = LimitsOpts {
+            max_commitments_per_slot: NonZero::new(10).unwrap(),
+            max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
+            min_priority_fee: NonZero::new(2 * GWEI_TO_WEI as u128).unwrap(),
+        };
+
+        let mut state = ExecutionState::new(client.clone(), limits).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        // Create a transaction with a max priority fee that is too low
+        let tx = default_test_transaction(*sender, None)
+            .with_max_priority_fee_per_gas(GWEI_TO_WEI as u128);
+
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
+
+        assert!(matches!(
+            state.validate_request(&mut request).await,
+            Err(ValidationError::MaxPriorityFeePerGasTooLow)
+        ));
+
+        // Create a transaction with a max priority fee that is correct
+        let tx = default_test_transaction(*sender, None)
+            .with_max_priority_fee_per_gas(3 * GWEI_TO_WEI as u128);
+
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
+
+        assert!(state.validate_request(&mut request).await.is_ok());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_invalid_inclusion_request_min_priority_fee_legacy() -> eyre::Result<()> {
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let limits = LimitsOpts {
+            max_commitments_per_slot: NonZero::new(10).unwrap(),
+            max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
+            min_priority_fee: NonZero::new(2 * GWEI_TO_WEI as u128).unwrap(),
+        };
+
+        let mut state = ExecutionState::new(client.clone(), limits).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let base_fee = state.basefee();
+        let Some(max_base_fee) = calculate_max_basefee(base_fee, 10 - slot) else {
+            return Err(eyre::eyre!("Failed to calculate max base fee"));
+        };
+
+        // Create a transaction with a gas price that is too low
+        let tx = default_test_transaction(*sender, None)
+            .with_gas_price(max_base_fee + GWEI_TO_WEI as u128);
+
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
+
+        assert!(matches!(
+            state.validate_request(&mut request).await,
+            Err(ValidationError::MaxPriorityFeePerGasTooLow)
+        ));
+
+        // Create a transaction with a gas price that is correct
+        let tx = default_test_transaction(*sender, None)
+            .with_gas_price(max_base_fee + 3 * GWEI_TO_WEI as u128);
+
+        let mut request = create_signed_commitment_request(&[tx], sender_pk, 10).await?;
+
+        assert!(state.validate_request(&mut request).await.is_ok());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_invalid_inclusion_request_duplicate_batch() -> eyre::Result<()> {
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let limits = LimitsOpts {
+            max_commitments_per_slot: NonZero::new(10).unwrap(),
+            max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
+            min_priority_fee: NonZero::new(2 * GWEI_TO_WEI as u128).unwrap(),
+        };
+
+        let mut state = ExecutionState::new(client.clone(), limits).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+
+        let base_fee = state.basefee();
+        let Some(max_base_fee) = calculate_max_basefee(base_fee, 10 - slot) else {
+            return Err(eyre::eyre!("Failed to calculate max base fee"));
+        };
+
+        // Create a transaction with a gas price that is too low
+        let tx = default_test_transaction(*sender, None)
+            .with_gas_price(max_base_fee + 3 * GWEI_TO_WEI as u128);
+
+        let mut request =
+            create_signed_commitment_request(&[tx.clone(), tx], sender_pk, 10).await?;
+
+        let response = state.validate_request(&mut request).await;
+        println!("{response:?}");
+
+        assert!(matches!(response, Err(ValidationError::NonceTooLow(_, _))));
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn test_invalidate_inclusion_request() -> eyre::Result<()> {
         let _ = tracing_subscriber::fmt::try_init();
 
@@ -815,7 +963,7 @@ mod tests {
         let client = StateClient::new(anvil.endpoint_url());
         let provider = ProviderBuilder::new().on_http(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -837,9 +985,9 @@ mod tests {
 
         assert!(state.validate_request(&mut request).await.is_ok());
 
-        let bls_signer = Signer::random();
-        let message = ConstraintsMessage::build(0, inclusion_request);
-        let signature = bls_signer.sign(&message.digest()).await.unwrap();
+        let bls_signer = LocalSigner::random();
+        let message = ConstraintsMessage::build(Default::default(), inclusion_request);
+        let signature = bls_signer.sign_commit_boost_root(message.digest()).unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
         state.add_constraint(target_slot, signed_constraints);
@@ -868,7 +1016,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -885,9 +1033,9 @@ mod tests {
 
         assert!(state.validate_request(&mut request).await.is_ok());
 
-        let bls_signer = Signer::random();
-        let message = ConstraintsMessage::build(0, inclusion_request);
-        let signature = bls_signer.sign(&message.digest()).await.unwrap();
+        let bls_signer = LocalSigner::random();
+        let message = ConstraintsMessage::build(Default::default(), inclusion_request);
+        let signature = bls_signer.sign_commit_boost_root(message.digest()).unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
         state.add_constraint(target_slot, signed_constraints);
@@ -910,9 +1058,10 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let limits: Limits = Limits {
+        let limits: LimitsOpts = LimitsOpts {
             max_commitments_per_slot: NonZero::new(10).unwrap(),
             max_committed_gas_per_slot: NonZero::new(5_000_000).unwrap(),
+            min_priority_fee: NonZero::new(1000000000).unwrap(),
         };
         let mut state = ExecutionState::new(client.clone(), limits).await?;
 
@@ -931,9 +1080,9 @@ mod tests {
 
         assert!(state.validate_request(&mut request).await.is_ok());
 
-        let bls_signer = Signer::random();
-        let message = ConstraintsMessage::build(0, inclusion_request);
-        let signature = bls_signer.sign(&message.digest()).await.unwrap();
+        let bls_signer = LocalSigner::random();
+        let message = ConstraintsMessage::build(Default::default(), inclusion_request);
+        let signature = bls_signer.sign_commit_boost_root(message.digest()).unwrap();
         let signed_constraints = SignedConstraints { message, signature };
 
         state.add_constraint(target_slot, signed_constraints);
@@ -960,7 +1109,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -987,7 +1136,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();
@@ -1017,7 +1166,7 @@ mod tests {
         let anvil = launch_anvil();
         let client = StateClient::new(anvil.endpoint_url());
 
-        let mut state = ExecutionState::new(client.clone(), Limits::default()).await?;
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
 
         let sender = anvil.addresses().first().unwrap();
         let sender_pk = anvil.keys().first().unwrap();

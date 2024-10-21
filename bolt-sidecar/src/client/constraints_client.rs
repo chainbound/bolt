@@ -2,10 +2,13 @@
 //! The Bolt sidecar's main purpose is to sit between the beacon node and Constraints client,
 //! so most requests are simply proxied to its API.
 
+use std::collections::HashSet;
+
 use axum::http::StatusCode;
 use beacon_api_client::VersionedValue;
 use ethereum_consensus::{
-    builder::SignedValidatorRegistration, deneb::mainnet::SignedBlindedBeaconBlock, Fork,
+    builder::SignedValidatorRegistration, crypto::PublicKey as BlsPublicKey,
+    deneb::mainnet::SignedBlindedBeaconBlock, Fork,
 };
 use reqwest::Url;
 use tracing::error;
@@ -30,6 +33,7 @@ use crate::{
 pub struct ConstraintsClient {
     url: Url,
     client: reqwest::Client,
+    delegations: Vec<SignedDelegation>,
 }
 
 impl ConstraintsClient {
@@ -38,7 +42,22 @@ impl ConstraintsClient {
         Self {
             url: url.into(),
             client: reqwest::ClientBuilder::new().user_agent("bolt-sidecar").build().unwrap(),
+            delegations: Vec::new(),
         }
+    }
+
+    /// Adds a list of delegations to the client.
+    pub fn add_delegations(&mut self, delegations: Vec<SignedDelegation>) {
+        self.delegations.extend(delegations);
+    }
+
+    /// Finds all delegations for the given public key.
+    pub fn find_delegatees(&self, pubkey: &BlsPublicKey) -> HashSet<BlsPublicKey> {
+        self.delegations
+            .iter()
+            .filter(|d| d.message.delegatee_pubkey == *pubkey)
+            .map(|d| d.message.delegatee_pubkey.clone())
+            .collect::<HashSet<_>>()
     }
 
     fn endpoint(&self, path: &str) -> Url {
@@ -78,6 +97,13 @@ impl BuilderApi for ConstraintsClient {
         if response.status() != StatusCode::OK {
             let error = response.json::<ErrorResponse>().await?;
             return Err(BuilderApiError::FailedRegisteringValidators(error));
+        }
+
+        // If there are any delegations, propagate them to the relay
+        if self.delegations.is_empty() {
+            return Ok(());
+        } else if let Err(err) = self.delegate(&self.delegations).await {
+            error!(?err, "Failed to propagate delegations during validator registration");
         }
 
         Ok(())
@@ -190,12 +216,12 @@ impl ConstraintsApi for ConstraintsClient {
         Ok(header)
     }
 
-    async fn delegate(&self, signed_data: SignedDelegation) -> Result<(), BuilderApiError> {
+    async fn delegate(&self, signed_data: &[SignedDelegation]) -> Result<(), BuilderApiError> {
         let response = self
             .client
             .post(self.endpoint(DELEGATE_PATH))
             .header("content-type", "application/json")
-            .body(serde_json::to_string(&signed_data)?)
+            .body(serde_json::to_string(signed_data)?)
             .send()
             .await?;
 
@@ -207,12 +233,12 @@ impl ConstraintsApi for ConstraintsClient {
         Ok(())
     }
 
-    async fn revoke(&self, signed_data: SignedRevocation) -> Result<(), BuilderApiError> {
+    async fn revoke(&self, signed_data: &[SignedRevocation]) -> Result<(), BuilderApiError> {
         let response = self
             .client
             .post(self.endpoint(REVOKE_PATH))
             .header("content-type", "application/json")
-            .body(serde_json::to_string(&signed_data)?)
+            .body(serde_json::to_string(signed_data)?)
             .send()
             .await?;
 

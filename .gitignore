@@ -1,6 +1,7 @@
 *_dump.log
 logs/
 target/
+.vscode
+.idea
 .DS_Store
 .env
-.vscode

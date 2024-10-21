@@ -2,22 +2,22 @@ use std::{str::FromStr, sync::Arc};
 
 use alloy::{rpc::types::beacon::BlsSignature, signers::Signature};
 use cb_common::{
-    commit::{client::SignerClient, request::SignConsensusRequest},
-    signer::{BlsPublicKey, EcdsaPublicKey},
+    commit::{client::SignerClient, error::SignerClientError, request::SignConsensusRequest},
+    signer::EcdsaPublicKey,
 };
 use commit_boost::prelude::SignProxyRequest;
-use eyre::ErrReport;
+use ethereum_consensus::crypto::bls::PublicKey as BlsPublicKey;
 use parking_lot::RwLock;
+use reqwest::Url;
 use thiserror::Error;
 use tracing::{debug, error, info};
 
 use crate::{
-    crypto::{
-        bls::{SignerBLS, BLS_DST_PREFIX},
-        ecdsa::SignerECDSA,
-    },
+    crypto::{bls::BLS_DST_PREFIX, ecdsa::SignerECDSA},
     primitives::commitment::ECDSASignatureExt,
 };
+
+use super::SignerResult;
 
 /// A client for interacting with CommitBoost.
 #[derive(Debug, Clone)]
@@ -33,14 +33,17 @@ pub enum CommitBoostError {
     #[error("failed to sign constraint: {0}")]
     NoSignature(String),
     #[error("failed to create signer client: {0}")]
-    SignerClientError(#[from] ErrReport),
+    SignerClientError(#[from] SignerClientError),
+    #[error("error in commit boost signer: {0}")]
+    Other(eyre::Report),
 }
 
 #[allow(unused)]
 impl CommitBoostSigner {
     /// Create a new [CommitBoostSigner] instance
-    pub async fn new(signer_server_address: String, jwt: &str) -> Result<Self, CommitBoostError> {
-        let signer_client = SignerClient::new(signer_server_address, jwt)?;
+    pub fn new(signer_url: Url, jwt: &str) -> SignerResult<Self> {
+        let socket_addr = parse_address_from_url(signer_url).map_err(CommitBoostError::Other)?;
+        let signer_client = SignerClient::new(socket_addr, jwt).map_err(CommitBoostError::Other)?;
 
         let client = Self {
             signer_client,
@@ -60,7 +63,11 @@ impl CommitBoostSigner {
                     );
                     let mut pubkeys_lock = this.pubkeys.write();
                     let mut proxy_ecdsa_lock = this.proxy_ecdsa.write();
-                    *pubkeys_lock = pubkeys.consensus;
+                    *pubkeys_lock = pubkeys
+                        .consensus
+                        .into_iter()
+                        .map(|k| BlsPublicKey::try_from(k.as_ref()).unwrap())
+                        .collect();
                     *proxy_ecdsa_lock = pubkeys.proxy_ecdsa;
                 }
                 Err(e) => {
@@ -74,7 +81,8 @@ impl CommitBoostSigner {
 
     /// Get the consensus public key from the Commit-Boost signer.
     pub fn get_consensus_pubkey(&self) -> BlsPublicKey {
-        *self.pubkeys.read().first().expect("consensus pubkey loaded")
+        let pk = self.pubkeys.read().first().expect("consensus pubkey loaded").clone();
+        BlsPublicKey::try_from(pk.as_ref()).expect("consensus pubkey is valid")
     }
 
     /// Get the proxy ECDSA public key from the Commit-Boost signer.
@@ -107,17 +115,28 @@ impl CommitBoostSigner {
     }
 }
 
-#[async_trait::async_trait]
-impl SignerBLS for CommitBoostSigner {
-    async fn sign(&self, data: &[u8; 32]) -> eyre::Result<BlsSignature> {
-        let request = SignConsensusRequest::builder(
-            *self.pubkeys.read().first().expect("consensus pubkey loaded"),
-        )
-        .with_msg(data);
+impl CommitBoostSigner {
+    /// Get the public key of the signer.
+    pub fn pubkey(&self) -> BlsPublicKey {
+        self.get_consensus_pubkey()
+    }
+
+    /// Sign an object root with the Commit Boost domain.
+    pub async fn sign_commit_boost_root(&self, data: [u8; 32]) -> SignerResult<BlsSignature> {
+        // convert the pubkey from ethereum_consensus to commit-boost format
+        let pubkey = cb_common::signer::BlsPublicKey::from(
+            alloy::rpc::types::beacon::BlsPublicKey::from_slice(self.pubkey().as_ref()),
+        );
+
+        let request = SignConsensusRequest { pubkey, object_root: data };
 
         debug!(?request, "Requesting signature from commit_boost");
 
-        Ok(self.signer_client.request_consensus_signature(request).await?)
+        Ok(self
+            .signer_client
+            .request_consensus_signature(request)
+            .await
+            .map_err(CommitBoostError::SignerClientError)?)
     }
 }
 
@@ -140,11 +159,33 @@ impl SignerECDSA for CommitBoostSigner {
     }
 }
 
+fn parse_address_from_url(url: Url) -> eyre::Result<String> {
+    let str = url.as_str();
+
+    // take the host out of the URL, e.g. "http://localhost:425" -> localhost:425
+    // and also "remotehost:2425" -> remotehost:2425
+    let without_base = url.as_str().split("://").last().unwrap_or(str);
+    let hostname = without_base.split(':').next().unwrap_or(without_base);
+    let port = without_base.split(':').last().ok_or_else(|| eyre::eyre!("No port found"))?;
+    let port = port.trim_end_matches('/');
+
+    Ok(format!("{}:{}", hostname, port))
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
     use rand::Rng;
     use tracing::warn;
+
+    #[test]
+    fn test_url_parse_address() {
+        let url = Url::parse("http://localhost:8080").unwrap();
+        assert_eq!(parse_address_from_url(url).unwrap(), "localhost:8080");
+
+        let url = Url::parse("remotehost:2425").unwrap();
+        assert_eq!(parse_address_from_url(url).unwrap(), "remotehost:2425");
+    }
 
     #[tokio::test]
     async fn test_bls_commit_boost_signer() -> eyre::Result<()> {
@@ -160,14 +201,14 @@ mod test {
                 return Ok(());
             }
         };
-        let signer = CommitBoostSigner::new(signer_server_address, &jwt_hex).await.unwrap();
+        let signer = CommitBoostSigner::new(signer_server_address.parse()?, &jwt_hex).unwrap();
 
         // Generate random data for the test
         let mut rng = rand::thread_rng();
         let mut data = [0u8; 32];
         rng.fill(&mut data);
 
-        let signature = signer.sign(&data).await.unwrap();
+        let signature = signer.sign_commit_boost_root(data).await.unwrap();
         let sig = blst::min_pk::Signature::from_bytes(signature.as_ref()).unwrap();
         let pubkey = signer.get_consensus_pubkey();
         let bls_pubkey = blst::min_pk::PublicKey::from_bytes(pubkey.as_ref()).unwrap();
@@ -190,7 +231,7 @@ mod test {
                 return Ok(());
             }
         };
-        let signer = CommitBoostSigner::new(signer_server_address, &jwt_hex).await.unwrap();
+        let signer = CommitBoostSigner::new(signer_server_address.parse()?, &jwt_hex).unwrap();
         let pubkey = signer.get_proxy_ecdsa_pubkey();
 
         // Generate random data for the test

@@ -65,7 +65,7 @@ type mockRelay struct {
 
 	// Default responses placeholders, used if overrider does not exist
 	GetHeaderResponse           *builderSpec.VersionedSignedBuilderBid
-	GetHeaderWithProofsResponse *BidWithInclusionProofs
+	GetHeaderWithProofsResponse *VersionedSignedBuilderBidWithProofs
 	GetPayloadResponse          *builderApi.VersionedSubmitBlindedBlockResponse
 
 	// Server section
@@ -123,6 +123,8 @@ func (m *mockRelay) getRouter() http.Handler {
 	r.HandleFunc(pathGetHeader, m.handleGetHeader).Methods(http.MethodGet)
 	r.HandleFunc(pathGetHeaderWithProofs, m.handleGetHeaderWithProofs).Methods(http.MethodGet)
 	r.HandleFunc(pathSubmitConstraint, m.handleSubmitConstraint).Methods(http.MethodPost)
+	r.HandleFunc(pathDelegate, m.handleDelegate).Methods(http.MethodPost)
+	r.HandleFunc(pathRevoke, m.handleRevoke).Methods(http.MethodPost)
 	r.HandleFunc(pathGetPayload, m.handleGetPayload).Methods(http.MethodPost)
 
 	return m.newTestMiddleware(r)
@@ -172,6 +174,28 @@ func (m *mockRelay) defaultHandleRegisterValidator(w http.ResponseWriter, req *h
 	w.WriteHeader(http.StatusOK)
 }
 
+func (m *mockRelay) handleDelegate(w http.ResponseWriter, req *http.Request) {
+	payload := SignedDelegation{}
+	if err := DecodeJSON(req.Body, &payload); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+}
+
+func (m *mockRelay) handleRevoke(w http.ResponseWriter, req *http.Request) {
+	payload := SignedRevocation{}
+	if err := DecodeJSON(req.Body, &payload); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+}
+
 func (m *mockRelay) handleSubmitConstraint(w http.ResponseWriter, req *http.Request) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -197,7 +221,7 @@ func (m *mockRelay) MakeGetHeaderWithConstraintsResponse(value uint64, blockHash
 	tx   Transaction
 	hash phase0.Hash32
 },
-) *BidWithInclusionProofs {
+) *VersionedSignedBuilderBidWithProofs {
 	transactions := new(utilbellatrix.ExecutionPayloadTransactions)
 
 	for _, con := range constraints {
@@ -288,7 +312,7 @@ func (m *mockRelay) MakeGetHeaderResponse(value uint64, blockHash, parentHash, p
 
 // MakeGetHeaderWithProofsResponseWithTxsRoot is used to create the default or can be used to create a custom response to the getHeaderWithProofs
 // method
-func (m *mockRelay) MakeGetHeaderWithProofsResponseWithTxsRoot(value uint64, blockHash, parentHash, publicKey string, version spec.DataVersion, txsRoot phase0.Root) *BidWithInclusionProofs {
+func (m *mockRelay) MakeGetHeaderWithProofsResponseWithTxsRoot(value uint64, blockHash, parentHash, publicKey string, version spec.DataVersion, txsRoot phase0.Root) *VersionedSignedBuilderBidWithProofs {
 	switch version {
 	case spec.DataVersionCapella:
 		// Fill the payload with custom values.
@@ -307,8 +331,8 @@ func (m *mockRelay) MakeGetHeaderWithProofsResponseWithTxsRoot(value uint64, blo
 		signature, err := ssz.SignMessage(message, ssz.DomainBuilder, m.secretKey)
 		require.NoError(m.t, err)
 
-		return &BidWithInclusionProofs{
-			Bid: &builderSpec.VersionedSignedBuilderBid{
+		return &VersionedSignedBuilderBidWithProofs{
+			VersionedSignedBuilderBid: &builderSpec.VersionedSignedBuilderBid{
 				Version: spec.DataVersionCapella,
 				Capella: &builderApiCapella.SignedBuilderBid{
 					Message:   message,
@@ -335,8 +359,8 @@ func (m *mockRelay) MakeGetHeaderWithProofsResponseWithTxsRoot(value uint64, blo
 		signature, err := ssz.SignMessage(message, ssz.DomainBuilder, m.secretKey)
 		require.NoError(m.t, err)
 
-		return &BidWithInclusionProofs{
-			Bid: &builderSpec.VersionedSignedBuilderBid{
+		return &VersionedSignedBuilderBidWithProofs{
+			VersionedSignedBuilderBid: &builderSpec.VersionedSignedBuilderBid{
 				Version: spec.DataVersionDeneb,
 				Deneb: &builderApiDeneb.SignedBuilderBid{
 					Message:   message,
@@ -411,7 +435,7 @@ func (m *mockRelay) defaultHandleGetHeaderWithProofs(w http.ResponseWriter) {
 		"0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7",
 		"0xe28385e7bd68df656cd0042b74b69c3104b5356ed1f20eb69f1f925df47a3ab7",
 		"0x8a1d7b8dd64e0aafe7ea7b6c95065c9364cf99d38470c12ee807d55f7de1529ad29ce2c422e0b65e3d5a05c02caca249",
-		spec.DataVersionCapella,
+		spec.DataVersionDeneb,
 		nil,
 	)
 

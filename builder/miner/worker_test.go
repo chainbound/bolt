@@ -122,8 +122,8 @@ func init() {
 			} else {
 				idx = nil
 			}
-			constraints := make(map[common.Hash]*types.ConstraintDecoded)
-			constraints[tx1.Hash()] = &types.ConstraintDecoded{Index: idx, Tx: tx1}
+			constraints := make(map[common.Hash]*types.Transaction)
+			constraints[tx1.Hash()] = tx1
 			// FIXME: slot 0 is probably not correct for these tests
 			testConstraintsCache.Put(0, constraints)
 		}

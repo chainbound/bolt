@@ -1033,10 +1033,19 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 
 	// Here we initialize and track the constraints left to be executed along
 	// with their gas requirements
-	constraintsOrderedByIndex,
-		constraintsWithoutIndex,
+	constraintsOrderedByNonceAndHashDesc,
 		constraintsTotalGasLeft,
 		constraintsTotalBlobGasLeft := types.ParseConstraintsDecoded(constraints)
+
+	constraintsRecoveredOrderedByNonceAndHashDesc := make([]*types.TransactionEcRecovered, 0, len(constraintsOrderedByNonceAndHashDesc))
+	for _, tx := range constraintsOrderedByNonceAndHashDesc {
+		// Error may be ignored here, see assumption
+		from, _ := types.Sender(env.signer, tx)
+		constraintsRecoveredOrderedByNonceAndHashDesc = append(constraintsRecoveredOrderedByNonceAndHashDesc, &types.TransactionEcRecovered{
+			Transaction: tx,
+			Sender:      from,
+		})
+	}
 
 	for {
 		// `env.tcount` starts from 0 so it's correct to use it as the current index
@@ -1106,67 +1115,77 @@ func (w *worker) commitTransactions(env *environment, plainTxs, blobTxs *transac
 			isConstraint bool
 		}
 
-		var constraintTx *types.ConstraintDecoded
-		if len(constraintsOrderedByIndex) > 0 {
-			constraintTx = constraintsOrderedByIndex[0]
-		}
-
 		isSomePoolTxLeft := lazyTx != nil
+		var from common.Address
 
-		isThereConstraintWithThisIndex := constraintTx != nil && constraintTx.Index != nil && *constraintTx.Index == currentTxIndex
-		if isThereConstraintWithThisIndex {
-			// we retrieve the candidate constraint by shifting it from the list
-			candidate = candidateTx{tx: common.Shift(&constraintsOrderedByIndex).Tx, isConstraint: true}
-		} else {
-			if isSomePoolTxLeft {
-				// Check if there enough gas left for this tx
-				if constraintsTotalGasLeft+lazyTx.Gas > env.gasPool.Gas() || constraintsTotalBlobGasLeft+lazyTx.BlobGas > blobGasLeft {
-					// Skip this tx and try to fit one with less gas.
-					// Drop all consecutive transactions from the same sender because of `nonce-too-high` clause.
-					log.Debug("Could not find transactions gas with the remaining constraints, account skipped", "hash", lazyTx.Hash)
-					txs.Pop()
-					// Edge case:
-					//
-					// Assumption: suppose sender A sends tx T_1 with nonce 1, and T_2 with nonce 2, and T_2 is a constraint.
-					//
-					//
-					// When running the block building algorithm I first have to make sure to reserve enough gas for the constraints.
-					// This implies that when a pooled tx comes I have to check if there is enough gas for it while taking into account
-					// the rest of the remaining constraint gas to allocate.
-					// Suppose there is no gas for the pooled tx T_1, then I have to drop it and consequently drop every tx from the same
-					// sender with higher nonce due to "nonce-too-high" issues, including T_2.
-					// But then, I have dropped a constraint which means my bid is invalid.
-					//
-					// FIXME: for the PoC we're not handling this
+		if isSomePoolTxLeft {
+			// Check if there enough gas left for this tx
+			if constraintsTotalGasLeft+lazyTx.Gas > env.gasPool.Gas() || constraintsTotalBlobGasLeft+lazyTx.BlobGas > blobGasLeft {
+				// Skip this tx and try to fit one with less gas.
+				// Drop all consecutive transactions from the same sender because of `nonce-too-high` clause.
+				log.Debug("Could not find transactions gas with the remaining constraints, account skipped", "hash", lazyTx.Hash)
+				txs.Pop()
+				// Edge case:
+				//
+				// Assumption: suppose sender A sends tx T_1 with nonce 1, and T_2 with nonce 2, and T_2 is a constraint.
+				//
+				//
+				// When running the block building algorithm I first have to make sure to reserve enough gas for the constraints.
+				// This implies that when a pooled tx comes I have to check if there is enough gas for it while taking into account
+				// the rest of the remaining constraint gas to allocate.
+				// Suppose there is no gas for the pooled tx T_1, then I have to drop it and consequently drop every tx from the same
+				// sender with higher nonce due to "nonce-too-high" issues, including T_2.
+				// But then, I have dropped a constraint which means my bid is invalid.
+				//
+				// NOTE: this actually cannot happen because the sidecar accept constraints considering the previous block
+				// state and not pending transactions. So this setting would be rejected by the sidecar with `NonceTooHigh`
+				// error. A scenario like T_1 is a constraint and T_2 is not is possible instead and correctly handled (see below).
 
-					// Repeat the loop to try to find another pool transaction
-					continue
-				}
-				// We can safely consider the pool tx as the candidate,
-				// since by assumption it is not nonce-conflicting
-				tx := lazyTx.Resolve()
-				if tx == nil {
-					log.Trace("Ignoring evicted transaction", "hash", candidate.tx.Hash())
-					txs.Pop()
-					continue
-				}
-				candidate = candidateTx{tx: tx, isConstraint: false}
-			} else {
-				// No more pool tx left, we can add the unindexed ones if available
-				if len(constraintsWithoutIndex) == 0 {
-					// To recap, this means:
-					// 1. there are no more pool tx left
-					// 2. there are no more constraints without an index
-					// 3. the remaining indexes inside `constraintsOrderedByIndex`, if any, cannot be satisfied
-					// As such, we can safely exist
-					break
-				}
-				candidate = candidateTx{tx: common.Shift(&constraintsWithoutIndex).Tx, isConstraint: true}
+				// Repeat the loop to try to find another pool transaction
+				continue
 			}
-		}
 
-		// Error may be ignored here, see assumption
-		from, _ := types.Sender(env.signer, candidate.tx)
+			// We can safely consider the pool tx as the candidate,
+			// since by assumption it is not nonce-conflicting.
+			tx := lazyTx.Resolve()
+			if tx == nil {
+				log.Trace("Ignoring evicted transaction", "hash", candidate.tx.Hash())
+				txs.Pop()
+				continue
+			}
+
+			// Error may be ignored here, see assumption
+			from, _ = types.Sender(env.signer, tx)
+
+			// We cannot choose this pooled tx yet, we need to make sure that there is not a constraint with lower nonce.
+			// That is, a scenario where T_1 is a constraint and T_2 is pooled.
+			constraintsBySender := append(constraintsRecoveredOrderedByNonceAndHashDesc, []*types.TransactionEcRecovered{}...)
+			common.Filter(&constraintsBySender, func(txRecovered *types.TransactionEcRecovered) bool {
+				return txRecovered.Sender == from
+			})
+
+			// The slice might be empty so the last value might be nil!
+			lowestNonceConstraintBySender := common.Last(constraintsBySender)
+			if lowestNonceConstraintBySender != nil && lowestNonceConstraintBySender.Transaction.Nonce() < tx.Nonce() {
+				// This means that the constraint with the lowest nonce from this sender
+				// has lower nonce than the pooled tx, so we cannot execute the pooled tx yet.
+				// We need to execute the constraint first.
+				candidate = candidateTx{tx: lowestNonceConstraintBySender.Transaction, isConstraint: true}
+			} else {
+				candidate = candidateTx{tx: tx, isConstraint: false}
+			}
+		} else {
+			// No more pool tx left, we can add the unindexed ones if available
+			if len(constraintsRecoveredOrderedByNonceAndHashDesc) == 0 {
+				// To recap, this means:
+				// 1. there are no more pool tx left
+				// 2. there are no more constraints
+				// As such, we can safely exist
+				break
+			}
+			from = common.Last(constraintsRecoveredOrderedByNonceAndHashDesc).Sender
+			candidate = candidateTx{tx: common.Pop(&constraintsRecoveredOrderedByNonceAndHashDesc).Transaction, isConstraint: true}
+		}
 
 		// Check whether the tx is replay protected. If we're not in the EIP155 hf
 		// phase, start ignoring the sender until we do.
@@ -1246,7 +1265,7 @@ type generateParams struct {
 	noTxs            bool                                                     // Flag whether an empty block without any transaction is expected
 	onBlock          BlockHookFn                                              // Callback to call for each produced block
 	slot             uint64                                                   // The slot in which the block is being produced
-	constraintsCache *shardmap.FIFOMap[uint64, types.HashToConstraintDecoded] // The preconfirmations to include in the block
+	constraintsCache *shardmap.FIFOMap[uint64, types.HashToConstraintDecoded] // The constraints to include in the block
 }
 
 func doPrepareHeader(genParams *generateParams, chain *core.BlockChain, config *Config, chainConfig *params.ChainConfig, extra []byte, engine consensus.Engine) (*types.Header, *types.Header, error) {
@@ -1422,9 +1441,9 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 	// Drop all transactions that conflict with the constraints (sender, nonce)
 	signerAndNonceOfConstraints := make(map[common.Address]uint64)
 
-	for _, constraint := range constraints {
-		from, err := types.Sender(env.signer, constraint.Tx)
-		log.Info(fmt.Sprintf("Inside fillTransactions, constraint %s from %s", constraint.Tx.Hash().String(), from.String()))
+	for _, tx := range constraints {
+		from, err := types.Sender(env.signer, tx)
+		log.Info(fmt.Sprintf("Inside fillTransactions, constraint %s from %s", tx.Hash().String(), from.String()))
 		if err != nil {
 			// NOTE: is this the right behaviour? If this happens the builder is not able to
 			// produce a valid bid
@@ -1432,7 +1451,7 @@ func (w *worker) fillTransactions(interrupt *atomic.Int32, env *environment, con
 			continue
 		}
 
-		signerAndNonceOfConstraints[from] = constraint.Tx.Nonce()
+		signerAndNonceOfConstraints[from] = tx.Nonce()
 	}
 	for sender, lazyTxs := range pendingPlainTxs {
 		common.Filter(&lazyTxs, func(lazyTx *txpool.LazyTransaction) bool {

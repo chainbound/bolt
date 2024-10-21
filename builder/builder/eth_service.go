@@ -31,7 +31,7 @@ type testEthereumService struct {
 	testBundlesMerged  []types.SimulatedBundle
 	testAllBundles     []types.SimulatedBundle
 	testUsedSbundles   []types.UsedSBundle
-	testPreconfs       []*types.Transaction
+	testConstraints    []*types.Transaction
 }
 
 func (t *testEthereumService) BuildBlock(attrs *types.BuilderPayloadAttributes, sealedBlockCallback miner.BlockHookFn, constraintsCache *shardmap.FIFOMap[uint64, types.HashToConstraintDecoded]) error {

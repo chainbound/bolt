@@ -273,19 +273,6 @@ func getPayloadResponseIsEmpty(payload *builderApi.VersionedSubmitBlindedBlockRe
 	return false
 }
 
-// EmitBoltDemoEvent sends a message to the web demo backend to log an event.
-// This is only used for demo purposes and should be removed in production.
-func EmitBoltDemoEvent(message string) {
-	event := strings.NewReader(fmt.Sprintf("{ \"message\": \"BOLT-MEV-BOOST: %s\"}", message))
-	eventRes, err := http.Post("http://host.docker.internal:3001/events", "application/json", event)
-	if err != nil {
-		fmt.Printf("Failed to send web demo event: %v", err)
-	}
-	if eventRes != nil {
-		defer eventRes.Body.Close()
-	}
-}
-
 func Map[T any, U any](slice []*T, mapper func(el *T) *U) []*U {
 	result := make([]*U, len(slice))
 	for i, el := range slice {

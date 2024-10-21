@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	builderSpec "github.com/attestantio/go-builder-client/spec"
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -61,7 +61,7 @@ func (r *RemoteRelayAggregator) SubmitBlock(msg *builderSpec.VersionedSubmitBloc
 	return nil
 }
 
-func (r *RemoteRelayAggregator) SubmitBlockWithProofs(msg *common.VersionedSubmitBlockRequestWithProofs, registration ValidatorData) error {
+func (r *RemoteRelayAggregator) SubmitBlockWithProofs(msg *types.VersionedSubmitBlockRequestWithProofs, registration ValidatorData) error {
 	r.registrationsCacheLock.RLock()
 	defer r.registrationsCacheLock.RUnlock()
 
@@ -79,6 +79,56 @@ func (r *RemoteRelayAggregator) SubmitBlockWithProofs(msg *common.VersionedSubmi
 	}
 
 	return nil
+}
+
+func (r *RemoteRelayAggregator) GetDelegationsForSlot(nextSlot uint64) (types.SignedDelegations, error) {
+	delegationsCh := make(chan *types.SignedDelegations, len(r.relays))
+
+	for i, relay := range r.relays {
+		go func(relay IRelay, relayI int) {
+			delegations, err := relay.GetDelegationsForSlot(nextSlot)
+			if err != nil {
+				// Send nil to channel to indicate error
+				log.Error("could not get delegations", "err", err, "relay", relay.Config().Endpoint)
+				delegationsCh <- nil
+			}
+
+			delegationsCh <- &delegations
+		}(relay, i)
+	}
+
+	err := errors.New("could not get delegations from any relay")
+
+	aggregated := types.SignedDelegations{}
+	for i := 0; i < len(r.relays); i++ {
+		d := <-delegationsCh
+
+		if d != nil {
+			err = nil
+
+			// Check if the delegations array already contains the delegations, if not add them
+			for _, delegation := range *d {
+				found := false
+				for _, existing := range aggregated {
+					if existing == delegation {
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					aggregated = append(aggregated, delegation)
+				}
+			}
+		}
+	}
+
+	// If we still have an error, return error to caller
+	if err != nil {
+		return nil, err
+	}
+
+	return aggregated, nil
 }
 
 type RelayValidatorRegistration struct {

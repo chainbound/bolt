@@ -2,6 +2,13 @@
 default:
   @just --list --unsorted
 
+# 1. Make sure the nightly-2024-10-03 toolchain is installed
+# 2. cd to git root and cd into crate
+fmt crate:
+  rustup toolchain install nightly-2024-10-03 > /dev/null 2>&1 && \
+  cd $(git rev-parse --show-toplevel)/{{crate}} && \
+  cargo +nightly-2024-10-03 fmt
+
 # run the web demo locally
 demo:
 	chmod +x ./scripts/start-demo.sh
@@ -36,56 +43,61 @@ _restart-sidecar:
 inspect:
 	kurtosis enclave inspect bolt-devnet
 
+bash service:
+    @id=$(docker ps -n 100 | grep {{ service }} | awk -F' ' '{print $1}') && \
+    docker exec -it $id bash
+
+log service:
+    @id=$(docker ps -n 100 | grep {{ service }} | awk -F' ' '{print $1}') && \
+    docker logs -f $id
+
+dump service:
+  @id=$(docker ps -n 100 | grep {{ service }} | awk -F' ' '{print $1}') && \
+  docker logs $id 2>&1 | tee {{ service }}_dump.log
+
 # show the logs for the bolt devnet relay
 relay-logs:
-    @id=$(docker ps -n 100 | grep mev-relay-api | awk -F' ' '{print $1}') && \
-    docker logs -f $id
+    @just log helix-relay
 
 # show the logs for the bolt devnet builder
 builder-logs:
-    @id=$(docker ps -n 100 | grep bolt-builder | awk -F' ' '{print $1}') && \
-    docker logs -f $id
+    @just log bolt-builder
+
+# show the logs for the bolt devnet bolt-boost sidecar
+boost-logs:
+    @just log bolt-boost
 
 # show the logs for the bolt devnet mev-boost sidecar
-boost-logs:
-    @id=$(docker ps -n 100 | grep bolt-mev-boost | awk -F' ' '{print $1}') && \
-    docker logs -f $id
+mev-boost-logs:
+    @just log bolt-mev-boost
 
 # show the logs for the bolt devnet bolt-sidecar
 sidecar-logs:
-    @id=$(docker ps -n 100 | grep sidecar | awk -F' ' '{print $1}') && \
-    docker logs -f $id
+    @just log sidecar
 
 # show the logs for the bolt devnet for beacon node
 beacon-logs:
-    @id=$(docker ps -n 100 | grep 'cl-1-lighthouse-geth' | awk -F' ' '{print $1}') && \
-    docker logs -f $id
+    @just log 'cl-1-lighthouse-geth'
 
 # show the logs for the bolt devnet for beacon node
 beacon-dump:
-    @id=$(docker ps -n 100 | grep 'cl-1-lighthouse-geth' | awk -F' ' '{print $1}') && \
-    docker logs $id 2>&1 | tee beacon_dump.log
+    @just dump 'cl-1-lighthouse-geth'
 
 # show the logs for the bolt devnet relay
 relay-dump:
-    @id=$(docker ps -n 100 | grep mev-relay-api | awk -F' ' '{print $1}') && \
-    docker logs $id 2>&1 | tee relay_dump.log
+    @just dump mev-relay-api
 
 # show the logs for the bolt devnet builder
 builder-dump:
-    @id=$(docker ps -n 100 | grep bolt-builder | awk -F' ' '{print $1}') && \
-    docker logs $id 2>&1 | tee builder_dump.log
+    @just dump bolt-builder
 
 # show the logs for the bolt devnet mev-boost sidecar
 boost-dump:
-    @id=$(docker ps -n 100 | grep bolt-mev-boost | awk -F' ' '{print $1}') && \
-    docker logs $id 2>&1 | tee boost_dump.log
+    @just dump bolt-mev-boost
 
 # show the logs for the bolt devnet bolt-sidecar
 sidecar-dump:
-    @id=$(docker ps -n 100 | grep sidecar | awk -F' ' '{print $1}') && \
-    docker logs $id 2>&1 | tee sidecar_dump.log
-
+    @just dump sidecar
 
 # show the logs for the bolt devnet builder
 kill-builder:
@@ -115,7 +127,7 @@ send-preconf count='1':
 	cd bolt-kurtosis-client && RUST_LOG=info cargo run -- \
 		--provider-url $(kurtosis port print bolt-devnet el-1-geth-lighthouse rpc) \
 		--beacon-client-url $(kurtosis port print bolt-devnet cl-1-lighthouse-geth http) \
-		--bolt-sidecar-url http://$(kurtosis port print bolt-devnet mev-sidecar-api api)  \
+		--bolt-sidecar-url http://$(kurtosis port print bolt-devnet bolt-sidecar-1-lighthouse-geth api)  \
 		--private-key 53321db7c1e331d93a11a41d16f004d7ff63972ec8ec7c25db329728ceeb1710 \
 		--slot head \
 		--count {{count}}
@@ -125,7 +137,7 @@ send-blob-preconf count='1':
 	cd bolt-kurtosis-client && RUST_LOG=info cargo run -- \
 		--provider-url $(kurtosis port print bolt-devnet el-1-geth-lighthouse rpc) \
 		--beacon-client-url $(kurtosis port print bolt-devnet cl-1-lighthouse-geth http) \
-		--bolt-sidecar-url http://$(kurtosis port print bolt-devnet mev-sidecar-api api)  \
+		--bolt-sidecar-url http://$(kurtosis port print bolt-devnet bolt-sidecar-1-lighthouse-geth api)  \
 		--private-key 53321db7c1e331d93a11a41d16f004d7ff63972ec8ec7c25db329728ceeb1710 \
 		--slot head \
 		--blob \
@@ -137,38 +149,43 @@ build-images:
 	@just _build-relay
 	@just _build-sidecar
 	@just _build-mevboost
+	@just _build-bolt-boost
 
 # build the docker image for the bolt builder
 _build-builder:
-	cd builder && docker buildx build -t ghcr.io/chainbound/bolt-builder:0.1.0 . --load
+	cd builder && docker build -t ghcr.io/chainbound/bolt-builder:0.1.0 . --load
 
 # build the docker image for the bolt relay
 _build-relay:
-	cd mev-boost-relay && docker buildx build -t ghcr.io/chainbound/bolt-relay:0.1.0 . --load
+	cd mev-boost-relay && docker build -t ghcr.io/chainbound/bolt-relay:0.1.0 . --load
 
 # build the docker image for the bolt sidecar
 _build-sidecar:
-	cd bolt-sidecar && docker buildx build -t ghcr.io/chainbound/bolt-sidecar:0.1.0 . --load
+	cd bolt-sidecar && docker build -t ghcr.io/chainbound/bolt-sidecar:0.1.0 . --load
 
 # build the docker image for the bolt mev-boost sidecar
 _build-mevboost:
-	cd mev-boost && docker buildx build -t ghcr.io/chainbound/bolt-mev-boost:0.1.0 . --load
+	cd mev-boost && docker build -t ghcr.io/chainbound/bolt-mev-boost:0.1.0 . --load
+
+# build the docker image for bolt-boost
+_build-bolt-boost:
+	cd bolt-boost && docker build -t ghcr.io/chainbound/bolt-boost:0.1.0 . --load
 
 # deploy the bolt sidecar to the dev server
-deploy-sidecar-dev:
-    chmod +x ./scripts/deploy_bolt_sidecar.sh && ./scripts/deploy_bolt_sidecar.sh
+deploy-sidecar-dev chain:
+    chmod +x ./scripts/deploy_bolt_sidecar.sh && ./scripts/deploy_bolt_sidecar.sh {{chain}}
 
 # Check the status of the sidecar service on the dev server
-status-sidecar-dev:
-    ssh shared@remotebeast "sudo systemctl status bolt_sidecar" | less
+status-sidecar-dev chain:
+    ssh shared@remotebeast "sudo systemctl status bolt_sidecar_{{chain}}" | less
 
 # Tail the logs of the service on the dev server
-logs-sidecar-dev:
-    ssh shared@remotebeast "journalctl -qu bolt_sidecar -f"
+logs-sidecar-dev chain:
+    ssh shared@remotebeast "journalctl -qu bolt_sidecar_{{chain}} -f"
 
 # Stop the service on the dev server
-stop-sidecar-dev:
-    ssh shared@remotebeast "sudo systemctl stop bolt_sidecar"
+stop-sidecar-dev chain:
+    ssh shared@remotebeast "sudo systemctl stop bolt_sidecar_{{chain}}"
 
 
 # build and push the docker images to the github container registry with the provided tag

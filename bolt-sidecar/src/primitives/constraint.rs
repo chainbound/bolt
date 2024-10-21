@@ -1,34 +1,10 @@
-use alloy::{
-    primitives::keccak256,
-    signers::k256::sha2::{Digest, Sha256},
-};
-use secp256k1::Message;
+use alloy::signers::k256::sha2::{Digest, Sha256};
+use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    crypto::{bls::BLSSig, ecdsa::SignableECDSA, SignableBLS},
-    primitives::{deserialize_txs, serialize_txs},
-};
+use crate::crypto::{bls::BLSSig, SignableBLS};
 
-use super::{FullTransaction, InclusionRequest};
-
-/// What the proposer sidecar will need to sign to confirm the inclusion request.
-impl SignableECDSA for ConstraintsMessage {
-    fn digest(&self) -> Message {
-        let mut data = Vec::new();
-        data.extend_from_slice(&self.validator_index.to_le_bytes());
-        data.extend_from_slice(&self.slot.to_le_bytes());
-
-        let mut constraint_bytes = Vec::new();
-        for constraint in &self.constraints {
-            constraint_bytes.extend_from_slice(&constraint.envelope_encoded().0);
-        }
-        data.extend_from_slice(&constraint_bytes);
-
-        let hash = keccak256(data).0;
-        Message::from_digest_slice(&hash).expect("digest")
-    }
-}
+use super::{deserialize_txs, serialize_txs, FullTransaction, InclusionRequest};
 
 /// The inclusion request transformed into an explicit list of signed constraints
 /// that need to be forwarded to the PBS pipeline to inform block production.
@@ -37,7 +13,7 @@ pub type BatchedSignedConstraints = Vec<SignedConstraints>;
 /// A container for a list of constraints and the signature of the proposer sidecar.
 ///
 /// Reference: https://chainbound.github.io/bolt-docs/api/builder#constraints
-#[derive(Serialize, Default, Debug, Clone, PartialEq)]
+#[derive(Serialize, Default, Debug, Clone, PartialEq, Eq)]
 pub struct SignedConstraints {
     /// The constraints that need to be signed.
     pub message: ConstraintsMessage,
@@ -48,10 +24,10 @@ pub struct SignedConstraints {
 /// A message that contains the constraints that need to be signed by the proposer sidecar.
 ///
 /// Reference: https://chainbound.github.io/bolt-docs/api/builder#constraints
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, Eq)]
 pub struct ConstraintsMessage {
-    /// The validator index of the proposer sidecar.
-    pub validator_index: u64,
+    /// The validator pubkey of the proposer sidecar.
+    pub pubkey: BlsPublicKey,
     /// The consensus slot at which the constraints are valid
     pub slot: u64,
     /// Indicates whether these constraints are only valid on the top of the block.
@@ -59,27 +35,32 @@ pub struct ConstraintsMessage {
     pub top: bool,
     /// The constraints that need to be signed.
     #[serde(deserialize_with = "deserialize_txs", serialize_with = "serialize_txs")]
-    pub constraints: Vec<FullTransaction>,
+    pub transactions: Vec<FullTransaction>,
 }
 
 impl ConstraintsMessage {
     /// Builds a constraints message from an inclusion request and metadata
-    pub fn build(validator_index: u64, request: InclusionRequest) -> Self {
-        let constraints = request.txs;
+    pub fn build(pubkey: BlsPublicKey, request: InclusionRequest) -> Self {
+        let transactions = request.txs;
 
-        Self { validator_index, slot: request.slot, top: false, constraints }
+        Self { pubkey, slot: request.slot, top: false, transactions }
+    }
+
+    /// Builds a constraints message from a single transaction.
+    pub fn from_transaction(pubkey: BlsPublicKey, slot: u64, transaction: FullTransaction) -> Self {
+        Self { pubkey, slot, top: false, transactions: vec![transaction] }
     }
 }
 
 impl SignableBLS for ConstraintsMessage {
     fn digest(&self) -> [u8; 32] {
         let mut hasher = Sha256::new();
-        hasher.update(self.validator_index.to_le_bytes());
+        hasher.update(self.pubkey.to_vec());
         hasher.update(self.slot.to_le_bytes());
         hasher.update((self.top as u8).to_le_bytes());
 
-        for constraint in &self.constraints {
-            hasher.update(constraint.hash());
+        for tx in &self.transactions {
+            hasher.update(tx.hash());
         }
 
         hasher.finalize().into()
@@ -88,7 +69,11 @@ impl SignableBLS for ConstraintsMessage {
 
 #[cfg(test)]
 mod tests {
+    use crate::signer::local::LocalSigner;
+
     use super::*;
+    use alloy::primitives::bytes;
+    use blst::min_pk::Signature as BlsSignature;
     use rand::{rngs::ThreadRng, Rng};
 
     fn random_u64(rng: &mut ThreadRng) -> u64 {
@@ -109,19 +94,14 @@ mod tests {
 
     #[test]
     fn test_bls_digest() {
-        let mut rng = rand::thread_rng();
-
         // Generate random values for the `ConstraintsMessage` fields
-        let validator_index = random_u64(&mut rng);
-        let slot = random_u64(&mut rng);
+        let pubkey = BlsPublicKey::default();
+        let slot = 0;
         let top = false;
-        let constraints = random_constraints(1); // Generate 'n' random constraints
+        let transactions = random_constraints(1); // Generate 'n' random constraints
 
         // Create a random `ConstraintsMessage`
-        let mut message = ConstraintsMessage { validator_index, slot, top, constraints };
-        message.validator_index = 0;
-        message.slot = 0;
-        message.top = false;
+        let message = ConstraintsMessage { pubkey, slot, top, transactions };
 
         // Compute tree hash root
         let digest = SignableBLS::digest(&message);
@@ -135,13 +115,13 @@ mod tests {
         let mut rng = rand::thread_rng();
 
         // Generate random values for the `ConstraintsMessage` fields
-        let validator_index = random_u64(&mut rng);
+        let pubkey = BlsPublicKey::default();
         let slot = random_u64(&mut rng);
         let top = false;
-        let constraints = random_constraints(2); // Generate 'n' random constraints
+        let transactions = random_constraints(2); // Generate 'n' random constraints
 
         // Create a random `ConstraintsMessage`
-        let message = ConstraintsMessage { validator_index, slot, top, constraints };
+        let message = ConstraintsMessage { pubkey, slot, top, transactions };
 
         // Serialize the `ConstraintsMessage` to JSON
         let json = serde_json::to_string(&message).unwrap();
@@ -151,5 +131,23 @@ mod tests {
 
         // Verify that the deserialized message is equal to the original message
         assert_eq!(message, deserialized_message);
+    }
+
+    #[test]
+    fn test_constraints_signature_roundtrip() {
+        let signer = LocalSigner::random();
+
+        let tx_bytes = bytes!("f8678085019dc6838082520894deaddeaddeaddeaddeaddeaddeaddeaddeaddead38808360306ca06664c078fa60bd3ece050903dd295949908dd9686ec8871fa558f868e031cd39a00ed4f0b122b32b73f19230fabe6a726e2d07f84eda5beaa42a1ae1271bdee39f").to_vec();
+        let tx = FullTransaction::decode_enveloped(tx_bytes.as_slice()).unwrap();
+
+        let constraint = ConstraintsMessage::from_transaction(signer.pubkey(), 165, tx);
+
+        let digest = constraint.digest();
+        let signature = signer.sign_commit_boost_root(digest).unwrap();
+        let signed_constraints = SignedConstraints { message: constraint, signature };
+
+        // verify the signature
+        let blst_sig = BlsSignature::from_bytes(signed_constraints.signature.as_ref()).unwrap();
+        assert!(signer.verify_commit_boost_root(digest, &blst_sig).is_ok());
     }
 }

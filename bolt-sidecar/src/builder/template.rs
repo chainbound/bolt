@@ -42,7 +42,7 @@ impl BlockTemplate {
     /// Returns the cloned list of transactions from the constraints.
     #[inline]
     pub fn transactions(&self) -> Vec<FullTransaction> {
-        self.signed_constraints_list.iter().flat_map(|sc| sc.message.constraints.clone()).collect()
+        self.signed_constraints_list.iter().flat_map(|sc| sc.message.transactions.clone()).collect()
     }
 
     /// Converts the list of signed constraints into a list of signed transactions. Use this when
@@ -52,7 +52,7 @@ impl BlockTemplate {
         self.signed_constraints_list
             .iter()
             .flat_map(|sc| {
-                sc.message.constraints.iter().map(|c| c.clone().into_inner().into_transaction())
+                sc.message.transactions.iter().map(|c| c.clone().into_inner().into_transaction())
             })
             .collect()
     }
@@ -64,7 +64,7 @@ impl BlockTemplate {
         let (commitments, proofs, blobs) =
             self.signed_constraints_list
                 .iter()
-                .flat_map(|sc| sc.message.constraints.iter())
+                .flat_map(|sc| sc.message.transactions.iter())
                 .filter_map(|c| c.blob_sidecar())
                 .fold(
                     (Vec::new(), Vec::new(), Vec::new()),
@@ -90,14 +90,14 @@ impl BlockTemplate {
     /// Returns the length of the transactions in the block template.
     #[inline]
     pub fn transactions_len(&self) -> usize {
-        self.signed_constraints_list.iter().fold(0, |acc, sc| acc + sc.message.constraints.len())
+        self.signed_constraints_list.iter().fold(0, |acc, sc| acc + sc.message.transactions.len())
     }
 
     /// Returns the committed gas in the block template.
     #[inline]
     pub fn committed_gas(&self) -> u64 {
         self.signed_constraints_list.iter().fold(0, |acc, sc| {
-            acc + sc.message.constraints.iter().fold(0, |acc, c| acc + c.gas_limit())
+            acc + sc.message.transactions.iter().fold(0, |acc, c| acc + c.gas_limit())
         })
     }
 
@@ -105,7 +105,7 @@ impl BlockTemplate {
     #[inline]
     pub fn blob_count(&self) -> usize {
         self.signed_constraints_list.iter().fold(0, |mut acc, sc| {
-            acc += sc.message.constraints.iter().fold(0, |acc, c| {
+            acc += sc.message.transactions.iter().fold(0, |acc, c| {
                 acc + c.as_eip4844().map(|tx| tx.blob_versioned_hashes.len()).unwrap_or(0)
             });
 
@@ -115,7 +115,7 @@ impl BlockTemplate {
 
     /// Adds a list of constraints to the block template and updates the state diff.
     pub fn add_constraints(&mut self, constraints: SignedConstraints) {
-        for constraint in constraints.message.constraints.iter() {
+        for constraint in constraints.message.transactions.iter() {
             let max_cost = max_transaction_cost(constraint);
             self.state_diff
                 .diffs
@@ -134,7 +134,7 @@ impl BlockTemplate {
     fn remove_constraints_at_index(&mut self, index: usize) {
         let constraints = self.signed_constraints_list.remove(index);
 
-        for constraint in constraints.message.constraints.iter() {
+        for constraint in constraints.message.transactions.iter() {
             self.state_diff
                 .diffs
                 .entry(*constraint.sender().expect("recovered sender"))
@@ -155,7 +155,7 @@ impl BlockTemplate {
             .signed_constraints_list
             .iter()
             .enumerate()
-            .map(|(idx, c)| (idx, &c.message.constraints))
+            .map(|(idx, c)| (idx, &c.message.transactions))
             .filter(|(_idx, c)| c.iter().any(|c| c.sender().expect("recovered sender") == &address))
             .map(|(idx, c)| {
                 (

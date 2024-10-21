@@ -1,5 +1,6 @@
 network_params:
   seconds_per_slot: 2 # 2 seconds are the minimum for testing
+  genesis_delay: 0 # Apparently it seems needed to avoid timestamp issues on Helix
 tx_spammer_params:
   tx_spammer_extra_args: ["--slot-time=1", "--accounts=10", "--txcount=1"]
 
@@ -23,10 +24,14 @@ mev_type: full
 mev_params:
   mev_builder_cl_image: sigp/lighthouse:latest
   # Bolt-specific images:
+  # Adding the `bolt_boost_image` will start the devnet with Bolt-Boost
+  # instead of MEV-Boost by Flashbots
+  bolt_boost_image: ghcr.io/chainbound/bolt-boost:0.1.0
+  bolt_sidecar_image: ghcr.io/chainbound/bolt-sidecar:0.1.0
+  helix_relay_image: ghcr.io/chainbound/helix:0.1.0
   mev_relay_image: ghcr.io/chainbound/bolt-relay:0.1.0
   mev_builder_image: ghcr.io/chainbound/bolt-builder:0.1.0
   mev_boost_image: ghcr.io/chainbound/bolt-mev-boost:0.1.0
-  mev_sidecar_image: ghcr.io/chainbound/bolt-sidecar:0.1.0
 
   mev_boost_args: []
   mev_relay_api_extra_args: []

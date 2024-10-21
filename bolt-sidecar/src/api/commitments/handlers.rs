@@ -12,8 +12,9 @@ use serde_json::Value;
 use tracing::{debug, error, info, instrument};
 
 use crate::{
-    commitments::headers::auth_from_headers, common::CARGO_PKG_VERSION,
-    primitives::InclusionRequest,
+    commitments::headers::auth_from_headers,
+    common::CARGO_PKG_VERSION,
+    primitives::{commitment::SignatureError, InclusionRequest},
 };
 
 use super::{
@@ -70,7 +71,7 @@ pub async fn rpc_entrypoint(
                     "Recovered signer does not match the provided signer"
                 );
 
-                return Err(Error::InvalidSignature(crate::primitives::SignatureError));
+                return Err(Error::InvalidSignature(SignatureError));
             }
 
             // Set the request signer
