@@ -261,7 +261,37 @@ impl ECDSASignatureExt for Signature {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
+    use alloy::{
+        hex,
+        primitives::{Address, Signature},
+    };
+
     use super::{CommitmentRequest, InclusionRequest};
+
+    #[test]
+    fn test_create_digest() {
+        let json_req = r#"{
+            "slot": 633067,
+            "txs": ["0xf86b82016e84042343e0830f424094deaddeaddeaddeaddeaddeaddeaddeaddeaddead0780850344281a21a0e525fc31b5574722ff064bdd127c4441b0fc66de7dc44928e163cb68e9d807e5a00b3ec02fc1e34b0209f252369ad10b745cd5a51c88384a340f7a150d0e45e471"]
+        }"#;
+
+        let req: InclusionRequest = serde_json::from_str(json_req).unwrap();
+        let digest = req.digest();
+        assert_eq!(
+            hex::encode(digest.as_slice()),
+            "52ecc7832625c3d107aaba5b55d4509b48cd9f4f7ce375d6696d09bbf3310525"
+        );
+
+        // Verify signature over the digest
+        let sig = Signature::from_str("0xcdd20b2abbd8cdfb77ec2608e1227f8ce0f66133b9d0ec0ea68102c2152b82193e3be0d6967b7c20b83e1a2530daa3a07713556541dc2aa16a46d922e6145a2b01").unwrap();
+        let recovered = sig.recover_address_from_prehash(&digest).unwrap();
+        assert_eq!(
+            recovered,
+            Address::from_str("0x27083ED52464625660f3e30Aa5B9C20A30D7E110").unwrap()
+        );
+    }
 
     #[test]
     fn test_deserialize_inclusion_request() {

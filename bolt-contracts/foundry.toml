@@ -1,6 +1,73 @@
 [profile.default]
+solc = "0.8.25"
+via_ir = true
 src = "src"
 out = "out"
 libs = ["lib"]
+fs_permissions = [{ access = "read-write", path = "./" }]
+gas_reports = ["*"]
+# Required options for the OpenZeppelin Foundry Upgrades toolkit: https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades
+ffi = true
+ast = true
+build_info = true
+extra_output = ["storageLayout"]
+
+# silence some warnings during compilation
+# https://book.getfoundry.sh/reference/config/solidity-compiler#ignored_error_codes
+ignored_error_codes = [3628, 1878, 5574]
+ignored_warnings_from = [
+  "lib/openzeppelin-contracts/contracts",
+  "lib/core",
+  "lib/eigenlayer-contracts",
+]
+
+remappings = [
+  # Bolt remappings
+  "@relic/=lib/relic-sdk/packages/contracts",
+  "@symbiotic/=lib/core/src/",
+  "@eigenlayer/=lib/eigenlayer-contracts/",
+  "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+  "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
+  "@openzeppelin-foundry-upgrades/=lib/openzeppelin-foundry-upgrades/",
+
+  # Symbiotic remappings contexts
+  "lib/core/:forge-std/=lib/core/lib/forge-std/src/",
+  "lib/core/:@openzeppelin/contracts/=lib/core/lib/openzeppelin-contracts/contracts/",
+  "lib/core/:@openzeppelin/contracts-upgradeable/=lib/core/lib/openzeppelin-contracts-upgradeable/contracts/",
+
+  # Eigenlayer remappings contexts
+  "lib/eigenlayer-contracts/:@openzeppelin-upgrades/=lib/eigenlayer-contracts/lib/openzeppelin-contracts-upgradeable/",
+  "lib/eigenlayer-contracts/:@openzeppelin/=lib/eigenlayer-contracts/lib/openzeppelin-contracts/",
+  "lib/eigenlayer-contracts/:@openzeppelin-v4.9.0/=lib/eigenlayer-contracts/lib/openzeppelin-contracts-v4.9.0/",
+  "lib/eigenlayer-contracts/:@openzeppelin-upgrades-v4.9.0/=lib/eigenlayer-contracts/lib/openzeppelin-contracts-upgradeable-v4.9.0/",
+  "lib/eigenlayer-contracts/:ds-test/=lib/eigenlayer-contracts/lib/ds-test/src/",
+  "lib/eigenlayer-contracts/:forge-std/=lib/eigenlayer-contracts/lib/forge-std/src/",
+  "lib/eigenlayer-contracts/lib/openzeppelin-contracts/:@openzeppelin/contracts/=lib/eigenlayer-contracts/lib/openzeppelin-contracts/contracts/",
+
+  # OpenZeppelin remappings contexts
+  "lib/openzeppelin-contracts/:@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+]
+
+
+[rpc_endpoints]
+mainnet = "${ETH_RPC_URL}"
+holesky = "${ETH_RPC_URL_HOLESKY}"
+
+[fmt]
+bracket_spacing = false
+int_types = "long"
+line_length = 120
+multiline_func_header = "params_first"
+number_underscore = "thousands"
+quote_style = "double"
+tab_width = 4
+
+[fuzz]
+runs = 4096
+max_test_rejects = 262144
+
+# [etherscan]
+# mainnet = { key = "${ETHERSCAN_API_KEY_MAINNET}" }
+# holesky = { key = "${ETHERSCAN_API_KEY_HOLESKY}" }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
