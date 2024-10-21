@@ -66,6 +66,9 @@ client implementations to download and run them.
 >    --always-prefer-builder-payload
 >    --builder-fallback-disable-checks
 >    ```
+> 
+> In other clients like Vouch, the same can be achieved by setting the `builder-boost-factor` to a large value
+> like 18446744073709551615.
 >
 > It might be necessary to restart your beacon node depending on your existing
 > setup. See the [Avoid Restarting the Beacon
@@ -116,19 +119,22 @@ containing the necessary environment variables:
 
 1. **Bolt Sidecar Configuration:**
 
-   Create a `bolt-sidecar.env` file in the `testnets/holesky` directory. If you
-   need a reference, you can use the `.env.example` file in the `bolt-sidecar`
-   directory as a starting point. For proper configuration of the signing
-   options, please refer to the [Delegations and
-   Signing](#delegations-and-signing-options-for-standalone-and-docker-container-setup)
-   section of this guide.
+    Copy over the example environment file into this folder:
+    ```bash
+    cp ../../bolt-sidecar/.env.example bolt-sidecar.env
+    ```
+
+    Next up, fill out all of the values that are required. For proper configuration of the signing options, please refer to the 
+    [Delegations and Signing](#delegations-and-signing-options-for-standalone-and-docker-container-setup) section of this guide.
 
 2. **MEV-Boost Configuration:**
 
-   Similarly, create a `mev-boost.env` file in the
-   `testnets/holesky` folder to configure the MEV-Boost service. If you need a
-   reference, you can use the `.env.example` file in the `mev-boost` directory as a
-   starting point.
+    Copy over the example environment file:
+    ```bash
+    cp ../../mev-boost/.env.example mev-boost.env
+    ```
+
+    Then configure the file accordingly.
 
 If you prefer not to restart your beacon node, follow the instructions in the
 [Avoid Restarting the Beacon Node](#avoid-restarting-the-beacon-node) section.
