@@ -66,9 +66,6 @@ contract RegisterValidators is Script {
             uint256[2] memory x = _bytesToParts(vm.parseBytes(array[0]));
             uint256[2] memory y = _bytesToParts(vm.parseBytes(array[1]));
 
-            console.logBytes(abi.encodePacked(x));
-            console.logBytes(abi.encodePacked(y));
-
             pubkeys[i] = BLS12381.G1Point(x, y);
 
             console.log("Registering pubkey:", vm.toString(abi.encodePacked(pubkeys[i].compress())));
