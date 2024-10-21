@@ -104,7 +104,7 @@ First, make sure to have both [Docker](https://docs.docker.com/engine/install/),
 Then clone the Bolt repository by running:
 
 ```bash
-git clone --branch v0.3.0 htts://github.com/chainbound/bolt.git && cd bolt
+git clone --branch v0.3.0-alpha htts://github.com/chainbound/bolt.git && cd bolt
 ```
 
 The Docker Compose setup will spin up the Bolt sidecar along with the Bolt
