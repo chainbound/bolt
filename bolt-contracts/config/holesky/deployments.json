@@ -3,7 +3,7 @@
         "validators": "0x05275a4799cd1B07D81319390fC62Bc7BDbDf269"
     },
     "symbiotic": {
-        "network": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+        "network": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
         "operatorRegistry": "0xAdFC41729fF447974cE27DdFa358A0f2096c3F39",
         "networkOptInService": "0xF5AFc9FA3Ca63a07E529DDbB6eae55C665cCa83E",
         "vaultFactory": "0x18C659a269a7172eF78BBC19Fe47ad2237Be0590",
