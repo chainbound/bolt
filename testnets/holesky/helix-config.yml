@@ -1,0 +1,17 @@
+postgres:
+  hostname: db
+  port: 5432
+  db_name: helixdb
+  user: postgres
+  password: postgres
+
+redis:
+  url: redis://redis:6379
+
+simulator:
+  url: http://builder:8545
+
+beacon_clients:
+  - url: http://beacon:50050
+
+network_config: !Holesky
