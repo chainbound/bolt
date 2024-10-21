@@ -124,7 +124,13 @@ containing the necessary environment variables:
 
    Create a `bolt-sidecar.env` file in the `testnets/holesky` directory. If you
    need a reference, you can use the `.env.example` file in the `bolt-sidecar`
-   directory as a starting point. For proper configuration of the signing
+   directory as a starting point.
+
+   ```bash
+   cat ./bolt-sidecar/.env.example > ./testnets/holesky/bolt-sidecar.env
+   ```
+
+   For proper configuration of the signing
    options, please refer to the [Delegations and
    Signing](#delegations-and-signing-options-for-standalone-and-docker-container-setup)
    section of this guide.
@@ -135,6 +141,10 @@ containing the necessary environment variables:
    `testnets/holesky` folder to configure the MEV-Boost service. If you need a
    reference, you can use the `.env.example` file in the `mev-boost` directory as a
    starting point.
+
+   ```bash
+   cat ./mev-boost/.env.example > ./testnets/holesky/mev-boost.env
+   ```
 
 If you prefer not to restart your beacon node, follow the instructions in the
 [Avoid Restarting the Beacon Node](#avoid-restarting-the-beacon-node) section.
