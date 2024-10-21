@@ -9,6 +9,8 @@ import {Script, console} from "forge-std/Script.sol";
 /// @notice Script to register Ethereum validators to Bolt
 /// @dev this script reads from the config file in /config/holesky/register_validators.json
 contract RegisterValidators is Script {
+    using BLS12381 for BLS12381.G1Point;
+
     struct RegisterValidatorsConfig {
         uint128 maxCommittedGasLimit;
         address authorizedOperator;
@@ -39,7 +41,7 @@ contract RegisterValidators is Script {
         return IBoltValidatorsV1(vm.parseJsonAddress(json, ".bolt.validators"));
     }
 
-    function _parseConfig() public view returns (RegisterValidatorsConfig memory config) {
+    function _parseConfig() public returns (RegisterValidatorsConfig memory config) {
         string memory root = vm.projectRoot();
         string memory path = string.concat(root, "/config/holesky/validators.json");
         string memory json = vm.readFile(path);
@@ -47,33 +49,55 @@ contract RegisterValidators is Script {
         config.authorizedOperator = vm.parseJsonAddress(json, ".authorizedOperator");
         config.maxCommittedGasLimit = uint128(vm.parseJsonUint(json, ".maxCommittedGasLimit"));
 
-        bytes[] memory pubkeysRaw = vm.parseJsonBytesArray(json, ".pubkeys");
+        string[] memory pubkeysRaw = vm.parseJsonStringArray(json, ".pubkeys");
         BLS12381.G1Point[] memory pubkeys = new BLS12381.G1Point[](pubkeysRaw.length);
 
         for (uint256 i = 0; i < pubkeysRaw.length; i++) {
-            bytes memory pubkey = pubkeysRaw[i];
-            require(pubkey.length == 96, "Invalid pubkey length");
+            string memory pubkey = pubkeysRaw[i];
 
-            uint256[2] memory x;
-            uint256[2] memory y;
+            string[] memory convertCmd = new string[](2);
+            convertCmd[0] = "./script/pubkey_to_g1_wrapper.sh";
+            convertCmd[1] = pubkey;
 
-            // Assuming each coordinate is split into two 32 bytes
-            x[0] = uint256(bytes32(_slice(pubkey, 0, 32)));
-            x[1] = uint256(bytes32(_slice(pubkey, 32, 32)));
-            y[0] = uint256(bytes32(_slice(pubkey, 64, 32)));
-            y[1] = uint256(bytes32(_slice(pubkey, 96, 32)));
+            bytes memory output = vm.ffi(convertCmd);
+            string memory outputStr = string(output);
+            string[] memory array = vm.split(outputStr, ",");
+
+            uint256[2] memory x = _bytesToParts(vm.parseBytes(array[0]));
+            uint256[2] memory y = _bytesToParts(vm.parseBytes(array[1]));
+
+            console.logBytes(abi.encodePacked(x));
+            console.logBytes(abi.encodePacked(y));
 
             pubkeys[i] = BLS12381.G1Point(x, y);
+
+            console.log("Registering pubkey:", vm.toString(abi.encodePacked(pubkeys[i].compress())));
         }
 
         config.pubkeys = pubkeys;
     }
 
-    function _slice(bytes memory data, uint256 start, uint256 length) internal pure returns (bytes memory) {
-        bytes memory part = new bytes(length);
-        for (uint256 i = 0; i < length; i++) {
-            part[i] = data[i + start];
+    function _bytesToParts(
+        bytes memory data
+    ) public pure returns (uint256[2] memory out) {
+        require(data.length == 48, "Invalid data length");
+
+        uint256 value1;
+        uint256 value2;
+
+        // Load the first 32 bytes into value1
+        assembly {
+            value1 := mload(add(data, 32))
         }
-        return part;
+        value1 = value1 >> 128; // Clear unwanted upper bits
+
+        // Load the next 16 bytes into value2
+        assembly {
+            value2 := mload(add(data, 48))
+        }
+        // value2 = value2 >> 128;
+
+        out[0] = value1;
+        out[1] = value2;
     }
 }
