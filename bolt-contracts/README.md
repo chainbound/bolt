@@ -54,7 +54,7 @@ contracts can read from. An overview is given in the table below:
 | `CHALLENGE_BOND`     | 1 ether         | Yes (by admin)           |
 | `ALLOW_UNSAFE_REGISTRATION` | `true`   | Yes (by admin)           |
 
-The values of these parameters can also be found in [`config.holesky.json`](./config/config.holesky.json).
+The values of these parameters can also be found in [`parameters.json`](./config/holesky/parameters.json).
 
 ## Validator Registration: `BoltValidators`
 
