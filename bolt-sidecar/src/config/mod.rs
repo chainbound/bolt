@@ -23,11 +23,13 @@ use limits::LimitsOpts;
 
 use crate::common::{BlsSecretKeyWrapper, EcdsaSecretKeyWrapper, JwtSecretConfig};
 
-/// Default port for the JSON-RPC server exposed by the sidecar.
-pub const DEFAULT_RPC_PORT: u16 = 8000;
+/// Default port for the JSON-RPC server exposed by the sidecar supporting the Commitments API.
+///
+/// 8017 -> BOLT :)
+pub const DEFAULT_RPC_PORT: u16 = 8017;
 
-/// Default port for the Constraints proxy server.
-pub const DEFAULT_CONSTRAINTS_PROXY_PORT: u16 = 18551;
+/// Default port for the Constraints proxy server, binded to the default port used by MEV-Boost.
+pub const DEFAULT_CONSTRAINTS_PROXY_PORT: u16 = 18550;
 
 /// Command-line options for the Bolt sidecar
 #[derive(Debug, Parser, Deserialize)]
@@ -52,7 +54,7 @@ pub struct Opts {
     #[clap(
         long,
         env = "BOLT_SIDECAR_CONSTRAINTS_API_URL",
-        default_value = "http://localhost:3030"
+        default_value = "http://localhost:18551"
     )]
     pub constraints_api_url: Url,
     /// The port from which the Bolt sidecar will receive Builder-API requests from the
@@ -68,7 +70,7 @@ pub struct Opts {
     /// - a comma-separated list of indexes (e.g. "1,2,3,4")
     /// - a contiguous range of indexes (e.g. "1..4")
     /// - a mix of the above (e.g. "1,2..4,6..8")
-    #[clap(long, env = "BOLT_SIDECAR_VALIDATOR_INDEXES", default_value_t)]
+    #[clap(long, env = "BOLT_SIDECAR_VALIDATOR_INDEXES")]
     pub validator_indexes: ValidatorIndexes,
     /// The JWT secret token to authenticate calls to the engine API.
     ///
