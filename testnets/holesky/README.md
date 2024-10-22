@@ -742,6 +742,11 @@ Options:
   -h, --help                                 Print help (see more with '--help')
 ```
 
+> [!TIP]
+> If you're using the Docker Compose Mode please don't set the `--out` flag and
+> provide `delegations_path = /etc/delegations.json` in the `bolt-sidecar.toml`
+> file.
+
 The environment variables can be also set in a `.env` file. For a reference
 example you can check out the `.env.local.example` and the
 `.env.keystore.example`
