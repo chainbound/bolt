@@ -37,6 +37,17 @@ pub enum Commands {
         #[clap(subcommand)]
         source: KeySource,
     },
+
+    /// Output a list of pubkeys from a keystore
+    Pubkeys {
+        /// The options for reading the keystore file.
+        #[clap(flatten)]
+        keystore_opts: KeystoreOpts,
+
+        /// The output file for the pubkeys.
+        #[clap(long, env = "OUTPUT_FILE_PATH", default_value = "pubkeys.json")]
+        out: String,
+    },
 }
 
 /// The action to perform.
@@ -60,29 +71,37 @@ pub enum KeySource {
 
     /// Use an EIP-2335 keystore folder to generate the signed messages.
     Keystore {
-        /// Path to the keystore file.
-        #[clap(long, env = "KEYSTORE_PATH", default_value = "validators")]
-        path: String,
-
-        /// The password for the keystore files in the path.
-        /// Assumes all keystore files have the same password.
-        #[clap(
-            long,
-            env = "KEYSTORE_PASSWORD",
-            hide_env_values = true,
-            default_value = DEFAULT_KEYSTORE_PASSWORD,
-            conflicts_with = "password_path"
-        )]
-        password: Option<String>,
-
-        #[clap(
-            long,
-            env = "KEYSTORE_PASSWORD_PATH",
-            default_value = "secrets",
-            conflicts_with = "password"
-        )]
-        password_path: Option<String>,
+        /// The options for reading the keystore file.
+        #[clap(flatten)]
+        opts: KeystoreOpts,
     },
+}
+
+/// Options for reading a keystore folder.
+#[derive(Debug, Clone, Deserialize, Parser)]
+pub struct KeystoreOpts {
+    /// The path to the keystore file.
+    #[clap(long, env = "KEYSTORE_PATH", default_value = "validators")]
+    pub path: String,
+
+    /// The password for the keystore files in the path.
+    /// Assumes all keystore files have the same password.
+    #[clap(
+                long,
+                env = "KEYSTORE_PASSWORD",
+                hide_env_values = true,
+                default_value = DEFAULT_KEYSTORE_PASSWORD,
+                conflicts_with = "password_path"
+            )]
+    pub password: Option<String>,
+
+    #[clap(
+        long,
+        env = "KEYSTORE_PASSWORD_PATH",
+        default_value = "secrets",
+        conflicts_with = "password"
+    )]
+    pub password_path: Option<String>,
 }
 
 /// Supported chains for the CLI

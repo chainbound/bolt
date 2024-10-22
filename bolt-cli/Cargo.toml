@@ -15,6 +15,7 @@ alloy = { version = "0.2.0", features = [
   "rpc-types-engine",
 ] }
 blst = "0.3.12"
+prost = "0.13.3"
 
 # utils
 dotenvy = "0.15.7"
@@ -28,3 +29,6 @@ lighthouse_account_utils = { package = "account_utils", git = "https://github.co
 
 [dev-dependencies]
 tempfile = "3.13.0"
+
+[build-dependencies]
+prost-build = "0.13.3"
