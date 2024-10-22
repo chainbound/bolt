@@ -1,4 +1,5 @@
-use std::time::Duration;
+use core::fmt;
+use std::{fmt::Display, time::Duration};
 
 use clap::{Args, ValueEnum};
 use ethereum_consensus::deneb::{compute_fork_data_root, Root};
@@ -25,7 +26,7 @@ pub const COMMIT_BOOST_DOMAIN_MASK: [u8; 4] = [109, 109, 111, 67];
 #[derive(Debug, Clone, Copy, Args, Deserialize)]
 pub struct ChainConfig {
     /// Chain on which the sidecar is running
-    #[clap(long, env = "BOLT_SIDECAR_CHAIN", default_value = "mainnet")]
+    #[clap(long, env = "BOLT_SIDECAR_CHAIN", default_value_t = Chain::Mainnet)]
     chain: Chain,
     /// The deadline in the slot at which the sidecar will stop accepting
     /// new commitments for the next block (parsed as milliseconds).
@@ -65,6 +66,24 @@ pub enum Chain {
     Kurtosis,
 }
 
+impl Chain {
+    /// Get the chain name for the given chain.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Chain::Mainnet => "mainnet",
+            Chain::Holesky => "holesky",
+            Chain::Helder => "helder",
+            Chain::Kurtosis => "kurtosis",
+        }
+    }
+}
+
+impl Display for Chain {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
 impl ChainConfig {
     /// Get the chain ID for the given chain.
     pub fn chain_id(&self) -> u64 {
@@ -78,12 +97,7 @@ impl ChainConfig {
 
     /// Get the chain name for the given chain.
     pub fn name(&self) -> &'static str {
-        match self.chain {
-            Chain::Mainnet => "mainnet",
-            Chain::Holesky => "holesky",
-            Chain::Helder => "helder",
-            Chain::Kurtosis => "kurtosis",
-        }
+        self.chain.name()
     }
 
     /// Get the slot time for the given chain in seconds.
