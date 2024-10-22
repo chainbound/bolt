@@ -9,6 +9,7 @@ services:
     entrypoint: /bin/sh -c "BOLT_SIDECAR_CONFIG_PATH=/etc/bolt-sidecar.toml /usr/local/bin/bolt-sidecar"
     volumes:
       - "./bolt-sidecar.toml:/etc/bolt-sidecar.toml"
+      - "../../bolt-delegations-cli/delegations.json:/etc/delegations.json"
 
   bolt-mev-boost-holesky:
     image: ghcr.io/chainbound/bolt-mev-boost:v0.3.0-alpha.rc1
