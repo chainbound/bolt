@@ -4,10 +4,11 @@ services:
     container_name: bolt-sidecar-holesky
     restart: unless-stopped
     ports:
-      - "${BOLT_SIDECAR_PORT}:${BOLT_SIDECAR_PORT}" # Bolt RPC port (this should be opened on your firewall!)
-      - "${BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT}:${BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT}"
-    env_file: ./bolt-sidecar.env
-    entrypoint: /bin/sh -c /usr/local/bin/bolt-sidecar
+      - "${BOLT_SIDECAR_PORT:-8017}:${BOLT_SIDECAR_PORT:-8017}" # Bolt RPC port (this should be opened on your firewall!)
+      - "${BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT:-18550}:${BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT:-18550}"
+    entrypoint: /bin/sh -c "BOLT_SIDECAR_CONFIG_PATH=/etc/bolt-sidecar.toml /usr/local/bin/bolt-sidecar"
+    volumes:
+      - "./bolt-sidecar.toml:/etc/bolt-sidecar.toml"
 
   bolt-mev-boost-holesky:
     image: ghcr.io/chainbound/bolt-mev-boost:v0.3.0-alpha.rc1
