@@ -21,18 +21,23 @@ constraints_api_url = "http://localhost:18551"
 #   - a comma-separated list of indexes (e.g. "1,2,3,4") 
 #   - a contiguous range of indexes (e.g. "1..4") 
 #   - a mix of the above (e.g. "1,2..4,6..8")
+# REQUIRED
 validator_indexes = "0..64"
 # The JWT secret token to authenticate calls to the engine API. It can be
 # either be a hex-encoded string or a file path to a file containing the
 # hex-encoded secret.
+# REQUIRED
 engine_jwt_hex = "0x0000000000000000000000000000000000000000000000000000000000000000"
 # The fee recipient address for fallback blocks
+# REQUIRED
 fee_recipient = "0x0000000000000000000000000000000000000000"
 # Secret ECDSA key to sign commitment messages with. The public key associated
 # to it must be then used when registering the operator in the `BoltManager`
 # contract
+# REQUIRED
 commitment_private_key = "0x0000000000000000000000000000000000000000000000000000000000000000"
 # Secret BLS key to sign fallback payloads with
+# REQUIRED
 builder_private_key = "0x0000000000000000000000000000000000000000000000000000000000000000"
 
 # Commitments limits
@@ -69,6 +74,7 @@ commitment_deadline = 8000
 # cb_signer_url = "http://localhost:18551"
 # cb_jwt_hex = "0x0000000000000000000000000000000000000000000000000000000000000000"
 # keystore_password = "password"
+# keystore_secrets_path = "./secrets"
 # keystore_path = "./keys"
 # delegations_path = "./delegations.json"
 
