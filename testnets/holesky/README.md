@@ -127,7 +127,7 @@ containing the necessary environment variables:
    directory as a starting point.
 
    ```bash
-   cat ./bolt-sidecar/Config.example.toml > ./testnets/holesky/bolt-sidecar.toml
+   cp ./bolt-sidecar/Config.example.toml ./testnets/holesky/bolt-sidecar.toml
    ```
 
    For proper configuration of the signing
@@ -143,7 +143,7 @@ containing the necessary environment variables:
    starting point.
 
    ```bash
-   cat ./mev-boost/.env.example > ./testnets/holesky/mev-boost.env
+   cp ./mev-boost/.env.example ./testnets/holesky/mev-boost.env
    ```
 
 If you prefer not to restart your beacon node, follow the instructions in the
