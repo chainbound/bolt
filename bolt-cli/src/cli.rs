@@ -14,8 +14,8 @@ pub struct Opts {
 
 #[derive(Subcommand, Debug, Clone, Deserialize)]
 pub enum Commands {
-    /// Generate delegation messages.
-    Generate {
+    /// Generate BLS delegation or revocation messages.
+    Delegate {
         /// The BLS public key to which the delegation message should be signed.
         #[clap(long, env = "DELEGATEE_PUBKEY")]
         delegatee_pubkey: String,

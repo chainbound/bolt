@@ -6,7 +6,7 @@ use ethereum_consensus::{
 };
 use eyre::Result;
 
-use crate::config::Chain;
+use crate::cli::Chain;
 
 /// The domain mask for the Commit Boost domain.
 pub const COMMIT_BOOST_DOMAIN_MASK: [u8; 4] = [109, 109, 111, 67];

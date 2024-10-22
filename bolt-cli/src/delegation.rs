@@ -1,14 +1,13 @@
+use alloy::signers::k256::sha2::{Digest, Sha256};
 use ethereum_consensus::crypto::{
     PublicKey as BlsPublicKey, SecretKey as BlsSecretKey, Signature as BlsSignature,
 };
 use eyre::Result;
 use lighthouse_eth2_keystore::Keystore;
+use serde::Serialize;
 
 use crate::{
-    config::{Action, Chain},
-    types::{
-        DelegationMessage, RevocationMessage, SignedDelegation, SignedMessage, SignedRevocation,
-    },
+    cli::{Action, Chain},
     utils::{
         keystore::{keystore_paths, KeystoreError, KeystoreSecret},
         signing::compute_commit_boost_signing_root,
@@ -100,17 +99,110 @@ pub fn generate_from_keystore(
     Ok(signed_messages)
 }
 
+/// Event types that can be emitted by the validator pubkey to
+/// signal some action on the Bolt protocol.
+#[derive(Debug, Clone, Copy)]
+#[repr(u8)]
+enum SignedMessageAction {
+    /// Signal delegation of a validator pubkey to a delegatee pubkey.
+    Delegation,
+    /// Signal revocation of a previously delegated pubkey.
+    Revocation,
+}
+
+/// Transparent serialization of signed messages.
+/// This is used to serialize and deserialize signed messages
+///
+/// e.g. serde_json::to_string(&signed_message):
+/// ```
+/// {
+///    "message": {
+///       "action": 0,
+///       "validator_pubkey": "0x...",
+///       "delegatee_pubkey": "0x..."
+///    },
+///   "signature": "0x..."
+/// },
+/// ```
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum SignedMessage {
+    Delegation(SignedDelegation),
+    Revocation(SignedRevocation),
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct SignedDelegation {
+    pub message: DelegationMessage,
+    pub signature: BlsSignature,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct DelegationMessage {
+    action: u8,
+    pub validator_pubkey: BlsPublicKey,
+    pub delegatee_pubkey: BlsPublicKey,
+}
+
+impl DelegationMessage {
+    /// Create a new delegation message.
+    pub fn new(validator_pubkey: BlsPublicKey, delegatee_pubkey: BlsPublicKey) -> Self {
+        Self { action: SignedMessageAction::Delegation as u8, validator_pubkey, delegatee_pubkey }
+    }
+
+    /// Compute the digest of the delegation message.
+    pub fn digest(&self) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update([self.action]);
+        hasher.update(self.validator_pubkey.to_vec());
+        hasher.update(self.delegatee_pubkey.to_vec());
+
+        hasher.finalize().into()
+    }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct SignedRevocation {
+    pub message: RevocationMessage,
+    pub signature: BlsSignature,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct RevocationMessage {
+    action: u8,
+    pub validator_pubkey: BlsPublicKey,
+    pub delegatee_pubkey: BlsPublicKey,
+}
+
+impl RevocationMessage {
+    /// Create a new revocation message.
+    pub fn new(validator_pubkey: BlsPublicKey, delegatee_pubkey: BlsPublicKey) -> Self {
+        Self { action: SignedMessageAction::Revocation as u8, validator_pubkey, delegatee_pubkey }
+    }
+
+    /// Compute the digest of the revocation message.
+    pub fn digest(&self) -> [u8; 32] {
+        let mut hasher = Sha256::new();
+        hasher.update([self.action]);
+        hasher.update(self.validator_pubkey.to_vec());
+        hasher.update(self.delegatee_pubkey.to_vec());
+
+        hasher.finalize().into()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
 
     use crate::{
-        config::{Action, Chain},
-        types::SignedMessage,
-        utils::{keystore::KeystoreSecret, parse_public_key, signing::verify_commit_boost_root},
+        cli::{Action, Chain},
+        utils::{
+            keystore::KeystoreSecret, parse_bls_public_key, signing::verify_commit_boost_root,
+        },
     };
 
-    use super::generate_from_keystore;
+    use super::{generate_from_keystore, SignedMessage};
 
     #[test]
     fn test_delegation_keystore_signer_lighthouse() -> eyre::Result<()> {
@@ -121,7 +213,7 @@ mod tests {
         let keystore_secret = KeystoreSecret::from_directory(secrets_path)?;
 
         let delegatee_pubkey = "0x83eeddfac5e60f8fe607ee8713efb8877c295ad9f8ca075f4d8f6f2ae241a30dd57f78f6f3863a9fe0d5b5db9d550b93";
-        let delegatee_pubkey = parse_public_key(delegatee_pubkey)?;
+        let delegatee_pubkey = parse_bls_public_key(delegatee_pubkey)?;
         let chain = Chain::Mainnet;
 
         let signed_delegations = generate_from_keystore(
