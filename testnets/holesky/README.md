@@ -444,7 +444,7 @@ If the script executed succesfully, your validators were registered.
 
 ## Bolt Network Entrypoint
 
-The [`BoltManager`](./src/contracts/BoltManager.sol) contract is a crucial component of Bolt that
+The [`BoltManager`](../../bolt-contracts/src/contracts/BoltManagerV1.sol) contract is a crucial component of Bolt that
 integrates with restaking ecosystems Symbiotic and Eigenlayer. It manages the registration and
 coordination of validators, operators, and vaults within the Bolt network.
 
@@ -457,44 +457,46 @@ Key features include:
 Specific functionalities about the restaking protocols are handled inside
 the `IBoltMiddleware` contracts, such as `BoltSymbioticMiddleware` and `BoltEigenlayerMiddleware`.
 
-### Symbiotic Integration guide for Staking Pools
+## Operator Registration
+In this section we outline how to register as an operator, i.e. an entity uniquely identified by an Ethereum address and responsible for
+duties like signing commitments. Note that in Bolt, there is no real separation between validators and an operator. An operator is only real in
+the sense that its private key will be used to sign commitments on the corresponding validators' sidecars. However, we need a way to logically
+connect validators to an on-chain address associated with some stake, which is what the operator is.
 
-As a staking pool, it is assumed that you are already in control of a Symbiotic Vault.
-If not, please refer to the [Symbiotic docs](https://docs.symbiotic.fi/handbooks/Handbook%20for%20Vaults)
-on how to spin up a Vault and start receiving stake from your node operators.
+**In the next sections we assume you have saved the private key corresponding to the operator address in `$OPERATOR_SK`.** This private key will
+be read by the Forge scripts for registering operators and needs to be set correctly. You also have to invoke the scripts from the
+[`bolt-contracts`](../../bolt-contracts) directory.
 
-Opting into Bolt works as any other Symbiotic middleware integration. Here are the steps:
-
-1. Make sure your vault collateral is whitelisted in `BoltSymbioticMiddleware` by calling `isCollateralWhitelisted`.
-2. Register as a vault in `BoltSymbioticMiddleware` by calling `registerVault`.
-3. Verify that your vault is active in `BoltSymbioticMiddleware` by calling `isVaultEnabled`.
-4. Set the network limit for your vault in Symbiotic with `Vault.delegator().setNetworkLimit()`.
-5. You can now start approving operators that opt in to your vault directly in Symbiotic.
-6. When you assign shares to operators, they are able to provide commitments on behalf of your collateral.
-
-### Symbiotic Integration guide for Operators
+### Symbiotic Registration Steps
 
 As an operator, you will need to opt-in to the Bolt Network and any Vault that trusts you to provide
-commitments on their behalf.
+commitments on their behalf. 
 
 The opt-in process requires the following steps:
+
+#### External Steps
+
+> [!NOTE] The network and supported vault addresses can be found in [`deployments.json`](../../bolt-contracts/config/holesky/deployments.json).
 
 1. register in Symbiotic with `OperatorRegistry.registerOperator()`.
 2. opt-in to the Bolt network with `OperatorNetworkOptInService.optIn(networkAddress)`.
 3. opt-in to any vault with `OperatorVaultOptInService.optIn(vaultAddress)`.
-4. register in Bolt with `BoltSymbioticMiddleware.registerOperator(operatorAddress)`.
-5. get approved by the vault.
-6. start providing commitments with the stake provided by the vault.
 
-### EigenLayer Integration Guide for Node Operators and Solo Stakers
+#### Internal Steps
 
-> [!NOTE]
-> Without loss of generality, we will assume the reader of this guide is a Node
-> Operator (NO), since the same steps apply to solo stakers.
-> As a Node Operator you will be an ["Operator"](https://docs.eigenlayer.xyz/eigenlayer/overview/key-terms)
-> in the Bolt AVS built on top of EigenLayer. This requires
-> running an Ethereum validator and the Bolt sidecar in order issue
-> preconfirmations.
+Run the provided Forge script to register a Symbiotic operator:
+
+```bash
+forge script script/holesky/validators/RegisterSymbioticOperator.s.sol --rpc-url $HOLESKY_RPC -vvvv --broadcast
+```
+
+If all goes well, your Symbiotic operator was registered into Bolt.
+
+### EigenLayer Registration Steps
+
+#### External Steps
+
+> [!NOTE] The supported strategies can be found in [`deployments.json`](../../bolt-contracts/config/holesky/deployments.json).
 
 The Operator will be represented by an Ethereum address that needs
 to follow the standard procedure outlined in the
@@ -502,53 +504,18 @@ to follow the standard procedure outlined in the
 
 1. As an Operator, you register into EigenLayer using [`DelegationManager.registerAsOperator`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/mainnet/src/contracts/core/DelegationManager.sol#L107-L119).
 
-2. As an Ethereum validator offering precofirmations a NO needs some collateral in
-   order to be economically credible. In order to do that, some entities known as a "stakers"
-   need to deposit whitelisted Liquid Staking Tokens (LSTs)
-   into an appropriate "Strategy" associated to the LST via the
-   [`StrategyManager.depositIntoStrategy`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/mainnet/src/contracts/core/StrategyManager.sol#L105-L110),
-   so that the Operator has a `min_amount` (for Holesky 1 ether) of collateral associated to it.
-   Whitelisted LSTs are exposed by the `BoltEigenLayerMiddleware` contract
-   in the `getWhitelistedCollaterals` function.
-   Note that NOs and stakers can be two different entities
-   _but there is fully trusted relationship as stakers will be slashed if a NO misbehaves_.
+2. You can then use the same account to deposit into a supported EigenLayer strategy using [`StrategyManager.depositIntoStrategy`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/mainnet/src/contracts/core/StrategyManager.sol#L105-L110). This will add the deposit into the collateral of the operator
+so that Bolt can read it. Note that you need to deposit a minimum of `1 ether` of the strategies underlying token in order to opt in.
 
-3. After the stakers have deposited their collateral into a strategy they need
-   to choose you as their operator. To do that, they need to call the function
-   [`DelegationManager.delegateTo`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/mainnet/src/contracts/core/DelegationManager.sol#L154-L163).
+#### Internal Steps
 
-4. As an Operator you finally opt into the Bolt AVS by interacting with the `BoltEigenLayerMiddleware`.
-   This consists in calling the function `BoltEigenLayerMiddleware.registerOperatorToAVS`.
-   The payload is a signature whose digest consists of:
+Set the operator private key to an `OPERATOR_SK` environment variable, and then run the following Forge script from the `bolt-contracts` directory:
 
-   1. your operator address
-   2. the `BoltEigenLayerMiddleware` contract address
-   3. a salt
-   4. an expiry 2.
+```bash
+forge script script/holesky/validators/RegisterEigenLayerOperator.s.sol --rpc-url $HOLESKY_RPC -vvvv --broadcast
+```
 
-   The contract will then forward the call to the [`AVSDirectory.registerOperatorToAVS`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/mainnet/src/contracts/core/AVSDirectory.sol#L64-L108)
-   with the `msg.sender` set to the Bolt AVS contract. Upon successful verification of the signature,
-   the operator is considered `REGISTERED` in a mapping `avsOperatorStatus[msg.sender][operator]`.
-
-Lastly, a NO needs to interact with both the `BoltValidators` and `BoltEigenLayerMiddleware`
-contract. This is needed for internal functioning of the AVS and to make RPCs aware that you are a
-registered operator and so that they can forward you preconfirmation requests.
-
-The steps required are the following:
-
-1. Register all the validator public keys you want to use with Bolt via the `BoltValidators.registerValidator`.
-   If you own more than one validator public key,
-   you can use the more gas-efficient `BoltValidators.batchRegisterValidators` function.
-   The `authorizedOperator` argument must be the same Ethereum address used for
-   opting into EigenLayer as an Operator.
-
-2. Register the same Operator address in the `BoltEigenLayerMiddleware` contract by calling
-   the `BoltEigenLayerMiddleware.registerOperator` function. This formalizes your role within the Bolt network
-   and allows you to manage operations effectively, such as pausing or resuming
-   your service.
-
-3. Register the EigenLayer strategy you are using for restaking _if it has not been done by someone else already_.
-   This ensures that your restaked assets are correctly integrated with Bolt’s system.
+If all goes well, your EigenLayer operator was registered into Bolt.
 
 # Reference
 
