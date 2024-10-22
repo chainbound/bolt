@@ -443,8 +443,9 @@ directory.
 
 - Next up, decide on a controller account and save the key in an environment
   variable: `export CONTROLLER_KEY=0x...`. This controller key will be used to run
-  the script and will mark the corresponding account as the controller account for
-  these validators.
+  the script and will mark the corresponding account as the [controller
+  account](https://github.com/chainbound/bolt/blob/06bdd8e75d759d91f6178ad73f962b1f4ad43fd8/bolt-contracts/src/interfaces/IBoltValidatorsV1.sol#L18-L19)
+  for these validators.
 
 - Finally, run the script:
 
