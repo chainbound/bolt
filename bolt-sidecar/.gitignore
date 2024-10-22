@@ -2,3 +2,4 @@ target/
 .env*
 !.env.example
 bolt-sidecar*
+Config.toml
