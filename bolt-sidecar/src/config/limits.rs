@@ -31,7 +31,7 @@ pub struct LimitsOpts {
         env = "BOLT_SIDECAR_MIN_PRIORITY_FEE",
         default_value_t = LimitsOpts::default().min_priority_fee
     )]
-    pub min_priority_fee: NonZero<u128>,
+    pub min_priority_fee: u128,
 }
 
 impl Default for LimitsOpts {
@@ -41,7 +41,7 @@ impl Default for LimitsOpts {
                 .expect("Valid non-zero"),
             max_committed_gas_per_slot: NonZero::new(DEFAULT_MAX_COMMITTED_GAS)
                 .expect("Valid non-zero"),
-            min_priority_fee: NonZero::new(DEFAULT_MIN_PRIORITY_FEE).expect("Valid non-zero"),
+            min_priority_fee: DEFAULT_MIN_PRIORITY_FEE,
         }
     }
 }
