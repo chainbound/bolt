@@ -1177,7 +1177,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "bolt-delegations-cli"
+name = "bolt-cli"
 version = "0.1.0"
 dependencies = [
  "account_utils",

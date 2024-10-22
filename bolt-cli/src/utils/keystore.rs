@@ -1,28 +1,27 @@
 use std::{
     collections::HashMap,
     ffi::OsString,
-    fs::{self, read_dir, DirEntry},
+    fs::{self, DirEntry},
     io,
     path::{Path, PathBuf},
 };
 
-use alloy::primitives::FixedBytes;
-use blst::{min_pk::Signature, BLST_ERROR};
-use ethereum_consensus::{
-    crypto::PublicKey as BlsPublicKey,
-    deneb::{compute_fork_data_root, compute_signing_root, Root},
-};
 use eyre::{Context, Result};
 
-use crate::{config::Chain, types::KeystoreError};
+/// Default password used for keystores in the test vectors.
+///
+/// Reference: https://eips.ethereum.org/EIPS/eip-2335#test-cases
+pub const DEFAULT_KEYSTORE_PASSWORD: &str = r#"𝔱𝔢𝔰𝔱𝔭𝔞𝔰𝔰𝔴𝔬𝔯𝔡🔑"#;
 
-// Reference: https://eips.ethereum.org/EIPS/eip-2335#test-cases
-pub const KEYSTORE_PASSWORD: &str = r#"𝔱𝔢𝔰𝔱𝔭𝔞𝔰𝔰𝔴𝔬𝔯𝔡🔑"#;
-
-pub const COMMIT_BOOST_DOMAIN_MASK: [u8; 4] = [109, 109, 111, 67];
-
-/// The BLS Domain Separator used in Ethereum 2.0.
-pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
+#[derive(Debug, thiserror::Error)]
+pub enum KeystoreError {
+    #[error("failed to read keystore directory: {0}")]
+    ReadFromDirectory(#[from] std::io::Error),
+    #[error("Failed to read or decrypt keystore: {0:?}")]
+    Eth2Keystore(lighthouse_eth2_keystore::Error),
+    #[error("Missing password for keypair")]
+    MissingPassword,
+}
 
 pub enum KeystoreSecret {
     /// When using a unique password for all validators in the keystore
@@ -85,13 +84,6 @@ impl Drop for KeystoreSecret {
     }
 }
 
-/// Parse the delegated public key from a string
-pub fn parse_public_key(delegatee_pubkey: &str) -> Result<BlsPublicKey> {
-    let hex_pk = delegatee_pubkey.strip_prefix("0x").unwrap_or(delegatee_pubkey);
-    BlsPublicKey::try_from(hex::decode(hex_pk).expect("Failed to decode pubkey").as_slice())
-        .map_err(|e| eyre::eyre!("Failed to parse public key '{}': {}", hex_pk, e))
-}
-
 /// Returns the paths of all the keystore files provided in `keys_path`.
 ///
 /// We're expecting a directory structure like:
@@ -125,54 +117,6 @@ fn read_path(entry: io::Result<DirEntry>) -> Result<PathBuf> {
     Ok(entry.map_err(KeystoreError::ReadFromDirectory)?.path())
 }
 
-/// Helper function to compute the signing root for a message
-pub fn compute_commit_boost_signing_root(
-    message: [u8; 32],
-    chain: &Chain,
-) -> Result<FixedBytes<32>> {
-    compute_signing_root(&message, compute_domain_from_mask(chain.fork_version()))
-        .map_err(|e| eyre::eyre!("Failed to compute signing root: {}", e))
-}
-
-/// Compute the commit boost domain from the fork version
-pub fn compute_domain_from_mask(fork_version: [u8; 4]) -> [u8; 32] {
-    let mut domain = [0; 32];
-
-    // Note: the application builder domain specs require the genesis_validators_root
-    // to be 0x00 for any out-of-protocol message. The commit-boost domain follows the
-    // same rule.
-    let root = Root::default();
-    let fork_data_root = compute_fork_data_root(fork_version, root).expect("valid fork data");
-
-    domain[..4].copy_from_slice(&COMMIT_BOOST_DOMAIN_MASK);
-    domain[4..].copy_from_slice(&fork_data_root[..28]);
-    domain
-}
-
-/// Verify the signature with the public key of the signer using the Commit Boost domain.
-pub fn verify_commit_boost_root(
-    pubkey: BlsPublicKey,
-    root: [u8; 32],
-    signature: &Signature,
-    chain: &Chain,
-) -> Result<()> {
-    verify_root(pubkey, root, signature, compute_domain_from_mask(chain.fork_version()))
-}
-
-/// Verify the signature of the object with the given public key.
-pub fn verify_root(
-    pubkey: BlsPublicKey,
-    root: [u8; 32],
-    signature: &Signature,
-    domain: [u8; 32],
-) -> Result<()> {
-    let signing_root = compute_signing_root(&root, domain)?;
-    let pk = blst::min_pk::PublicKey::from_bytes(pubkey.as_ref()).unwrap();
-
-    let res = signature.verify(true, signing_root.as_ref(), BLS_DST_PREFIX, &[], &pk, true);
-    if res == BLST_ERROR::BLST_SUCCESS {
-        Ok(())
-    } else {
-        Err(eyre::eyre!("bls verification failed"))
-    }
+fn read_dir(path: PathBuf) -> Result<fs::ReadDir> {
+    fs::read_dir(path).wrap_err("Failed to read directory")
 }

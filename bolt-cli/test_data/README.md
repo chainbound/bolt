@@ -1,4 +1,4 @@
-# test data for the delegation cli tool
+# test data for the bolt cli tool
 
 - `lighthouse`: A lighthouse-format keystore according to the [specs][lh-specs].
   It contains two directories: `validators` for the voting-keystores, and `secrets` for the passwords

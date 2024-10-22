@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use serde::Deserialize;
 
-use crate::utils::KEYSTORE_PASSWORD;
+use crate::utils::keystore::DEFAULT_KEYSTORE_PASSWORD;
 
 /// A CLI tool to generate signed delegation messages for BLS keys.
 #[derive(Parser, Debug, Clone, Deserialize)]
@@ -70,7 +70,7 @@ pub enum KeySource {
             long,
             env = "KEYSTORE_PASSWORD",
             hide_env_values = true,
-            default_value = KEYSTORE_PASSWORD,
+            default_value = DEFAULT_KEYSTORE_PASSWORD,
             conflicts_with = "password_path"
         )]
         password: Option<String>,
