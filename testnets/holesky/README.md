@@ -122,17 +122,17 @@ containing the necessary environment variables:
 
 1. **Bolt Sidecar Configuration:**
 
-   Create a `bolt-sidecar.env` file in the `testnets/holesky` directory. If you
-   need a reference, you can use the `.env.example` file in the `bolt-sidecar`
+   Create a `bolt-sidecar.toml` file in the `testnets/holesky` directory. If you
+   need a reference, you can use the `Config.example.toml` file in the `bolt-sidecar`
    directory as a starting point.
 
    ```bash
-   cat ./bolt-sidecar/.env.example > ./testnets/holesky/bolt-sidecar.env
+   cat ./bolt-sidecar/Config.example.toml > ./testnets/holesky/bolt-sidecar.toml
    ```
 
    For proper configuration of the signing
    options, please refer to the [Delegations and
-   Signing](#delegations-and-signing-options-for-standalone-and-docker-container-setup)
+   Signing](#delegations-and-signing-options-for-native-and-docker-compose-mode)
    section of this guide.
 
 2. **MEV-Boost Configuration:**
@@ -316,15 +316,13 @@ can be found by running `./bolt-sidecar --help`, or you can find them in the
 
 #### Configuration file
 
-A configuration file can be either a `.env` file or a `.toml` file. If you use
-`.env` file you can find a `.env.example` file in the repository that you can
-use as a template.
-
-For a `.toml` file you can use the template in the `Config.example.toml`. Lastly
-you need to specify the path of the configuration file by setting the
+You can use a `Config.toml` file to configure the sidecar, for which you can
+find a template in the `Config.example.toml` file.
+If you wish to place the configuration file in another folder you need to
+specify the path of the configuration file by setting the
 `BOLT_SIDECAR_CONFIG_PATH` environment variable to the path of the file.
 
-Please read the section on [delegations and signing](#delegations-and-signing-options-for-native-and-docker-compose-mode)
+Please read the section on [Delegations and Signing](#delegations-and-signing-options-for-native-and-docker-compose-mode)
 to configure such sidecar options properly.
 
 After you've set up the configuration file you can run the Bolt sidecar with
@@ -517,15 +515,14 @@ with the `--help` flag:
 ```
 Command-line options for the Bolt sidecar
 
-Usage: bolt-sidecar [OPTIONS] --engine-jwt-hex <ENGINE_JWT_HEX> --fee-recipient <FEE_RECIPIENT> --builder-private-key <BUILDER_PRIVATE_KEY> --commitment-private-key <COMMITMENT_PRIVATE_KEY> <--constraint-private-key <CONSTRAINT_PRIVATE_KEY>|--commit-boost-signer-url <COMMIT_BOOST_SIGNER_URL>|--keystore-password <KEYSTORE_PASSWORD>|--keystore-secrets-path <KEYSTORE_SECRETS_PATH>>
+Usage: bolt-sidecar [OPTIONS] --validator-indexes <VALIDATOR_INDEXES> --engine-jwt-hex <ENGINE_JWT_HEX> --fee-recipient <FEE_RECIPIENT> --builder-private-key <BUILDER_PRIVATE_KEY> --commitment-private-key <COMMITMENT_PRIVATE_KEY> <--constraint-private-key <CONSTRAINT_PRIVATE_KEY>|--commit-boost-signer-url <COMMIT_BOOST_SIGNER_URL>|--keystore-password <KEYSTORE_PASSWORD>|--keystore-secrets-path <KEYSTORE_SECRETS_PATH>>
 
 Options:
       --port <PORT>
-          Port to listen on for incoming JSON-RPC requests of the Commitments API
-          This port should be open on your firewall in order to receive external requests!
+          Port to listen on for incoming JSON-RPC requests of the Commitments API. This port should be open on your firewall in order to receive external requests!
 
           [env: BOLT_SIDECAR_PORT=]
-          [default: 8000]
+          [default: 8017]
 
       --execution-api-url <EXECUTION_API_URL>
           Execution client API URL
@@ -540,34 +537,28 @@ Options:
           [default: http://localhost:5052]
 
       --engine-api-url <ENGINE_API_URL>
-          Execution client Engine API URL. This is needed for fallback block
-          building and must be a synced Geth node
+          Execution client Engine API URL. This is needed for fallback block building and must be a synced Geth node
 
           [env: BOLT_SIDECAR_ENGINE_API_URL=]
           [default: http://localhost:8551]
 
       --constraints-api-url <CONSTRAINTS_API_URL>
-          URL to forward the constraints produced by the Bolt sidecar to a
-          server supporting the Constraints API, such as an MEV-Boost fork
+          URL to forward the constraints produced by the Bolt sidecar to a server supporting the Constraints API, such as an MEV-Boost fork
 
           [env: BOLT_SIDECAR_CONSTRAINTS_API_URL=]
-          [default: http://localhost:3030]
+          [default: http://localhost:18551]
 
       --constraints-proxy-port <CONSTRAINTS_PROXY_PORT>
           The port from which the Bolt sidecar will receive Builder-API requests from the Beacon client
 
           [env: BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT=]
-          [default: 18551]
+          [default: 18550]
 
       --validator-indexes <VALIDATOR_INDEXES>
-          Validator indexes of connected validators that the sidecar should
-          accept commitments on behalf of. Accepted values:
-            - a comma-separated list of indexes (e.g. "1,2,3,4")
-            - a contiguous range of indexes (e.g. "1..4")
-            - a mix of the above (e.g. "1,2..4,6..8")
+          Validator indexes of connected validators that the sidecar should accept commitments on behalf of. Accepted values: - a comma-separated list of indexes (e.g. "1,2,3,4") - a contiguous range of indexes (e.g. "1..4") - a mix of the
+          above (e.g. "1,2..4,6..8")
 
           [env: BOLT_SIDECAR_VALIDATOR_INDEXES=]
-          [default: ]
 
       --engine-jwt-hex <ENGINE_JWT_HEX>
           The JWT secret token to authenticate calls to the engine API.
@@ -587,9 +578,7 @@ Options:
           [env: BOLT_SIDECAR_BUILDER_PRIVATE_KEY=]
 
       --commitment-private-key <COMMITMENT_PRIVATE_KEY>
-          Secret ECDSA key to sign commitment messages with. The public key
-          associated to it must be then used when registering the operator in the
-          `BoltManager` contract
+          Secret ECDSA key to sign commitment messages with. The public key associated to it must be then used when registering the operator in the `BoltManager` contract
 
           [env: BOLT_SIDECAR_COMMITMENT_PRIVATE_KEY=]
 
