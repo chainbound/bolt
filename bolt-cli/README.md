@@ -1,4 +1,10 @@
-# Bolt Delegations CLI
+# Bolt CLI
+
+Components:
+
+- `bolt-delegations-cli`: A command-line tool for generating delegation messages signed with a BLS12-381 key.
+
+## Bolt-delegations-cli
 
 `bolt-delegations-cli` is an offline command-line tool for safely generating delegation messages
 signed with a BLS12-381 key for the [Constraints API](https://docs.boltprotocol.xyz/api/builder)
@@ -15,7 +21,7 @@ Features:
 - Flexible key source: Support for both direct local BLS private keys and Ethereum keystore files (ERC-2335 format).
 - BLS delegation signing: Sign delegation messages using a BLS secret key and output the signed delegation in JSON format.
 
-## Usage
+### Usage
 
 ```text
 A CLI tool to generate signed delegation messages for BLS keys
@@ -31,7 +37,7 @@ Options:
   -V, --version  Print version
 ```
 
-### Example
+#### Example
 
 1. Using a local BLS private key:
 
@@ -64,7 +70,7 @@ flag must be used instead of `--password`, pointing to the directory containing 
 
 You can find a reference Lighthouse keystore [here](./test_data/lighthouse/).
 
-### Supported Chains
+#### Supported Chains
 
 The tool supports the following chains:
 
