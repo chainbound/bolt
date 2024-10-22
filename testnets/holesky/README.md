@@ -888,17 +888,21 @@ below.
 
 As you can see in the [command line options](#command-line-options) section you
 can pass directly the private key as a hex-encoded string to the Bolt sidecar
-using the `--private-key` flag. This is the simplest setup and can be used in
+using the `--constraint-private-key` flag (or `constraint_private_key` in the
+TOML file).
+
+This is the simplest setup and can be used in
 case if all the delegations messages point to the same delegatee or if you're
 running the sidecar with a single active validator.
 
 ### Using a ERC-2335 Keystore
 
-The Bolt sidecar supports [ERC-2335](https://eips.ethereum.org/EIPS/eip-2335) keystores for loading signing keypairs.
-In order to use them you need to provide the `--keystore-path` pointing to the
-folder containing the keystore files and the `--keystore-password` or
-`keystore-secrets-path` flag pointing to the folder containing the password
-file.
+The Bolt sidecar supports [ERC-2335](https://eips.ethereum.org/EIPS/eip-2335)
+keystores for loading signing keypairs. In order to use them you need to provide
+the `--keystore-path` pointing to the folder containing the keystore files and
+the `--keystore-password` or `keystore-secrets-path` flag pointing to the folder
+containing the password file (in the TOML configuration file these are the
+`keystore_path`, `keystore_password` and `keystore_secrets_path` respectively).
 
 Both the `keys` and `passwords` folders must adhere to the structure outlined
 in the [Delegations CLI example](#delegations-cli-example) section.
@@ -914,9 +918,9 @@ However if you're already running a PBS sidecar like
 [MEV-Boost](https://boost.flashbots.net/) on the same machine then you can avoid
 the restart by following this steps when starting the Bolt sidecar:
 
-1. Set the `--constraints-proxy-port` flag or the
-   `BOLT_SIDECAR_BUILDER_PROXY_PORT` environment variable to the port previously occupied by
-   MEV-Boost.
+1. Set the `--constraints-proxy-port` flag (the `constraints_proxy_port` option
+   in the TOML file) to the port previously occupied by MEV-Boost.
 2. Build the Bolt MEV-Boost fork binary or pull the Docker image and start it
    using another port
-3. Set the `--constraints-url` flag or the `BOLT_SIDECAR_CONSTRAINTS_URL` to point to the Bolt MEV-Boost instance.
+3. Set the `--constraints-api-url` flag (or the `constraints_api_url` in the
+   TOML file) to point to the Bolt MEV-Boost instance.
