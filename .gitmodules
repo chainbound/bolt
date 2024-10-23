@@ -16,3 +16,6 @@
 [submodule "bolt-contracts/lib/core"]
 	path = bolt-contracts/lib/core
 	url = https://github.com/symbioticfi/core
+[submodule "bolt-contracts/lib/eigenlayer-middleware"]
+	path = bolt-contracts/lib/eigenlayer-middleware
+	url = https://github.com/layr-labs/eigenlayer-middleware
