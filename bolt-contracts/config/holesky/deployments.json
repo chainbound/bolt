@@ -1,6 +1,7 @@
 {
     "bolt": {
-        "validators": "0x47D2DC1DE1eFEFA5e6944402f2eda3981D36a9c8"
+        "validators": "0x47D2DC1DE1eFEFA5e6944402f2eda3981D36a9c8",
+        "manager": "0x440202829b493F9FF43E730EB5e8379EEa3678CF"
     },
     "symbiotic": {
         "network": "0xb017002D8024d8c8870A5CECeFCc63887650D2a4",
