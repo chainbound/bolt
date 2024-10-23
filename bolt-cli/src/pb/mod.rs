@@ -1,7 +1,12 @@
-pub mod v1;
+mod v1;
 
-#[allow(unused_imports)]
-pub use v1::{
-    lister_client::ListerClient, Account, DistributedAccount, ListAccountsRequest,
-    ListAccountsResponse, ResponseState,
-};
+/// Re-exported protobuf API for the ETH2 remote signer service.
+pub mod eth2_signer_api {
+
+    #[allow(unused_imports)]
+    pub use super::v1::{
+        lister_client::ListerClient, sign_request::Id as SignRequestId,
+        signer_client::SignerClient, Account, DistributedAccount, ListAccountsRequest,
+        ListAccountsResponse, ResponseState, SignRequest, SignResponse,
+    };
+}

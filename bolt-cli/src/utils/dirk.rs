@@ -1,11 +1,15 @@
 use std::fs;
 
+use alloy_primitives::B256;
+use ethereum_consensus::crypto::bls::{PublicKey as BlsPublicKey, Signature as BlsSignature};
 use eyre::{Context, Result};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
 
 use crate::{
     cli::TlsCredentials,
-    pb::{Account, ListAccountsRequest, ListerClient},
+    pb::eth2_signer_api::{
+        Account, ListAccountsRequest, ListerClient, SignRequest, SignRequestId, SignerClient,
+    },
 };
 
 /// A Dirk remote signer.
@@ -32,6 +36,28 @@ impl Dirk {
         let accs = lister.list_accounts(ListAccountsRequest { paths }).await?;
 
         Ok(accs.into_inner().accounts)
+    }
+
+    /// Request a signature from the remote signer.
+    pub async fn request_signature(
+        &self,
+        pubkey: BlsPublicKey,
+        hash: B256,
+        domain: B256,
+    ) -> Result<BlsSignature> {
+        let mut signer = SignerClient::new(self.conn.clone());
+
+        let req = SignRequest {
+            data: hash.to_vec(),
+            domain: domain.to_vec(),
+            id: Some(SignRequestId::PublicKey(pubkey.to_vec())),
+        };
+
+        let res = signer.sign(req).await?;
+        let sig = res.into_inner().signature;
+        let sig = BlsSignature::try_from(sig.as_slice()).wrap_err("Failed to parse signature")?;
+
+        Ok(sig)
     }
 }
 

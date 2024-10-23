@@ -3,7 +3,7 @@ use eyre::Result;
 use lighthouse_eth2_keystore::Keystore;
 
 use crate::{
-    pb::Account,
+    pb::eth2_signer_api::Account,
     utils::keystore::{keystore_paths, KeystoreError, KeystoreSecret},
 };
 
