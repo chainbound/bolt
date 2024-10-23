@@ -3,22 +3,14 @@ pragma solidity 0.8.25;
 
 import {Script, console} from "forge-std/Script.sol";
 
-import {INetworkRegistry} from "@symbiotic/interfaces/INetworkRegistry.sol";
-import {IOperatorRegistry} from "@symbiotic/interfaces/IOperatorRegistry.sol";
-import {IVaultFactory} from "@symbiotic/interfaces/IVaultFactory.sol";
 import {IVault} from "@symbiotic/interfaces/vault/IVault.sol";
 import {IOptInService} from "@symbiotic/interfaces/service/IOptInService.sol";
 import {IVaultConfigurator} from "@symbiotic/interfaces/IVaultConfigurator.sol";
 import {IBaseDelegator} from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
 import {IBaseSlasher} from "@symbiotic/interfaces/slasher/IBaseSlasher.sol";
-import {IMetadataService} from "@symbiotic/interfaces/service/IMetadataService.sol";
 import {INetworkRestakeDelegator} from "@symbiotic/interfaces/delegator/INetworkRestakeDelegator.sol";
-import {INetworkMiddlewareService} from "@symbiotic/interfaces/service/INetworkMiddlewareService.sol";
-import {ISlasherFactory} from "@symbiotic/interfaces/ISlasherFactory.sol";
 import {IVetoSlasher} from "@symbiotic/interfaces/slasher/IVetoSlasher.sol";
-import {IDelegatorFactory} from "@symbiotic/interfaces/IDelegatorFactory.sol";
 import {IMigratablesFactory} from "@symbiotic/interfaces/common/IMigratablesFactory.sol";
-import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
 
 contract DeploySymbioticVaults is Script {
     struct VaultConfig {
@@ -31,7 +23,7 @@ contract DeploySymbioticVaults is Script {
         VaultConfig[] memory configs = _readVaultConfigs();
         uint48 epochDuration = _readEpochDuration();
 
-        // TODO: Check if vaults for specific collateral are already deployed
+        // TODO: Check if vaults for specific collateral are already deployed!
 
         vm.startBroadcast();
 

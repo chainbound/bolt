@@ -1,10 +1,10 @@
 [
     {
-        "collateral": "0x8d09a4502Cc8Cf1547aD300E066060D043f6982D",
-        "admin": "0x20A1305Ec6c13FFE8e5289f98ba1A18Aa262c15E"
+        "admin": "0x20A1305Ec6c13FFE8e5289f98ba1A18Aa262c15E",
+        "collateral": "0x8d09a4502Cc8Cf1547aD300E066060D043f6982D"
     },
     {
-        "collateral": "0x7322c24752f79c05FFD1E2a6FCB97020C1C264F1",
-        "admin": "0x20A1305Ec6c13FFE8e5289f98ba1A18Aa262c15E"
+        "admin": "0x20A1305Ec6c13FFE8e5289f98ba1A18Aa262c15E",
+        "collateral": "0x7322c24752f79c05FFD1E2a6FCB97020C1C264F1"
     }
 ]
