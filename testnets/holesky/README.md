@@ -511,7 +511,7 @@ The opt-in process requires the following steps:
 Run the provided Forge script to register a Symbiotic operator:
 
 ```bash
-forge script script/holesky/validators/RegisterSymbioticOperator.s.sol --rpc-url $HOLESKY_RPC -vvvv --broadcast
+forge script script/holesky/operators/RegisterSymbioticOperator.s.sol --rpc-url $HOLESKY_RPC -vvvv --broadcast
 ```
 
 If all goes well, your Symbiotic operator was registered into Bolt.
@@ -545,7 +545,7 @@ Set the operator private key to an `OPERATOR_SK` environment variable, and then
 run the following Forge script from the `bolt-contracts` directory:
 
 ```bash
-forge script script/holesky/validators/RegisterEigenLayerOperator.s.sol --rpc-url $HOLESKY_RPC -vvvv --broadcast
+forge script script/holesky/operators/RegisterEigenLayerOperator.s.sol --rpc-url $HOLESKY_RPC -vvvv --broadcast
 ```
 
 If all goes well, your EigenLayer operator was registered into Bolt.
