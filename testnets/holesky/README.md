@@ -493,28 +493,53 @@ directory.
 As an operator, you will need to opt-in to the Bolt Network and any Vault that
 trusts you to provide commitments on their behalf.
 
-The opt-in process requires the following steps:
-
 **External Steps**
 
 > [!NOTE]
 > The network and supported vault addresses can be found in
 > [`deployments.json`](../../bolt-contracts/config/holesky/deployments.json).
 
-1. register in Symbiotic with `OperatorRegistry.registerOperator()`.
-2. opt-in to the Bolt network with
-   `OperatorNetworkOptInService.optIn(networkAddress)`.
-3. opt-in to any vault with `OperatorVaultOptInService.optIn(vaultAddress)`.
+Make sure you have installed the [Symbiotic
+CLI](https://docs.symbiotic.fi/guides/cli/).
+
+The opt-in process requires the following steps:
+
+1. if you haven't done it already, register as a Symbiotic Operator with the
+   [`register-operator`](https://docs.symbiotic.fi/guides/cli/#register-operator)
+   command;
+2. opt-in to the Bolt network with the
+   [`opt-in-network`](https://docs.symbiotic.fi/guides/cli/#opt-in-network)
+   command;
+3. opt-in to any vault using the
+   [`opt-in-vault`](https://docs.symbiotic.fi/guides/cli/#opt-in-vault) command;
+4. deposit collateral into the vault using the
+   [`deposit`](https://docs.symbiotic.fi/guides/cli/#deposit) command.
 
 **Internal Steps**
 
-Run the provided Forge script to register a Symbiotic operator:
+After having deposited collateral into a vault you need to register into
+Bolt as a Symbiotic operator. We've provided a script to facilitate the
+procedure. If you want to use it, please set the operator private key to an
+`OPERATOR_SK` environment variable, and then run the following Forge script from
+the `bolt-contracts` directory:
 
 ```bash
-forge script script/holesky/operators/RegisterSymbioticOperator.s.sol --rpc-url $HOLESKY_RPC -vvvv --broadcast
+forge script script/holesky/operators/RegisterSymbioticOperator.s.sol \
+  --sig "S01_registerIntoBolt" \
+  --rpc-url $HOLESKY_RPC \
+  -vvvv \
+  --broadcast
 ```
 
-If all goes well, your Symbiotic operator was registered into Bolt.
+To check if your operator is correctly registered, set the operator public key
+in the `OPERATOR_PK` environment variable and run the following script:
+
+```bash
+forge script script/holesky/operators/RegisterSymbioticOperator.s.sol \
+  --sig "S02_checkOperatorRegistration" \
+  --rpc-url $HOLESKY_RPC \
+  -vvvv
+```
 
 ### EigenLayer Registration Steps
 
