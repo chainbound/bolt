@@ -19,7 +19,6 @@ import {Slasher} from "@symbiotic/contracts/slasher/Slasher.sol";
 import {VetoSlasher} from "@symbiotic/contracts/slasher/VetoSlasher.sol";
 import {VaultConfigurator} from "@symbiotic/contracts/VaultConfigurator.sol";
 
-import {SimpleCollateral} from "@symbiotic/../test/mocks/SimpleCollateral.sol";
 import {Token} from "../mocks/Token.sol";
 
 contract SymbioticSetupFixture is Test {
@@ -40,7 +39,7 @@ contract SymbioticSetupFixture is Test {
             OptInService operatorVaultOptInService,
             OptInService operatorNetworkOptInService,
             VaultConfigurator vaultConfigurator,
-            SimpleCollateral collateral
+            Token collateral
         )
     {
         vm.startPrank(deployer);
@@ -53,9 +52,10 @@ contract SymbioticSetupFixture is Test {
         MetadataService operatorMetadataService_ = new MetadataService(address(operatorRegistry_));
         MetadataService networkMetadataService_ = new MetadataService(address(networkRegistry_));
         NetworkMiddlewareService networkMiddlewareService_ = new NetworkMiddlewareService(address(networkRegistry_));
-        OptInService operatorVaultOptInService_ = new OptInService(address(operatorRegistry_), address(vaultFactory_));
+        OptInService operatorVaultOptInService_ =
+            new OptInService(address(operatorRegistry_), address(vaultFactory_), "vaultOptIn");
         OptInService operatorNetworkOptInService_ =
-            new OptInService(address(operatorRegistry_), address(networkRegistry_));
+            new OptInService(address(operatorRegistry_), address(networkRegistry_), "networkOptIn");
 
         Vault vault_ = new Vault(address(delegatorFactory_), address(slasherFactory_), address(vaultFactory_));
         vaultFactory_.whitelist(address(vault_));
@@ -113,7 +113,6 @@ contract SymbioticSetupFixture is Test {
         slasherFactory_.transferOwnership(owner);
 
         Token token_ = new Token("Token");
-        SimpleCollateral collateral_ = new SimpleCollateral(address(token_));
 
         vm.stopPrank();
 
@@ -129,7 +128,7 @@ contract SymbioticSetupFixture is Test {
             operatorVaultOptInService_,
             operatorNetworkOptInService_,
             vaultConfigurator_,
-            collateral_
+            token_
         );
     }
 }

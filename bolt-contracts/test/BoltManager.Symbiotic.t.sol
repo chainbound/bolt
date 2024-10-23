@@ -10,6 +10,7 @@ import {IVault} from "@symbiotic/interfaces/vault/IVault.sol";
 import {IOptInService} from "@symbiotic/interfaces/service/IOptInService.sol";
 import {IVaultConfigurator} from "@symbiotic/interfaces/IVaultConfigurator.sol";
 import {IBaseDelegator} from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
+import {IBaseSlasher} from "@symbiotic/interfaces/slasher/IBaseSlasher.sol";
 import {IMetadataService} from "@symbiotic/interfaces/service/IMetadataService.sol";
 import {INetworkRestakeDelegator} from "@symbiotic/interfaces/delegator/INetworkRestakeDelegator.sol";
 import {INetworkMiddlewareService} from "@symbiotic/interfaces/service/INetworkMiddlewareService.sol";
@@ -18,7 +19,6 @@ import {IVetoSlasher} from "@symbiotic/interfaces/slasher/IVetoSlasher.sol";
 import {IDelegatorFactory} from "@symbiotic/interfaces/IDelegatorFactory.sol";
 import {IMigratablesFactory} from "@symbiotic/interfaces/common/IMigratablesFactory.sol";
 import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
-import {SimpleCollateral} from "@symbiotic/../test/mocks/SimpleCollateral.sol";
 
 import {IBoltValidatorsV1} from "../src/interfaces/IBoltValidatorsV1.sol";
 import {IBoltMiddlewareV1} from "../src/interfaces/IBoltMiddlewareV1.sol";
@@ -32,6 +32,7 @@ import {BoltConfig} from "../src/lib/Config.sol";
 import {Utils} from "./Utils.sol";
 
 import {SymbioticSetupFixture} from "./fixtures/SymbioticSetup.f.sol";
+import {Token} from "../test/mocks/Token.sol";
 
 contract BoltManagerSymbioticTest is Test {
     using BLS12381 for BLS12381.G1Point;
@@ -60,7 +61,7 @@ contract BoltManagerSymbioticTest is Test {
     IVault public vault;
     INetworkRestakeDelegator public networkRestakeDelegator;
     IVaultConfigurator public vaultConfigurator;
-    SimpleCollateral public collateral;
+    Token public collateral;
 
     address deployer = makeAddr("deployer");
     address admin = makeAddr("admin");
@@ -102,21 +103,21 @@ contract BoltManagerSymbioticTest is Test {
         IVaultConfigurator.InitParams memory vaultConfiguratorInitParams = IVaultConfigurator.InitParams({
             version: IMigratablesFactory(vaultConfigurator.VAULT_FACTORY()).lastVersion(),
             owner: vaultAdmin,
-            vaultParams: IVault.InitParams({
-                collateral: address(collateral),
-                delegator: address(0),
-                slasher: address(0),
-                burner: address(0xdead),
-                epochDuration: EPOCH_DURATION,
-                depositWhitelist: false,
-                isDepositLimit: false,
-                depositLimit: 0,
-                defaultAdminRoleHolder: vaultAdmin,
-                depositWhitelistSetRoleHolder: vaultAdmin,
-                depositorWhitelistRoleHolder: vaultAdmin,
-                isDepositLimitSetRoleHolder: vaultAdmin,
-                depositLimitSetRoleHolder: vaultAdmin
-            }),
+            vaultParams: abi.encode(
+                IVault.InitParams({
+                    collateral: address(collateral),
+                    burner: address(0xdead),
+                    epochDuration: EPOCH_DURATION,
+                    depositWhitelist: false,
+                    isDepositLimit: false,
+                    depositLimit: 0,
+                    defaultAdminRoleHolder: vaultAdmin,
+                    depositWhitelistSetRoleHolder: vaultAdmin,
+                    depositorWhitelistRoleHolder: vaultAdmin,
+                    isDepositLimitSetRoleHolder: vaultAdmin,
+                    depositLimitSetRoleHolder: vaultAdmin
+                })
+            ),
             delegatorIndex: 0, // Use NetworkRestakeDelegator
             delegatorParams: abi.encode(
                 INetworkRestakeDelegator.InitParams({
@@ -133,6 +134,9 @@ contract BoltManagerSymbioticTest is Test {
             slasherIndex: 1, // Use VetoSlasher
             slasherParams: abi.encode(
                 IVetoSlasher.InitParams({
+                    baseParams: IBaseSlasher.BaseParams({
+                        isBurnerHook: false // ?
+                    }),
                     // veto duration must be smaller than epoch duration
                     vetoDuration: uint48(12 hours),
                     resolverSetEpochsDelay: 3
@@ -245,12 +249,10 @@ contract BoltManagerSymbioticTest is Test {
         networkRestakeDelegator.setNetworkLimit(subnetwork, 2 ether);
 
         // --- Add stake to the Vault ---
+        deal(address(collateral), provider, 1 ether);
 
         vm.prank(provider);
-        SimpleCollateral(collateral).mint(1 ether);
-
-        vm.prank(provider);
-        SimpleCollateral(collateral).approve(address(vault), 1 ether);
+        collateral.approve(address(vault), 1 ether);
 
         // deposit collateral from "provider" on behalf of "operator"
         vm.prank(provider);
@@ -258,8 +260,8 @@ contract BoltManagerSymbioticTest is Test {
 
         assertEq(depositedAmount, 1 ether);
         assertEq(mintedShares, 1 ether);
-        assertEq(vault.balanceOf(operator), 1 ether);
-        assertEq(SimpleCollateral(collateral).balanceOf(address(vault)), 1 ether);
+        assertEq(vault.slashableBalanceOf(operator), 1 ether);
+        assertEq(collateral.balanceOf(address(vault)), 1 ether);
     }
 
     /// @notice Compute the hash of a BLS public key
