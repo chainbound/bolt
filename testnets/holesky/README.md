@@ -424,9 +424,9 @@ validator or change any preferences.
 > All of these scripts can be simulated on a Holesky fork using Anvil with the
 > following command:
 >
-> `bash anvil --fork-url https://holesky.drpc.org `
+> `anvil --fork-url https://holesky.drpc.org --port 8545`
 >
-> In order to use this local fork, replace `$HOLESKY_RPC` with localhost:8545 in
+> In order to use this local fork, replace `$HOLESKY_RPC` with `localhost:8545` in
 > all of the `forge` commands below.
 
 To register your validators, we provide the following Foundry script:
@@ -530,11 +530,11 @@ documentation](https://docs.eigenlayer.xyz/) to opt into EigenLayer. Let's go
 through the steps:
 
 1. As an Operator, you register into EigenLayer using
-   [`DelegationManager.registerAsOperator`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/mainnet/src/contracts/core/DelegationManager.sol#L107-L119).
+   [`DelegationManager.registerAsOperator`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/testnet-holesky/src/contracts/core/DelegationManager.sol#L107-L119).
 
 2. You can then use the same account to deposit into a supported EigenLayer
    strategy using
-   [`StrategyManager.depositIntoStrategy`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/mainnet/src/contracts/core/StrategyManager.sol#L105-L110).
+   [`StrategyManager.depositIntoStrategy`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/testnet-holesky/src/contracts/core/StrategyManager.sol#L303-L322).
    This will add the deposit into the collateral of the operator so that Bolt can
    read it. Note that you need to deposit a minimum of `1 ether` of the strategies
    underlying token in order to opt in.
