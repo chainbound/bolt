@@ -26,6 +26,7 @@ remappings = [
   "@relic/=lib/relic-sdk/packages/contracts",
   "@symbiotic/=lib/core/src/",
   "@eigenlayer/=lib/eigenlayer-contracts/",
+  "@eigenlayer-middleware/=lib/eigenlayer-middleware/",
   "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
   "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
   "@openzeppelin-foundry-upgrades/=lib/openzeppelin-foundry-upgrades/",
