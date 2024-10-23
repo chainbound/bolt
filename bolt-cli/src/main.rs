@@ -55,7 +55,7 @@ async fn main() -> Result<()> {
                 println!("Signed delegation messages generated and saved to {}", out);
             }
             KeySource::Dirk { opts } => {
-                let dirk = Dirk::connect(opts.url, opts.tls_credentials).await?;
+                let _dirk = Dirk::connect(opts.url, opts.tls_credentials).await?;
 
                 todo!("generate delegations from dirk");
             }

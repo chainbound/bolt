@@ -52,6 +52,7 @@ pub enum Commands {
 
 /// The action to perform.
 #[derive(Debug, Clone, ValueEnum, Deserialize)]
+#[clap(rename_all = "kebab_case")]
 pub enum Action {
     /// Create a delegation message.
     Delegate,
