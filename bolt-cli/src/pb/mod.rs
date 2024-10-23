@@ -5,8 +5,12 @@ pub mod eth2_signer_api {
 
     #[allow(unused_imports)]
     pub use super::v1::{
-        lister_client::ListerClient, sign_request::Id as SignRequestId,
-        signer_client::SignerClient, Account, DistributedAccount, ListAccountsRequest,
-        ListAccountsResponse, ResponseState, SignRequest, SignResponse,
+        account_manager_client::AccountManagerClient, lister_client::ListerClient,
+        sign_request::Id as SignRequestId, signer_client::SignerClient,
+        wallet_manager_client::WalletManagerClient, Account, DistributedAccount,
+        ListAccountsRequest, ListAccountsResponse, LockAccountRequest, LockAccountResponse,
+        LockWalletRequest, LockWalletResponse, MultisignRequest, MultisignResponse, ResponseState,
+        SignRequest, SignResponse, UnlockAccountRequest, UnlockAccountResponse,
+        UnlockWalletRequest, UnlockWalletResponse,
     };
 }

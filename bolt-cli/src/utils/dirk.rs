@@ -1,24 +1,32 @@
 use std::fs;
 
 use alloy_primitives::B256;
-use ethereum_consensus::crypto::bls::{PublicKey as BlsPublicKey, Signature as BlsSignature};
-use eyre::{Context, Result};
+use ethereum_consensus::crypto::bls::Signature as BlsSignature;
+use eyre::{bail, Context, Result};
 use tonic::transport::{Certificate, Channel, ClientTlsConfig, Identity};
+use tracing::debug;
 
 use crate::{
     cli::TlsCredentials,
     pb::eth2_signer_api::{
-        Account, ListAccountsRequest, ListerClient, SignRequest, SignRequestId, SignerClient,
+        Account, AccountManagerClient, ListAccountsRequest, ListerClient, ResponseState,
+        SignRequest, SignRequestId, SignerClient, UnlockAccountRequest,
     },
 };
 
 /// A Dirk remote signer.
+///
+/// Available services:
+/// - `Lister`: List accounts in the keystore.
+/// - `Signer`: Request a signature from the remote signer.
+/// - `AccountManager`: Manage accounts in the keystore (lock and unlock accounts).
 ///
 /// Reference: https://github.com/attestantio/dirk
 #[derive(Clone)]
 pub struct Dirk {
     lister: ListerClient<Channel>,
     signer: SignerClient<Channel>,
+    account_mng: AccountManagerClient<Channel>,
 }
 
 impl Dirk {
@@ -30,34 +38,76 @@ impl Dirk {
 
         let lister = ListerClient::new(conn.clone());
         let signer = SignerClient::new(conn.clone());
+        let account_mng = AccountManagerClient::new(conn);
 
-        Ok(Self { lister, signer })
+        Ok(Self { lister, signer, account_mng })
     }
 
     /// List all accounts in the keystore.
-    pub async fn list_accounts(&mut self, paths: Vec<String>) -> Result<Vec<Account>> {
-        let accs = self.lister.list_accounts(ListAccountsRequest { paths }).await?;
+    pub async fn list_accounts(&mut self, wallet_path: String) -> Result<Vec<Account>> {
+        // Request all accounts in the given path. Only one path at a time
+        // as done in https://github.com/wealdtech/go-eth2-wallet-dirk/blob/182f99b22b64d01e0d4ae67bf47bb055763465d7/grpc.go#L121
+        let req = ListAccountsRequest { paths: vec![wallet_path] };
+        let res = self.lister.list_accounts(req).await?.into_inner();
 
-        Ok(accs.into_inner().accounts)
+        if !matches!(res.state(), ResponseState::Succeeded) {
+            bail!("Failed to list accounts: {:?}", res);
+        }
+
+        debug!("{} Accounts listed successfully", res.accounts.len());
+        Ok(res.accounts)
+    }
+
+    /// Unlock an account in the keystore with the given passphrase.
+    pub async fn unlock_account(
+        &mut self,
+        account_name: String,
+        passphrase: String,
+    ) -> Result<bool> {
+        let pf_bytes = passphrase.as_bytes().to_vec();
+        let req = UnlockAccountRequest { account: account_name.clone(), passphrase: pf_bytes };
+        let res = self.account_mng.unlock(req).await?.into_inner();
+
+        match res.state() {
+            ResponseState::Succeeded => {
+                debug!("Unlock request succeeded for account {}", account_name);
+                Ok(true)
+            }
+            ResponseState::Denied => {
+                debug!("Unlock request denied for account {}", account_name);
+                Ok(false)
+            }
+            ResponseState::Unknown => bail!("Unknown response from unlock account: {:?}", res),
+            ResponseState::Failed => bail!("Failed to unlock account: {:?}", res),
+        }
     }
 
     /// Request a signature from the remote signer.
     pub async fn request_signature(
         &mut self,
-        pubkey: BlsPublicKey,
+        account: &Account,
         hash: B256,
         domain: B256,
     ) -> Result<BlsSignature> {
         let req = SignRequest {
             data: hash.to_vec(),
             domain: domain.to_vec(),
-            id: Some(SignRequestId::PublicKey(pubkey.to_vec())),
+            id: Some(SignRequestId::Account(account.name.clone())),
         };
 
-        let res = self.signer.sign(req).await?;
-        let sig = res.into_inner().signature;
-        let sig = BlsSignature::try_from(sig.as_slice()).wrap_err("Failed to parse signature")?;
+        let res = self.signer.sign(req).await?.into_inner();
 
+        if !matches!(res.state(), ResponseState::Succeeded) {
+            bail!("Failed to sign data: {:?}", res);
+        }
+        if res.signature.is_empty() {
+            bail!("Empty signature returned");
+        }
+
+        let sig = BlsSignature::try_from(res.signature.as_slice())
+            .wrap_err("Failed to parse signature")?;
+
+        debug!("Signature request succeeded for account {}", account.name);
         Ok(sig)
     }
 }
@@ -133,7 +183,7 @@ mod tests {
 
         let mut dirk = Dirk::connect(url, cred).await?;
 
-        let accounts = dirk.list_accounts(vec!["wallet1".to_string()]).await?;
+        let accounts = dirk.list_accounts("wallet1".to_string()).await?;
         println!("Dirk Accounts: {:?}", accounts);
 
         // make sure to stop the dirk server

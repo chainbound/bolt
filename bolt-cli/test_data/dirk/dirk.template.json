@@ -19,5 +19,8 @@
     "localhost": {
       "wallet1": "All"
     }
+  },
+  "unlocker": {
+    "wallet-passphrases": ["file://$PWD/wallet1-pf.txt"]
   }
 }

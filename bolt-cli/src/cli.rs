@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 use crate::utils::keystore::DEFAULT_KEYSTORE_PASSWORD;
 
-/// A CLI tool to generate signed delegation messages for BLS keys.
+/// A CLI tool to interact with Bolt Protocol ✨
 #[derive(Parser, Debug, Clone, Deserialize)]
 #[command(author, version, about, long_about = None)]
 pub struct Opts {
@@ -119,13 +119,18 @@ pub struct DirkOpts {
     #[clap(long, env = "DIRK_URL")]
     pub url: String,
 
+    /// The path of the wallets in the DIRK keystore.
+    #[clap(long, env = "DIRK_WALLET_PATH")]
+    pub wallet_path: String,
+
+    /// The passphrases to unlock the wallet in the DIRK keystore.
+    /// If multiple are provided, they are tried in order until one works.
+    #[clap(long, env = "DIRK_PASSPHRASES", value_delimiter = ',', hide_env_values = true)]
+    pub passphrases: Option<Vec<String>>,
+
     /// The TLS credentials for connecting to the DIRK keystore.
     #[clap(flatten)]
     pub tls_credentials: TlsCredentials,
-
-    /// The paths to the accounts in the DIRK keystore.
-    #[clap(long, env = "DIRK_ACCOUNTS", value_delimiter = ',', hide_env_values = true)]
-    pub accounts: Vec<String>,
 }
 
 /// TLS credentials for connecting to a remote server.

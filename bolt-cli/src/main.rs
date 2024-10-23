@@ -60,10 +60,12 @@ async fn main() -> Result<()> {
             KeySource::Dirk { opts } => {
                 let mut dirk = Dirk::connect(opts.url, opts.tls_credentials).await?;
                 let delegatee_pubkey = parse_bls_public_key(&delegatee_pubkey)?;
+
                 let signed_messages = delegation::generate_from_dirk(
                     &mut dirk,
                     delegatee_pubkey,
-                    opts.accounts,
+                    opts.wallet_path,
+                    opts.passphrases,
                     chain,
                     action,
                 )
@@ -90,8 +92,9 @@ async fn main() -> Result<()> {
                 println!("Pubkeys generated and saved to {}", out);
             }
             KeySource::Dirk { opts } => {
+                // Note: we don't need to unlock wallets to list pubkeys
                 let mut dirk = Dirk::connect(opts.url, opts.tls_credentials).await?;
-                let accounts = dirk.list_accounts(opts.accounts).await?;
+                let accounts = dirk.list_accounts(opts.wallet_path).await?;
                 let pubkeys = pubkeys::list_from_dirk_accounts(&accounts)?;
 
                 write_to_file(&out, &pubkeys)?;

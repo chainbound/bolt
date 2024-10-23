@@ -1,8 +1,9 @@
+use alloy_primitives::B256;
 use alloy_signer::k256::sha2::{Digest, Sha256};
 use ethereum_consensus::crypto::{
     PublicKey as BlsPublicKey, SecretKey as BlsSecretKey, Signature as BlsSignature,
 };
-use eyre::Result;
+use eyre::{bail, Result};
 use lighthouse_eth2_keystore::Keystore;
 use serde::Serialize;
 use tracing::debug;
@@ -70,6 +71,7 @@ pub fn generate_from_keystore(
 ) -> Result<Vec<SignedMessage>> {
     let keystores_paths = keystore_paths(keys_path)?;
     let mut signed_messages = Vec::with_capacity(keystores_paths.len());
+    debug!("Found {} keys in the keystore", keystores_paths.len());
 
     for path in keystores_paths {
         let ks = Keystore::from_json_file(path).map_err(KeystoreError::Eth2Keystore)?;
@@ -105,35 +107,47 @@ pub fn generate_from_keystore(
 pub async fn generate_from_dirk(
     dirk: &mut Dirk,
     delegatee_pubkey: BlsPublicKey,
-    account_paths: Vec<String>,
+    account_path: String,
+    passphrases: Option<Vec<String>>,
     chain: Chain,
     action: Action,
 ) -> Result<Vec<SignedMessage>> {
-    let mut signed_messages = Vec::new();
-
     // first read the accounts from the remote keystore
-    let accounts = dirk.list_accounts(account_paths).await?;
-    debug!("Found {} remote accounts", accounts.len());
+    let accounts = dirk.list_accounts(account_path).await?;
+    debug!("Found {} remote accounts to sign with", accounts.len());
+
+    let mut signed_messages = Vec::with_capacity(accounts.len());
 
     // specify the signing domain (needs to be included in the signing request)
-    let domain = compute_domain_from_mask(chain.fork_version());
+    let domain = B256::from(compute_domain_from_mask(chain.fork_version()));
 
     for account in accounts {
         // for each available pubkey we control, sign a delegation message
         let pubkey = BlsPublicKey::try_from(account.public_key.as_slice())?;
 
+        // Note: before signing, we must unlock the account
+        if let Some(ref passphrases) = passphrases {
+            for passphrase in passphrases {
+                if dirk.unlock_account(account.name.clone(), passphrase.clone()).await? {
+                    break;
+                }
+            }
+        } else {
+            bail!("A passphrase is required in order to sign messages remotely with Dirk");
+        }
+
         match action {
             Action::Delegate => {
                 let message = DelegationMessage::new(pubkey.clone(), delegatee_pubkey.clone());
                 let signing_root = compute_commit_boost_signing_root(message.digest(), &chain)?;
-                let signature = dirk.request_signature(pubkey, signing_root, domain.into()).await?;
+                let signature = dirk.request_signature(&account, signing_root, domain).await?;
                 let signed = SignedDelegation { message, signature };
                 signed_messages.push(SignedMessage::Delegation(signed));
             }
             Action::Revoke => {
                 let message = RevocationMessage::new(pubkey.clone(), delegatee_pubkey.clone());
                 let signing_root = compute_commit_boost_signing_root(message.digest(), &chain)?;
-                let signature = dirk.request_signature(pubkey, signing_root, domain.into()).await?;
+                let signature = dirk.request_signature(&account, signing_root, domain).await?;
                 let signed = SignedRevocation { message, signature };
                 signed_messages.push(SignedMessage::Revocation(signed));
             }
