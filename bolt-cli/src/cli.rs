@@ -117,6 +117,28 @@ pub struct DirkOpts {
     /// The URL of the DIRK keystore.
     #[clap(long, env = "DIRK_URL")]
     pub url: String,
+
+    /// The TLS credentials for connecting to the DIRK keystore.
+    #[clap(flatten)]
+    pub tls_credentials: TlsCredentials,
+
+    /// The paths to the accounts in the DIRK keystore.
+    #[clap(long, env = "DIRK_ACCOUNTS", value_delimiter = ',', hide_env_values = true)]
+    pub accounts: Vec<String>,
+}
+
+/// TLS credentials for connecting to a remote server.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Parser)]
+pub struct TlsCredentials {
+    /// Path to the client certificate file. (.crt)
+    #[clap(long, env = "CLIENT_CERT_PATH")]
+    pub client_cert_path: String,
+    /// Path to the client key file. (.key)
+    #[clap(long, env = "CLIENT_KEY_PATH")]
+    pub client_key_path: String,
+    /// Path to the CA certificate file. (.crt)
+    #[clap(long, env = "CA_CERT_PATH")]
+    pub ca_cert_path: Option<String>,
 }
 
 /// Supported chains for the CLI

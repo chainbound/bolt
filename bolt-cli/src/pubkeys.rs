@@ -2,7 +2,10 @@ use ethereum_consensus::crypto::bls::{PublicKey as BlsPublicKey, SecretKey as Bl
 use eyre::Result;
 use lighthouse_eth2_keystore::Keystore;
 
-use crate::utils::keystore::{keystore_paths, KeystoreError, KeystoreSecret};
+use crate::{
+    pb::Account,
+    utils::keystore::{keystore_paths, KeystoreError, KeystoreSecret},
+};
 
 /// Derive public keys from the provided secret keys.
 pub fn list_from_local_keys(secret_keys: &[String]) -> Result<Vec<BlsPublicKey>> {
@@ -29,6 +32,18 @@ pub fn list_from_keystore(
         let password = keystore_secret.get(ks.pubkey()).ok_or(KeystoreError::MissingPassword)?;
         let kp = ks.decrypt_keypair(password.as_bytes()).map_err(KeystoreError::Eth2Keystore)?;
         let pubkey = BlsPublicKey::try_from(kp.pk.serialize().to_vec().as_ref())?;
+        pubkeys.push(pubkey);
+    }
+
+    Ok(pubkeys)
+}
+
+/// Derive public keys from the provided dirk accounts.
+pub fn list_from_dirk_accounts(accounts: &[Account]) -> Result<Vec<BlsPublicKey>> {
+    let mut pubkeys = Vec::with_capacity(accounts.len());
+
+    for acc in accounts {
+        let pubkey = BlsPublicKey::try_from(acc.public_key.as_slice())?;
         pubkeys.push(pubkey);
     }
 
