@@ -31,7 +31,7 @@ import {StrategyManagerStorage} from "@eigenlayer/src/contracts/core/StrategyMan
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 /// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
 /// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
-contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, IServiceManager, OwnableUpgradeable, UUPSUpgradeable {
+contract BoltEigenLayerMiddlewareV2 is IBoltMiddlewareV1, IServiceManager, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
