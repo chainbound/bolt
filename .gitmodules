@@ -13,3 +13,6 @@
 [submodule "bolt-contracts/lib/openzeppelin-foundry-upgrades"]
 	path = bolt-contracts/lib/openzeppelin-foundry-upgrades
 	url = https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades
+[submodule "bolt-contracts/lib/eigenlayer-contracts"]
+	path = bolt-contracts/lib/eigenlayer-contracts
+	url = https://github.com/layr-labs/eigenlayer-contracts
