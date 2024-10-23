@@ -524,31 +524,66 @@ If all goes well, your Symbiotic operator was registered into Bolt.
 > The supported strategies can be found in
 > [`deployments.json`](../../bolt-contracts/config/holesky/deployments.json).
 
-The Operator will be represented by an Ethereum address that needs to follow the
-standard procedure outlined in the [EigenLayer
-documentation](https://docs.eigenlayer.xyz/) to opt into EigenLayer. Let's go
-through the steps:
+If you're not registered as an operator in EigenLayer yet, you need to do so by
+following [the official
+guide](https://docs.eigenlayer.xyz/eigenlayer/operator-guides/operator-introduction).
+This requires installing the EigenLayer CLI and opt into the protocol by
+registering via the
+[`DelegationManager.registerAsOperator`](https://docs.eigenlayer.xyz/eigenlayer/operator-guides/operator-installation)
+function.
 
-1. As an Operator, you register into EigenLayer using
-   [`DelegationManager.registerAsOperator`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/testnet-holesky/src/contracts/core/DelegationManager.sol#L107-L119).
+After that you need to deposit into a supported EigenLayer
+strategy using
+[`StrategyManager.depositIntoStrategy`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/testnet-holesky/src/contracts/core/StrategyManager.sol#L303-L322).
+This will add the deposit into the collateral of the operator so that Bolt can
+read it. Note that you need to deposit a minimum of `1 ether` of the strategies
+underlying token in order to opt in.
 
-2. You can then use the same account to deposit into a supported EigenLayer
-   strategy using
-   [`StrategyManager.depositIntoStrategy`](https://github.com/Layr-Labs/eigenlayer-contracts/blob/testnet-holesky/src/contracts/core/StrategyManager.sol#L303-L322).
-   This will add the deposit into the collateral of the operator so that Bolt can
-   read it. Note that you need to deposit a minimum of `1 ether` of the strategies
-   underlying token in order to opt in.
+We've provided a script to facilitate the procedure. If you want to use it,
+please set the operator private key to an `OPERATOR_SK` environment variable.
+
+First, you need to first configure the deposit details in this JSON
+file:
+
+```bash
+$EDITOR ./config/holesky/operators/eigenlayer/depositIntoStrategy.json
+```
+
+Then you can run the following Forge script:
+
+```bash
+forge script script/holesky/operators/RegisterEigenLayerOperator.s.sol \
+  --sig "S01_depositIntoStrategy()" \
+  --rpc-url $HOLESKY_RPC \
+  -vvvv \
+  --broadcast
+```
 
 **Internal Steps**
 
-Set the operator private key to an `OPERATOR_SK` environment variable, and then
-run the following Forge script from the `bolt-contracts` directory:
+After having deposited collateral into a strategy you need to register into the
+Bolt AVS. We've provided a script to facilitate the procedure. If you want to
+use it, please set the operator private key to an `OPERATOR_SK` environment
+variable, and then run the following Forge script from the `bolt-contracts`
+directory:
 
 ```bash
-forge script script/holesky/operators/RegisterEigenLayerOperator.s.sol --rpc-url $HOLESKY_RPC -vvvv --broadcast
+forge script script/holesky/operators/RegisterEigenLayerOperator.s.sol \
+  --sig "S02_registerIntoBoltAVS" \
+  --rpc-url $HOLESKY_RPC \
+  -vvvv \
+  --broadcast
 ```
 
-If all goes well, your EigenLayer operator was registered into Bolt.
+To check if your operator is correctly registered, set the operator public key
+in the `OPERATOR_PK` environment variable and run the following script:
+
+```bash
+forge script script/holesky/operators/RegisterEigenLayerOperator.s.sol \
+  --sig "S03_checkOperatorRegistration" \
+  --rpc-url $HOLESKY_RPC \
+  -vvvv
+```
 
 # Reference
 
@@ -559,13 +594,14 @@ sidecar. You can see them in your terminal by running the Bolt sidecar binary
 with the `--help` flag:
 
 ```
+
 Command-line options for the Bolt sidecar
 
 Usage: bolt-sidecar [OPTIONS] --validator-indexes <VALIDATOR_INDEXES> --engine-jwt-hex <ENGINE_JWT_HEX> --fee-recipient <FEE_RECIPIENT> --builder-private-key <BUILDER_PRIVATE_KEY> --commitment-private-key <COMMITMENT_PRIVATE_KEY> <--constraint-private-key <CONSTRAINT_PRIVATE_KEY>|--commit-boost-signer-url <COMMIT_BOOST_SIGNER_URL>|--keystore-password <KEYSTORE_PASSWORD>|--keystore-secrets-path <KEYSTORE_SECRETS_PATH>>
 
 Options:
-      --port <PORT>
-          Port to listen on for incoming JSON-RPC requests of the Commitments API. This port should be open on your firewall in order to receive external requests!
+--port <PORT>
+Port to listen on for incoming JSON-RPC requests of the Commitments API. This port should be open on your firewall in order to receive external requests!
 
           [env: BOLT_SIDECAR_PORT=]
           [default: 8017]
@@ -709,8 +745,9 @@ Options:
       --disable-metrics
           [env: BOLT_SIDECAR_DISABLE_METRICS=]
 
-  -h, --help
-          Print help (see a summary with '-h')
+-h, --help
+Print help (see a summary with '-h')
+
 ```
 
 ## Delegations and signing options for Native and Docker Compose Mode
