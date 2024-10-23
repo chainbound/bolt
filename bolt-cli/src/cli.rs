@@ -38,15 +38,15 @@ pub enum Commands {
         source: KeySource,
     },
 
-    /// Output a list of pubkeys from a keystore
+    /// Output a list of pubkeys in JSON format.
     Pubkeys {
-        /// The options for reading the keystore file.
-        #[clap(flatten)]
-        keystore_opts: KeystoreOpts,
-
         /// The output file for the pubkeys.
         #[clap(long, env = "OUTPUT_FILE_PATH", default_value = "pubkeys.json")]
         out: String,
+
+        /// The source of the private keys from which to extract the pubkeys.
+        #[clap(subcommand)]
+        source: KeySource,
     },
 }
 
@@ -61,25 +61,32 @@ pub enum Action {
 
 #[derive(Debug, Clone, Parser, Deserialize)]
 pub enum KeySource {
-    /// Use local private keys to generate the signed messages.
-    Local {
-        /// The private key in hex format (required if source is local).
+    /// Use local secret keys to generate the signed messages.
+    SecretKeys {
+        /// The private key in hex format.
         /// Multiple secret keys must be seperated by commas.
         #[clap(long, env = "SECRET_KEYS", value_delimiter = ',', hide_env_values = true)]
         secret_keys: Vec<String>,
     },
 
-    /// Use an EIP-2335 keystore folder to generate the signed messages.
-    Keystore {
-        /// The options for reading the keystore file.
+    /// Use an EIP-2335 filesystem keystore directory to generate the signed messages.
+    LocalKeystore {
+        /// The options for reading the keystore directory.
         #[clap(flatten)]
-        opts: KeystoreOpts,
+        opts: LocalKeystoreOpts,
+    },
+
+    /// Use a remote DIRK keystore to generate the signed messages.
+    Dirk {
+        /// The options for connecting to the DIRK keystore.
+        #[clap(flatten)]
+        opts: DirkOpts,
     },
 }
 
 /// Options for reading a keystore folder.
 #[derive(Debug, Clone, Deserialize, Parser)]
-pub struct KeystoreOpts {
+pub struct LocalKeystoreOpts {
     /// The path to the keystore file.
     #[clap(long, env = "KEYSTORE_PATH", default_value = "validators")]
     pub path: String,
@@ -87,12 +94,12 @@ pub struct KeystoreOpts {
     /// The password for the keystore files in the path.
     /// Assumes all keystore files have the same password.
     #[clap(
-                long,
-                env = "KEYSTORE_PASSWORD",
-                hide_env_values = true,
-                default_value = DEFAULT_KEYSTORE_PASSWORD,
-                conflicts_with = "password_path"
-            )]
+        long,
+        env = "KEYSTORE_PASSWORD",
+        hide_env_values = true,
+        default_value = DEFAULT_KEYSTORE_PASSWORD,
+        conflicts_with = "password_path"
+    )]
     pub password: Option<String>,
 
     #[clap(
@@ -102,6 +109,14 @@ pub struct KeystoreOpts {
         conflicts_with = "password"
     )]
     pub password_path: Option<String>,
+}
+
+/// Options for connecting to a DIRK keystore.
+#[derive(Debug, Clone, Deserialize, Parser)]
+pub struct DirkOpts {
+    /// The URL of the DIRK keystore.
+    #[clap(long, env = "DIRK_URL")]
+    pub url: String,
 }
 
 /// Supported chains for the CLI

@@ -4,6 +4,9 @@ use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
 use eyre::{Context, Result};
 use serde::Serialize;
 
+/// Utilities for working with DIRK remote keystores.
+pub mod dirk;
+
 /// Utilities and types for EIP-2335 keystore files.
 pub mod keystore;
 

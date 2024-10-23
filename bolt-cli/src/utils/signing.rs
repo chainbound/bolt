@@ -1,4 +1,4 @@
-use alloy::primitives::B256;
+use alloy_primitives::B256;
 use blst::{min_pk::Signature, BLST_ERROR};
 use ethereum_consensus::{
     crypto::PublicKey as BlsPublicKey,
@@ -17,6 +17,8 @@ pub const BLS_DST_PREFIX: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_"
 /// Helper function to compute the signing root for a message
 pub fn compute_commit_boost_signing_root(message: [u8; 32], chain: &Chain) -> Result<B256> {
     compute_signing_root(&message, compute_domain_from_mask(chain.fork_version()))
+        // Ethereum-consensus uses a different version of alloy so we need to do this cast
+        .map(|r| B256::from_slice(r.to_vec().as_slice()))
         .map_err(|e| eyre::eyre!("Failed to compute signing root: {}", e))
 }
 

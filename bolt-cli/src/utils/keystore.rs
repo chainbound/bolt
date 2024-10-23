@@ -6,7 +6,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use eyre::{Context, Result};
+use eyre::{bail, Context, ContextCompat, Result};
+
+use crate::cli::LocalKeystoreOpts;
 
 /// Default password used for keystores in the test vectors.
 ///
@@ -23,6 +25,7 @@ pub enum KeystoreError {
     MissingPassword,
 }
 
+/// EIP-2335 keystore secret kind.
 pub enum KeystoreSecret {
     /// When using a unique password for all validators in the keystore
     /// (e.g. for Prysm keystore)
@@ -33,14 +36,26 @@ pub enum KeystoreSecret {
 }
 
 impl KeystoreSecret {
+    /// Create a new [`KeystoreSecret`] from the provided [`LocalKeystoreOpts`].
+    pub fn from_keystore_options(opts: &LocalKeystoreOpts) -> Result<Self> {
+        if let Some(password_path) = &opts.password_path {
+            Ok(KeystoreSecret::from_directory(password_path)?)
+        } else if let Some(password) = &opts.password {
+            Ok(KeystoreSecret::from_unique_password(password.clone()))
+        } else {
+            // This case is prevented upstream by clap's validation.
+            bail!("Either `password_path` or `password` must be provided")
+        }
+    }
+
     /// Load the keystore passwords from a directory containing individual password files.
-    pub fn from_directory(root_dir: String) -> Result<Self> {
+    pub fn from_directory(root_dir: &str) -> Result<Self> {
         let mut secrets = HashMap::new();
         for entry in fs::read_dir(root_dir)? {
             let entry = entry.wrap_err("Failed to read secrets directory entry")?;
             let path = entry.path();
 
-            let filename = path.file_name().expect("secret file name").to_string_lossy();
+            let filename = path.file_name().wrap_err("Secret file name")?.to_string_lossy();
             let secret = fs::read_to_string(&path).wrap_err("Failed to read secret file")?;
             secrets.insert(filename.trim_start_matches("0x").to_string(), secret);
         }

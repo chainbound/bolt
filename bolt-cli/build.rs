@@ -1,7 +1,16 @@
-// Perform the code generation for the protobuf files.
-fn main() -> std::io::Result<()> {
-    let mut proto_build = prost_build::Config::new();
+use std::{fs, io, path::Path};
 
-    proto_build.out_dir("src/pb");
-    proto_build.compile_protos(&["proto/eth2-signer-api/lister.proto"], &["proto/eth2-signer-api"])
+const PB_OUT_DIR: &str = "src/pb";
+
+// Perform the code generation for the protobuf files.
+fn main() -> io::Result<()> {
+    // create the /src/pb directory if it doesn't exist
+    if !Path::new(PB_OUT_DIR).exists() {
+        fs::create_dir(PB_OUT_DIR)?;
+    }
+
+    tonic_build::configure().build_client(true).out_dir(PB_OUT_DIR).compile_protos(
+        &["proto/eth2-signer-api/v1/lister.proto"],
+        &["proto/eth2-signer-api/v1/", "proto/eth2-signer-api/"],
+    )
 }

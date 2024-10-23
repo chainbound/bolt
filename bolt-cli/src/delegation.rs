@@ -1,4 +1,4 @@
-use alloy::signers::k256::sha2::{Digest, Sha256};
+use alloy_signer::k256::sha2::{Digest, Sha256};
 use ethereum_consensus::crypto::{
     PublicKey as BlsPublicKey, SecretKey as BlsSecretKey, Signature as BlsSignature,
 };
@@ -21,7 +21,7 @@ use crate::{
 /// - Compute the signing roots and sign the messages
 /// - Return the signed messages
 pub fn generate_from_local_keys(
-    secret_keys: &Vec<String>,
+    secret_keys: &[String],
     delegatee_pubkey: BlsPublicKey,
     chain: &Chain,
     action: Action,
@@ -210,7 +210,7 @@ mod tests {
         let keys_path = env!("CARGO_MANIFEST_DIR").to_string() + "/test_data/lighthouse/validators";
         let secrets_path = env!("CARGO_MANIFEST_DIR").to_string() + "/test_data/lighthouse/secrets";
 
-        let keystore_secret = KeystoreSecret::from_directory(secrets_path)?;
+        let keystore_secret = KeystoreSecret::from_directory(&secrets_path)?;
 
         let delegatee_pubkey = "0x83eeddfac5e60f8fe607ee8713efb8877c295ad9f8ca075f4d8f6f2ae241a30dd57f78f6f3863a9fe0d5b5db9d550b93";
         let delegatee_pubkey = parse_bls_public_key(delegatee_pubkey)?;
