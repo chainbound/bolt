@@ -17,7 +17,8 @@ use crate::{
 /// Reference: https://github.com/attestantio/dirk
 #[derive(Clone)]
 pub struct Dirk {
-    conn: Channel,
+    lister: ListerClient<Channel>,
+    signer: SignerClient<Channel>,
 }
 
 impl Dirk {
@@ -27,33 +28,33 @@ impl Dirk {
         let tls_config = compose_credentials(credentials)?;
         let conn = Channel::builder(addr).tls_config(tls_config)?.connect().await?;
 
-        Ok(Self { conn })
+        let lister = ListerClient::new(conn.clone());
+        let signer = SignerClient::new(conn.clone());
+
+        Ok(Self { lister, signer })
     }
 
     /// List all accounts in the keystore.
-    pub async fn list_accounts(&self, paths: Vec<String>) -> Result<Vec<Account>> {
-        let mut lister = ListerClient::new(self.conn.clone());
-        let accs = lister.list_accounts(ListAccountsRequest { paths }).await?;
+    pub async fn list_accounts(&mut self, paths: Vec<String>) -> Result<Vec<Account>> {
+        let accs = self.lister.list_accounts(ListAccountsRequest { paths }).await?;
 
         Ok(accs.into_inner().accounts)
     }
 
     /// Request a signature from the remote signer.
     pub async fn request_signature(
-        &self,
+        &mut self,
         pubkey: BlsPublicKey,
         hash: B256,
         domain: B256,
     ) -> Result<BlsSignature> {
-        let mut signer = SignerClient::new(self.conn.clone());
-
         let req = SignRequest {
             data: hash.to_vec(),
             domain: domain.to_vec(),
             id: Some(SignRequestId::PublicKey(pubkey.to_vec())),
         };
 
-        let res = signer.sign(req).await?;
+        let res = self.signer.sign(req).await?;
         let sig = res.into_inner().signature;
         let sig = BlsSignature::try_from(sig.as_slice()).wrap_err("Failed to parse signature")?;
 
@@ -83,21 +84,46 @@ fn compose_credentials(creds: TlsCredentials) -> Result<ClientTlsConfig> {
 
 #[cfg(test)]
 mod tests {
+    use std::{process::Command, time::Duration};
+
     use super::*;
 
-    /// Test connecting to a DIRK server
+    /// Test connecting to a DIRK server and listing available accounts.
     ///
-    /// This test should be run manually against a running DIRK server.
-    /// Eventually this could become part of the entire test setup but for now it's ignored.
+    /// ```shell
+    /// cargo test --package bolt-cli --bin bolt-cli -- utils::dirk::tests::test_dirk_connection_e2e
+    /// --exact --show-output --ignored
+    /// ```
     #[tokio::test]
     #[ignore]
-    async fn test_connect_to_dirk() -> eyre::Result<()> {
+    async fn test_dirk_connection_e2e() -> eyre::Result<()> {
         // Init the default rustls provider
         let _ = rustls::crypto::ring::default_provider().install_default();
 
-        let url = "https://localhost:9091".to_string();
-
         let test_data_dir = env!("CARGO_MANIFEST_DIR").to_string() + "/test_data/dirk";
+
+        // Init the DIRK config file
+        init_dirk_config(test_data_dir.clone())?;
+
+        // Check if dirk is installed (in $PATH)
+        if Command::new("dirk")
+            .arg("--base-dir")
+            .arg(&test_data_dir)
+            .arg("--help")
+            .status()
+            .is_err()
+        {
+            eprintln!("DIRK is not installed in $PATH");
+            return Ok(());
+        }
+
+        // Start the DIRK server in the background
+        let mut dirk_proc = Command::new("dirk").arg("--base-dir").arg(&test_data_dir).spawn()?;
+
+        // Wait for some time for the server to start up
+        tokio::time::sleep(Duration::from_secs(3)).await;
+
+        let url = "https://localhost:9091".to_string();
 
         let cred = TlsCredentials {
             client_cert_path: test_data_dir.clone() + "/client1.crt",
@@ -105,10 +131,26 @@ mod tests {
             ca_cert_path: Some(test_data_dir.clone() + "/security/ca.crt"),
         };
 
-        let dirk = Dirk::connect(url, cred).await?;
+        let mut dirk = Dirk::connect(url, cred).await?;
 
         let accounts = dirk.list_accounts(vec!["wallet1".to_string()]).await?;
         println!("Dirk Accounts: {:?}", accounts);
+
+        // make sure to stop the dirk server
+        dirk_proc.kill()?;
+
+        Ok(())
+    }
+
+    fn init_dirk_config(test_data_dir: String) -> eyre::Result<()> {
+        // read the template json file from test_data
+        let template_path = test_data_dir.clone() + "/dirk.template.json";
+        let template = fs::read_to_string(template_path).wrap_err("Failed to read template")?;
+
+        // change the occurrence of $PWD to the current working directory in the template
+        let new_file = test_data_dir.clone() + "/dirk.json";
+        let new_content = template.replace("$PWD", &test_data_dir);
+        fs::write(new_file, new_content).wrap_err("Failed to write dirk config file")?;
 
         Ok(())
     }

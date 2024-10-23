@@ -5,12 +5,14 @@ use ethereum_consensus::crypto::{
 use eyre::Result;
 use lighthouse_eth2_keystore::Keystore;
 use serde::Serialize;
+use tracing::debug;
 
 use crate::{
     cli::{Action, Chain},
     utils::{
+        dirk::Dirk,
         keystore::{keystore_paths, KeystoreError, KeystoreSecret},
-        signing::compute_commit_boost_signing_root,
+        signing::{compute_commit_boost_signing_root, compute_domain_from_mask},
     },
 };
 
@@ -90,6 +92,48 @@ pub fn generate_from_keystore(
                 let signing_root = compute_commit_boost_signing_root(message.digest(), &chain)?;
                 let signature = validator_private_key.sign(signing_root.0.into());
                 let signature = BlsSignature::try_from(signature.serialize().as_ref())?;
+                let signed = SignedRevocation { message, signature };
+                signed_messages.push(SignedMessage::Revocation(signed));
+            }
+        }
+    }
+
+    Ok(signed_messages)
+}
+
+/// Generate signed delegations/revocations using a remote Dirk signer
+pub async fn generate_from_dirk(
+    dirk: &mut Dirk,
+    delegatee_pubkey: BlsPublicKey,
+    account_paths: Vec<String>,
+    chain: Chain,
+    action: Action,
+) -> Result<Vec<SignedMessage>> {
+    let mut signed_messages = Vec::new();
+
+    // first read the accounts from the remote keystore
+    let accounts = dirk.list_accounts(account_paths).await?;
+    debug!("Found {} remote accounts", accounts.len());
+
+    // specify the signing domain (needs to be included in the signing request)
+    let domain = compute_domain_from_mask(chain.fork_version());
+
+    for account in accounts {
+        // for each available pubkey we control, sign a delegation message
+        let pubkey = BlsPublicKey::try_from(account.public_key.as_slice())?;
+
+        match action {
+            Action::Delegate => {
+                let message = DelegationMessage::new(pubkey.clone(), delegatee_pubkey.clone());
+                let signing_root = compute_commit_boost_signing_root(message.digest(), &chain)?;
+                let signature = dirk.request_signature(pubkey, signing_root, domain.into()).await?;
+                let signed = SignedDelegation { message, signature };
+                signed_messages.push(SignedMessage::Delegation(signed));
+            }
+            Action::Revoke => {
+                let message = RevocationMessage::new(pubkey.clone(), delegatee_pubkey.clone());
+                let signing_root = compute_commit_boost_signing_root(message.digest(), &chain)?;
+                let signature = dirk.request_signature(pubkey, signing_root, domain.into()).await?;
                 let signed = SignedRevocation { message, signature };
                 signed_messages.push(SignedMessage::Revocation(signed));
             }
