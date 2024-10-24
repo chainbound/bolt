@@ -28,7 +28,7 @@ mev_params:
   # instead of MEV-Boost by Flashbots
   bolt_boost_image: ghcr.io/chainbound/bolt-boost:0.1.0
   bolt_sidecar_image: ghcr.io/chainbound/bolt-sidecar:0.1.0
-  helix_relay_image: ghcr.io/chainbound/helix:0.1.0
+  helix_relay_image: ghcr.io/chainbound/helix:v0.3.0-alpha.rc1
   mev_relay_image: ghcr.io/chainbound/bolt-relay:0.1.0
   mev_builder_image: ghcr.io/chainbound/bolt-builder:0.1.0
   mev_boost_image: ghcr.io/chainbound/bolt-mev-boost:0.1.0
