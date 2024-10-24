@@ -160,7 +160,7 @@ mod tests {
     /// Test connecting to a DIRK server and listing available accounts.
     ///
     /// ```shell
-    /// cargo test --package bolt-cli --bin bolt-cli -- utils::dirk::tests::test_dirk_connection_e2e
+    /// cargo test --package bolt -- utils::dirk::tests::test_dirk_connection_e2e
     /// --exact --show-output --ignored
     /// ```
     #[tokio::test]

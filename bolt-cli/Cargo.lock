@@ -593,7 +593,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "bolt-cli"
+name = "bolt"
 version = "0.1.0"
 dependencies = [
  "alloy-primitives 0.8.9",

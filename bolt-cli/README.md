@@ -22,7 +22,7 @@ cd bolt-cli
 cargo install --path . --force
 
 # test the installation
-bolt-cli --version
+bolt --version
 ```
 
 ## Usage
@@ -49,11 +49,11 @@ To learn more about the Constraints API, please refer to the [Bolt documentation
 <summary>Usage</summary>
 
 ```text
-❯ bolt-cli delegate --help
+❯ bolt delegate --help
 
 Generate BLS delegation or revocation messages
 
-Usage: bolt-cli delegate [OPTIONS] --delegatee-pubkey <DELEGATEE_PUBKEY> <COMMAND>
+Usage: bolt delegate [OPTIONS] --delegatee-pubkey <DELEGATEE_PUBKEY> <COMMAND>
 
 Commands:
 secret-keys     Use local secret keys to generate the signed messages
@@ -102,7 +102,7 @@ Options:
 1. Generating a delegation using a local BLS secret key
 
 ```text
-bolt-cli delegate \
+bolt delegate \
   --delegatee-pubkey 0x8d0edf4fe9c80cd640220ca7a68a48efcbc56a13536d6b274bf3719befaffa13688ebee9f37414b3dddc8c7e77233ce8 \
   --chain holesky \
   secret-keys --secret-keys 642e0d33fde8968a48b5f560c1b20143eb82036c1aa6c7f4adc4beed919a22e3
@@ -111,17 +111,18 @@ bolt-cli delegate \
 2. Generating a delegation using an ERC-2335 keystore directory
 
 ```text
-bolt-cli delegate \
+bolt delegate \
  --delegatee-pubkey 0x8d0edf4fe9c80cd640220ca7a68a48efcbc56a13536d6b274bf3719befaffa13688ebee9f37414b3dddc8c7e77233ce8 \
  --chain holesky \
  local-keystore --path test_data/lighthouse/validators --password-path test_data/lighthouse/secrets
 ```
 
-3. Generating a revocation using a remote DIRK keystore
+3. Generating a delegation using a remote DIRK keystore
 
 ```text
-bolt-cli delegate \
+bolt delegate \
   --delegatee-pubkey 0x83eeddfac5e60f8fe607ee8713efb8877c295ad9f8ca075f4d8f6f2ae241a30dd57f78f6f3863a9fe0d5b5db9d550b93 \
+  --chain holesky \
   dirk --url https://localhost:9091 \
   --client-cert-path ./test_data/dirk/client1.crt \
   --client-key-path ./test_data/dirk/client1.key \
@@ -141,11 +142,11 @@ The `pubkeys` command lists available BLS public keys from different key sources
 <summary>Usage</summary>
 
 ```text
-❯ bolt-cli pubkeys --help
+❯ bolt pubkeys --help
 
 Output a list of pubkeys in JSON format
 
-Usage: bolt-cli pubkeys [OPTIONS] <COMMAND>
+Usage: bolt pubkeys [OPTIONS] <COMMAND>
 
 Commands:
   secret-keys     Use local secret keys to generate the signed messages
@@ -166,13 +167,13 @@ Options:
 1. Listing BLS public keys from a local secret key
 
 ```text
-bolt-cli pubkeys secret-keys --secret-keys 642e0d33fde8968a48b5f560c1b20143eb82036c1aa6c7f4adc4beed919a22e3
+bolt pubkeys secret-keys --secret-keys 642e0d33fde8968a48b5f560c1b20143eb82036c1aa6c7f4adc4beed919a22e3
 ```
 
 2. Listing BLS public keys from an ERC-2335 keystore directory
 
 ```text
-bolt-cli pubkeys local-keystore \
+bolt pubkeys local-keystore \
   --path test_data/lighthouse/validators \
   --password-path test_data/lighthouse/secrets
 ```
@@ -180,7 +181,7 @@ bolt-cli pubkeys local-keystore \
 3. Listing BLS public keys from a remote DIRK keystore
 
 ```text
-bolt-cli pubkeys dirk --url https://localhost:9091 \
+bolt pubkeys dirk --url https://localhost:9091 \
   --client-cert-path ./test_data/dirk/client1.crt \
   --client-key-path ./test_data/dirk/client1.key \
   --ca-cert-path ./test_data/dirk/security/ca.crt \
