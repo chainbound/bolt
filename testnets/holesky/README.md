@@ -852,8 +852,8 @@ and outputs a JSON file with the delegation/revocation messages to the provided
 
 Prerequisites:
 
-- [Rust toolchain][rust]
-- [Protoc][protoc]
+- [Rust toolchain](https://www.rust-lang.org/tools/install)
+- [Protoc](https://grpc.io/docs/protoc-installation/)
 
 Once you have the necessary prerequisites, you can build the binary 
 in the following way:
