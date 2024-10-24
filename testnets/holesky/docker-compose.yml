@@ -9,7 +9,6 @@ services:
     entrypoint: /bin/sh -c /usr/local/bin/bolt-sidecar
     env_file: ./bolt-sidecar.env
     volumes:
-      - "./bolt-sidecar.toml:/etc/bolt-sidecar.toml"
       - "./delegations.json:${BOLT_SIDECAR_DELEGATIONS_PATH:-/etc/delegations.json}"
 
   bolt-mev-boost-holesky:
