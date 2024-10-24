@@ -884,7 +884,7 @@ bolt --version
 The binary can be used with the following command:
 
 ```shell
-bolt delegate --delegate-pubkey <DELEGATEE_PUBKEY>
+bolt delegate --delegatee-pubkey <DELEGATEE_PUBKEY>
               --out <OUTPUT_FILE>
               --chain <CHAIN>
               <KEY_SOURCE>
