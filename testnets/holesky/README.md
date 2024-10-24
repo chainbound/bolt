@@ -23,9 +23,8 @@ This document provides instructions for running the Bolt sidecar on the Holesky 
 * [Reference](#reference)
   * [Command-line options](#command-line-options)
   * [Delegations and signing options for Native and Docker Compose Mode](#delegations-and-signing-options-for-native-and-docker-compose-mode)
-    * [`bolt-delegations-cli`](#`bolt-delegations-cli`)
+    * [`bolt-cli`](#bolt-cli)
       * [Installation and usage](#installation-and-usage)
-      * [Delegations CLI Example](#delegations-cli-example)
     * [Using a private key directly](#using-a-private-key-directly)
     * [Using a ERC-2335 Keystore](#using-a-erc-2335-keystore)
   * [Avoid restarting the beacon node](#avoid-restarting-the-beacon-node)
@@ -42,8 +41,8 @@ your system.
 Bolt is fully trustless since it is able to produce a fallback block with the
 commitments issued in case builders do not return a valid bid. In order to do so
 it relies on a synced execution client, configured via the `--execution-api-url`
-flag. At the moment only Geth is supported; with more
-clients to be supported in the future.
+flag. **At the moment only Geth is supported; with more
+clients to be supported in the future.**
 
 Using the sidecar with a different execution client could lead to commitment
 faults because fallback block building is not supported yet. You can download
@@ -74,22 +73,25 @@ client implementations to download and run them.
 >
 > It might be necessary to restart your beacon node depending on your existing
 > setup. See the [Avoid Restarting the Beacon
-> Node](#avoid-restarting-the-beacon-node) for more details.
+> Node](#avoid-restarting-the-beacon-node) section for more details.
 
 **Active validators:**
 
-The Bolt sidecar requires signing keys from active Ethereum validators, or
-authorized delegates acting on their behalf, to issue and sign preconfirmations.
+The Bolt sidecar requires access to BLS signing keys from active Ethereum validators, 
+or **authorized delegates** acting on their behalf, to issue and sign preconfirmations.
+
+To learn more about delegation, check out the [Delegations and Signing](#delegations-and-signing-options-for-native-and-docker-compose-mode) 
+section.
 
 # Off-Chain Setup
 
 There are various way to run the Bolt Sidecar depending on what infrastructure
 you want to use and your preferred signing methods:
 
-- Docker mode (recommended);
+- Docker mode (recommended)
 - [Commit-Boost](https://commit-boost.github.io/commit-boost-client) mode
-  (requires Docker).
-- Native mode (advanced, requires building everything from source);
+  (requires Docker)
+- Native mode (advanced, requires building everything from source)
 
 Running the Bolt sidecar as a standalone binary requires building it from
 source. Both the standalone binary and the Docker container requires reading
@@ -102,19 +104,19 @@ requirements.
 
 ## Docker Mode (recommended)
 
-First, make sure to have both [Docker](https://docs.docker.com/engine/install/),
+First, make sure to have [Docker](https://docs.docker.com/engine/install/),
 [Docker Compose](https://docs.docker.com/compose/install/) and
 [git](https://git-scm.com/downloads) installed in your machine.
 
 Then clone the Bolt repository by running:
 
 ```bash
-git clone --branch v0.3.0-alpha htts://github.com/chainbound/bolt.git && cd bolt
+git clone --branch v0.3.0-alpha htts://github.com/chainbound/bolt.git
+cd bolt/testnets/holesky
 ```
 
 The Docker Compose setup will spin up the Bolt sidecar along with the Bolt
-MEV-Boost fork which includes supports the [Constraints
-API](https://docs.boltprotocol.xyz/api/builder).
+MEV-Boost fork which includes supports the [Constraints API](https://docs.boltprotocol.xyz/api/builder).
 
 Before starting the services, you'll need to provide configuration files
 containing the necessary environment variables:
@@ -652,7 +654,10 @@ For completeness, here are all the command-line options available for the Bolt
 sidecar. You can see them in your terminal by running the Bolt sidecar binary
 with the `--help` flag:
 
-```
+<details>
+<summary>CLI help Reference</summary>
+
+```text
 
 Command-line options for the Bolt sidecar
 
@@ -812,6 +817,9 @@ Options:
 
 ```
 
+</details>
+
+
 ## Delegations and signing options for Native and Docker Compose Mode
 
 As mentioned in the [prerequisites](#prerequisites) section, the Bolt sidecar
@@ -825,115 +833,150 @@ Ethereum validators.
 In order to create these delegation you can use the `bolt-delegations-cli` binary.
 If you don't want to use it you can skip the following section.
 
-### `bolt-delegations-cli`
+### `bolt` CLI
 
-`bolt-delegations-cli` is an offline command-line tool for safely generating
-delegation and revocation messages signed with a BLS12-381 key for the
-[Constraints API](https://docs.boltprotocol.xyz/api/builder) in
-[Bolt](https://docs.boltprotocol.xyz/).
+`bolt` CLI is an offline tool for safely generating delegation and revocation messages 
+signed with a BLS12-381 key for the [Constraints API](https://docs.boltprotocol.xyz/api/builder) 
+in [Bolt](https://docs.boltprotocol.xyz/).
 
-The tool supports two key sources:
+The tool supports three key sources:
 
-- Local: A BLS private key provided directly from a file.
-- Keystore: A keystore file that contains an encrypted BLS private key.
+- **Secret Keys**: A list of BLS private keys provided directly as hex-strings.
+- **Local Keystore**: A EIP-2335 keystore that contains an encrypted BLS private keys.
+- **Dirk**: A remote Dirk server that provides the BLS signatures for the delegation messages.
 
 and outputs a JSON file with the delegation/revocation messages to the provided
-`<DELEGATEE_PUBKEY>` for the given chain
-
-Features:
-
-- Offline usage: Safely generate delegation messages in an offline environment.
-- Flexible key source: Support for both direct local BLS private keys and
-  Ethereum keystore files (ERC-2335 format).
-- BLS delegation signing: Sign delegation messages using a BLS secret key and
-  output the signed delegation in JSON format.
+`<DELEGATEE_PUBKEY>` for the given chain.
 
 #### Installation and usage
 
-Go to the root of the Bolt project you've previously cloned using Git. Enter in
-the `bolt-delegations-cli` directory by running `cd bolt-delegations-cli`.
+Prerequisites:
 
-If you're using the Docker container setup make sure you have
-[Rust](https://www.rust-lang.org/tools/install) installed in your system as
-well. Then you can build the `bolt-delegations-cli` binary by running:
+- [Rust toolchain][rust]
+- [Protoc][protoc]
 
-```bash
-cargo build --release && mv target/release/bolt-delegations-cli .
+Once you have the necessary prerequisites, you can build the binary 
+in the following way:
+
+```shell
+# clone the Bolt repository if you haven't already
+git clone git@github.com:chainbound/bolt.git
+
+# navigate to the Bolt CLI package directory
+cd bolt-cli
+
+# build and install the binary on your machine
+cargo install --path . --force
+
+# test the installation
+bolt --version
 ```
 
-Now you can run the binary by running:
+The binary can be used with the following command:
 
-```bash
-./bolt-delegations-cli <COMMAND>
+```shell
+bolt delegate --delegate-pubkey <DELEGATEE_PUBKEY> 
+              --out <OUTPUT_FILE> 
+              --chain <CHAIN> 
+              <KEY_SOURCE> 
+              <KEY_SOURCE_OPTIONS>
 ```
 
-The binary exposes a single `generate` command, which accepts the following
-options and subcommands (use `./bolt-delegations-cli generate --help` to see
-them):
+where:
 
-```text
-Usage: bolt-delegations-cli generate [OPTIONS] --delegatee-pubkey <DELEGATEE_PUBKEY> <COMMAND>
-
-Commands:
-  local     Use local private keys to generate the signed messages
-  keystore  Use an EIP-2335 keystore folder to generate the signed messages
-  help      Print this message or the help of the given subcommand(s)
-
-Options:
-      --delegatee-pubkey <DELEGATEE_PUBKEY>  The BLS public key to which the delegation message should be signed [env: DELEGATEE_PUBKEY=]
-      --out <OUT>                            The output file for the delegations [env: OUTPUT_FILE_PATH=] [default: delegations.json]
-      --chain <CHAIN>                        The chain for which the delegation message is intended [env: CHAIN=] [default: mainnet] [possible values: mainnet, holesky, helder, kurtosis]
-      --action <ACTION>                      The action to perform. The tool can be used to generate delegation or revocation messages (default: delegate) [env: ACTION=] [default: delegate] [possible values: delegate, revoke]
-  -h, --help                                 Print help (see more with '--help')
-```
+- `<DELEGATEE_PUBKEY>` is the public key of the delegatee.
+- `<OUTPUT_FILE>` is the path to the file where the delegation JSON messages will be written.
+- `<CHAIN>` is the chain for which the delegations are being generated (e.g. Holesky).
+- `<KEY_SOURCE>` is the key source to use for generating the delegations. It can be one of:
+  - `secret-keys`: A list of BLS private keys provided directly as hex-strings.
+  - `local-keystore`: A EIP-2335 keystore that contains an encrypted BLS private keys.
+  - `dirk`: A remote Dirk server that provides the BLS signatures for the delegation messages.
+  
+You can also find more information about the available key source 
+options by running `bolt delegate <KEY_SOURCE> --help`.
 
 > [!TIP]
 > If you're using the Docker Compose Mode please don't set the `--out` flag and
 > provide `delegations_path = /etc/delegations.json` in the `bolt-sidecar.toml`
 > file.
 
-The environment variables can be also set in a `.env` file. For a reference
-example you can check out the `.env.local.example` and the
-`.env.keystore.example`
+Here you can see usage examples for each key source:
 
-In the section below you can see a usage example of the binary.
+<details>
+<summary>Usage</summary>
 
-#### Delegations CLI Example
+```text
+❯ bolt-cli delegate --help
+Generate BLS delegation or revocation messages
+Usage: bolt-cli delegate [OPTIONS] --delegatee-pubkey <DELEGATEE_PUBKEY> <COMMAND>
+Commands:
+secret-keys     Use local secret keys to generate the signed messages
+local-keystore  Use an EIP-2335 filesystem keystore directory to generate the signed messages
+dirk            Use a remote DIRK keystore to generate the signed messages
+help            Print this message or the help of the given subcommand(s)
+Options:
+    --delegatee-pubkey <DELEGATEE_PUBKEY>
+        The BLS public key to which the delegation message should be signed
+        [env: DELEGATEE_PUBKEY=]
+    --out <OUT>
+        The output file for the delegations
+        [env: OUTPUT_FILE_PATH=]
+        [default: delegations.json]
+    --chain <CHAIN>
+        The chain for which the delegation message is intended
+        [env: CHAIN=]
+        [default: mainnet]
+        [possible values: mainnet, holesky, helder, kurtosis]
+    --action <ACTION>
+        The action to perform. The tool can be used to generate delegation or revocation messages (default: delegate)
+        [env: ACTION=]
+        [default: delegate]
+        Possible values:
+        - delegate: Create a delegation message
+        - revoke:   Create a revocation message
+-h, --help
+        Print help (see a summary with '-h')
+```
 
-1. Using a local BLS private key:
+</details>
 
-   ```text
-   bolt-delegations-cli generate \
-       --delegatee-pubkey 0x7890ab... \
-       --out my_delegations.json \
-       --chain holesky \
-       local \
-       --secret-keys 0xabc123...,0xdef456..
-   ```
+<details>
+<summary>Examples</summary>
 
-2. Using a Ethereum keystores files and raw password:
+1. Generating a delegation using a local BLS secret key
 
-   ```text
-   bolt-delegations-cli generate \
-       --delegatee-pubkey 0x7890ab... \
-       --out my_delegations.json \
-       --chain holesky \
-       keystore \
-       --path /keys \
-       --password myS3cr3tP@ssw0rd
-   ```
+```text
+bolt-cli delegate \
+  --delegatee-pubkey 0x8d0edf4fe9c80cd640220ca7a68a48efcbc56a13536d6b274bf3719befaffa13688ebee9f37414b3dddc8c7e77233ce8 \
+  --chain holesky \
+  secret-keys --secret-keys 642e0d33fde8968a48b5f560c1b20143eb82036c1aa6c7f4adc4beed919a22e3
+```
 
-3. Using an Ethereum keystores files and secrets folder
+2. Generating a delegation using an ERC-2335 keystore directory
 
-   ```text
-   bolt-delegations-cli generate \
-       --delegatee-pubkey 0x7890ab... \
-       --out my_delegations.json \
-       --chain holesky \
-       keystore \
-       --path /keys \
-       --password-path /secrets
-   ```
+```text
+bolt-cli delegate \
+ --delegatee-pubkey 0x8d0edf4fe9c80cd640220ca7a68a48efcbc56a13536d6b274bf3719befaffa13688ebee9f37414b3dddc8c7e77233ce8 \
+ --chain holesky \
+ local-keystore --path test_data/lighthouse/validators --password-path test_data/lighthouse/secrets
+```
+
+3. Generating a delegation using a remote DIRK keystore
+
+```text
+bolt-cli delegate \
+  --delegatee-pubkey 0x83eeddfac5e60f8fe607ee8713efb8877c295ad9f8ca075f4d8f6f2ae241a30dd57f78f6f3863a9fe0d5b5db9d550b93 \
+  dirk --url https://localhost:9091 \
+  --client-cert-path ./test_data/dirk/client1.crt \
+  --client-key-path ./test_data/dirk/client1.key \
+  --ca-cert-path ./test_data/dirk/security/ca.crt \
+  --wallet-path wallet1 --passphrases secret
+```
+
+</details>
+
+<details>
+<summary>Keystore-specific instructions</summary>
 
 When using the `keystore` key source, the `--path` flag should point to the
 directory containing the encrypted keypair directories.
@@ -971,6 +1014,8 @@ That is, the password files should be named after the public key and each file
 should just contain one line with the password in plain text. The files
 themselves don't need a particular file extension.
 
+</details>
+
 ---
 
 Now that you have generated the delegation messages you can provide them to the
@@ -990,9 +1035,9 @@ can pass directly the private key as a hex-encoded string to the Bolt sidecar
 using the `--constraint-private-key` flag (or `constraint_private_key` in the
 TOML file).
 
-This is the simplest setup and can be used in
-case if all the delegations messages point to the same delegatee or if you're
-running the sidecar with a single active validator.
+This is the simplest setup and can be used in case if all the delegations messages 
+point to the same delegatee or if you're running the sidecar with a single active 
+validator.
 
 ### Using a ERC-2335 Keystore
 
