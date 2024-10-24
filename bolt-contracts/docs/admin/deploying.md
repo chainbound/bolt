@@ -83,8 +83,8 @@ forge script script/holesky/admin/helpers/RegisterAVS.s.sol --rpc-url $HOLESKY_R
 
 ### Other Scripts
 
-#### Modifying supported Vaults
-This script will update supported vaults according to `deployments.json`, and remove any vaults that have been whitelisted but are no longer in the `supportedVaults` list.
+#### Modifying supported Symbiotic Vaults
+This script will update supported vaults according to `deployments.json`, and remove any vaults that have been whitelisted but are no longer in the `symbiotic.supportedVaults` list.
 ```bash
 forge script script/holesky/admin/helpers/UpdateSupportedVaults.s.sol --rpc-url $HOLESKY_RPC --private-key $ADMIN_PRIVATE_KEY --broadcast -vvv
 ```
