@@ -24,7 +24,7 @@ import {AVSDirectoryStorage} from "@eigenlayer/src/contracts/core/AVSDirectorySt
 import {DelegationManagerStorage} from "@eigenlayer/src/contracts/core/DelegationManagerStorage.sol";
 import {StrategyManagerStorage} from "@eigenlayer/src/contracts/core/StrategyManagerStorage.sol";
 
-/// @title Bolt Manager
+/// @title Bolt EigenLayer Middleware contract.
 /// @notice This contract is responsible for interfacing with the EigenLayer restaking protocol.
 /// @dev This contract is upgradeable using the UUPSProxy pattern. Storage layout remains fixed across upgrades
 /// with the use of storage gaps.
@@ -96,6 +96,25 @@ contract BoltEigenLayerMiddlewareV2 is IBoltMiddlewareV1, IServiceManager, Ownab
         address _eigenlayerDelegationManager,
         address _eigenlayerStrategyManager
     ) public initializer {
+        __Ownable_init(_owner);
+        parameters = IBoltParametersV1(_parameters);
+        manager = IBoltManagerV1(_manager);
+        START_TIMESTAMP = Time.timestamp();
+
+        AVS_DIRECTORY = IAVSDirectory(_eigenlayerAVSDirectory);
+        DELEGATION_MANAGER = DelegationManagerStorage(_eigenlayerDelegationManager);
+        STRATEGY_MANAGER = StrategyManagerStorage(_eigenlayerStrategyManager);
+        NAME_HASH = keccak256("EIGENLAYER");
+    }
+
+    function initializeV2(
+        address _owner,
+        address _parameters,
+        address _manager,
+        address _eigenlayerAVSDirectory,
+        address _eigenlayerDelegationManager,
+        address _eigenlayerStrategyManager
+    ) public reinitializer(2) {
         __Ownable_init(_owner);
         parameters = IBoltParametersV1(_parameters);
         manager = IBoltManagerV1(_manager);
