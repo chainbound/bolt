@@ -28,6 +28,7 @@ contract UpgradeBolt is Script {
         address eigenLayerAVSDirectory;
         address eigenLayerDelegationManager;
         address eigenLayerStrategyManager;
+        address eigenLayerMiddleware;
         address[] supportedStrategies;
     }
 
@@ -79,12 +80,6 @@ contract UpgradeBolt is Script {
 
         string memory upgradeTo = "BoltEigenLayerMiddlewareV2.sol";
 
-        string memory root = vm.projectRoot();
-        string memory path = string.concat(root, "/config/holesky/deployments.json");
-        string memory json = vm.readFile(path);
-
-        address middlewareV1 = vm.parseJsonAddress(json, ".eigenLayer.middleware");
-
         Deployments memory deployments = _readDeployments();
 
         bytes memory initEigenLayerMiddleware = abi.encodeCall(
@@ -101,7 +96,7 @@ contract UpgradeBolt is Script {
 
         vm.startBroadcast(admin);
 
-        Upgrades.upgradeProxy(middlewareV1, upgradeTo, initEigenLayerMiddleware, opts);
+        Upgrades.upgradeProxy(deployments.eigenLayerMiddleware, upgradeTo, initEigenLayerMiddleware, opts);
 
         vm.stopBroadcast();
 
@@ -125,6 +120,7 @@ contract UpgradeBolt is Script {
             eigenLayerAVSDirectory: vm.parseJsonAddress(json, ".eigenLayer.avsDirectory"),
             eigenLayerDelegationManager: vm.parseJsonAddress(json, ".eigenLayer.delegationManager"),
             eigenLayerStrategyManager: vm.parseJsonAddress(json, ".eigenLayer.strategyManager"),
+            eigenLayerMiddleware: vm.parseJsonAddress(json, ".eigenLayer.middleware"),
             supportedStrategies: vm.parseJsonAddressArray(json, ".eigenLayer.supportedStrategies")
         });
     }
