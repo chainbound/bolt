@@ -1,8 +1,5 @@
-use std::fs;
-
 use alloy::primitives::Address;
 use clap::Parser;
-use eyre::Context;
 use reqwest::Url;
 use serde::Deserialize;
 
@@ -110,14 +107,6 @@ pub struct Opts {
     pub extra_args: Vec<String>,
 }
 
-impl Opts {
-    /// Parse the configuration from a TOML file.
-    pub fn parse_from_toml(file_path: &str) -> eyre::Result<Self> {
-        let contents = fs::read_to_string(file_path).wrap_err("Unable to read file")?;
-        toml::from_str(&contents).wrap_err("Error parsing the TOML file")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -135,17 +124,5 @@ mod tests {
         let socket_addr = parsed.socket_addrs(|| None).unwrap()[0];
         let localhost_socket = "0.0.0.0:3030".parse().unwrap();
         assert_eq!(socket_addr, localhost_socket);
-    }
-
-    #[test]
-    fn test_parse_config_from_toml() {
-        let path = env!("CARGO_MANIFEST_DIR").to_string() + "/Config.example.toml";
-
-        let config = Opts::parse_from_toml(&path).expect("Failed to parse config from TOML");
-        assert_eq!(config.execution_api_url, Url::parse("http://localhost:8545").unwrap());
-        assert_eq!(config.beacon_api_url, Url::parse("http://localhost:5052").unwrap());
-        assert_eq!(config.engine_api_url, Url::parse("http://localhost:8551").unwrap());
-        assert_eq!(config.constraints_api_url, Url::parse("http://localhost:3030").unwrap());
-        assert_eq!(config.constraints_proxy_port, 18551);
     }
 }
