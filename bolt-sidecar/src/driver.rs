@@ -224,6 +224,15 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
     /// Any errors encountered are contained to the specific `handler` in which
     /// they occurred, and the driver will continue to run as long as possible.
     pub async fn run_forever(mut self) -> ! {
+        const BOLT: &str = r#"
+            ██████╗  ██████╗ ██╗  ████████╗
+            ██╔══██╗██╔═══██╗██║  ╚══██╔══╝
+            ██████╔╝██║   ██║██║     ██║   
+            ██╔══██╗██║   ██║██║     ██║   
+            ██████╔╝╚██████╔╝███████╗██║   
+            ╚═════╝  ╚═════╝ ╚══════╝╚═╝   "#;
+        println!("{BOLT}");
+
         loop {
             tokio::select! {
                 Some(api_event) = self.api_events_rx.recv() => {
