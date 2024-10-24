@@ -10,6 +10,7 @@ import {BoltParametersV1} from "../../../src/contracts/BoltParametersV1.sol";
 import {BoltValidatorsV1} from "../../../src/contracts/BoltValidatorsV1.sol";
 import {BoltManagerV1} from "../../../src/contracts/BoltManagerV1.sol";
 import {BoltEigenLayerMiddlewareV1} from "../../../src/contracts/BoltEigenLayerMiddlewareV1.sol";
+import {BoltEigenLayerMiddlewareV2} from "../../../src/contracts/BoltEigenLayerMiddlewareV2.sol";
 import {BoltSymbioticMiddlewareV1} from "../../../src/contracts/BoltSymbioticMiddlewareV1.sol";
 import {BoltSymbioticMiddlewareV2} from "../../../src/contracts/BoltSymbioticMiddlewareV2.sol";
 import {BoltConfig} from "../../../src/lib/Config.sol";
@@ -30,9 +31,9 @@ contract UpgradeBolt is Script {
         address[] supportedStrategies;
     }
 
-    function run() public {
+    function upgradeSymbioticMiddleware() public {
         address admin = msg.sender;
-        console.log("Upgrading with admin", admin);
+        console.log("Upgrading Symbiotic middleware with admin", admin);
         // TODO: Validate upgrades with Upgrades.validateUpgrade
 
         Options memory opts;
@@ -65,6 +66,46 @@ contract UpgradeBolt is Script {
         console.log("BoltSymbioticMiddleware proxy upgraded from %s to %s", opts.referenceContract, upgradeTo);
 
         // TODO: Upgrade contracts with Upgrades.upgradeProxy
+    }
+
+    function upgradeEigenLayerMiddleware() public {
+        address admin = msg.sender;
+        console.log("Upgrading EigenLayer middleware with admin", admin);
+        // TODO: Validate upgrades with Upgrades.validateUpgrade
+
+        Options memory opts;
+        opts.unsafeSkipAllChecks = true;
+        opts.referenceContract = "BoltEigenLayerMiddlewareV1.sol";
+
+        string memory upgradeTo = "BoltEigenLayerMiddlewareV2.sol";
+
+        string memory root = vm.projectRoot();
+        string memory path = string.concat(root, "/config/holesky/deployments.json");
+        string memory json = vm.readFile(path);
+
+        address middlewareV1 = vm.parseJsonAddress(json, ".eigenLayer.middleware");
+
+        Deployments memory deployments = _readDeployments();
+
+        bytes memory initEigenLayerMiddleware = abi.encodeCall(
+            BoltEigenLayerMiddlewareV2.initialize,
+            (
+                admin,
+                deployments.boltParameters,
+                deployments.boltManager,
+                deployments.eigenLayerAVSDirectory,
+                deployments.eigenLayerDelegationManager,
+                deployments.eigenLayerStrategyManager
+            )
+        );
+
+        vm.startBroadcast(admin);
+
+        Upgrades.upgradeProxy(middlewareV1, upgradeTo, initEigenLayerMiddleware, opts);
+
+        vm.stopBroadcast();
+
+        console.log("BoltSymbioticMiddleware proxy upgraded from %s to %s", opts.referenceContract, upgradeTo);
     }
 
     function _readDeployments() public view returns (Deployments memory) {
