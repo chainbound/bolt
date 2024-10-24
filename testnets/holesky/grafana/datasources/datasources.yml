@@ -1,0 +1,11 @@
+apiVersion: 1
+
+datasources:
+  - name: bolt-prometheus-holesky
+    type: prometheus
+    uid: bolt-prometheus-holesky
+    access: proxy
+    orgId: 1
+    url: http://bolt-prometheus-holesky:49090
+    isDefault: true
+    editable: true

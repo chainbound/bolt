@@ -6,11 +6,7 @@ use bolt_sidecar::{telemetry::init_telemetry_stack, Opts, SidecarDriver};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let opts = if let Ok(config_path) = std::env::var("BOLT_SIDECAR_CONFIG_PATH") {
-        Opts::parse_from_toml(config_path.as_str())?
-    } else {
-        Opts::parse()
-    };
+    let opts = Opts::parse();
 
     if let Err(err) = init_telemetry_stack(opts.telemetry.metrics_port()) {
         bail!("Failed to initialize telemetry stack: {:?}", err)

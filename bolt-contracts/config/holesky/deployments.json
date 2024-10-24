@@ -1,38 +1,38 @@
 {
-    "bolt": {
-        "validators": "0x47D2DC1DE1eFEFA5e6944402f2eda3981D36a9c8",
-        "parameters": "0x20d1cf3A5BD5928dB3118b2CfEF54FDF9fda5c12",
-        "manager": "0x440202829b493F9FF43E730EB5e8379EEa3678CF"
-    },
-    "symbiotic": {
-        "network": "0xb017002D8024d8c8870A5CECeFCc63887650D2a4",
-        "operatorRegistry": "0x6F75a4ffF97326A00e52662d82EA4FdE86a2C548",
-        "networkOptInService": "0x58973d16FFA900D11fC22e5e2B6840d9f7e13401",
-        "vaultFactory": "0x407A039D94948484D356eFB765b3c74382A050B4",
-        "vaultConfigurator": "0xD2191FE92987171691d552C219b8caEf186eb9cA",
-        "networkRegistry": "0x7d03b7343BF8d5cEC7C0C27ecE084a20113D15C9",
-        "networkMiddlewareService": "0x62a1ddfD86b4c1636759d9286D3A0EC722D086e3",
-        "middleware": "0x04f40d9CaE475E5BaA462acE53E5c58A0DD8D8e8",
-        "supportedVaults": [
-            "0xc79c533a77691641d52ebD5e87E51dCbCaeb0D78",
-            "0xe5708788c90e971f73D928b7c5A8FD09137010e0",
-            "0x11c5b9A9cd8269580aDDbeE38857eE451c1CFacd",
-            "0xC56Ba584929c6f381744fA2d7a028fA927817f2b",
-            "0xcDdeFfcD2bA579B8801af1d603812fF64c301462",
-            "0x91e84e12Bb65576C0a6614c5E6EbbB2eA595E10f"
-        ]
-    },
-    "eigenLayer": {
-        "avsDirectory": "0x055733000064333CaDDbC92763c58BF0192fFeBf",
-        "delegationManager": "0xA44151489861Fe9e3055d95adC98FbD462B948e7",
-        "strategyManager": "0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6",
-        "middleware": "0xa632a3e652110Bb2901D5cE390685E6a9838Ca04",
-        "supportedStrategies": [
-            "0x7D704507b76571a51d9caE8AdDAbBFd0ba0e63d3",
-            "0x3A8fBdf9e77DFc25d09741f51d3E181b25d0c4E0",
-            "0x80528D6e9A2BAbFc766965E0E26d5aB08D9CFaF9",
-            "0x70EB4D3c164a6B4A5f908D4FBb5a9cAfFb66bAB6",
-            "0xaccc5A86732BE85b5012e8614AF237801636F8e5"
-        ]
-    }
+  "bolt": {
+    "validators": "0x47D2DC1DE1eFEFA5e6944402f2eda3981D36a9c8",
+    "parameters": "0x20d1cf3A5BD5928dB3118b2CfEF54FDF9fda5c12",
+    "manager": "0x440202829b493F9FF43E730EB5e8379EEa3678CF"
+  },
+  "symbiotic": {
+    "network": "0xb017002D8024d8c8870A5CECeFCc63887650D2a4",
+    "operatorRegistry": "0x6F75a4ffF97326A00e52662d82EA4FdE86a2C548",
+    "networkOptInService": "0x58973d16FFA900D11fC22e5e2B6840d9f7e13401",
+    "vaultFactory": "0x407A039D94948484D356eFB765b3c74382A050B4",
+    "vaultConfigurator": "0xD2191FE92987171691d552C219b8caEf186eb9cA",
+    "networkRegistry": "0x7d03b7343BF8d5cEC7C0C27ecE084a20113D15C9",
+    "networkMiddlewareService": "0x62a1ddfD86b4c1636759d9286D3A0EC722D086e3",
+    "middleware": "0x04f40d9CaE475E5BaA462acE53E5c58A0DD8D8e8",
+    "supportedVaults": [
+      "0xc79c533a77691641d52ebD5e87E51dCbCaeb0D78",
+      "0xe5708788c90e971f73D928b7c5A8FD09137010e0",
+      "0x11c5b9A9cd8269580aDDbeE38857eE451c1CFacd",
+      "0xC56Ba584929c6f381744fA2d7a028fA927817f2b",
+      "0xcDdeFfcD2bA579B8801af1d603812fF64c301462",
+      "0x91e84e12Bb65576C0a6614c5E6EbbB2eA595E10f"
+    ]
+  },
+  "eigenLayer": {
+    "avsDirectory": "0x055733000064333CaDDbC92763c58BF0192fFeBf",
+    "delegationManager": "0xA44151489861Fe9e3055d95adC98FbD462B948e7",
+    "strategyManager": "0xdfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6",
+    "middleware": "0xa632a3e652110Bb2901D5cE390685E6a9838Ca04",
+    "supportedStrategies": [
+      "0x7D704507b76571a51d9caE8AdDAbBFd0ba0e63d3",
+      "0x3A8fBdf9e77DFc25d09741f51d3E181b25d0c4E0",
+      "0x80528D6e9A2BAbFc766965E0E26d5aB08D9CFaF9",
+      "0x70EB4D3c164a6B4A5f908D4FBb5a9cAfFb66bAB6",
+      "0xaccc5A86732BE85b5012e8614AF237801636F8e5"
+    ]
+  }
 }
