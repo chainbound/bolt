@@ -354,8 +354,12 @@ EigenLayer protocol. Bolt is compatible with the following ETH derivative tokens
 on Holesky:
 
 - [Symbiotic Vaults](https://docs.symbiotic.fi/deployments#vaults)
-  - [`wstETH`](https://holesky.etherscan.io/address/0x8d09a4502Cc8Cf1547aD300E066060D043f6982D)
-  - [`rETH`](https://holesky.etherscan.io/address/0x7322c24752f79c05FFD1E2a6FCB97020C1C264F1)
+  - [`wstETH`](https://holesky.etherscan.io/address/0xc79c533a77691641d52ebD5e87E51dCbCaeb0D78)
+  - [`rETH`](https://holesky.etherscan.io/address/0xe5708788c90e971f73D928b7c5A8FD09137010e0)
+  - [`stETH`](https://holesky.etherscan.io/address/0x11c5b9A9cd8269580aDDbeE38857eE451c1CFacd)
+  - [`WETH`](https://holesky.etherscan.io/address/0xC56Ba584929c6f381744fA2d7a028fA927817f2b)
+  - [`cbETH`](https://holesky.etherscan.io/address/0xcDdeFfcD2bA579B8801af1d603812fF64c301462)
+  - [`mETH`](https://holesky.etherscan.io/address/0x91e84e12Bb65576C0a6614c5E6EbbB2eA595E10f)
 - [EigenLayer Strategies](https://github.com/Layr-Labs/eigenlayer-contracts#current-testnet-deployment)
   - [`stETH`](https://holesky.etherscan.io/address/0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034)
   - [`rETH`](https://holesky.etherscan.io/address/0x7322c24752f79c05FFD1E2a6FCB97020C1C264F1)
