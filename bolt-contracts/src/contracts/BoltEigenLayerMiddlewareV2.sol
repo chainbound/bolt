@@ -107,6 +107,25 @@ contract BoltEigenLayerMiddlewareV2 is IBoltMiddlewareV1, IServiceManager, Ownab
         NAME_HASH = keccak256("EIGENLAYER");
     }
 
+    function initializeV2(
+        address _owner,
+        address _parameters,
+        address _manager,
+        address _eigenlayerAVSDirectory,
+        address _eigenlayerDelegationManager,
+        address _eigenlayerStrategyManager
+    ) public reinitializer(2) {
+        __Ownable_init(_owner);
+        parameters = IBoltParametersV1(_parameters);
+        manager = IBoltManagerV1(_manager);
+        START_TIMESTAMP = Time.timestamp();
+
+        AVS_DIRECTORY = IAVSDirectory(_eigenlayerAVSDirectory);
+        DELEGATION_MANAGER = DelegationManagerStorage(_eigenlayerDelegationManager);
+        STRATEGY_MANAGER = StrategyManagerStorage(_eigenlayerStrategyManager);
+        NAME_HASH = keccak256("EIGENLAYER");
+    }
+
     function _authorizeUpgrade(
         address newImplementation
     ) internal override onlyOwner {}

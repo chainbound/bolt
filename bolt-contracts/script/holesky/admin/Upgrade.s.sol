@@ -83,7 +83,7 @@ contract UpgradeBolt is Script {
         Deployments memory deployments = _readDeployments();
 
         bytes memory initEigenLayerMiddleware = abi.encodeCall(
-            BoltEigenLayerMiddlewareV2.initialize,
+            BoltEigenLayerMiddlewareV2.initializeV2,
             (
                 admin,
                 deployments.boltParameters,
