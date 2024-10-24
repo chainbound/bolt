@@ -1,13 +1,12 @@
 # Bolt CLI
 
-The Bolt CLI is a collection of command-line tools for interacting with the Bolt protocol.
+The Bolt CLI is a collection of command-line tools for interacting with Bolt protocol.
 
 ## Installation
 
-The Bolt CLI can be built with Cargo. If you don't have the Rust toolchain installed
-on your machine, you can follow the steps [here](https://www.rust-lang.org/tools/install).
-
-Once you have Rust installed, you can build the CLI binary in the following way:
+This tool can be built with Cargo. If you don't have the Rust toolchain installed
+on your machine, you can follow the steps [here][rust].
+Once you have Rust installed, you can build the binary in the following way:
 
 ```shell
 # clone the Bolt repository if you haven't already
@@ -30,16 +29,18 @@ Available commands:
 - [`delegate`](#delegate) - Generate BLS delegation messages for the Constraints API.
 - [`pubkeys`](#pubkeys) - List available BLS public keys from various key sources.
 
-### `Delegate`
-
-The `delegate` command generates signed delegation messages for the Constraints API.
-To learn more about the Constraints API, please refer to the [Bolt documentation][bolt-docs].
-
-The command supports three key sources for generating the signed messages:
+All above commands support three key sources:
 
 - Local BLS secret keys (as hex-encoded strings) via `secret-keys`
 - Local EIP-2335 filesystem keystore directories via `local-keystore`
 - Remote Dirk keystore via `dirk` (requires TLS credentials)
+
+---
+
+### `Delegate`
+
+The `delegate` command generates signed delegation messages for the Constraints API.
+To learn more about the Constraints API, please refer to the [Bolt documentation][bolt-docs].
 
 <details>
 <summary>Usage</summary>
@@ -127,13 +128,11 @@ bolt-cli delegate \
 
 </details>
 
+---
+
 ### `Pubkeys`
 
-The `pubkeys` command lists available BLS public keys from different key sources:
-
-- Local BLS secret keys (as hex-encoded strings) via `secret-keys`
-- Local EIP-2335 filesystem keystore directories via `local-keystore`
-- Remote Dirk keystore via `dirk` (requires TLS credentials)
+The `pubkeys` command lists available BLS public keys from different key sources.
 
 <details>
 <summary>Usage</summary>
@@ -204,6 +203,7 @@ on our official [Discord][discord] or [Twitter][twitter] channels.
 
 <!-- Links -->
 
+[rust]: https://www.rust-lang.org/tools/install
 [bolt-docs]: https://docs.boltprotocol.xyz/
 [discord]: https://discord.gg/G5BJjCD9ss
 [twitter]: https://twitter.com/chainbound_
