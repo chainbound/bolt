@@ -6,5 +6,21 @@
     {
         "admin": "0x20A1305Ec6c13FFE8e5289f98ba1A18Aa262c15E",
         "collateral": "0x7322c24752f79c05FFD1E2a6FCB97020C1C264F1"
+    },
+    {
+        "admin": "0x20A1305Ec6c13FFE8e5289f98ba1A18Aa262c15E",
+        "collateral": "0x3F1c547b21f65e10480dE3ad8E19fAAC46C95034"
+    },
+    {
+        "admin": "0x20A1305Ec6c13FFE8e5289f98ba1A18Aa262c15E",
+        "collateral": "0x94373a4919B3240D86eA41593D5eBa789FEF3848"
+    },
+    {
+        "admin": "0x20A1305Ec6c13FFE8e5289f98ba1A18Aa262c15E",
+        "collateral": "0x8720095Fa5739Ab051799211B146a2EEE4Dd8B37"
+    },
+    {
+        "admin": "0x20A1305Ec6c13FFE8e5289f98ba1A18Aa262c15E",
+        "collateral": "0xe3C063B1BEe9de02eb28352b55D49D85514C67FF"
     }
 ]
