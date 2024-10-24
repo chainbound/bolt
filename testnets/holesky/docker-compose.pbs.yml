@@ -64,7 +64,7 @@ services:
       ["/bin/sh", "-c", "chmod +x /scripts/run-bn.sh && /scripts/run-bn.sh"]
 
   helix-relay:
-    image: ghcr.io/chainbound/helix:v0.3.0-alpha.rc1
+    image: ghcr.io/chainbound/helix:v0.3.0-alpha.rc2
     restart: unless-stopped
     depends_on:
       - db
