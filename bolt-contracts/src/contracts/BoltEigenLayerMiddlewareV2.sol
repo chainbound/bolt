@@ -24,7 +24,7 @@ import {AVSDirectoryStorage} from "@eigenlayer/src/contracts/core/AVSDirectorySt
 import {DelegationManagerStorage} from "@eigenlayer/src/contracts/core/DelegationManagerStorage.sol";
 import {StrategyManagerStorage} from "@eigenlayer/src/contracts/core/StrategyManagerStorage.sol";
 
-/// @title Bolt Manager
+/// @title Bolt EigenLayer Middleware contract.
 /// @notice This contract is responsible for interfacing with the EigenLayer restaking protocol.
 /// @dev This contract is upgradeable using the UUPSProxy pattern. Storage layout remains fixed across upgrades
 /// with the use of storage gaps.
