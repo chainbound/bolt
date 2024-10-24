@@ -45,7 +45,7 @@ contract RegisterEigenLayerOperator is Script {
 
         BoltEigenLayerMiddlewareV1 middleware = _readMiddleware();
         IAVSDirectory avsDirectory = _readAvsDirectory();
-        OperatorConfig memory config = _readConfig("config/holesky/operator.json");
+        OperatorConfig memory config = _readConfig("config/holesky/operators/eigenlayer/registerIntoBoltAVS.json");
 
         console.log("Registering EigenLayer operator");
         console.log("Operator address:", operator);

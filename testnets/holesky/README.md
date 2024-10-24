@@ -563,9 +563,36 @@ forge script script/holesky/operators/RegisterEigenLayerOperator.s.sol \
 
 After having deposited collateral into a strategy you need to register into the
 Bolt AVS. We've provided a script to facilitate the procedure. If you want to
-use it, please set the operator private key to an `OPERATOR_SK` environment
-variable, and then run the following Forge script from the `bolt-contracts`
-directory:
+use it, please set follow these steps:
+
+1. configure the operator details in this JSON file
+
+   ```bash
+   $EDITOR ./config/holesky/operators/eigenlayer/registerIntoBoltAVS.json
+   ```
+
+   In there you'll need to set the the following fields:
+
+   - `rpc` -- the RPC URL of your operator which supports the Commitments API
+   - `salt` -- an unique 32 bytes value to avoid replay attacks. To generate it on
+     both Linux and MacOS you can run:
+
+     ```bash
+     echo -n "0x"; head -c 32 /dev/urandom | hexdump -e '32/1 "%02x" "\n"'
+     ```
+
+   - `expiry` -- the timestamp of the signature expiry in seconds. To generate it
+     on both Linux and MacOS run the following command, replacing
+     `<EXPIRY_TIMESTAMP>` with the desired timestamp:
+
+     ```bash
+     echo -n "0x"; printf "%064x\n" <EXPIRY_TIMESTAMP>
+     ```
+
+2. set the operator private key to an `OPERATOR_SK` environment
+   variable;
+3. run the following Forge script from the `bolt-contracts`
+   directory:
 
 ```bash
 forge script script/holesky/operators/RegisterEigenLayerOperator.s.sol \
