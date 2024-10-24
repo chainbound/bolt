@@ -19,6 +19,7 @@ contract RegisterSymbioticOperator is Script {
 
     function S01_registerIntoBolt() public {
         uint256 operatorSk = vm.envUint("OPERATOR_SK");
+        string memory rpc = vm.envString("OPERATOR_RPC");
 
         address operator = vm.addr(operatorSk);
 
@@ -32,10 +33,10 @@ contract RegisterSymbioticOperator is Script {
 
         console.log("Registering Symbiotic operator into Bolt");
         console.log("Operator address:", operator);
-        console.log("Operator RPC:", config.rpc);
+        console.log("Operator RPC:", rpc);
 
         vm.startBroadcast(operatorSk);
-        config.symbioticMiddleware.registerOperator(config.rpc);
+        config.symbioticMiddleware.registerOperator(rpc);
         console.log("Successfully registered Symbiotic operator");
 
         vm.stopBroadcast();

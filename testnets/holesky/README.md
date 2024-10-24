@@ -519,17 +519,20 @@ The opt-in process requires the following steps:
 
 After having deposited collateral into a vault you need to register into
 Bolt as a Symbiotic operator. We've provided a script to facilitate the
-procedure. If you want to use it, please set the operator private key to an
-`OPERATOR_SK` environment variable, and then run the following Forge script from
-the `bolt-contracts` directory:
+procedure. If you want to use it, please follow these steps:
 
-```bash
-forge script script/holesky/operators/RegisterSymbioticOperator.s.sol \
-  --sig "S01_registerIntoBolt" \
-  --rpc-url $HOLESKY_RPC \
-  -vvvv \
-  --broadcast
-```
+1. set the operator private key to the `OPERATOR_SK` environment variable;
+2. set the operator RPC URL which supports the Commitments API to the
+   `OPERATOR_RPC` environment variable;
+3. run the following Forge script from the `bolt-contracts` directory:
+
+   ```bash
+   forge script script/holesky/operators/RegisterSymbioticOperator.s.sol \
+     --sig "S01_registerIntoBolt" \
+     --rpc-url $HOLESKY_RPC \
+     -vvvv \
+     --broadcast
+   ```
 
 To check if your operator is correctly registered, set the operator public key
 in the `OPERATOR_PK` environment variable and run the following script:
