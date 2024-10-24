@@ -14,3 +14,21 @@ Upgrades.upgradeProxy(proxy, "BoltManagerV2.sol", initManager, opts);
 ```
 
 Before an upgrade, update the [`Upgrade.s.sol`](../script/holesky/Upgrade.s.sol) script to include the correct contracts, references and configurations.
+
+## Unsafe
+In order to run an unsafe upgrade, set `Options.unsafeSkipAllChecks` to `true`:
+```solidity
+Options memory opts;
+opts.unsafeSkipAllChecks = true;
+```
+
+## Reinitializers
+In case you need to reinitialize your contract, you'll need to create a reinitializer.
+
+Let `x` = your version number. Add the following new initializer to the contract to be upgraded:
+
+```solidity
+function initializeVx() public reinitializer(x) { ... }
+```
+
+For more info, check out https://docs.openzeppelin.com/contracts/5.x/api/proxy#Initializable.
