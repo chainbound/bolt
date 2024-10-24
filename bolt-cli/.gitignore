@@ -1,0 +1,7 @@
+/target
+
+.env
+.env.*
+
+delegations.json
+pubkeys.json

@@ -111,9 +111,8 @@ In particular, the core components are:
   such as proposer registration and permissionless dispute resolution for attributable faults.
 - [**Bolt Boost**](./bolt-boost/): A [Commit-Boost][commit-boost] module that implements the
   Constraints-API and is compatible with the Bolt Sidecar.
-- [**Bolt client**](./bolt-client/): A CLI tool to send preconfirmations on enabled test networks.
-- [**Bolt Kurtosis client**](./bolt-kurtosis-client/): A CLI tool to send preconfirmations on our Kurtosis devnet.
-- [**Bolt delegations CLI**](./bolt-delegations-cli/): A CLI tool to generate signed delegation and revocation messages for ETH validators.
+- [**Bolt CLI**](./bolt-cli/): A CLI tool to interact with Bolt contracts, register proposers,
+  and submit transactions to the Bolt Sidecar.
 - [**Testnets**](./testnets/): A set of guides and scripts to deploy the Bolt contracts on testnets.
 
 Additionally, this repository contains the necessary scripts to spin up a [Kurtosis][kurtosis]

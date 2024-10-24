@@ -1,0 +1,42 @@
+[package]
+name = "bolt"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# async
+tokio = { version = "1.41.0", features = ["full"] }
+
+# cli
+clap = { version = "4.5.4", features = ["derive", "env"] }
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.115"
+
+# grpc
+rustls = { version = "0.23.15", features = ["ring"] }
+tonic = { version = "0.12.3", features = ["tls"] }
+prost = "0.13.3"
+
+# crypto
+blst = "0.3.12"
+
+# ethereum
+ethereum-consensus = { git = "https://github.com/ralexstokes/ethereum-consensus", rev = "cf3c404" }
+lighthouse_eth2_keystore = { package = "eth2_keystore", git = "https://github.com/sigp/lighthouse", rev = "a87f19d" }
+alloy-primitives = "0.8.9"
+alloy-signer = "0.5.2"
+
+# utils
+dotenvy = "0.15.7"
+eyre = "0.6.12"
+thiserror = "1.0"
+hex = "0.4.3"
+tracing = "0.1.40"
+tracing-subscriber = "0.3.18"
+
+[dev-dependencies]
+tempfile = "3.13.0"
+reqwest = "0.12.8"
+
+[build-dependencies]
+tonic-build = "0.12.3"

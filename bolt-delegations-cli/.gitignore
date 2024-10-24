@@ -1,6 +1,0 @@
-/target
-.env
-.env.*
-delegations.json
-!.env.local.example
-!.env.keystore.example

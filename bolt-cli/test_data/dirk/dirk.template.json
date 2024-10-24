@@ -1,0 +1,26 @@
+{
+  "server": {
+    "id": 212483780,
+    "name": "localhost",
+    "listen-address": "localhost:9091"
+  },
+  "certificates": {
+    "ca-cert": "file://$PWD/security/ca.crt",
+    "server-cert": "file://$PWD/security/localhost.crt",
+    "server-key": "file://$PWD/security/localhost.key"
+  },
+  "peers": {
+    "212483780": "localhost:9091"
+  },
+  "permissions": {
+    "client1": {
+      "wallet1": "All"
+    },
+    "localhost": {
+      "wallet1": "All"
+    }
+  },
+  "unlocker": {
+    "wallet-passphrases": ["file://$PWD/wallet1-pf.txt"]
+  }
+}
