@@ -6,6 +6,6 @@ datasources:
     uid: bolt-prometheus-holesky
     access: proxy
     orgId: 1
-    url: http://bolt-prometheus-holesky:49090
+    url: http://bolt-prometheus-holesky:9090
     isDefault: true
     editable: true

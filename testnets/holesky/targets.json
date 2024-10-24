@@ -1,14 +1,8 @@
 [
   {
-    "targets": ["bolt-sidecar-holesky:8017"],
+    "targets": ["bolt-sidecar-holesky:9091"],
     "labels": {
-      "job": "bolt-sidecar-rpc"
-    }
-  },
-  {
-    "targets": ["bolt-sidecar-holesky:18550"],
-    "labels": {
-      "job": "bolt-sidecar-builder-proxy"
+      "job": "bolt-sidecar-holesky"
     }
   }
 ]

@@ -6,10 +6,11 @@ services:
     ports:
       - "${BOLT_SIDECAR_PORT:-8017}:${BOLT_SIDECAR_PORT:-8017}" # Bolt RPC port (this should be opened on your firewall!)
       - "${BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT:-18550}:${BOLT_SIDECAR_CONSTRAINTS_PROXY_PORT:-18550}"
-    entrypoint: /bin/sh -c "BOLT_SIDECAR_CONFIG_PATH=/etc/bolt-sidecar.toml /usr/local/bin/bolt-sidecar"
+    entrypoint: /bin/sh -c /usr/local/bin/bolt-sidecar
+    env_file: ./bolt-sidecar.env
     volumes:
       - "./bolt-sidecar.toml:/etc/bolt-sidecar.toml"
-      - "../../bolt-delegations-cli/delegations.json:/etc/delegations.json"
+      - "./delegations.json:${BOLT_SIDECAR_DELEGATIONS_PATH:-/etc/delegations.json}"
 
   bolt-mev-boost-holesky:
     image: ghcr.io/chainbound/bolt-mev-boost:v0.3.0-alpha.rc1
@@ -22,39 +23,26 @@ services:
     image: prom/prometheus:latest
     container_name: bolt-prometheus-holesky
     ports:
-      - 49090:49090
+      - 18017:9090
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
       - ./targets.json:/etc/prometheus/targets.json
       - prometheus-data:/prometheus
-    networks:
-      - monitoring_network
 
   bolt-grafana-holesky:
     image: grafana/grafana:latest
     container_name: bolt-grafana-holesky
     ports:
-      - 33000:33000
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - 28017:3000
     volumes:
       - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
       - ./grafana/datasources:/etc/grafana/provisioning/datasources
       - grafana-data:/var/lib/grafana
-    networks:
-      - monitoring_network
     depends_on:
       - bolt-prometheus-holesky
-    logging:
-      driver: none
 
 volumes:
   prometheus-data:
     driver: local
   grafana-data:
     driver: local
-networks:
-  monitoring_network:
-    driver: bridge
-  signer_network:
-    driver: bridge
