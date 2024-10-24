@@ -6,7 +6,7 @@ use ethereum_consensus::crypto::{
 use eyre::{bail, Result};
 use lighthouse_eth2_keystore::Keystore;
 use serde::Serialize;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::{
     cli::{Action, Chain},
@@ -153,6 +153,11 @@ pub async fn generate_from_dirk(
                 let signed = SignedRevocation { message, signature };
                 signed_messages.push(SignedMessage::Revocation(signed));
             }
+        }
+
+        // Try to lock the account back after signing
+        if let Err(err) = dirk.lock_account(account.name.clone()).await {
+            warn!("Failed to lock account after signing {}: {:?}", account.name, err);
         }
     }
 

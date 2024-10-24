@@ -9,8 +9,8 @@ use tracing::debug;
 use crate::{
     cli::TlsCredentials,
     pb::eth2_signer_api::{
-        Account, AccountManagerClient, ListAccountsRequest, ListerClient, ResponseState,
-        SignRequest, SignRequestId, SignerClient, UnlockAccountRequest,
+        Account, AccountManagerClient, ListAccountsRequest, ListerClient, LockAccountRequest,
+        ResponseState, SignRequest, SignRequestId, SignerClient, UnlockAccountRequest,
     },
 };
 
@@ -79,6 +79,25 @@ impl Dirk {
             }
             ResponseState::Unknown => bail!("Unknown response from unlock account: {:?}", res),
             ResponseState::Failed => bail!("Failed to unlock account: {:?}", res),
+        }
+    }
+
+    /// Lock an account in the keystore.
+    pub async fn lock_account(&mut self, account_name: String) -> Result<bool> {
+        let req = LockAccountRequest { account: account_name.clone() };
+        let res = self.account_mng.lock(req).await?.into_inner();
+
+        match res.state() {
+            ResponseState::Succeeded => {
+                debug!("Lock request succeeded for account {}", account_name);
+                Ok(true)
+            }
+            ResponseState::Denied => {
+                debug!("Lock request denied for account {}", account_name);
+                Ok(false)
+            }
+            ResponseState::Unknown => bail!("Unknown response from lock account: {:?}", res),
+            ResponseState::Failed => bail!("Failed to lock account: {:?}", res),
         }
     }
 
