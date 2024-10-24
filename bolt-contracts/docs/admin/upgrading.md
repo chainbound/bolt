@@ -45,7 +45,7 @@ This will output the following table:
 | NAME_HASH              | bytes32                               | 11   | 0      | 32    | src/contracts/BoltSymbioticMiddlewareV2.sol:BoltSymbioticMiddlewareV2 |
 | __gap                  | uint256[38]                           | 12   | 0      | 1216  | src/contracts/BoltSymbioticMiddlewareV2.sol:BoltSymbioticMiddlewareV2 |
 
-The last line indicating the `__gap` storage slot is what's most important. `__gap` has a total of 50 storage slots reserved. You **MUST** verify that the array length of __gap`, in this case `38`, is equal to `50 - __gap.Slot`. In this case, the `Slot` column for `__gap` shows 12, so the layout is correct.
+The last line indicating the `__gap` storage slot is what's most important. `__gap` has a total of 50 storage slots reserved. You **MUST** verify that the array length of `__gap`, in this case `38`, is equal to `50 - __gap.Slot`. In this case, the `Slot` column for `__gap` shows 12, so the layout is correct.
 
 ## Reinitializers
 In case you need to reinitialize your contract, you'll need to create a reinitializer.
