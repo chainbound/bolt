@@ -23,7 +23,7 @@ This document provides instructions for running the Bolt sidecar on the Holesky 
 * [Reference](#reference)
   * [Command-line options](#command-line-options)
   * [Delegations and signing options for Native and Docker Compose Mode](#delegations-and-signing-options-for-native-and-docker-compose-mode)
-    * [`bolt-cli`](#bolt-cli)
+    * [`bolt` CLI](#`bolt`-cli)
       * [Installation and usage](#installation-and-usage)
     * [Using a private key directly](#using-a-private-key-directly)
     * [Using a ERC-2335 Keystore](#using-a-erc-2335-keystore)
@@ -77,10 +77,10 @@ client implementations to download and run them.
 
 **Active validators:**
 
-The Bolt sidecar requires access to BLS signing keys from active Ethereum validators, 
+The Bolt sidecar requires access to BLS signing keys from active Ethereum validators,
 or **authorized delegates** acting on their behalf, to issue and sign preconfirmations.
 
-To learn more about delegation, check out the [Delegations and Signing](#delegations-and-signing-options-for-native-and-docker-compose-mode) 
+To learn more about delegation, check out the [Delegations and Signing](#delegations-and-signing-options-for-native-and-docker-compose-mode)
 section.
 
 # Off-Chain Setup
@@ -123,41 +123,48 @@ containing the necessary environment variables:
 
 1. **Bolt Sidecar Configuration:**
 
-   Create a `bolt-sidecar.toml` file in the `testnets/holesky` directory. If you
-   need a reference, you can use the `Config.example.toml` file in the `bolt-sidecar`
-   directory as a starting point.
+   Change directory to the `testnets/holesky` folder and create a
+   `bolt-sidecar.env` file starting from the reference template:
 
    ```bash
-   cp ./bolt-sidecar/Config.example.toml ./testnets/holesky/bolt-sidecar.toml
+   cd testnets/holesky
+   cp bolt-sidecar.env.example bolt-sidecar.env
    ```
 
-   Next up, fill out all the values that are required. For proper configuration
-   of the signing options, please refer to the [Delegations and
+   Next up, fill out the values that are left blank. Please also review the
+   default values and see that they work for your setup. For proper
+   configuration of the signing options, please refer to the [Delegations and
    Signing](#delegations-and-signing-options-for-native-and-docker-compose-mode)
    section of this guide.
 
+   If you've generated a `delegation.json` file using the Bolt CLI please
+   place it in the `testnets/holesky` directory by replacing the existing empty
+   one.
+
 2. **MEV-Boost Configuration:**
 
-   Copy over the example configuration file:
+   Change directory to the `testnets/holesky` folder if you haven't already and
+   copy over the example configuration file:
 
    ```bash
-   cp ./mev-boost/.env.example ./testnets/holesky/mev-boost.env
+   cp ./mev-boost.env.example ./mev-boost.env
    ```
 
-   Then configure it accordingly.
+Then configure it accordingly and review the default values chosen.
 
 If you prefer not to restart your beacon node, follow the instructions in the
 [Avoid Restarting the Beacon Node](#avoid-restarting-the-beacon-node) section.
 
-Once the configuration files are in place, you can start the Docker containers
-by running:
+Once the configuration files are in place, make sure you are in the
+`testnets/holesky` directory and then run:
 
 ```bash
-cd testnets/holesky && docker compose up -d
+docker compose up -d --env-file bolt-sidecar.env
 ```
 
 The docker compose setup comes with various observability tools, such as
-Prometheus and Grafana. It also comes with some pre-built dashboards which you can find at `http://localhost:3000`.
+Prometheus and Grafana. It also comes with some pre-built dashboards which you
+can find at `http://localhost:28017`.
 
 ## Commit-Boost Mode
 
@@ -315,11 +322,8 @@ can be found by running `./bolt-sidecar --help`, or you can find them in the
 
 #### Configuration file
 
-You can use a `Config.toml` file to configure the sidecar, for which you can
-find a template in the `Config.example.toml` file.
-If you wish to place the configuration file in another folder you need to
-specify the path of the configuration file by setting the
-`BOLT_SIDECAR_CONFIG_PATH` environment variable to the path of the file.
+You can use a `.env` file to configure the sidecar, for which you can
+find a template in the `.env.example` file.
 
 Please read the section on [Delegations and Signing](#delegations-and-signing-options-for-native-and-docker-compose-mode)
 to configure such sidecar options properly.
@@ -332,16 +336,22 @@ After you've set up the configuration file you can run the Bolt sidecar with
 
 ### Observability
 
-Commit-Boost comes with various observability tools, such as Prometheus,
-cadvisor, and Grafana. It also comes with some pre-built dashboards, which can
+The bolt sidecar comes with various observability tools, such as Prometheus
+and Grafana. It also comes with some pre-built dashboards, which can
 be found in the `grafana` directory.
 
-To update these dashboards, run the following command:
+To run these dashboards change directory to the `bolt-sidecar/infra` folder and
+run:
 
-`bash ./update-grafana.sh `
+```bash
+docker compose -f telemetry.compose.yml up -d
+```
 
-In this directory, you can also find a Bolt dashboard, which will be launched
-alongside the other dashboards.
+To stop the services run:
+
+```bash
+docker compose -f telemetry.compose.yml down
+```
 
 # On-Chain Registration
 
@@ -819,7 +829,6 @@ Options:
 
 </details>
 
-
 ## Delegations and signing options for Native and Docker Compose Mode
 
 As mentioned in the [prerequisites](#prerequisites) section, the Bolt sidecar
@@ -830,13 +839,13 @@ Ethereum validators.
 > This is the recommended way to run the Bolt sidecar as it
 > doesn't expose the active validator signing keys to any additional risk.
 
-In order to create these delegation you can use the `bolt-delegations-cli` binary.
+In order to create these delegation you can use the `bolt` CLI binary.
 If you don't want to use it you can skip the following section.
 
 ### `bolt` CLI
 
-`bolt` CLI is an offline tool for safely generating delegation and revocation messages 
-signed with a BLS12-381 key for the [Constraints API](https://docs.boltprotocol.xyz/api/builder) 
+`bolt` CLI is an offline tool for safely generating delegation and revocation messages
+signed with a BLS12-381 key for the [Constraints API](https://docs.boltprotocol.xyz/api/builder)
 in [Bolt](https://docs.boltprotocol.xyz/).
 
 The tool supports three key sources:
@@ -855,7 +864,7 @@ Prerequisites:
 - [Rust toolchain](https://www.rust-lang.org/tools/install)
 - [Protoc](https://grpc.io/docs/protoc-installation/)
 
-Once you have the necessary prerequisites, you can build the binary 
+Once you have the necessary prerequisites, you can build the binary
 in the following way:
 
 ```shell
@@ -875,10 +884,10 @@ bolt --version
 The binary can be used with the following command:
 
 ```shell
-bolt delegate --delegate-pubkey <DELEGATEE_PUBKEY> 
-              --out <OUTPUT_FILE> 
-              --chain <CHAIN> 
-              <KEY_SOURCE> 
+bolt delegate --delegate-pubkey <DELEGATEE_PUBKEY>
+              --out <OUTPUT_FILE>
+              --chain <CHAIN>
+              <KEY_SOURCE>
               <KEY_SOURCE_OPTIONS>
 ```
 
@@ -891,8 +900,8 @@ where:
   - `secret-keys`: A list of BLS private keys provided directly as hex-strings.
   - `local-keystore`: A EIP-2335 keystore that contains an encrypted BLS private keys.
   - `dirk`: A remote Dirk server that provides the BLS signatures for the delegation messages.
-  
-You can also find more information about the available key source 
+
+You can also find more information about the available key source
 options by running `bolt delegate <KEY_SOURCE> --help`.
 
 > [!TIP]
@@ -1035,8 +1044,8 @@ can pass directly the private key as a hex-encoded string to the Bolt sidecar
 using the `--constraint-private-key` flag (or `constraint_private_key` in the
 TOML file).
 
-This is the simplest setup and can be used in case if all the delegations messages 
-point to the same delegatee or if you're running the sidecar with a single active 
+This is the simplest setup and can be used in case if all the delegations messages
+point to the same delegatee or if you're running the sidecar with a single active
 validator.
 
 ### Using a ERC-2335 Keystore
@@ -1049,7 +1058,7 @@ containing the password file (in the TOML configuration file these are the
 `keystore_path`, `keystore_password` and `keystore_secrets_path` respectively).
 
 Both the `keys` and `passwords` folders must adhere to the structure outlined
-in the [Delegations CLI example](#delegations-cli-example) section.
+in the [Installation and Usage](#installation-and-usage) section.
 
 ## Avoid restarting the beacon node
 
