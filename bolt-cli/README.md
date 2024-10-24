@@ -4,9 +4,12 @@ The Bolt CLI is a collection of command-line tools for interacting with Bolt pro
 
 ## Installation
 
-This tool can be built with Cargo. If you don't have the Rust toolchain installed
-on your machine, you can follow the steps [here][rust].
-Once you have Rust installed, you can build the binary in the following way:
+Prerequisites:
+
+- [Rust toolchain][rust]
+- [Protoc][protoc]
+
+Once you have the necessary prerequisites, you can build the binary in the following way:
 
 ```shell
 # clone the Bolt repository if you haven't already
@@ -204,6 +207,7 @@ on our official [Discord][discord] or [Twitter][twitter] channels.
 <!-- Links -->
 
 [rust]: https://www.rust-lang.org/tools/install
+[protoc]: https://grpc.io/docs/protoc-installation/
 [bolt-docs]: https://docs.boltprotocol.xyz/
 [discord]: https://discord.gg/G5BJjCD9ss
 [twitter]: https://twitter.com/chainbound_
