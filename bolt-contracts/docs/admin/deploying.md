@@ -34,19 +34,28 @@ export ADMIN_PRIVATE_KEY=0x...
 
 ### Pre-deployment
 
-Register a Symbiotic network for Bolt with the Symbiotic `NetworkRegistry`. The private key with which the script is run will determine the network address. This private key will also need to be used later.
+- Register a Symbiotic network for Bolt with the Symbiotic `NetworkRegistry`. The private key with which the script is run will determine the network address. This private key will also need to be used later.
 
 ```bash
 forge script script/holesky/admin/helpers/Symbiotic.s.sol --rpc-url $HOLESKY_RPC --private-key $NETWORK_PRIVATE_KEY --broadcast -vvvv --sig "run(string memory arg)" registerNetwork
 ```
 
-Make sure `deployments.json` contains the correct address for the Symbiotic network.
+Make sure [`deployments.json`](../../config/holesky/deployments.json) contains the correct address for the Symbiotic network.
+
+- Deploy Bolt-specific Symbiotic Vaults. Vaults will be deployed from the [`vaults.json`](../../config/holesky/vaults.json) configuration file.
+
+```bash
+forge script script/holesky/admin/helpers/DeployVaults.s.sol --rpc-url $HOLESKY_RPC --private-key $ADMIN_PRIVATE_KEY --verify --broadcast -vvvv
+```
+
+If vaults with the `(collateral, admin)` combination already exist, they won't be recreated. After these vaults have been created, copy their
+addresses into the [`deployments.json`](../../config/holesky/deployments.json) file under `symbiotic.supportedVaults`.
 
 ### Deployment
 
 Run the following script to deploy Bolt V1:
 ```bash
-forge script script/holesky/admin/Deploy.s.sol --rpc-url $HOLESKY_RPC --private-key $ADMIN_PRIVATE_KEY --broadcast -vvvv
+forge script script/holesky/admin/Deploy.s.sol --rpc-url $HOLESKY_RPC --private-key $ADMIN_PRIVATE_KEY --verify --broadcast -vvvv
 ```
 
 This will deploy all the contracts. The address corresponding to the private key will be the system admin.
@@ -71,3 +80,11 @@ forge script script/holesky/admin/helpers/RegisterAVS.s.sol --rpc-url $HOLESKY_R
 > [!IMPORTANT]
 > After the `deployments.json` file has been fully updated with the correct contract addresses, push it to Github.
 
+
+### Other Scripts
+
+#### Modifying supported Symbiotic Vaults
+This script will update supported vaults according to `deployments.json`, and remove any vaults that have been whitelisted but are no longer in the `symbiotic.supportedVaults` list.
+```bash
+forge script script/holesky/admin/helpers/UpdateSupportedVaults.s.sol --rpc-url $HOLESKY_RPC --private-key $ADMIN_PRIVATE_KEY --broadcast -vvv
+```

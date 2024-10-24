@@ -14,6 +14,7 @@ import {IBoltValidatorsV1} from "../interfaces/IBoltValidatorsV1.sol";
 import {IBoltMiddlewareV1} from "../interfaces/IBoltMiddlewareV1.sol";
 import {IBoltManagerV1} from "../interfaces/IBoltManagerV1.sol";
 
+import {IServiceManager} from "@eigenlayer-middleware/src/interfaces/IServiceManager.sol";
 import {IStrategyManager} from "@eigenlayer/src/contracts/interfaces/IStrategyManager.sol";
 import {IAVSDirectory} from "@eigenlayer/src/contracts/interfaces/IAVSDirectory.sol";
 import {IDelegationManager} from "@eigenlayer/src/contracts/interfaces/IDelegationManager.sol";
@@ -30,7 +31,7 @@ import {StrategyManagerStorage} from "@eigenlayer/src/contracts/core/StrategyMan
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 /// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
 /// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
-contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UUPSUpgradeable {
+contract BoltEigenLayerMiddlewareV2 is IBoltMiddlewareV1, IServiceManager, OwnableUpgradeable, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
@@ -95,6 +96,25 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UU
         address _eigenlayerDelegationManager,
         address _eigenlayerStrategyManager
     ) public initializer {
+        __Ownable_init(_owner);
+        parameters = IBoltParametersV1(_parameters);
+        manager = IBoltManagerV1(_manager);
+        START_TIMESTAMP = Time.timestamp();
+
+        AVS_DIRECTORY = IAVSDirectory(_eigenlayerAVSDirectory);
+        DELEGATION_MANAGER = DelegationManagerStorage(_eigenlayerDelegationManager);
+        STRATEGY_MANAGER = StrategyManagerStorage(_eigenlayerStrategyManager);
+        NAME_HASH = keccak256("EIGENLAYER");
+    }
+
+    function initializeV2(
+        address _owner,
+        address _parameters,
+        address _manager,
+        address _eigenlayerAVSDirectory,
+        address _eigenlayerDelegationManager,
+        address _eigenlayerStrategyManager
+    ) public reinitializer(2) {
         __Ownable_init(_owner);
         parameters = IBoltParametersV1(_parameters);
         manager = IBoltManagerV1(_manager);
@@ -183,8 +203,7 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UU
             revert NotOperator();
         }
 
-        // Register the operator to the AVS directory for this AVS
-        AVS_DIRECTORY.registerOperatorToAVS(msg.sender, operatorSignature);
+        registerOperatorToAVS(msg.sender, operatorSignature);
 
         // Register the operator in the manager
         manager.registerOperator(msg.sender, rpc);
@@ -198,7 +217,7 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UU
             revert NotRegistered();
         }
 
-        AVS_DIRECTORY.deregisterOperatorFromAVS(msg.sender);
+        deregisterOperatorFromAVS(msg.sender);
 
         manager.deregisterOperator(msg.sender);
     }
@@ -256,8 +275,6 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UU
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
 
-        IStrategy[] memory strategyImpls = new IStrategy[](strategies.length());
-
         for (uint256 i = 0; i < strategies.length(); ++i) {
             (address strategy, uint48 enabledTime, uint48 disabledTime) = strategies.atWithTimes(i);
 
@@ -270,14 +287,8 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UU
             address collateral = address(strategyImpl.underlyingToken());
             collateralTokens[i] = collateral;
 
-            strategyImpls[i] = strategyImpl;
-        }
-
-        // NOTE: order is preserved, which is why we can use the same index for both arrays below
-        uint256[] memory shares = DELEGATION_MANAGER.getOperatorShares(operator, strategyImpls);
-
-        for (uint256 i = 0; i < strategyImpls.length; ++i) {
-            amounts[i] = strategyImpls[i].sharesToUnderlyingView(shares[i]);
+            uint256 shares = DELEGATION_MANAGER.operatorShares(operator, strategyImpl);
+            amounts[i] = strategyImpl.sharesToUnderlyingView(shares);
         }
 
         return (collateralTokens, amounts);
@@ -308,9 +319,6 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UU
 
         uint48 epochStartTs = getEpochStartTs(getEpochAtTs(timestamp));
 
-        // NOTE: Can this be done more gas-efficiently?
-        IStrategy[] memory strategyMem = new IStrategy[](1);
-
         for (uint256 i = 0; i < strategies.length(); i++) {
             (address strategy, uint48 enabledTime, uint48 disabledTime) = strategies.atWithTimes(i);
 
@@ -322,10 +330,8 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UU
                 continue;
             }
 
-            strategyMem[0] = IStrategy(strategy);
-            // NOTE: order is preserved i.e., shares[i] corresponds to strategies[i]
-            uint256[] memory shares = DELEGATION_MANAGER.getOperatorShares(operator, strategyMem);
-            amount += IStrategy(strategy).sharesToUnderlyingView(shares[0]);
+            uint256 shares = DELEGATION_MANAGER.operatorShares(operator, IStrategy(strategy));
+            amount += IStrategy(strategy).sharesToUnderlyingView(shares);
         }
 
         return amount;
@@ -350,5 +356,62 @@ contract BoltEigenLayerMiddlewareV1 is IBoltMiddlewareV1, OwnableUpgradeable, UU
     /// @return True if the map entry was active at the given timestamp, false otherwise.
     function _wasEnabledAt(uint48 enabledTime, uint48 disabledTime, uint48 timestamp) private pure returns (bool) {
         return enabledTime != 0 && enabledTime <= timestamp && (disabledTime == 0 || disabledTime >= timestamp);
+    }
+
+    // ============== EIGENLAYER SERVICE MANAGER ================= //
+    // Cfr. https://docs.eigenlayer.xyz/developers/avs-dashboard-onboarding
+    // getOperatorRestakedStrategies and getRestakeableStrategies have reference implementations
+    // that read from RegistryCoordinator & StakeRegistry. These are middleware contracts that
+    // are not used in the EigenLayer operator CLI as of today (23 Oct 2024): https://github.com/Layr-Labs/eigensdk-go/blob/0042b1a0dd502bb03c6bf1da85fc096c5c8e8f1b/chainio/clients/elcontracts/writer.go#L158
+    //
+    // So we'll just get that information from our own system for now.
+
+    function registerOperatorToAVS(
+        address operator,
+        ISignatureUtils.SignatureWithSaltAndExpiry memory operatorSignature
+    ) public override {
+        // Register the operator to the AVS directory for this AVS
+        AVS_DIRECTORY.registerOperatorToAVS(operator, operatorSignature);
+    }
+
+    function deregisterOperatorFromAVS(
+        address operator
+    ) public override {
+        // NOTE: need to do this check because these functions have to be public
+        if (msg.sender != operator) {
+            revert NotAllowed();
+        }
+
+        AVS_DIRECTORY.deregisterOperatorFromAVS(operator);
+    }
+
+    function getOperatorRestakedStrategies(
+        address operator
+    ) external view override returns (address[] memory) {
+        address[] memory restakedStrategies = new address[](strategies.length());
+
+        uint48 epochStartTs = getEpochStartTs(getEpochAtTs(Time.timestamp()));
+
+        for (uint256 i = 0; i < strategies.length(); ++i) {
+            (address strategy, uint48 enabledTime, uint48 disabledTime) = strategies.atWithTimes(i);
+
+            if (!_wasEnabledAt(enabledTime, disabledTime, epochStartTs)) {
+                continue;
+            }
+
+            if (DELEGATION_MANAGER.operatorShares(operator, IStrategy(strategy)) > 0) {
+                restakedStrategies[restakedStrategies.length] = strategy;
+            }
+        }
+
+        return restakedStrategies;
+    }
+
+    function getRestakeableStrategies() external view override returns (address[] memory) {
+        return strategies.keys();
+    }
+
+    function avsDirectory() external view override returns (address) {
+        return address(AVS_DIRECTORY);
     }
 }

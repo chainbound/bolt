@@ -6,7 +6,7 @@ import {Test, console} from "forge-std/Test.sol";
 import {BoltValidatorsV1} from "../src/contracts/BoltValidatorsV1.sol";
 import {BoltManagerV1} from "../src/contracts/BoltManagerV1.sol";
 import {BoltParametersV1} from "../src/contracts/BoltParametersV1.sol";
-import {BoltEigenLayerMiddlewareV1} from "../src/contracts/BoltEigenLayerMiddlewareV1.sol";
+import {BoltEigenLayerMiddlewareV2} from "../src/contracts/BoltEigenLayerMiddlewareV2.sol";
 import {BoltConfig} from "../src/lib/Config.sol";
 import {IBoltValidatorsV1} from "../src/interfaces/IBoltValidatorsV1.sol";
 import {IBoltManagerV1} from "../src/interfaces/IBoltManagerV1.sol";
@@ -30,7 +30,7 @@ contract BoltManagerEigenLayerTest is Test {
 
     BoltValidatorsV1 public validators;
     BoltManagerV1 public manager;
-    BoltEigenLayerMiddlewareV1 public middleware;
+    BoltEigenLayerMiddlewareV2 public middleware;
     EigenLayerDeployer public eigenLayerDeployer;
 
     uint128 public constant PRECONF_MAX_GAS_LIMIT = 5_000_000;
@@ -74,7 +74,7 @@ contract BoltManagerEigenLayerTest is Test {
         validators.initialize(admin, address(parameters));
         manager = new BoltManagerV1();
         manager.initialize(admin, address(parameters), address(validators));
-        middleware = new BoltEigenLayerMiddlewareV1();
+        middleware = new BoltEigenLayerMiddlewareV2();
 
         middleware.initialize(
             address(admin),
