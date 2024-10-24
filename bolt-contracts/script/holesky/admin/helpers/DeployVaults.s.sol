@@ -3,6 +3,8 @@ pragma solidity 0.8.25;
 
 import {Script, console} from "forge-std/Script.sol";
 
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+
 import {IVault} from "@symbiotic/interfaces/vault/IVault.sol";
 import {IOptInService} from "@symbiotic/interfaces/service/IOptInService.sol";
 import {IVaultConfigurator} from "@symbiotic/interfaces/IVaultConfigurator.sol";
@@ -30,13 +32,39 @@ contract DeploySymbioticVaults is Script {
         for (uint256 i; i < configs.length; ++i) {
             VaultConfig memory config = configs[i];
 
-            console.log("Deploying vault with collateral:", config.collateral);
+            IMigratablesFactory vaultFactory = IMigratablesFactory(vaultConfigurator.VAULT_FACTORY());
+
+            bool exists;
+
+            // First check if the vault already exists. We do this by checking for the collateral, and the admin.
+            // If we need to check for more properties in the future (like version), we can add them here.
+            for (uint256 j; j < vaultFactory.totalEntities(); ++j) {
+                address existingVault = vaultFactory.entity(j);
+
+                if (
+                    IVault(existingVault).collateral() == config.collateral
+                        && OwnableUpgradeable(existingVault).owner() == config.admin
+                ) {
+                    console.log(
+                        "Vault for collateral %s already deployed with admin %s", config.collateral, config.admin
+                    );
+                    console.log("Address:", existingVault);
+                    exists = true;
+
+                    break;
+                }
+            }
+
+            if (exists) {
+                continue;
+            }
 
             address[] memory adminRoleHolders = new address[](1);
             adminRoleHolders[0] = config.admin;
 
             IVaultConfigurator.InitParams memory vaultConfiguratorInitParams = IVaultConfigurator.InitParams({
-                version: IMigratablesFactory(vaultConfigurator.VAULT_FACTORY()).lastVersion(),
+                // Use Version 1 for a standard vault (non-tokenized).
+                version: 1,
                 owner: config.admin,
                 vaultParams: abi.encode(
                     IVault.InitParams({
