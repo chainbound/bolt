@@ -40,6 +40,11 @@ async fn main() -> Result<()> {
                     action,
                 )?;
 
+                // Verify signatures
+                for message in &signed_messages {
+                    delegation::verify_message_signature(message, chain)?;
+                }
+
                 write_to_file(&out, &signed_messages)?;
                 println!("Signed delegation messages generated and saved to {}", out);
             }
@@ -53,6 +58,11 @@ async fn main() -> Result<()> {
                     chain,
                     action,
                 )?;
+
+                // Verify signatures
+                for message in &signed_messages {
+                    delegation::verify_message_signature(message, chain)?;
+                }
 
                 write_to_file(&out, &signed_messages)?;
                 println!("Signed delegation messages generated and saved to {}", out);
@@ -71,6 +81,11 @@ async fn main() -> Result<()> {
                 )
                 .await?;
                 debug!("Signed {} messages with Dirk", signed_messages.len());
+
+                // Verify signatures
+                for message in &signed_messages {
+                    delegation::verify_message_signature(message, chain)?;
+                }
 
                 write_to_file(&out, &signed_messages)?;
                 println!("Signed delegation messages generated and saved to {}", out);

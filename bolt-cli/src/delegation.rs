@@ -13,7 +13,9 @@ use crate::{
     utils::{
         dirk::Dirk,
         keystore::{keystore_paths, KeystoreError, KeystoreSecret},
-        signing::{compute_commit_boost_signing_root, compute_domain_from_mask},
+        signing::{
+            compute_commit_boost_signing_root, compute_domain_from_mask, verify_commit_boost_root,
+        },
     },
 };
 
@@ -139,14 +141,14 @@ pub async fn generate_from_dirk(
         match action {
             Action::Delegate => {
                 let message = DelegationMessage::new(pubkey.clone(), delegatee_pubkey.clone());
-                let signing_root = compute_commit_boost_signing_root(message.digest(), &chain)?;
+                let signing_root = message.digest().into(); // Dirk does the hash tree root internally
                 let signature = dirk.request_signature(&account, signing_root, domain).await?;
                 let signed = SignedDelegation { message, signature };
                 signed_messages.push(SignedMessage::Delegation(signed));
             }
             Action::Revoke => {
                 let message = RevocationMessage::new(pubkey.clone(), delegatee_pubkey.clone());
-                let signing_root = compute_commit_boost_signing_root(message.digest(), &chain)?;
+                let signing_root = message.digest().into(); // Dirk does the hash tree root internally
                 let signature = dirk.request_signature(&account, signing_root, domain).await?;
                 let signed = SignedRevocation { message, signature };
                 signed_messages.push(SignedMessage::Revocation(signed));
@@ -249,18 +251,42 @@ impl RevocationMessage {
     }
 }
 
+/// Verify the signature of a signed message
+pub fn verify_message_signature(message: &SignedMessage, chain: Chain) -> Result<()> {
+    match message {
+        SignedMessage::Delegation(signed_delegation) => {
+            let signer_pubkey = signed_delegation.message.validator_pubkey.clone();
+            let digest = signed_delegation.message.digest();
+
+            let blst_sig =
+                blst::min_pk::Signature::from_bytes(signed_delegation.signature.as_ref())
+                    .map_err(|e| eyre::eyre!("Failed to parse signature: {:?}", e))?;
+
+            // Verify the signature
+            verify_commit_boost_root(signer_pubkey, digest, &blst_sig, &chain)
+        }
+        SignedMessage::Revocation(signed_revocation) => {
+            let signer_pubkey = signed_revocation.message.validator_pubkey.clone();
+            let digest = signed_revocation.message.digest();
+
+            let blst_sig =
+                blst::min_pk::Signature::from_bytes(signed_revocation.signature.as_ref())
+                    .map_err(|e| eyre::eyre!("Failed to parse signature: {:?}", e))?;
+
+            // Verify the signature
+            verify_commit_boost_root(signer_pubkey, digest, &blst_sig, &chain)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
-
     use crate::{
         cli::{Action, Chain},
-        utils::{
-            keystore::KeystoreSecret, parse_bls_public_key, signing::verify_commit_boost_root,
-        },
+        utils::{keystore::KeystoreSecret, parse_bls_public_key},
     };
 
-    use super::{generate_from_keystore, SignedMessage};
+    use super::{generate_from_keystore, verify_message_signature};
 
     #[test]
     fn test_delegation_keystore_signer_lighthouse() -> eyre::Result<()> {
@@ -284,31 +310,8 @@ mod tests {
 
         let signed_message = signed_delegations.first().expect("to get signed delegation");
 
-        verify_delegation_signature(signed_message, delegatee_pubkey, chain);
+        verify_message_signature(signed_message, chain)?;
 
         Ok(())
-    }
-
-    fn verify_delegation_signature(
-        message: &SignedMessage,
-        delegatee_pubkey: BlsPublicKey,
-        chain: Chain,
-    ) {
-        match message {
-            SignedMessage::Delegation(signed_delegation) => {
-                let output_delegatee_pubkey = signed_delegation.message.delegatee_pubkey.clone();
-                let signer_pubkey = signed_delegation.message.validator_pubkey.clone();
-                let digest = signed_delegation.message.digest();
-                assert_eq!(output_delegatee_pubkey, delegatee_pubkey);
-
-                let blst_sig =
-                    blst::min_pk::Signature::from_bytes(signed_delegation.signature.as_ref())
-                        .expect("Failed to convert delegation signature");
-
-                // Verify the signature
-                assert!(verify_commit_boost_root(signer_pubkey, digest, &blst_sig, &chain).is_ok());
-            }
-            _ => panic!("Expected a delegation message"),
-        }
     }
 }
