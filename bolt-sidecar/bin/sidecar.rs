@@ -1,22 +1,12 @@
-use std::fs;
-
 use clap::Parser;
 use eyre::{bail, Result};
 use tracing::info;
 
 use bolt_sidecar::{telemetry::init_telemetry_stack, Opts, SidecarDriver};
 
-pub const TOML_CONFIG_DEFAULT_PATH: &str = "./Config.toml";
-
 #[tokio::main]
 async fn main() -> Result<()> {
-    let opts = if let Ok(config_path) = std::env::var("BOLT_SIDECAR_CONFIG_PATH") {
-        Opts::parse_from_toml(config_path.as_str())?
-    } else if fs::exists(TOML_CONFIG_DEFAULT_PATH).is_ok_and(|exists| exists) {
-        Opts::parse_from_toml(TOML_CONFIG_DEFAULT_PATH)?
-    } else {
-        Opts::parse()
-    };
+    let opts = Opts::parse();
 
     if let Err(err) = init_telemetry_stack(opts.telemetry.metrics_port()) {
         bail!("Failed to initialize telemetry stack: {:?}", err)

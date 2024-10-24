@@ -47,7 +47,7 @@ impl SignableBLS for DelegationMessage {
     }
 }
 
-/// read the delegaitons from disk if they exist and add them to the constraints client
+/// read the delegations from disk if they exist and add them to the constraints client
 pub fn read_signed_delegations_from_file(
     file_path: &PathBuf,
 ) -> eyre::Result<Vec<SignedDelegation>> {
