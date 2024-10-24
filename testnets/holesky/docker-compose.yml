@@ -28,6 +28,17 @@ services:
       - ./targets.json:/etc/prometheus/targets.json
       - prometheus-data:/prometheus
 
+  bolt-cadvisor-holesky:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: bolt-cadvisor-holesky
+    restart: unless-stopped
+    ports:
+      - "38017:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+
   bolt-grafana-holesky:
     image: grafana/grafana:latest
     container_name: bolt-grafana-holesky
