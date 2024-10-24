@@ -600,8 +600,8 @@ Command-line options for the Bolt sidecar
 Usage: bolt-sidecar [OPTIONS] --validator-indexes <VALIDATOR_INDEXES> --engine-jwt-hex <ENGINE_JWT_HEX> --fee-recipient <FEE_RECIPIENT> --builder-private-key <BUILDER_PRIVATE_KEY> --commitment-private-key <COMMITMENT_PRIVATE_KEY> <--constraint-private-key <CONSTRAINT_PRIVATE_KEY>|--commit-boost-signer-url <COMMIT_BOOST_SIGNER_URL>|--keystore-password <KEYSTORE_PASSWORD>|--keystore-secrets-path <KEYSTORE_SECRETS_PATH>>
 
 Options:
---port <PORT>
-Port to listen on for incoming JSON-RPC requests of the Commitments API. This port should be open on your firewall in order to receive external requests!
+      --port <PORT>
+      Port to listen on for incoming JSON-RPC requests of the Commitments API. This port should be open on your firewall in order to receive external requests!
 
           [env: BOLT_SIDECAR_PORT=]
           [default: 8017]
@@ -637,8 +637,11 @@ Port to listen on for incoming JSON-RPC requests of the Commitments API. This po
           [default: 18550]
 
       --validator-indexes <VALIDATOR_INDEXES>
-          Validator indexes of connected validators that the sidecar should accept commitments on behalf of. Accepted values: - a comma-separated list of indexes (e.g. "1,2,3,4") - a contiguous range of indexes (e.g. "1..4") - a mix of the
-          above (e.g. "1,2..4,6..8")
+          Validator indexes of connected validators that the sidecar should accept commitments on behalf of.
+          Accepted values:
+              - a comma-separated list of indexes (e.g. "1,2,3,4")
+              - a contiguous range of indexes (e.g. "1..4")
+              - a mix of the above (e.g. "1,2..4,6..8")
 
           [env: BOLT_SIDECAR_VALIDATOR_INDEXES=]
 
@@ -745,8 +748,8 @@ Port to listen on for incoming JSON-RPC requests of the Commitments API. This po
       --disable-metrics
           [env: BOLT_SIDECAR_DISABLE_METRICS=]
 
--h, --help
-Print help (see a summary with '-h')
+  -h, --help
+          Print help (see a summary with '-h')
 
 ```
 
