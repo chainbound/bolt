@@ -11,7 +11,6 @@ import {IVault} from "@symbiotic/interfaces/vault/IVault.sol";
 
 contract RegisterSymbioticOperator is Script {
     struct Config {
-        string rpc;
         BoltSymbioticMiddlewareV1 symbioticMiddleware;
         IOptInService symbioticNetworkOptInService;
         address symbioticNetwork;
@@ -25,14 +24,15 @@ contract RegisterSymbioticOperator is Script {
 
         Config memory config = _readConfig();
 
+        console.log("Registering Symbiotic operator into Bolt");
+        console.log("Operator address:", operator);
+
         // First, make sure the operator is opted into the network
         require(
             config.symbioticNetworkOptInService.isOptedIn(operator, config.symbioticNetwork),
             "Operator must be opted in into Bolt Network"
         );
 
-        console.log("Registering Symbiotic operator into Bolt");
-        console.log("Operator address:", operator);
         console.log("Operator RPC:", rpc);
 
         vm.startBroadcast(operatorSk);
@@ -40,14 +40,23 @@ contract RegisterSymbioticOperator is Script {
         console.log("Successfully registered Symbiotic operator");
 
         vm.stopBroadcast();
+
+        (address[] memory tokens, uint256[] memory amounts) =
+            config.symbioticMiddleware.getOperatorCollaterals(operator);
+
+        console.log("Operator collateral:");
+        for (uint256 i; i < tokens.length; ++i) {
+            console.log("Collateral:", tokens[i], "Amount:", amounts[i]);
+        }
     }
 
     function S02_checkOperatorRegistration() public view {
-        address operatorPublicKey = vm.envAddress("OPERATOR_PK");
-        console.log("Checking operator registration for address", operatorPublicKey);
+        address operatorAddress = vm.envAddress("OPERATOR_ADDRESS");
+        console.log("Checking operator registration for address", operatorAddress);
 
         IBoltManagerV1 boltManager = _readBoltManager();
-        bool isRegistered = boltManager.isOperator(operatorPublicKey);
+        bool isRegistered = boltManager.isOperator(operatorAddress);
+
         console.log("Operator is registered:", isRegistered);
         require(isRegistered, "Operator is not registered");
     }
@@ -57,11 +66,7 @@ contract RegisterSymbioticOperator is Script {
         string memory path = string.concat(root, "/config/holesky/deployments.json");
         string memory json = vm.readFile(path);
 
-        string memory operatorPath = string.concat(root, "/config/holesky/operator.json");
-        string memory operatorJson = vm.readFile(operatorPath);
-
         return Config({
-            rpc: vm.parseJsonString(operatorJson, ".rpc"),
             symbioticNetwork: vm.parseJsonAddress(json, ".symbiotic.network"),
             symbioticMiddleware: BoltSymbioticMiddlewareV1(vm.parseJsonAddress(json, ".symbiotic.middleware")),
             symbioticNetworkOptInService: IOptInService(vm.parseJsonAddress(json, ".symbiotic.networkOptInService"))

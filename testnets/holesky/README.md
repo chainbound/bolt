@@ -538,8 +538,8 @@ procedure. If you want to use it, please follow these steps:
      --broadcast
    ```
 
-To check if your operator is correctly registered, set the operator public key
-in the `OPERATOR_PK` environment variable and run the following script:
+To check if your operator is correctly registered, set the operator address
+in the `OPERATOR_ADDRESS` environment variable and run the following script:
 
 ```bash
 forge script script/holesky/operators/RegisterSymbioticOperator.s.sol \
