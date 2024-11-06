@@ -216,7 +216,6 @@ impl<C: StateFetcher, ECDSA: SignerECDSA> SidecarDriver<C, ECDSA> {
 
         let consensus = ConsensusState::new(
             beacon_client,
-            opts.validator_indexes.clone(),
             opts.chain.commitment_deadline(),
             opts.chain.enable_unsafe_lookahead,
         );

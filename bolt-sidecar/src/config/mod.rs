@@ -3,9 +3,6 @@ use clap::Parser;
 use reqwest::Url;
 use serde::Deserialize;
 
-pub mod validator_indexes;
-pub use validator_indexes::ValidatorIndexes;
-
 pub mod chain;
 pub use chain::ChainConfig;
 
@@ -58,13 +55,6 @@ pub struct Opts {
         default_value_t = DEFAULT_CONSTRAINTS_PROXY_PORT
     )]
     pub constraints_proxy_port: u16,
-    /// Validator indexes of connected validators that the sidecar
-    /// should accept commitments on behalf of. Accepted values:
-    /// - a comma-separated list of indexes (e.g. "1,2,3,4")
-    /// - a contiguous range of indexes (e.g. "1..4")
-    /// - a mix of the above (e.g. "1,2..4,6..8")
-    #[clap(long, env = "BOLT_SIDECAR_VALIDATOR_INDEXES", default_value_t)]
-    pub validator_indexes: ValidatorIndexes,
     /// The JWT secret token to authenticate calls to the engine API.
     ///
     /// It can either be a hex-encoded string or a file path to a file
