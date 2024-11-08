@@ -1,24 +1,53 @@
-FROM lukemathwalker/cargo-chef:latest-rust-1.81.0 AS chef
+FROM --platform=$BUILDPLATFORM tonistiigi/xx AS xx
+FROM --platform=$BUILDPLATFORM rust:1.81.0-alpine AS base
+
 WORKDIR /app
 
-FROM chef AS planner
+# Copy xx scripts to the build stage
+COPY --from=xx / /
+
+FROM base AS planner
+
+# Copy files for dependency & binary resolution
+COPY Cargo.toml Cargo.lock ./
+COPY src/main.rs ./src/main.rs
+
+# Pre-fetch dependencies with caching
+RUN --mount=type=cache,target=/root/.cargo/git/db \
+    --mount=type=cache,target=/root/.cargo/registry/cache \
+    --mount=type=cache,target=/root/.cargo/registry/index \
+    cargo fetch
+
+FROM base AS builder
+
+# Install necessary tools for cross-compilation
+RUN apk add clang lld musl-dev libc-dev build-base pkgconfig openssl-dev
+
+# Set PKG_CONFIG_PATH to the directory containing openssl.pc
+ENV PKG_CONFIG_PATH="/usr/lib/pkgconfig"
+
+# Copy application source code
 COPY . .
-RUN cargo chef prepare --recipe-path recipe.json
 
-FROM chef AS builder
-COPY --from=planner /app/recipe.json recipe.json
+# Set the target platform using xx-cargo
+ARG TARGETPLATFORM
+RUN --mount=type=cache,target=/root/.cargo/git/db \
+    --mount=type=cache,target=/root/.cargo/registry/cache \
+    --mount=type=cache,target=/root/.cargo/registry/index \
+    xx-cargo build --release --target-dir ./build && \
+    xx-verify ./build/$(xx-cargo --print-target-triple)/release/bolt-boost
 
-RUN cargo chef cook --release --recipe-path recipe.json
-
-COPY . .
-RUN cargo build --release
-
-
-FROM ubuntu AS runtime
+# Final stage - runtime with Alpine
+FROM alpine:latest AS runtime
 WORKDIR /app
 
-RUN apt-get update
-RUN apt-get install -y openssl ca-certificates libssl3 libssl-dev
+# Install only necessary runtime dependencies
+RUN apk add --no-cache openssl ca-certificates
 
-COPY --from=builder /app/target/release/bolt-boost /usr/local/bin
+# Copy the compiled binary from the builder stage
+COPY --from=builder /app/build/$(xx-cargo --print-target-triple)/release/bolt-boost /usr/local/bin/
+
+# Set executable permissions if needed
+RUN chmod +x /usr/local/bin/bolt-boost
+
 ENTRYPOINT ["/usr/local/bin/bolt-boost"]
