@@ -128,13 +128,13 @@ docker_image = "ghcr.io/chainbound/bolt-sidecar:v0.3.0-alpha.rc2"
 BOLT_SIDECAR_CHAIN = "holesky"
 
 # The address of the PBS module. cb_pbs is the name of the pbs module Docker container, you don't need to change it.
-BOLT_SIDECAR_CONSTRAINTS_API = "http://cb_pbs:18550"
+BOLT_SIDECAR_CONSTRAINTS_API_URL = "http://cb_pbs:18550"
 # The beacon node HTTP API endpoint
-BOLT_SIDECAR_BEACON_API = "http://135.181.191.125:44400"
+BOLT_SIDECAR_BEACON_API_URL = "http://135.181.191.125:44400"
 # The execution layer HTTP API endpoint
-BOLT_SIDECAR_EXECUTION_API = "http://135.181.191.125:48545"
+BOLT_SIDECAR_EXECUTION_API_URL = "http://135.181.191.125:48545"
 # The execution layer engine API endpoint
-BOLT_SIDECAR_ENGINE_API = "http://135.181.191.125:48551"
+BOLT_SIDECAR_ENGINE_API_URL = "http://135.181.191.125:48551"
 # The engine JWT secret
 BOLT_SIDECAR_ENGINE_JWT_HEX = "0000000000000000000000000000000000000000000000000000000000000000"
 # The port on which the sidecar builder-API will listen on. This is what your beacon node should connect to.
