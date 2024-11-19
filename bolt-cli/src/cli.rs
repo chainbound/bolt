@@ -1,3 +1,6 @@
+use std::path::PathBuf;
+
+use alloy::primitives::Address;
 use clap::{
     builder::styling::{AnsiColor, Color, Style},
     Parser, Subcommand, ValueEnum,
@@ -25,6 +28,9 @@ pub enum Cmd {
 
     /// Send a preconfirmation request to a Bolt proposer.
     Send(Box<SendCommand>),
+
+    /// Register validators in the Bolt network.
+    Register(RegisterCommand),
 }
 
 impl Cmd {
@@ -34,6 +40,7 @@ impl Cmd {
             Cmd::Delegate(cmd) => cmd.run().await,
             Cmd::Pubkeys(cmd) => cmd.run().await,
             Cmd::Send(cmd) => cmd.run().await,
+            Cmd::Register(cmd) => cmd.run().await,
         }
     }
 }
@@ -129,6 +136,29 @@ pub struct SendCommand {
     /// The URL of the devnet sidecar for sending transactions
     #[clap(long = "devnet.sidecar_url", hide = true)]
     pub devnet_sidecar_url: Option<Url>,
+}
+
+/// Command for registering validators in the Bolt network.
+#[derive(Debug, Clone, Parser)]
+pub struct RegisterCommand {
+    /// The chain for which the delegation message is intended.
+    #[clap(long, env = "CHAIN", default_value = "holesky")]
+    pub chain: Chain,
+
+    #[clap(long, env = "MAX_COMMITTED_GAS_LIMIT", default_value_t = 10_000_000)]
+    pub max_committed_gas_limit: u32,
+
+    #[clap(long, env = "AUTHORIZED_OPERATOR")]
+    pub authorized_operator: Address,
+
+    #[clap(long, env = "PUBKEYS_PATH", default_value = "pubkeys.json")]
+    pub pubkeys_path: PathBuf,
+
+    #[clap(long, env = "ADMIN_PRIVATE_KEY")]
+    pub admin_private_key: String,
+
+    #[clap(long, env = "RPC_URL")]
+    pub rpc_url: Url,
 }
 
 /// The action to perform.
@@ -229,7 +259,7 @@ pub struct TlsCredentials {
 }
 
 /// Supported chains for the CLI
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, ValueEnum, Hash, PartialEq, Eq)]
 #[clap(rename_all = "kebab_case")]
 pub enum Chain {
     Mainnet,
