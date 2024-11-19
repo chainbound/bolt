@@ -23,7 +23,11 @@ blst = "0.3.12"
 # ethereum
 ethereum-consensus = { git = "https://github.com/ralexstokes/ethereum-consensus", rev = "cf3c404" }
 lighthouse_eth2_keystore = { package = "eth2_keystore", git = "https://github.com/sigp/lighthouse", rev = "a87f19d" }
-alloy = { version = "0.5.2", features = ["full"] }
+alloy = { version = "0.6.4", features = [
+  "full",
+  "provider-anvil-api",
+  "provider-anvil-node",
+] }
 
 # utils
 dotenvy = "0.15.7"
@@ -37,6 +41,7 @@ rand = "0.8.5"
 
 [dev-dependencies]
 tempfile = "3.13.0"
+alloy-node-bindings = "0.6.3"
 
 [build-dependencies]
 tonic-build = "0.12.3"

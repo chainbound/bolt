@@ -45,9 +45,9 @@ impl RegisterCommand {
             self.authorized_operator,
         );
 
-        let result = call.send().await?;
+        let result = call.send().await?.watch().await?;
 
-        println!("Call result: {:?}", result);
+        println!("transaction hash: {:?}", result);
 
         Ok(())
     }
@@ -88,5 +88,40 @@ sol! {
         #[derive(Debug)]
         error ValidatorDoesNotExist(bytes20 pubkeyHash);
         error InvalidAuthorizedOperator();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use alloy::{
+        primitives::{Address, U256},
+        providers::{ext::AnvilApi, Provider, ProviderBuilder},
+        signers::k256::ecdsa::SigningKey,
+    };
+
+    use crate::cli::RegisterCommand;
+
+    #[tokio::test]
+    async fn test_register_validators() {
+        let rpc_url = "https://holesky.drpc.org";
+        let provider = ProviderBuilder::new().on_anvil_with_config(|anvil| anvil.fork(rpc_url));
+        let anvil_url = provider.client().transport().url();
+
+        let mut rnd = rand::thread_rng();
+        let secret_key = SigningKey::random(&mut rnd);
+        let account = Address::from_private_key(&secret_key);
+
+        provider.anvil_set_balance(account, U256::from(u64::MAX)).await.expect("set balance");
+
+        let command = RegisterCommand {
+            chain: crate::cli::Chain::Holesky,
+            max_committed_gas_limit: 30_000_000,
+            admin_private_key: format!("{:x}", secret_key.to_bytes()),
+            authorized_operator: account,
+            pubkeys_path: "./test_data/pubkeys.json".parse().unwrap(),
+            rpc_url: anvil_url.parse().unwrap(),
+        };
+
+        command.run().await.expect("run command");
     }
 }
