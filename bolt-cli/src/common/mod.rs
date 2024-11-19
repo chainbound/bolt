@@ -16,6 +16,8 @@ pub mod keystore;
 /// Utilities for signing and verifying messages.
 pub mod signing;
 
+pub mod hash;
+
 /// Parse a BLS public key from a string
 pub fn parse_bls_public_key(delegatee_pubkey: &str) -> Result<BlsPublicKey> {
     let hex_pk = delegatee_pubkey.strip_prefix("0x").unwrap_or(delegatee_pubkey);
