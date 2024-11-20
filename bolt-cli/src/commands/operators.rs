@@ -1,18 +1,3 @@
-use crate::{
-    cli::{
-        Chain, EigenLayerSubcommand, OperatorsCommand, OperatorsSubcommand, SymbioticSubcommand,
-    },
-    common::bolt_manager::BoltManagerContract,
-    contracts::{
-        bolt::{BoltEigenLayerMiddleware, SignatureWithSaltAndExpiry},
-        deployments_for_chain,
-        eigenlayer::{
-            AVSDirectory, IStrategy::IStrategyInstance, IStrategyManager::IStrategyManagerInstance,
-        },
-        erc20::IERC20::IERC20Instance,
-        strategy_to_address,
-    },
-};
 use alloy::{
     network::EthereumWallet,
     primitives::Bytes,
@@ -20,12 +5,34 @@ use alloy::{
     signers::{local::PrivateKeySigner, SignerSync},
 };
 use eyre::Context;
+use tracing::info;
+
+use crate::{
+    cli::{
+        Chain, EigenLayerSubcommand, OperatorsCommand, OperatorsSubcommand, SymbioticSubcommand,
+    },
+    common::bolt_manager::BoltManagerContract,
+    contracts::{
+        bolt::{
+            BoltEigenLayerMiddleware,
+            BoltSymbioticMiddleware::{self},
+            SignatureWithSaltAndExpiry,
+        },
+        deployments_for_chain,
+        eigenlayer::{
+            AVSDirectory, IStrategy::IStrategyInstance, IStrategyManager::IStrategyManagerInstance,
+        },
+        erc20::IERC20::IERC20Instance,
+        strategy_to_address,
+        symbiotic::IOptInService,
+    },
+};
 
 impl OperatorsCommand {
     pub async fn run(self) -> eyre::Result<()> {
         match self.subcommand {
             OperatorsSubcommand::EigenLayer { subcommand } => match subcommand {
-                EigenLayerSubcommand::DepositIntoStrategy {
+                EigenLayerSubcommand::Deposit {
                     rpc_url,
                     strategy,
                     amount,
@@ -77,7 +84,7 @@ impl OperatorsCommand {
 
                     Ok(())
                 }
-                EigenLayerSubcommand::RegisterIntoBoltAVS {
+                EigenLayerSubcommand::Register {
                     rpc_url,
                     operator_rpc,
                     salt,
@@ -131,7 +138,7 @@ impl OperatorsCommand {
 
                     Ok(())
                 }
-                EigenLayerSubcommand::CheckOperatorRegistration { rpc_url: rpc, address } => {
+                EigenLayerSubcommand::Status { rpc_url: rpc, address } => {
                     let provider = ProviderBuilder::new().on_http(rpc.clone());
                     let chain_id = provider.get_chain_id().await?;
                     let chain = Chain::from_id(chain_id)
@@ -148,8 +155,61 @@ impl OperatorsCommand {
                 }
             },
             OperatorsSubcommand::Symbiotic { subcommand } => match subcommand {
-                SymbioticSubcommand::RegisterIntoBolt { operator_rpc } => {
-                    todo!()
+                SymbioticSubcommand::Register { operator_rpc, operator_private_key, rpc_url } => {
+                    let signer = PrivateKeySigner::from_bytes(&operator_private_key)
+                        .wrap_err("valid private key")?;
+
+                    let provider = ProviderBuilder::new()
+                        .with_recommended_fillers()
+                        .wallet(EthereumWallet::from(signer.clone()))
+                        .on_http(rpc_url);
+
+                    let chain_id = provider.get_chain_id().await?;
+                    let chain = Chain::from_id(chain_id)
+                        .unwrap_or_else(|| panic!("chain id {} not supported", chain_id));
+
+                    let deployments = deployments_for_chain(chain);
+
+                    info!(operator = %signer.address(), rpc = %operator_rpc, ?chain, "Registering Symbiotic operator");
+
+                    // Check if operator is opted in to the bolt network
+                    if !IOptInService::new(
+                        deployments.symbiotic.network_opt_in_service,
+                        provider.clone(),
+                    )
+                    .isOptedIn(signer.address(), deployments.symbiotic.network)
+                    .call()
+                    .await?
+                    ._0
+                    {
+                        eyre::bail!(
+                            "Operator with address {} not opted in to the bolt network ({})",
+                            signer.address(),
+                            deployments.symbiotic.network
+                        );
+                    }
+
+                    let middleware = BoltSymbioticMiddleware::new(
+                        deployments.bolt.symbiotic_middleware,
+                        provider.clone(),
+                    );
+
+                    let pending =
+                        middleware.registerOperator(operator_rpc.to_string()).send().await?;
+
+                    info!(
+                        hash = ?pending.tx_hash(),
+                        "registerOperator transaction sent, awaiting receipt..."
+                    );
+
+                    let receipt = pending.get_receipt().await?;
+                    if !receipt.status() {
+                        eyre::bail!("Transaction failed: {:?}", receipt)
+                    }
+
+                    info!("Succesfully registered Symbiotic operator");
+
+                    Ok(())
                 }
             },
         }
@@ -248,7 +308,7 @@ mod tests {
 
         let deposit_into_strategy = OperatorsCommand {
             subcommand: OperatorsSubcommand::EigenLayer {
-                subcommand: EigenLayerSubcommand::DepositIntoStrategy {
+                subcommand: EigenLayerSubcommand::Deposit {
                     rpc_url: anvil_url.parse().expect("valid url"),
                     operator_private_key: secret_key,
                     strategy: EigenLayerStrategy::WEth,
@@ -263,7 +323,7 @@ mod tests {
 
         let register_operator = OperatorsCommand {
             subcommand: OperatorsSubcommand::EigenLayer {
-                subcommand: EigenLayerSubcommand::RegisterIntoBoltAVS {
+                subcommand: EigenLayerSubcommand::Register {
                     rpc_url: anvil_url.parse().expect("valid url"),
                     operator_private_key: secret_key,
                     operator_rpc: "https://bolt.chainbound.io/rpc".parse().expect("valid url"),
@@ -278,7 +338,7 @@ mod tests {
         // 4. Check operator registration
         let check_operator_registration = OperatorsCommand {
             subcommand: OperatorsSubcommand::EigenLayer {
-                subcommand: EigenLayerSubcommand::CheckOperatorRegistration {
+                subcommand: EigenLayerSubcommand::Status {
                     rpc_url: anvil_url.parse().expect("valid url"),
                     address: account,
                 },

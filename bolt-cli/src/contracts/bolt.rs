@@ -52,10 +52,4 @@ sol! {
         /// @dev Assumes that the operator is registered and enabled.
         function getOperatorCollaterals(address operator) public view returns (address[] memory, uint256[] memory);
     }
-
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    interface IBoltManager {
-        function isOperator(address operator) public view returns (bool);
-    }
 }

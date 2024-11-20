@@ -198,7 +198,7 @@ pub enum OperatorsSubcommand {
 #[derive(Debug, Clone, Parser)]
 pub enum EigenLayerSubcommand {
     /// Step 1: Deposit into a strategy.
-    DepositIntoStrategy {
+    Deposit {
         /// The URL of the RPC to broadcast the transaction.
         #[clap(long, env = "RPC_URL")]
         rpc_url: Url,
@@ -214,7 +214,7 @@ pub enum EigenLayerSubcommand {
     },
 
     /// Step 2: Register into the bolt AVS.
-    RegisterIntoBoltAVS {
+    Register {
         /// The URL of the RPC to broadcast the transaction.
         #[clap(long, env = "RPC_URL")]
         rpc_url: Url,
@@ -233,7 +233,7 @@ pub enum EigenLayerSubcommand {
     },
 
     /// Step 3: Check your operation registration in bolt
-    CheckOperatorRegistration {
+    Status {
         /// The URL of the RPC to broadcast the transaction.
         #[clap(long, env = "RPC_URL")]
         rpc_url: Url,
@@ -246,7 +246,13 @@ pub enum EigenLayerSubcommand {
 #[derive(Debug, Clone, Parser)]
 pub enum SymbioticSubcommand {
     /// Register into the bolt manager contract as an opeartor.
-    RegisterIntoBolt {
+    Register {
+        /// The URL of the RPC to broadcast the transaction.
+        #[clap(long, env = "RPC_URL")]
+        rpc_url: Url,
+        /// The private key of the operator.
+        #[clap(long, env = "OPERATOR_PRIVATE_KEY")]
+        operator_private_key: B256,
         /// The URL of the operator RPC.
         #[clap(long, env = "OPERATOR_RPC")]
         operator_rpc: Url,
