@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use alloy::primitives::Address;
+use alloy::primitives::{Address, B256, U256};
 use clap::{
     builder::styling::{AnsiColor, Color, Style},
     Parser, Subcommand, ValueEnum,
@@ -9,7 +9,7 @@ use reqwest::Url;
 
 use crate::common::keystore::DEFAULT_KEYSTORE_PASSWORD;
 
-/// `bolt` is a CLI tool to interact with Bolt Protocol ✨
+/// `bolt` is a CLI tool to interact with bolt Protocol ✨
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, styles = cli_styles(), about, arg_required_else_help(true))]
 pub struct Opts {
@@ -26,11 +26,14 @@ pub enum Cmd {
     /// Output a list of pubkeys in JSON format.
     Pubkeys(PubkeysCommand),
 
-    /// Send a preconfirmation request to a Bolt proposer.
+    /// Send a preconfirmation request to a bolt proposer.
     Send(Box<SendCommand>),
 
-    /// Register validators in the Bolt network.
+    /// Handle validators in the bolt network.
     Validators(ValidatorsCommand),
+
+    /// Handle operators in the bolt network.
+    Operators(OperatorsCommand),
 }
 
 impl Cmd {
@@ -41,6 +44,7 @@ impl Cmd {
             Cmd::Pubkeys(cmd) => cmd.run().await,
             Cmd::Send(cmd) => cmd.run().await,
             Cmd::Validators(cmd) => cmd.run().await,
+            Cmd::Operators(cmd) => cmd.run().await,
         }
     }
 }
@@ -82,10 +86,10 @@ pub struct PubkeysCommand {
     pub source: KeySource,
 }
 
-/// Command for sending a preconfirmation request to a Bolt proposer.
+/// Command for sending a preconfirmation request to a bolt proposer.
 #[derive(Debug, Clone, Parser)]
 pub struct SendCommand {
-    /// Bolt RPC URL to send requests to and fetch lookahead info from.
+    /// bolt RPC URL to send requests to and fetch lookahead info from.
     #[clap(
         long,
         env = "BOLT_RPC_URL",
@@ -97,7 +101,7 @@ pub struct SendCommand {
     #[clap(long, env = "PRIVATE_KEY", hide_env_values = true)]
     pub private_key: String,
 
-    /// The Bolt Sidecar URL to send requests to. If provided, this will override
+    /// The bolt Sidecar URL to send requests to. If provided, this will override
     /// the canonical bolt RPC URL and disregard any registration information.
     ///
     /// This is useful for testing and development purposes.
@@ -162,6 +166,70 @@ pub enum ValidatorsSubcommand {
 
         #[clap(long, env = "ADMIN_PRIVATE_KEY")]
         admin_private_key: String,
+    },
+}
+
+#[derive(Debug, Clone, Parser)]
+pub struct OperatorsCommand {
+    #[clap(subcommand)]
+    pub subcommand: OperatorsSubcommand,
+}
+
+#[derive(Debug, Clone, Parser)]
+pub enum OperatorsSubcommand {
+    /// Commands to interact with EigenLayer and bolt.
+    #[clap(name = "eigenlayer")] // and not eigen-layer
+    EigenLayer {
+        #[clap(subcommand)]
+        subcommand: EigenLayerSubcommand,
+    },
+    /// Commands to interact with Symbiotic and bolt.
+    Symbiotic {
+        #[clap(subcommand)]
+        subcommand: SymbioticSubcommand,
+    },
+}
+
+#[derive(Debug, Clone, Parser)]
+pub enum EigenLayerSubcommand {
+    /// Step 1: Deposit into a strategy.
+    DepositIntoStrategy {
+        /// The address of the strategy to deposit into.
+        #[clap(long, env = "EIGENLAYER_STRATEGY_ADDRESS")]
+        strategy: Address,
+        /// The amount to deposit into the strategy.
+        #[clap(long, env = "EIGENLAYER_STRATEGY_DEPOSIT_AMOUNT")]
+        amount: U256,
+    },
+
+    /// Step 2: Register into the bolt AVS.
+    RegisterIntoBoltAVS {
+        /// The URL of the operator RPC.
+        #[clap(long, env = "OPERATOR_RPC")]
+        operator_rpc: Url,
+        /// The salt for the operator signature.
+        #[clap(long, env = "OPERATOR_SIGNATURE_SALT")]
+        salt: B256,
+        /// The expiry timestamp for the operator signature.
+        #[clap(long, env = "OPERATOR_SIGNATURE_EXPIRY")]
+        expiry: u64,
+    },
+
+    /// Step 3: Check your operation registration in bolt
+    CheckOperatorRegistration {
+        /// The address of the operator to check.
+        #[clap(long, env = "OPERATOR_ADDRESS")]
+        address: Address,
+    },
+}
+
+#[derive(Debug, Clone, Parser)]
+pub enum SymbioticSubcommand {
+    /// Register into the bolt manager contract as an opeartor.
+    RegisterIntoBolt {
+        /// The URL of the operator RPC.
+        #[clap(long, env = "OPERATOR_RPC")]
+        operator_rpc: Url,
     },
 }
 

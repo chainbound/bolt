@@ -12,3 +12,6 @@ pub mod send;
 
 /// Module for the validators-related commands to interact with the bolt network.
 pub mod validators;
+
+/// Module for the operators-related commands to interact with the bolt network.
+pub mod operators;
