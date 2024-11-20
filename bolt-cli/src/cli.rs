@@ -30,7 +30,7 @@ pub enum Cmd {
     Send(Box<SendCommand>),
 
     /// Register validators in the Bolt network.
-    Register(RegisterCommand),
+    Validators(ValidatorsCommand),
 }
 
 impl Cmd {
@@ -40,7 +40,7 @@ impl Cmd {
             Cmd::Delegate(cmd) => cmd.run().await,
             Cmd::Pubkeys(cmd) => cmd.run().await,
             Cmd::Send(cmd) => cmd.run().await,
-            Cmd::Register(cmd) => cmd.run().await,
+            Cmd::Validators(cmd) => cmd.run().await,
         }
     }
 }
@@ -138,27 +138,31 @@ pub struct SendCommand {
     pub devnet_sidecar_url: Option<Url>,
 }
 
-/// Command for registering validators in the Bolt network.
 #[derive(Debug, Clone, Parser)]
-pub struct RegisterCommand {
-    /// The chain for which the delegation message is intended.
-    #[clap(long, env = "CHAIN", default_value = "holesky")]
-    pub chain: Chain,
+pub struct ValidatorsCommand {
+    #[clap(subcommand)]
+    pub subcommand: ValidatorsSubcommand,
+}
 
-    #[clap(long, env = "MAX_COMMITTED_GAS_LIMIT", default_value_t = 10_000_000)]
-    pub max_committed_gas_limit: u32,
+#[derive(Debug, Clone, Parser)]
+pub enum ValidatorsSubcommand {
+    /// The source of the private key.
+    Register {
+        #[clap(long, env = "RPC_URL")]
+        rpc_url: Url,
 
-    #[clap(long, env = "AUTHORIZED_OPERATOR")]
-    pub authorized_operator: Address,
+        #[clap(long, env = "MAX_COMMITTED_GAS_LIMIT")]
+        max_committed_gas_limit: u32,
 
-    #[clap(long, env = "PUBKEYS_PATH", default_value = "pubkeys.json")]
-    pub pubkeys_path: PathBuf,
+        #[clap(long, env = "AUTHORIZED_OPERATOR")]
+        authorized_operator: Address,
 
-    #[clap(long, env = "ADMIN_PRIVATE_KEY")]
-    pub admin_private_key: String,
+        #[clap(long, env = "PUBKEYS_PATH", default_value = "pubkeys.json")]
+        pubkeys_path: PathBuf,
 
-    #[clap(long, env = "RPC_URL")]
-    pub rpc_url: Url,
+        #[clap(long, env = "ADMIN_PRIVATE_KEY")]
+        admin_private_key: String,
+    },
 }
 
 /// The action to perform.
@@ -276,6 +280,16 @@ impl Chain {
             Chain::Holesky => [1, 1, 112, 0],
             Chain::Helder => [16, 0, 0, 0],
             Chain::Kurtosis => [16, 0, 0, 56],
+        }
+    }
+
+    pub fn from_id(id: u64) -> Option<Self> {
+        match id {
+            1 => Some(Self::Mainnet),
+            17000 => Some(Self::Holesky),
+            3151908 => Some(Self::Kurtosis),
+            7014190335 => Some(Self::Helder),
+            _ => None,
         }
     }
 }

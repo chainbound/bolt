@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use alloy::{
     network::EthereumWallet,
     primitives::{address, Address},
-    providers::ProviderBuilder,
+    providers::{Provider, ProviderBuilder},
     signers::local::PrivateKeySigner,
     sol,
 };
@@ -11,7 +11,7 @@ use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
 use eyre::Context;
 
 use crate::{
-    cli::{Chain, RegisterCommand},
+    cli::{Chain, ValidatorsCommand, ValidatorsSubcommand},
     common::hash::compress_bls_pubkey,
 };
 
@@ -20,36 +20,52 @@ enum BoltContract {
     Validators,
 }
 
-impl RegisterCommand {
-    /// Run the `delegate` command.
+impl ValidatorsCommand {
     pub async fn run(self) -> eyre::Result<()> {
-        let bolt_validators_address = bolt_validators_address(self.chain);
+        match self.subcommand {
+            ValidatorsSubcommand::Register {
+                max_committed_gas_limit,
+                pubkeys_path,
+                admin_private_key,
+                authorized_operator,
+                rpc_url,
+            } => {
+                let wallet: PrivateKeySigner =
+                    admin_private_key.parse().wrap_err("invalid private key")?;
+                let transaction_signer = EthereumWallet::from(wallet);
 
-        let pubkeys_file = std::fs::File::open(&self.pubkeys_path)?;
-        let keys: Vec<BlsPublicKey> = serde_json::from_reader(pubkeys_file)?;
-        let pubkey_hashes: Vec<_> = keys.iter().map(compress_bls_pubkey).collect();
+                let provider = ProviderBuilder::new()
+                    .with_recommended_fillers()
+                    .wallet(transaction_signer)
+                    .on_http(rpc_url.clone());
 
-        let wallet: PrivateKeySigner =
-            self.admin_private_key.parse().wrap_err("invalid private key")?;
-        let transaction_signer = EthereumWallet::from(wallet);
-        let provider = ProviderBuilder::new()
-            .with_recommended_fillers()
-            .wallet(transaction_signer)
-            .on_http(self.rpc_url.clone());
+                let chain_id = provider.get_chain_id().await?;
+                let chain = Chain::from_id(chain_id)
+                    .unwrap_or_else(|| panic!("chain id {} not supported", chain_id));
 
-        let bolt_validators = BoltValidatorsContract::new(bolt_validators_address, provider);
+                let bolt_validators_address = bolt_validators_address(chain);
 
-        let call = bolt_validators.batchRegisterValidatorsUnsafe(
-            pubkey_hashes,
-            self.max_committed_gas_limit,
-            self.authorized_operator,
-        );
+                let pubkeys_file = std::fs::File::open(&pubkeys_path)?;
+                let keys: Vec<BlsPublicKey> = serde_json::from_reader(pubkeys_file)?;
+                let pubkey_hashes: Vec<_> = keys.iter().map(compress_bls_pubkey).collect();
 
-        let result = call.send().await?.watch().await?;
+                let bolt_validators =
+                    BoltValidatorsContract::new(bolt_validators_address, provider);
 
-        println!("transaction hash: {:?}", result);
+                let call = bolt_validators.batchRegisterValidatorsUnsafe(
+                    pubkey_hashes,
+                    max_committed_gas_limit,
+                    authorized_operator,
+                );
 
-        Ok(())
+                let result = call.send().await?;
+                println!("Transaction submitted successfully, waiting for inclusion");
+                let result = result.watch().await?;
+                println!("Transaction included. Transaction hash: {:?}", result);
+
+                Ok(())
+            }
+        }
     }
 }
 
@@ -99,7 +115,7 @@ mod tests {
         signers::k256::ecdsa::SigningKey,
     };
 
-    use crate::cli::RegisterCommand;
+    use crate::cli::{ValidatorsCommand, ValidatorsSubcommand};
 
     #[tokio::test]
     async fn test_register_validators() {
@@ -113,13 +129,14 @@ mod tests {
 
         provider.anvil_set_balance(account, U256::from(u64::MAX)).await.expect("set balance");
 
-        let command = RegisterCommand {
-            chain: crate::cli::Chain::Holesky,
-            max_committed_gas_limit: 30_000_000,
-            admin_private_key: format!("{:x}", secret_key.to_bytes()),
-            authorized_operator: account,
-            pubkeys_path: "./test_data/pubkeys.json".parse().unwrap(),
-            rpc_url: anvil_url.parse().unwrap(),
+        let command = ValidatorsCommand {
+            subcommand: ValidatorsSubcommand::Register {
+                max_committed_gas_limit: 30_000_000,
+                admin_private_key: format!("{:x}", secret_key.to_bytes()),
+                authorized_operator: account,
+                pubkeys_path: "./test_data/pubkeys.json".parse().unwrap(),
+                rpc_url: anvil_url.parse().unwrap(),
+            },
         };
 
         command.run().await.expect("run command");

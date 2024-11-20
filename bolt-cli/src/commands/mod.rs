@@ -10,6 +10,5 @@ pub mod pubkeys;
 /// broadcast preconfirmations in Bolt.
 pub mod send;
 
-/// Module for the bolt `register` command to register
-/// validators in the Bolt network.
-pub mod register;
+/// Module for the validators-related commands to interact with the bolt network.
+pub mod validators;
