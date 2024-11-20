@@ -2,7 +2,7 @@ use crate::{
     cli::{
         Chain, EigenLayerSubcommand, OperatorsCommand, OperatorsSubcommand, SymbioticSubcommand,
     },
-    common::{bolt_manager::BoltManagerContract, signing::wallet_from_sk},
+    common::bolt_manager::BoltManagerContract,
     contracts::{
         bolt::{BoltEigenLayerMiddleware, SignatureWithSaltAndExpiry},
         deployments_for_chain,
@@ -31,11 +31,12 @@ impl OperatorsCommand {
                     amount,
                     operator_private_key,
                 } => {
-                    let wallet = wallet_from_sk(operator_private_key)?;
+                    let signer = PrivateKeySigner::from_bytes(&operator_private_key)
+                        .wrap_err("valid private key")?;
 
                     let provider = ProviderBuilder::new()
                         .with_recommended_fillers()
-                        .wallet(wallet)
+                        .wallet(EthereumWallet::from(signer))
                         .on_http(rpc_url.clone());
 
                     let chain_id = provider.get_chain_id().await?;
@@ -53,16 +54,7 @@ impl OperatorsCommand {
                         IStrategyManagerInstance::new(strategy_manager_address, provider.clone());
 
                     let token = strategy_contract.underlyingToken().call().await?.token;
-                    println!("Token address: {:?}", token);
-
                     let token_erc20 = IERC20Instance::new(token, provider.clone());
-
-                    let balance = token_erc20
-                        .balanceOf(provider.clone().default_signer_address())
-                        .call()
-                        .await?
-                        ._0;
-                    println!("Balance: {:?}", balance);
 
                     let result =
                         token_erc20.approve(strategy_manager_address, amount).send().await?;
@@ -70,25 +62,15 @@ impl OperatorsCommand {
                         "Approving transfer of {} {:?}, waiting for inclusion",
                         amount, strategy
                     );
-                    let result = result.watch().await?;
-                    println!("Approval transaction included. Transaction hash: {:?}", result);
-
-                    let allowance = token_erc20
-                        .allowance(
-                            provider.clone().default_signer_address(),
-                            strategy_manager_address,
-                        )
-                        .call()
-                        .await?
-                        ._0;
-                    println!("Allowance: {:?}", allowance);
+                    let receipt = result.get_receipt().await?;
+                    println!("Approval transaction included. Receipt: {:#?}", receipt);
 
                     let result = strategy_manager
                         .depositIntoStrategy(strategy_address, token, amount)
                         .send()
                         .await?;
-
                     println!("Submitted transaction to deposit into strategy successfully, waiting for inclusion");
+
                     let receipt = result.get_receipt().await?;
                     println!("Deposit transaction included. Receipt: {:#?}", receipt);
                     assert!(receipt.status(), "transaction failed");
@@ -142,6 +124,7 @@ impl OperatorsCommand {
                         .send()
                         .await?;
                     println!("Submitted transaction to registered operator into Bolt successfully, waiting for inclusion...");
+
                     let receipt = result.get_receipt().await?;
                     println!("Registration transaction included. Receipt: {:#?}", receipt);
                     assert!(receipt.status(), "transaction failed");
@@ -177,7 +160,6 @@ impl OperatorsCommand {
 mod tests {
     use crate::{
         cli::{Chain, EigenLayerSubcommand, OperatorsCommand, OperatorsSubcommand},
-        common::signing::wallet_from_sk,
         contracts::{
             deployments_for_chain,
             eigenlayer::{DelegationManager, IStrategy, OperatorDetails},
@@ -185,8 +167,10 @@ mod tests {
         },
     };
     use alloy::{
+        network::EthereumWallet,
         primitives::{keccak256, utils::parse_units, Address, B256, U256},
         providers::{ext::AnvilApi, Provider, ProviderBuilder, WalletProvider},
+        signers::local::PrivateKeySigner,
         sol_types::SolValue,
     };
     use rand::Rng;
@@ -195,12 +179,12 @@ mod tests {
     async fn test_eigenlayer_flow() {
         let mut rnd = rand::thread_rng();
         let secret_key = B256::from(rnd.gen::<[u8; 32]>());
-        let wallet = wallet_from_sk(secret_key).expect("to create wallet");
+        let wallet = PrivateKeySigner::from_bytes(&secret_key).expect("valid private key");
 
         let rpc_url = "https://holesky.drpc.org";
         let provider = ProviderBuilder::new()
             .with_recommended_fillers()
-            .wallet(wallet)
+            .wallet(EthereumWallet::from(wallet))
             .on_anvil_with_config(|anvil| anvil.fork(rpc_url));
         let anvil_url = provider.client().transport().url();
 

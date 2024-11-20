@@ -1,9 +1,14 @@
-use alloy::providers::{Provider, ProviderBuilder};
+use alloy::{
+    network::EthereumWallet,
+    providers::{Provider, ProviderBuilder},
+    signers::local::PrivateKeySigner,
+};
 use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
+use eyre::Context;
 
 use crate::{
     cli::{Chain, ValidatorsCommand, ValidatorsSubcommand},
-    common::{hash::compress_bls_pubkey, signing::wallet_from_sk},
+    common::hash::compress_bls_pubkey,
     contracts::{bolt::BoltValidators, deployments_for_chain},
 };
 
@@ -17,11 +22,12 @@ impl ValidatorsCommand {
                 authorized_operator,
                 rpc_url,
             } => {
-                let wallet = wallet_from_sk(admin_private_key)?;
+                let signer = PrivateKeySigner::from_bytes(&admin_private_key)
+                    .wrap_err("valid private key")?;
 
                 let provider = ProviderBuilder::new()
                     .with_recommended_fillers()
-                    .wallet(wallet)
+                    .wallet(EthereumWallet::from(signer))
                     .on_http(rpc_url.clone());
 
                 let chain_id = provider.get_chain_id().await?;

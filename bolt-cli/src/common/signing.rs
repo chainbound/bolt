@@ -1,10 +1,10 @@
-use alloy::{network::EthereumWallet, primitives::B256, signers::local::PrivateKeySigner};
+use alloy::primitives::B256;
 use blst::{min_pk::Signature, BLST_ERROR};
 use ethereum_consensus::{
     crypto::PublicKey as BlsPublicKey,
     deneb::{compute_fork_data_root, compute_signing_root, Root},
 };
-use eyre::{eyre, Context, Result};
+use eyre::{eyre, Result};
 
 use crate::cli::Chain;
 
@@ -64,10 +64,4 @@ pub fn verify_root(
     } else {
         Err(eyre!("bls verification failed"))
     }
-}
-
-/// Returns an [EthereumWallet] from a private key hex string.
-pub fn wallet_from_sk(sk: B256) -> eyre::Result<EthereumWallet> {
-    let wallet = PrivateKeySigner::from_bytes(&sk).wrap_err("valid private key")?;
-    Ok(EthereumWallet::from(wallet))
 }
