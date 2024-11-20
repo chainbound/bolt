@@ -1,6 +1,3 @@
-// NOTE: Primitive types should be flattened into a single module
-// for cleaner imports and better organization.
-
 use alloy::primitives::{keccak256, FixedBytes, B512};
 use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
 

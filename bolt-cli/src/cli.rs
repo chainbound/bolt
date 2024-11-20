@@ -152,18 +152,23 @@ pub struct ValidatorsCommand {
 pub enum ValidatorsSubcommand {
     /// The source of the private key.
     Register {
+        /// The URL of the RPC to broadcast the transaction.
         #[clap(long, env = "RPC_URL")]
         rpc_url: Url,
 
+        /// The max gas limit the validator is willing to reserve to commitments.
         #[clap(long, env = "MAX_COMMITTED_GAS_LIMIT")]
         max_committed_gas_limit: u32,
 
+        /// The authorized operator for the validator.
         #[clap(long, env = "AUTHORIZED_OPERATOR")]
         authorized_operator: Address,
 
+        /// The path to the JSON pubkeys file, containing an array of BLS public keys.
         #[clap(long, env = "PUBKEYS_PATH", default_value = "pubkeys.json")]
         pubkeys_path: PathBuf,
 
+        /// The private key to sign the transactions with.
         #[clap(long, env = "ADMIN_PRIVATE_KEY")]
         admin_private_key: String,
     },

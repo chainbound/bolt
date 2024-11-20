@@ -16,6 +16,7 @@ pub mod keystore;
 /// Utilities for signing and verifying messages.
 pub mod signing;
 
+/// Utilities for hashing messages and custom types.
 pub mod hash;
 
 /// Parse a BLS public key from a string
