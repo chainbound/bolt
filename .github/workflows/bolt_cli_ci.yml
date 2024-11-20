@@ -2,6 +2,9 @@ name: Bolt CLI CI
 
 on:
   push:
+    branches:
+      - unstable
+      - main
     paths:
       - "bolt-cli/**"
   pull_request:
