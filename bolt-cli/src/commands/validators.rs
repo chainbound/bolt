@@ -1,24 +1,14 @@
-use std::collections::HashMap;
-
 use alloy::{
-    network::EthereumWallet,
-    primitives::{address, Address},
     providers::{Provider, ProviderBuilder},
-    signers::local::PrivateKeySigner,
     sol,
 };
 use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
-use eyre::Context;
 
 use crate::{
     cli::{Chain, ValidatorsCommand, ValidatorsSubcommand},
-    common::hash::compress_bls_pubkey,
+    common::{hash::compress_bls_pubkey, signing::wallet_from_sk},
+    contracts::deployments_for_chain,
 };
-
-#[derive(Debug, PartialEq, Eq, Hash)]
-enum BoltContract {
-    Validators,
-}
 
 impl ValidatorsCommand {
     pub async fn run(self) -> eyre::Result<()> {
@@ -30,20 +20,18 @@ impl ValidatorsCommand {
                 authorized_operator,
                 rpc_url,
             } => {
-                let wallet: PrivateKeySigner =
-                    admin_private_key.parse().wrap_err("invalid private key")?;
-                let transaction_signer = EthereumWallet::from(wallet);
+                let wallet = wallet_from_sk(admin_private_key)?;
 
                 let provider = ProviderBuilder::new()
                     .with_recommended_fillers()
-                    .wallet(transaction_signer)
+                    .wallet(wallet)
                     .on_http(rpc_url.clone());
 
                 let chain_id = provider.get_chain_id().await?;
                 let chain = Chain::from_id(chain_id)
                     .unwrap_or_else(|| panic!("chain id {} not supported", chain_id));
 
-                let bolt_validators_address = bolt_validators_address(chain);
+                let bolt_validators_address = deployments_for_chain(chain).bolt.validators;
 
                 let pubkeys_file = std::fs::File::open(&pubkeys_path)?;
                 let keys: Vec<BlsPublicKey> = serde_json::from_reader(pubkeys_file)?;
@@ -67,25 +55,6 @@ impl ValidatorsCommand {
             }
         }
     }
-}
-
-// PERF: this should be done at compile time
-fn deployments() -> HashMap<Chain, HashMap<BoltContract, Address>> {
-    let mut deployments = HashMap::new();
-    let mut holesky_deployments = HashMap::new();
-    holesky_deployments
-        .insert(BoltContract::Validators, address!("47D2DC1DE1eFEFA5e6944402f2eda3981D36a9c8"));
-    deployments.insert(Chain::Holesky, holesky_deployments);
-
-    deployments
-}
-
-fn bolt_validators_address(chain: Chain) -> Address {
-    *deployments()
-        .get(&chain)
-        .unwrap_or_else(|| panic!("{:?} chain supported", chain))
-        .get(&BoltContract::Validators)
-        .expect("Validators contract address not found")
 }
 
 sol! {

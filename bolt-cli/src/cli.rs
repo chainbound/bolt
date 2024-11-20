@@ -7,7 +7,7 @@ use clap::{
 };
 use reqwest::Url;
 
-use crate::common::keystore::DEFAULT_KEYSTORE_PASSWORD;
+use crate::{common::keystore::DEFAULT_KEYSTORE_PASSWORD, contracts::EigenLayerStrategy};
 
 /// `bolt` is a CLI tool to interact with bolt Protocol ✨
 #[derive(Parser, Debug, Clone)]
@@ -200,9 +200,9 @@ pub enum EigenLayerSubcommand {
         /// The private key of the operator.
         #[clap(long, env = "OPERATOR_PRIVATE_KEY")]
         operator_private_key: String,
-        /// The address of the strategy to deposit into.
-        #[clap(long, env = "EIGENLAYER_STRATEGY_ADDRESS")]
-        strategy: Address,
+        /// The name of the strategy to deposit into.
+        #[clap(long, env = "EIGENLAYER_STRATEGY")]
+        strategy: EigenLayerStrategy,
         /// The amount to deposit into the strategy.
         #[clap(long, env = "EIGENLAYER_STRATEGY_DEPOSIT_AMOUNT")]
         amount: U256,

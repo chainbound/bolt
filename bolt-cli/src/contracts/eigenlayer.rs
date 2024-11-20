@@ -1,13 +1,4 @@
-use alloy::{providers::RootProvider, sol, transports::http::Http};
-
-use reqwest::Client;
-use IStrategy::IStrategyInstance;
-use IStrategyManager::IStrategyManagerInstance;
-
-pub struct IStrategyContract(IStrategyInstance<Http<Client>, RootProvider<Http<Client>>>);
-pub struct IStrategyManagerContract(
-    IStrategyManagerInstance<Http<Client>, RootProvider<Http<Client>>>,
-);
+use alloy::sol;
 
 sol! {
     #[allow(missing_docs)]
@@ -32,7 +23,7 @@ sol! {
         * `depositIntoStrategy` function, and individual share balances are recorded in the strategyManager as well.
         * @return newShares is the number of new shares issued at the current exchange ratio.
         */
-        function deposit(address token, uint256 amount) external returns (uint256);
+        function deposit(address token, uint256 amount) external returns (uint256 shares);
 
         /**
         * @notice Used to withdraw tokens from this Strategy, to the `recipient`'s address
@@ -99,7 +90,7 @@ sol! {
         function userUnderlyingView(address user) external view returns (uint256);
 
         /// @notice The underlying token for shares in this Strategy
-        function underlyingToken() external view returns (address);
+        function underlyingToken() external view returns (address token);
 
         /// @notice The total number of extant shares in this Strategy
         function totalShares() external view returns (uint256);
