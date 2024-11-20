@@ -42,5 +42,8 @@ jobs:
         with:
           crate: cargo-nextest
 
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@v1
+
       - name: Run bolt-cli tests
         run: cd bolt-cli && cargo nextest run --workspace --retries 3
