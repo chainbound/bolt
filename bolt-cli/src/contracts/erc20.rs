@@ -1,9 +1,4 @@
-use alloy::{providers::RootProvider, sol, transports::http::Http};
-
-use reqwest::Client;
-use IERC20::IERC20Instance;
-
-pub struct IERC20Contract(IERC20Instance<Http<Client>, RootProvider<Http<Client>>>);
+use alloy::sol;
 
 sol! {
     #[allow(missing_docs)]
