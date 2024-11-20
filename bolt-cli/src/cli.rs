@@ -229,7 +229,7 @@ pub enum EigenLayerSubcommand {
         salt: B256,
         /// The expiry timestamp for the operator signature.
         #[clap(long, env = "OPERATOR_SIGNATURE_EXPIRY")]
-        expiry: u64,
+        expiry: U256,
     },
 
     /// Step 3: Check your operation registration in bolt

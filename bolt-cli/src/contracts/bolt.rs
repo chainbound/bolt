@@ -18,3 +18,23 @@ sol! {
         error InvalidAuthorizedOperator();
     }
 }
+
+sol! {
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    struct SignatureWithSaltAndExpiry {
+        bytes signature;
+        bytes32 salt;
+        uint256 expiry;
+    }
+
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    interface BoltEigenLayerMiddleware {
+        /// @notice Allow an operator to signal opt-in to Bolt Protocol.
+        /// @dev This requires calling the EigenLayer AVS Directory contract to register the operator.
+        /// EigenLayer internally contains a mapping from `msg.sender` (our AVS contract) to the operator.
+        /// The msg.sender of this call will be the operator address.
+        function registerOperator(string calldata rpc, SignatureWithSaltAndExpiry calldata operatorSignature) public;
+    }
+}

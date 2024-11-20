@@ -4,13 +4,22 @@ use crate::{
     },
     common::signing::wallet_from_sk,
     contracts::{
+        bolt::{BoltEigenLayerMiddleware, SignatureWithSaltAndExpiry},
         deployments_for_chain,
-        eigenlayer::{IStrategy::IStrategyInstance, IStrategyManager::IStrategyManagerInstance},
+        eigenlayer::{
+            AVSDirectory, IStrategy::IStrategyInstance, IStrategyManager::IStrategyManagerInstance,
+        },
         erc20::IERC20::IERC20Instance,
         strategy_to_address,
     },
 };
-use alloy::providers::{Provider, ProviderBuilder, WalletProvider};
+use alloy::{
+    network::EthereumWallet,
+    primitives::{Bytes, U256},
+    providers::{Provider, ProviderBuilder, WalletProvider},
+    signers::{local::PrivateKeySigner, SignerSync},
+};
+use eyre::Context;
 
 impl OperatorsCommand {
     pub async fn run(self) -> eyre::Result<()> {
@@ -92,7 +101,50 @@ impl OperatorsCommand {
                     expiry,
                     operator_private_key,
                 } => {
-                    todo!()
+                    let signer = PrivateKeySigner::from_bytes(&operator_private_key)
+                        .wrap_err("valid private key")?;
+
+                    let provider = ProviderBuilder::new()
+                        .with_recommended_fillers()
+                        .wallet(EthereumWallet::from(signer.clone()))
+                        .on_http(rpc_url.clone());
+
+                    let chain_id = provider.get_chain_id().await?;
+                    let chain = Chain::from_id(chain_id)
+                        .unwrap_or_else(|| panic!("chain id {} not supported", chain_id));
+
+                    let deployments = deployments_for_chain(chain);
+
+                    let bolt_avs_address = deployments.bolt.eigenlayer_middleware;
+                    let bolt_eigenlayer_middleware =
+                        BoltEigenLayerMiddleware::new(bolt_avs_address, provider.clone());
+
+                    let avs_directory =
+                        AVSDirectory::new(deployments.eigen_layer.avs_directory, provider.clone());
+                    let signature_digest_hash = avs_directory
+                        .calculateOperatorAVSRegistrationDigestHash(
+                            provider.clone().default_signer_address(),
+                            bolt_avs_address,
+                            salt,
+                            expiry,
+                        )
+                        .call()
+                        .await?
+                        ._0;
+
+                    let signature =
+                        Bytes::from(signer.sign_hash_sync(&signature_digest_hash)?.as_bytes());
+                    let signature = SignatureWithSaltAndExpiry { signature, expiry, salt };
+
+                    let result = bolt_eigenlayer_middleware
+                        .registerOperator(operator_rpc.to_string(), signature)
+                        .send()
+                        .await?;
+                    println!("Submitted transaction to registered operator into Bolt successfully, waiting for inclusion...");
+                    let result = result.watch().await?;
+                    println!("Registration transaction included. Transaction hash: {:?}", result);
+
+                    Ok(())
                 }
                 EigenLayerSubcommand::CheckOperatorRegistration { rpc, address } => {
                     todo!()
@@ -112,7 +164,9 @@ mod tests {
     use crate::{
         cli::{Chain, EigenLayerSubcommand, OperatorsCommand, OperatorsSubcommand},
         contracts::{
-            deployments_for_chain, eigenlayer::IStrategy, strategy_to_address, EigenLayerStrategy,
+            deployments_for_chain,
+            eigenlayer::{DelegationManager, IStrategy, OperatorDetails},
+            strategy_to_address, EigenLayerStrategy,
         },
     };
     use alloy::{
@@ -123,7 +177,7 @@ mod tests {
     };
 
     #[tokio::test]
-    async fn test_deposit_into_strategy() {
+    async fn test_eigenlayer_flow() {
         let rpc_url = "https://holesky.drpc.org";
         let provider = ProviderBuilder::new().on_anvil_with_config(|anvil| anvil.fork(rpc_url));
         let anvil_url = provider.client().transport().url();
@@ -152,7 +206,41 @@ mod tests {
             .await
             .expect("to set storage");
 
-        let command = OperatorsCommand {
+        // 1. Register the operator into EigenLayer. This should be done by the operator using the
+        //    EigenLayer CLI, but we do it here for testing purposes.
+
+        let delegation_manager =
+            DelegationManager::new(deployments.eigen_layer.delegation_manager, provider.clone());
+        delegation_manager
+            .registerAsOperator(
+                OperatorDetails {
+                    earningsReceiver: account,
+                    delegationApprover: Address::ZERO,
+                    stakerOptOutWindowBlocks: 32,
+                },
+                "https://bolt.chainbound.io/rpc".to_string(),
+            )
+            .send()
+            .await
+            .expect("to send register as operator")
+            .watch()
+            .await
+            .expect("to watch register as operator");
+        if !delegation_manager
+            .isOperator(account)
+            .call()
+            .await
+            .expect("to check if operator is registered")
+            ._0
+        {
+            panic!("Operator not registered");
+        }
+
+        println!("Registered operator with address {}", account);
+
+        // 2. Deposit into the strategy
+
+        let deposit_into_strategy = OperatorsCommand {
             subcommand: OperatorsSubcommand::EigenLayer {
                 subcommand: EigenLayerSubcommand::DepositIntoStrategy {
                     rpc_url: anvil_url.parse().expect("valid url"),
@@ -164,6 +252,23 @@ mod tests {
             },
         };
 
-        command.run().await.expect("run command");
+        deposit_into_strategy.run().await.expect("to deposit into strategy");
+
+        // 3. Register the operator into Bolt AVS
+
+        let register_operator = OperatorsCommand {
+            subcommand: OperatorsSubcommand::EigenLayer {
+                subcommand: EigenLayerSubcommand::RegisterIntoBoltAVS {
+                    rpc_url: anvil_url.parse().expect("valid url"),
+                    operator_private_key: B256::try_from(secret_key.to_bytes().as_slice())
+                        .expect("valid secret key"),
+                    operator_rpc: "https://bolt.chainbound.io/rpc".parse().expect("valid url"),
+                    salt: B256::ZERO,
+                    expiry: U256::MAX,
+                },
+            },
+        };
+
+        register_operator.run().await.expect("to register operator");
     }
 }

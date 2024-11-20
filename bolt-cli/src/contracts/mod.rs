@@ -22,6 +22,8 @@ pub struct Bolt {
     pub validators: Address,
     pub parameters: Address,
     pub manager: Address,
+    pub eigenlayer_middleware: Address,
+    pub symbiotic_middleware: Address,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -100,6 +102,8 @@ const HOLESKY_DEPLOYMENTS: Contracts = Contracts {
         validators: address!("47D2DC1DE1eFEFA5e6944402f2eda3981D36a9c8"),
         parameters: address!("20d1cf3A5BD5928dB3118b2CfEF54FDF9fda5c12"),
         manager: address!("440202829b493F9FF43E730EB5e8379EEa3678CF"),
+        eigenlayer_middleware: address!("a632a3e652110Bb2901D5cE390685E6a9838Ca04"),
+        symbiotic_middleware: address!("04f40d9CaE475E5BaA462acE53E5c58A0DD8D8e8"),
     },
     symbiotic: Symbiotic {
         network: address!("b017002D8024d8c8870A5CECeFCc63887650D2a4"),
