@@ -170,7 +170,7 @@ pub enum ValidatorsSubcommand {
 
         /// The private key to sign the transactions with.
         #[clap(long, env = "ADMIN_PRIVATE_KEY")]
-        admin_private_key: String,
+        admin_private_key: B256,
     },
 }
 
@@ -204,7 +204,7 @@ pub enum EigenLayerSubcommand {
         rpc_url: Url,
         /// The private key of the operator.
         #[clap(long, env = "OPERATOR_PRIVATE_KEY")]
-        operator_private_key: String,
+        operator_private_key: B256,
         /// The name of the strategy to deposit into.
         #[clap(long, env = "EIGENLAYER_STRATEGY")]
         strategy: EigenLayerStrategy,
@@ -220,7 +220,7 @@ pub enum EigenLayerSubcommand {
         rpc_url: Url,
         /// The private key of the operator.
         #[clap(long, env = "OPERATOR_PRIVATE_KEY")]
-        operator_private_key: String,
+        operator_private_key: B256,
         /// The URL of the operator RPC.
         #[clap(long, env = "OPERATOR_RPC")]
         operator_rpc: Url,

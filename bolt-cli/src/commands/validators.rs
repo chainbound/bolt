@@ -56,7 +56,7 @@ impl ValidatorsCommand {
 #[cfg(test)]
 mod tests {
     use alloy::{
-        primitives::{Address, U256},
+        primitives::{Address, B256, U256},
         providers::{ext::AnvilApi, Provider, ProviderBuilder},
         signers::k256::ecdsa::SigningKey,
     };
@@ -78,7 +78,7 @@ mod tests {
         let command = ValidatorsCommand {
             subcommand: ValidatorsSubcommand::Register {
                 max_committed_gas_limit: 30_000_000,
-                admin_private_key: format!("{:x}", secret_key.to_bytes()),
+                admin_private_key: B256::try_from(secret_key.to_bytes().as_slice()).unwrap(),
                 authorized_operator: account,
                 pubkeys_path: "./test_data/pubkeys.json".parse().unwrap(),
                 rpc_url: anvil_url.parse().unwrap(),

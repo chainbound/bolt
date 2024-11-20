@@ -67,7 +67,7 @@ pub fn verify_root(
 }
 
 /// Returns an [EthereumWallet] from a private key hex string.
-pub fn wallet_from_sk(sk: String) -> eyre::Result<EthereumWallet> {
-    let wallet: PrivateKeySigner = sk.parse().wrap_err("invalid private key")?;
+pub fn wallet_from_sk(sk: B256) -> eyre::Result<EthereumWallet> {
+    let wallet = PrivateKeySigner::from_bytes(&sk).wrap_err("valid private key")?;
     Ok(EthereumWallet::from(wallet))
 }

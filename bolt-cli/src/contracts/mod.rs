@@ -60,7 +60,7 @@ pub struct EigenLayerStrategies {
     m_eth: Address,
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug, ValueEnum)]
+#[derive(Copy, Clone, Serialize, Deserialize, Debug, ValueEnum)]
 #[allow(clippy::enum_variant_names)]
 #[serde(rename_all = "kebab-case")]
 pub enum EigenLayerStrategy {
@@ -84,7 +84,6 @@ pub fn strategy_to_address(
     }
 }
 
-// PERF: this should be done at compile time
 pub fn deployments() -> HashMap<Chain, Contracts> {
     let mut deployments = HashMap::new();
     deployments.insert(Chain::Holesky, HOLESKY_DEPLOYMENTS);
@@ -118,11 +117,11 @@ const HOLESKY_DEPLOYMENTS: Contracts = Contracts {
         strategy_manager: address!("dfB5f6CE42aAA7830E94ECFCcAd411beF4d4D5b6"),
         middleware: address!("a632a3e652110Bb2901D5cE390685E6a9838Ca04"),
         supported_strategies: EigenLayerStrategies {
-            st_eth: address!("3F1c547b21f65e10480dE3ad8E19fAAC46C95034"),
-            r_eth: address!("7322c24752f79c05FFD1E2a6FCB97020C1C264F1"),
-            w_eth: address!("94373a4919B3240D86eA41593D5eBa789FEF3848"),
-            cb_eth: address!("8720095Fa5739Ab051799211B146a2EEE4Dd8B37"),
-            m_eth: address!("e3C063B1BEe9de02eb28352b55D49D85514C67FF"),
+            st_eth: address!("7D704507b76571a51d9caE8AdDAbBFd0ba0e63d3"),
+            r_eth: address!("3A8fBdf9e77DFc25d09741f51d3E181b25d0c4E0"),
+            w_eth: address!("80528D6e9A2BAbFc766965E0E26d5aB08D9CFaF9"),
+            cb_eth: address!("70EB4D3c164a6B4A5f908D4FBb5a9cAfFb66bAB6"),
+            m_eth: address!("accc5A86732BE85b5012e8614AF237801636F8e5"),
         },
     },
 };
