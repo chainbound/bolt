@@ -163,6 +163,7 @@ impl OperatorsCommand {
 mod tests {
     use crate::{
         cli::{Chain, EigenLayerSubcommand, OperatorsCommand, OperatorsSubcommand},
+        common::signing::wallet_from_sk,
         contracts::{
             deployments_for_chain,
             eigenlayer::{DelegationManager, IStrategy, OperatorDetails},
@@ -171,20 +172,25 @@ mod tests {
     };
     use alloy::{
         primitives::{keccak256, utils::parse_units, Address, B256, U256},
-        providers::{ext::AnvilApi, Provider, ProviderBuilder},
-        signers::k256::ecdsa::SigningKey,
+        providers::{ext::AnvilApi, Provider, ProviderBuilder, WalletProvider},
         sol_types::SolValue,
     };
+    use rand::Rng;
 
     #[tokio::test]
     async fn test_eigenlayer_flow() {
+        let mut rnd = rand::thread_rng();
+        let secret_key = B256::from(rnd.gen::<[u8; 32]>());
+        let wallet = wallet_from_sk(secret_key).expect("to create wallet");
+
         let rpc_url = "https://holesky.drpc.org";
-        let provider = ProviderBuilder::new().on_anvil_with_config(|anvil| anvil.fork(rpc_url));
+        let provider = ProviderBuilder::new()
+            .with_recommended_fillers()
+            .wallet(wallet)
+            .on_anvil_with_config(|anvil| anvil.fork(rpc_url));
         let anvil_url = provider.client().transport().url();
 
-        let mut rnd = rand::thread_rng();
-        let secret_key = SigningKey::random(&mut rnd);
-        let account = Address::from_private_key(&secret_key);
+        let account = provider.default_signer_address();
 
         // Add balance to the operator
         provider.anvil_set_balance(account, U256::from(u64::MAX)).await.expect("set balance");
@@ -206,15 +212,17 @@ mod tests {
             .await
             .expect("to set storage");
 
+        let random_address = Address::from(rnd.gen::<[u8; 20]>());
+
         // 1. Register the operator into EigenLayer. This should be done by the operator using the
         //    EigenLayer CLI, but we do it here for testing purposes.
 
         let delegation_manager =
             DelegationManager::new(deployments.eigen_layer.delegation_manager, provider.clone());
-        delegation_manager
+        let receipt = delegation_manager
             .registerAsOperator(
                 OperatorDetails {
-                    earningsReceiver: account,
+                    earningsReceiver: random_address,
                     delegationApprover: Address::ZERO,
                     stakerOptOutWindowBlocks: 32,
                 },
@@ -223,20 +231,20 @@ mod tests {
             .send()
             .await
             .expect("to send register as operator")
-            .watch()
+            .get_receipt()
             .await
-            .expect("to watch register as operator");
-        if !delegation_manager
+            .expect("to get receipt for register as operator");
+
+        assert!(receipt.status(), "operator should be registered");
+        println!("Registered operator with address {}", account);
+
+        let is_operator = delegation_manager
             .isOperator(account)
             .call()
             .await
             .expect("to check if operator is registered")
-            ._0
-        {
-            panic!("Operator not registered");
-        }
-
-        println!("Registered operator with address {}", account);
+            ._0;
+        println!("is operator {}", is_operator);
 
         // 2. Deposit into the strategy
 
@@ -244,8 +252,7 @@ mod tests {
             subcommand: OperatorsSubcommand::EigenLayer {
                 subcommand: EigenLayerSubcommand::DepositIntoStrategy {
                     rpc_url: anvil_url.parse().expect("valid url"),
-                    operator_private_key: B256::try_from(secret_key.to_bytes().as_slice())
-                        .expect("valid secret key"),
+                    operator_private_key: secret_key,
                     strategy: EigenLayerStrategy::WEth,
                     amount: parse_units("1.0", "ether").expect("parse ether").into(),
                 },
@@ -260,8 +267,7 @@ mod tests {
             subcommand: OperatorsSubcommand::EigenLayer {
                 subcommand: EigenLayerSubcommand::RegisterIntoBoltAVS {
                     rpc_url: anvil_url.parse().expect("valid url"),
-                    operator_private_key: B256::try_from(secret_key.to_bytes().as_slice())
-                        .expect("valid secret key"),
+                    operator_private_key: secret_key,
                     operator_rpc: "https://bolt.chainbound.io/rpc".parse().expect("valid url"),
                     salt: B256::ZERO,
                     expiry: U256::MAX,

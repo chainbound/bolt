@@ -34,7 +34,8 @@ impl ValidatorsCommand {
                 let keys: Vec<BlsPublicKey> = serde_json::from_reader(pubkeys_file)?;
                 let pubkey_hashes: Vec<_> = keys.iter().map(compress_bls_pubkey).collect();
 
-                let bolt_validators = BoltValidators::new(bolt_validators_address, provider);
+                let bolt_validators =
+                    BoltValidators::new(bolt_validators_address, provider.clone());
 
                 let call = bolt_validators.batchRegisterValidatorsUnsafe(
                     pubkey_hashes,
@@ -42,10 +43,13 @@ impl ValidatorsCommand {
                     authorized_operator,
                 );
 
-                let result = call.send().await?;
+                let pending_tx = call.send().await?;
                 println!("Transaction submitted successfully, waiting for inclusion");
-                let result = result.watch().await?;
-                println!("Transaction included. Transaction hash: {:?}", result);
+                let hash = pending_tx.watch().await?;
+                println!("Transaction included. Transaction hash: {:?}", hash);
+                let receipt =
+                    provider.get_transaction_receipt(hash).await?.expect("to find receipt");
+                assert!(receipt.status(), "transaction failed");
 
                 Ok(())
             }
