@@ -9,6 +9,7 @@ use crate::cli::Chain;
 pub mod bolt;
 pub mod eigenlayer;
 pub mod erc20;
+pub mod symbiotic;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct Contracts {

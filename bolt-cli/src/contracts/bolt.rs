@@ -37,4 +37,25 @@ sol! {
         /// The msg.sender of this call will be the operator address.
         function registerOperator(string calldata rpc, SignatureWithSaltAndExpiry calldata operatorSignature) public;
     }
+
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    interface BoltSymbioticMiddleware {
+        /// @notice Allow an operator to signal opt-in to Bolt Protocol.
+        /// msg.sender must be an operator in the Symbiotic network.
+        function registerOperator(string calldata rpc) public;
+
+        /// @notice Get the collaterals and amounts staked by an operator across the supported strategies.
+        ///
+        /// @param operator The operator address to get the collaterals and amounts staked for.
+        /// @return collaterals The collaterals staked by the operator.
+        /// @dev Assumes that the operator is registered and enabled.
+        function getOperatorCollaterals(address operator) public view returns (address[] memory, uint256[] memory);
+    }
+
+    #[allow(missing_docs)]
+    #[sol(rpc)]
+    interface IBoltManager {
+        function isOperator(address operator) public view returns (bool);
+    }
 }
