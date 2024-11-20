@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use alloy::{
     network::EthereumWallet,
     primitives::Bytes,
@@ -61,6 +63,13 @@ impl OperatorsCommand {
                         IStrategyManagerInstance::new(strategy_manager_address, provider.clone());
 
                     let token = strategy_contract.underlyingToken().call().await?.token;
+                    println!("Token address: {:?}", token);
+
+                    if !request_confirmation() {
+                        info!("Aborting");
+                        return Ok(());
+                    }
+
                     let token_erc20 = IERC20Instance::new(token, provider.clone());
 
                     let result =
@@ -103,6 +112,13 @@ impl OperatorsCommand {
                     let chain = Chain::from_id(chain_id)
                         .unwrap_or_else(|| panic!("chain id {} not supported", chain_id));
 
+                    info!(operator = %signer.address(), rpc = %operator_rpc, ?chain, "Registering EigenLayer operator");
+
+                    if !request_confirmation() {
+                        info!("Aborting");
+                        return Ok(());
+                    }
+
                     let deployments = deployments_for_chain(chain);
 
                     let bolt_avs_address = deployments.bolt.eigenlayer_middleware;
@@ -139,6 +155,10 @@ impl OperatorsCommand {
                     Ok(())
                 }
                 EigenLayerSubcommand::Status { rpc_url: rpc, address } => {
+                    if !request_confirmation() {
+                        return Ok(());
+                    }
+
                     let provider = ProviderBuilder::new().on_http(rpc.clone());
                     let chain_id = provider.get_chain_id().await?;
                     let chain = Chain::from_id(chain_id)
@@ -147,9 +167,11 @@ impl OperatorsCommand {
                     let deployments = deployments_for_chain(chain);
                     let bolt_manager =
                         BoltManagerContract::new(deployments.bolt.manager, provider.clone());
-                    let result = bolt_manager.isOperator(address).call().await?._0;
-                    println!("Operator is registered: {}", result);
-                    assert!(result, "operator is not registered");
+                    if bolt_manager.isOperator(address).call().await?._0 {
+                        info!(?address, "EigenLayer operator is registered");
+                    } else {
+                        warn!(?address, "Operator not registered");
+                    }
 
                     Ok(())
                 }
@@ -171,6 +193,11 @@ impl OperatorsCommand {
                     let deployments = deployments_for_chain(chain);
 
                     info!(operator = %signer.address(), rpc = %operator_rpc, ?chain, "Registering Symbiotic operator");
+
+                    if !request_confirmation() {
+                        info!("Aborting");
+                        return Ok(());
+                    }
 
                     // Check if operator is opted in to the bolt network
                     if !IOptInService::new(
@@ -233,6 +260,31 @@ impl OperatorsCommand {
     }
 }
 
+fn request_confirmation() -> bool {
+    loop {
+        info!("Do you want to continue? (yes/no): ");
+
+        print!("Answer: ");
+        std::io::stdout().flush().expect("Failed to flush");
+
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).expect("Failed to read input");
+
+        let input = input.trim().to_lowercase();
+
+        match input.as_str() {
+            "yes" | "y" => {
+                return true;
+            }
+            "no" | "n" => {
+                return false;
+            }
+            _ => {
+                println!("Invalid input. Please type 'yes' or 'no'.");
+            }
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use crate::{
