@@ -245,7 +245,7 @@ pub enum EigenLayerSubcommand {
 
 #[derive(Debug, Clone, Parser)]
 pub enum SymbioticSubcommand {
-    /// Register into the bolt manager contract as an opeartor.
+    /// Register into the bolt manager contract as a Symbiotic operator.
     Register {
         /// The URL of the RPC to broadcast the transaction.
         #[clap(long, env = "RPC_URL")]
@@ -256,6 +256,15 @@ pub enum SymbioticSubcommand {
         /// The URL of the operator RPC.
         #[clap(long, env = "OPERATOR_RPC")]
         operator_rpc: Url,
+    },
+    /// Check the status of a Symbiotic operator.
+    Status {
+        /// The URL of the RPC to broadcast the transaction.
+        #[clap(long, env = "RPC_URL")]
+        rpc_url: Url,
+        /// The address of the operator to check.
+        #[clap(long, env = "OPERATOR_ADDRESS")]
+        address: Address,
     },
 }
 

@@ -5,7 +5,7 @@ use alloy::{
     signers::{local::PrivateKeySigner, SignerSync},
 };
 use eyre::Context;
-use tracing::info;
+use tracing::{info, warn};
 
 use crate::{
     cli::{
@@ -208,6 +208,23 @@ impl OperatorsCommand {
                     }
 
                     info!("Succesfully registered Symbiotic operator");
+
+                    Ok(())
+                }
+                SymbioticSubcommand::Status { rpc_url, address } => {
+                    let provider = ProviderBuilder::new().on_http(rpc_url.clone());
+                    let chain_id = provider.get_chain_id().await?;
+                    let chain = Chain::from_id(chain_id)
+                        .unwrap_or_else(|| panic!("chain id {} not supported", chain_id));
+
+                    let deployments = deployments_for_chain(chain);
+                    let bolt_manager =
+                        BoltManagerContract::new(deployments.bolt.manager, provider.clone());
+                    if bolt_manager.isOperator(address).call().await?._0 {
+                        info!(?address, "Symbiotic operator is registered");
+                    } else {
+                        warn!(?address, "Operator not registered");
+                    }
 
                     Ok(())
                 }
