@@ -1,13 +1,10 @@
-use alloy::{
-    providers::{Provider, ProviderBuilder},
-    sol,
-};
+use alloy::providers::{Provider, ProviderBuilder};
 use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
 
 use crate::{
     cli::{Chain, ValidatorsCommand, ValidatorsSubcommand},
     common::{hash::compress_bls_pubkey, signing::wallet_from_sk},
-    contracts::deployments_for_chain,
+    contracts::{bolt::BoltValidators, deployments_for_chain},
 };
 
 impl ValidatorsCommand {
@@ -37,8 +34,7 @@ impl ValidatorsCommand {
                 let keys: Vec<BlsPublicKey> = serde_json::from_reader(pubkeys_file)?;
                 let pubkey_hashes: Vec<_> = keys.iter().map(compress_bls_pubkey).collect();
 
-                let bolt_validators =
-                    BoltValidatorsContract::new(bolt_validators_address, provider);
+                let bolt_validators = BoltValidators::new(bolt_validators_address, provider);
 
                 let call = bolt_validators.batchRegisterValidatorsUnsafe(
                     pubkey_hashes,
@@ -54,25 +50,6 @@ impl ValidatorsCommand {
                 Ok(())
             }
         }
-    }
-}
-
-sol! {
-    #[allow(missing_docs)]
-    #[sol(rpc)]
-    interface BoltValidatorsContract {
-        /// @notice Register a batch of Validators and authorize a Collateral Provider and Operator for them
-        /// @dev This function allows anyone to register a list of Validators.
-        /// @param pubkeyHashes List of BLS public key hashes for the Validators to be registered
-        /// @param maxCommittedGasLimit The maximum gas that the Validator can commit for preconfirmations
-        /// @param authorizedOperator The address of the authorized operator
-        function batchRegisterValidatorsUnsafe(bytes20[] calldata pubkeyHashes, uint32 maxCommittedGasLimit, address authorizedOperator);
-
-        error KeyNotFound();
-        error InvalidQuery();
-        #[derive(Debug)]
-        error ValidatorDoesNotExist(bytes20 pubkeyHash);
-        error InvalidAuthorizedOperator();
     }
 }
 
