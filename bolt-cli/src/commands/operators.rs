@@ -2,7 +2,7 @@ use std::io::Write;
 
 use alloy::{
     network::EthereumWallet,
-    primitives::Bytes,
+    primitives::{utils::format_ether, Bytes},
     providers::{Provider, ProviderBuilder, WalletProvider},
     signers::{local::PrivateKeySigner, SignerSync},
 };
@@ -42,6 +42,7 @@ impl OperatorsCommand {
                 } => {
                     let signer = PrivateKeySigner::from_bytes(&operator_private_key)
                         .wrap_err("valid private key")?;
+                    let operator = signer.address();
 
                     let provider = ProviderBuilder::new()
                         .with_recommended_fillers()
@@ -63,7 +64,8 @@ impl OperatorsCommand {
                         IStrategyManagerInstance::new(strategy_manager_address, provider.clone());
 
                     let token = strategy_contract.underlyingToken().call().await?.token;
-                    println!("Token address: {:?}", token);
+
+                    info!(%strategy, %token, amount = format_ether(amount), ?operator, "Depositing funds into EigenLayer strategy");
 
                     if !request_confirmation() {
                         info!("Aborting");
@@ -72,24 +74,34 @@ impl OperatorsCommand {
 
                     let token_erc20 = IERC20Instance::new(token, provider.clone());
 
+                    let balance = token_erc20
+                        .balanceOf(provider.clone().default_signer_address())
+                        .call()
+                        .await?
+                        ._0;
+
+                    info!("Operator token balance: {}", format_ether(balance));
+
                     let result =
                         token_erc20.approve(strategy_manager_address, amount).send().await?;
-                    println!(
-                        "Approving transfer of {} {:?}, waiting for inclusion",
-                        amount, strategy
-                    );
-                    let receipt = result.get_receipt().await?;
-                    println!("Approval transaction included. Receipt: {:#?}", receipt);
+
+                    info!(hash = ?result.tx_hash(), "Approving transfer of {} {:?}, awaiting receipt...", amount, strategy);
+                    let result = result.watch().await?;
+                    info!("Approval transaction included. Transaction hash: {:?}", result);
 
                     let result = strategy_manager
                         .depositIntoStrategy(strategy_address, token, amount)
                         .send()
                         .await?;
-                    println!("Submitted transaction to deposit into strategy successfully, waiting for inclusion");
 
+                    info!(hash = ?result.tx_hash(), "Submitted deposit transaction, awaiting receipt...");
                     let receipt = result.get_receipt().await?;
-                    println!("Deposit transaction included. Receipt: {:#?}", receipt);
-                    assert!(receipt.status(), "transaction failed");
+
+                    if !receipt.status() {
+                        eyre::bail!("Transaction failed: {:?}", receipt)
+                    }
+
+                    info!("Succesfully deposited collateral into strategy");
 
                     Ok(())
                 }
@@ -146,11 +158,18 @@ impl OperatorsCommand {
                         .registerOperator(operator_rpc.to_string(), signature)
                         .send()
                         .await?;
-                    println!("Submitted transaction to registered operator into Bolt successfully, waiting for inclusion...");
+
+                    info!(
+                        hash = ?result.tx_hash(),
+                        "registerOperator transaction sent, awaiting receipt..."
+                    );
 
                     let receipt = result.get_receipt().await?;
-                    println!("Registration transaction included. Receipt: {:#?}", receipt);
-                    assert!(receipt.status(), "transaction failed");
+                    if !receipt.status() {
+                        eyre::bail!("Transaction failed: {:?}", receipt)
+                    }
+
+                    info!("Succesfully registered Symbiotic operator");
 
                     Ok(())
                 }
