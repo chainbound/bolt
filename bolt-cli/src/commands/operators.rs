@@ -15,7 +15,7 @@ use crate::{
 };
 use alloy::{
     network::EthereumWallet,
-    primitives::{Bytes, U256},
+    primitives::Bytes,
     providers::{Provider, ProviderBuilder, WalletProvider},
     signers::{local::PrivateKeySigner, SignerSync},
 };
@@ -89,8 +89,9 @@ impl OperatorsCommand {
                         .await?;
 
                     println!("Submitted transaction to deposit into strategy successfully, waiting for inclusion");
-                    let result = result.watch().await;
-                    println!("Deposit transaction included. Transaction hash: {:?}", result);
+                    let receipt = result.get_receipt().await?;
+                    println!("Deposit transaction included. Receipt: {:#?}", receipt);
+                    assert!(receipt.status(), "transaction failed");
 
                     Ok(())
                 }
@@ -141,8 +142,9 @@ impl OperatorsCommand {
                         .send()
                         .await?;
                     println!("Submitted transaction to registered operator into Bolt successfully, waiting for inclusion...");
-                    let result = result.watch().await?;
-                    println!("Registration transaction included. Transaction hash: {:?}", result);
+                    let receipt = result.get_receipt().await?;
+                    println!("Registration transaction included. Receipt: {:#?}", receipt);
+                    assert!(receipt.status(), "transaction failed");
 
                     Ok(())
                 }

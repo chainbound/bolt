@@ -45,10 +45,8 @@ impl ValidatorsCommand {
 
                 let pending_tx = call.send().await?;
                 println!("Transaction submitted successfully, waiting for inclusion");
-                let hash = pending_tx.watch().await?;
-                println!("Transaction included. Transaction hash: {:?}", hash);
-                let receipt =
-                    provider.get_transaction_receipt(hash).await?.expect("to find receipt");
+                let receipt = pending_tx.get_receipt().await?;
+                println!("Transaction included. Receipt: {:?}", receipt);
                 assert!(receipt.status(), "transaction failed");
 
                 Ok(())
