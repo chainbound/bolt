@@ -2,7 +2,7 @@ use crate::{
     cli::{
         Chain, EigenLayerSubcommand, OperatorsCommand, OperatorsSubcommand, SymbioticSubcommand,
     },
-    common::signing::wallet_from_sk,
+    common::{bolt_manager::BoltManagerContract, signing::wallet_from_sk},
     contracts::{
         bolt::{BoltEigenLayerMiddleware, SignatureWithSaltAndExpiry},
         deployments_for_chain,
@@ -148,8 +148,20 @@ impl OperatorsCommand {
 
                     Ok(())
                 }
-                EigenLayerSubcommand::CheckOperatorRegistration { rpc, address } => {
-                    todo!()
+                EigenLayerSubcommand::CheckOperatorRegistration { rpc_url: rpc, address } => {
+                    let provider = ProviderBuilder::new().on_http(rpc.clone());
+                    let chain_id = provider.get_chain_id().await?;
+                    let chain = Chain::from_id(chain_id)
+                        .unwrap_or_else(|| panic!("chain id {} not supported", chain_id));
+
+                    let deployments = deployments_for_chain(chain);
+                    let bolt_manager =
+                        BoltManagerContract::new(deployments.bolt.manager, provider.clone());
+                    let result = bolt_manager.isOperator(address).call().await?._0;
+                    println!("Operator is registered: {}", result);
+                    assert!(result, "operator is not registered");
+
+                    Ok(())
                 }
             },
             OperatorsSubcommand::Symbiotic { subcommand } => match subcommand {
@@ -278,5 +290,17 @@ mod tests {
         };
 
         register_operator.run().await.expect("to register operator");
+
+        // 4. Check operator registration
+        let check_operator_registration = OperatorsCommand {
+            subcommand: OperatorsSubcommand::EigenLayer {
+                subcommand: EigenLayerSubcommand::CheckOperatorRegistration {
+                    rpc_url: anvil_url.parse().expect("valid url"),
+                    address: account,
+                },
+            },
+        };
+
+        check_operator_registration.run().await.expect("to check operator registration");
     }
 }

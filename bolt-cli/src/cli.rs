@@ -235,8 +235,8 @@ pub enum EigenLayerSubcommand {
     /// Step 3: Check your operation registration in bolt
     CheckOperatorRegistration {
         /// The URL of the RPC to broadcast the transaction.
-        #[clap(long, env = "RPC")]
-        rpc: Url,
+        #[clap(long, env = "RPC_URL")]
+        rpc_url: Url,
         /// The address of the operator to check.
         #[clap(long, env = "OPERATOR_ADDRESS")]
         address: Address,
