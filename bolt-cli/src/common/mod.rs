@@ -1,8 +1,9 @@
-use std::{fs, path::PathBuf};
+use std::{fs, io::Write, path::PathBuf};
 
 use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
 use eyre::{Context, Result};
 use serde::Serialize;
+use tracing::info;
 
 /// BoltManager contract bindings.
 pub mod bolt_manager;
@@ -34,4 +35,35 @@ pub fn write_to_file<T: Serialize>(out: &str, data: &T) -> Result<()> {
     let out_file = fs::File::create(out_path)?;
     serde_json::to_writer_pretty(out_file, data)?;
     Ok(())
+}
+
+/// Asks whether the user wants to proceed further. If not, the process is exited.
+pub fn request_confirmation() {
+    #[cfg(test)]
+    return;
+
+    loop {
+        info!("Do you want to continue? (yes/no): ");
+
+        print!("Answer: ");
+        std::io::stdout().flush().expect("Failed to flush");
+
+        let mut input = String::new();
+        std::io::stdin().read_line(&mut input).expect("Failed to read input");
+
+        let input = input.trim().to_lowercase();
+
+        match input.as_str() {
+            "yes" | "y" => {
+                return;
+            }
+            "no" | "n" => {
+                info!("Aborting");
+                std::process::exit(0);
+            }
+            _ => {
+                println!("Invalid input. Please type 'yes' or 'no'.");
+            }
+        }
+    }
 }

@@ -5,10 +5,11 @@ use alloy::{
 };
 use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
 use eyre::Context;
+use tracing::info;
 
 use crate::{
     cli::{Chain, ValidatorsCommand, ValidatorsSubcommand},
-    common::hash::compress_bls_pubkey,
+    common::{hash::compress_bls_pubkey, request_confirmation},
     contracts::{bolt::BoltValidators, deployments_for_chain},
 };
 
@@ -39,6 +40,15 @@ impl ValidatorsCommand {
                 let pubkeys_file = std::fs::File::open(&pubkeys_path)?;
                 let keys: Vec<BlsPublicKey> = serde_json::from_reader(pubkeys_file)?;
                 let pubkey_hashes: Vec<_> = keys.iter().map(compress_bls_pubkey).collect();
+
+                info!(
+                    validators = ?keys.len(),
+                    ?max_committed_gas_limit,
+                    ?authorized_operator,
+                    "Registering validators into bolt",
+                );
+
+                request_confirmation();
 
                 let bolt_validators =
                     BoltValidators::new(bolt_validators_address, provider.clone());
