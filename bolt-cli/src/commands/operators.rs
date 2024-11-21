@@ -67,10 +67,7 @@ impl OperatorsCommand {
 
                     info!(%strategy, %token, amount = format_ether(amount), ?operator, "Depositing funds into EigenLayer strategy");
 
-                    if !request_confirmation() {
-                        info!("Aborting");
-                        return Ok(());
-                    }
+                    request_confirmation();
 
                     let token_erc20 = IERC20Instance::new(token, provider.clone());
 
@@ -126,10 +123,7 @@ impl OperatorsCommand {
 
                     info!(operator = %signer.address(), rpc = %operator_rpc, ?chain, "Registering EigenLayer operator");
 
-                    if !request_confirmation() {
-                        info!("Aborting");
-                        return Ok(());
-                    }
+                    request_confirmation();
 
                     let deployments = deployments_for_chain(chain);
 
@@ -174,10 +168,6 @@ impl OperatorsCommand {
                     Ok(())
                 }
                 EigenLayerSubcommand::Status { rpc_url: rpc, address } => {
-                    if !request_confirmation() {
-                        return Ok(());
-                    }
-
                     let provider = ProviderBuilder::new().on_http(rpc.clone());
                     let chain_id = provider.get_chain_id().await?;
                     let chain = Chain::from_id(chain_id)
@@ -213,10 +203,7 @@ impl OperatorsCommand {
 
                     info!(operator = %signer.address(), rpc = %operator_rpc, ?chain, "Registering Symbiotic operator");
 
-                    if !request_confirmation() {
-                        info!("Aborting");
-                        return Ok(());
-                    }
+                    request_confirmation();
 
                     // Check if operator is opted in to the bolt network
                     if !IOptInService::new(
@@ -279,7 +266,11 @@ impl OperatorsCommand {
     }
 }
 
-fn request_confirmation() -> bool {
+/// Asks whether the user wants to proceed further. If not, the process is exited.
+fn request_confirmation() {
+    #[cfg(test)]
+    return;
+
     loop {
         info!("Do you want to continue? (yes/no): ");
 
@@ -293,10 +284,11 @@ fn request_confirmation() -> bool {
 
         match input.as_str() {
             "yes" | "y" => {
-                return true;
+                return;
             }
             "no" | "n" => {
-                return false;
+                info!("Aborting");
+                std::process::exit(0);
             }
             _ => {
                 println!("Invalid input. Please type 'yes' or 'no'.");
