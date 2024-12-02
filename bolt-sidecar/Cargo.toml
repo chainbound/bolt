@@ -27,7 +27,7 @@ ssz_rs = { git = "https://github.com/ralexstokes/ssz-rs", rev = "ec3073e" }
 ethereum_ssz = "0.5"
 
 # alloy
-alloy = { version = "0.6.4", features = [
+alloy = { version = "0.7.0", features = [
   "full",
   "provider-trace-api",
   "rpc-types-beacon",
