@@ -1065,7 +1065,7 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-extra",
- "cb-common",
+ "cb-common 0.3.1",
  "cb-pbs",
  "ethereum_ssz 0.5.4",
  "ethereum_ssz 0.8.0",
@@ -1162,12 +1162,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "cb-common"
+version = "0.3.1"
+source = "git+https://github.com/commit-boost/commit-boost-client?tag=v0.3.1#1dc63e2494a145718261a64baf90331adaef6d29"
+dependencies = [
+ "alloy",
+ "axum",
+ "bimap",
+ "blst",
+ "derive_more 1.0.0",
+ "eth2_keystore",
+ "ethereum_serde_utils 0.7.0",
+ "eyre",
+ "k256",
+ "rand",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "ssz_types 0.8.0",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "tree_hash 0.8.0",
+ "tree_hash_derive 0.8.0",
+ "url",
+]
+
+[[package]]
 name = "cb-metrics"
 version = "0.3.0"
 source = "git+https://github.com/commit-boost/commit-boost-client?tag=v0.3.0#d511c267243b3371f4d47604aebe6a20dbbd0e79"
 dependencies = [
  "axum",
- "cb-common",
+ "cb-common 0.3.0",
  "eyre",
  "prometheus",
  "thiserror",
@@ -1184,7 +1215,7 @@ dependencies = [
  "async-trait",
  "axum",
  "blst",
- "cb-common",
+ "cb-common 0.3.0",
  "cb-metrics",
  "dashmap 5.5.3",
  "eyre",

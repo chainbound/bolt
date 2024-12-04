@@ -43,7 +43,7 @@ alloy = { version = "0.3.6", features = [
 alloy-rlp = "0.3.9"
 
 # commit-boost
-cb-common = { git = "https://github.com/commit-boost/commit-boost-client", tag = "v0.3.0" }
+cb-common = { git = "https://github.com/commit-boost/commit-boost-client", tag = "v0.3.1" }
 cb-pbs = { git = "https://github.com/commit-boost/commit-boost-client", tag = "v0.3.0" }
 
 # other
