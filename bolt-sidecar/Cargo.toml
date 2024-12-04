@@ -24,7 +24,7 @@ tree_hash = "0.5"
 tree_hash_derive = "0.5"
 secp256k1 = { version = "0.29.0", features = ["rand"] }
 ssz_rs = { git = "https://github.com/ralexstokes/ssz-rs", rev = "ec3073e" }
-ethereum_ssz = "0.5"
+ethereum_ssz = "0.8"
 
 # alloy
 alloy = { version = "0.7.2", features = [
