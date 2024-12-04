@@ -10,7 +10,7 @@ debug = true
 
 [dependencies]
 # core
-clap = { version = "4.5.20", features = ["derive", "env"] }
+clap = { version = "4.5.21", features = ["derive", "env"] }
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.7", features = ["macros"] }
 tower-http = { version = "0.5.2", features = ["timeout"] }

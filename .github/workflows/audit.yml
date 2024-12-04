@@ -1,0 +1,45 @@
+name: Security Audit
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    paths: 
+      - ".github/workflows/audit.yml"
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+  push:
+    branches:
+      - main
+      - unstable
+    paths: 
+      - ".github/workflows/audit.yml"
+      - "**/Cargo.toml"
+      - "**/Cargo.lock"
+  schedule:
+    # Run daily at midnight
+    - cron: '0 0 * * *'
+
+permissions:
+  issues: write
+  checks: write
+  pull-requests: read
+  contents: read
+
+jobs:
+  security-audit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [bolt-sidecar, bolt-cli, bolt-boost]
+    name: Security Audit for ${{ matrix.project }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run cargo audit
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: ${{ matrix.project }}

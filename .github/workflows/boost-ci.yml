@@ -2,6 +2,9 @@ name: Bolt Boost CI
 
 on:
   push:
+    branches:
+      - unstable
+      - main
     paths:
       - "bolt-boost/**"
   pull_request:

@@ -1,11 +1,12 @@
-name: Bolt-contracts CI
+name: Bolt Contracts CI
 
 on:
   push:
-    paths:
-      - "bolt-contracts/**"
     branches:
       - unstable
+      - main
+    paths:
+      - "bolt-contracts/**"
   pull_request:
     paths:
       - "bolt-contracts/**"
