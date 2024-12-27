@@ -20,7 +20,7 @@ reqwest = "0.12.9"
 
 # crypto
 ssz_rs = { git = "https://github.com/ralexstokes/ssz-rs", rev = "ec3073e" }
-tree_hash = "0.8"
+tree_hash = "0.9"
 
 # tracing & metrics
 tracing = "0.1.41"

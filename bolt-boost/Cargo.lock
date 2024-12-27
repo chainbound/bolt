@@ -1144,7 +1144,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "tree_hash 0.8.0",
+ "tree_hash 0.9.0",
  "types",
 ]
 
@@ -4634,6 +4634,19 @@ dependencies = [
  "alloy-primitives",
  "ethereum_hashing 0.7.0",
  "smallvec",
+]
+
+[[package]]
+name = "tree_hash"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3cc60ae4c4236ee721305d0f0b5aa3e8ef5b66f3fa61d17072430bc246d6694a"
+dependencies = [
+ "alloy-primitives",
+ "ethereum_hashing 0.7.0",
+ "ethereum_ssz 0.8.1",
+ "smallvec",
+ "typenum",
 ]
 
 [[package]]
