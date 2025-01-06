@@ -1,65 +1,37 @@
-/// Gas limit constants
-pub const DEFAULT_BLOCK_GAS_LIMIT: u64 = 30_000_000;
+//! Implementation of preconfirmation pricing as presented in
+//! <https://research.lido.fi/t/a-pricing-model-for-inclusion-preconfirmations/9136>.
+use super::{Pricing, PricingError, DEFAULT_BLOCK_GAS_LIMIT};
 
 /// Fee calculation constants from
-/// https://research.lido.fi/t/a-pricing-model-for-inclusion-preconfirmations/9136#p-19482-a-model-for-cumulative-proposer-rewards-13
+/// <https://research.lido.fi/t/a-pricing-model-for-inclusion-preconfirmations/9136#p-19482-a-model-for-cumulative-proposer-rewards-13>
 const BASE_MULTIPLIER: f64 = 0.019;
 const GAS_SCALAR: f64 = 1.02e-6;
 
 /// Handles pricing calculations for preconfirmations
 #[derive(Debug)]
-pub struct PreconfPricing {
+pub struct LidoPricing {
     block_gas_limit: u64,
     base_multiplier: f64,
     gas_scalar: f64,
 }
 
-/// Errors that can occur during pricing calculations
-#[derive(Debug, thiserror::Error)]
-pub enum PricingError {
-    /// Preconfirmed gas exceeds the block limit
-    #[error("Preconfirmed gas {0} exceeds block limit {1}")]
-    ExceedsBlockLimit(u64, u64),
-    /// Insufficient remaining gas for the incoming transaction
-    #[error("Insufficient remaining gas: requested {requested}, available {available}")]
-    /// Insufficient remaining gas for the incoming transaction
-    InsufficientGas {
-        /// Gas requested by the incoming transaction
-        requested: u64,
-        /// Gas available in the block
-        available: u64,
-    },
-    /// Incoming gas is zero
-    #[error("Invalid gas limit: Incoming gas ({incoming_gas}) is zero")]
-    InvalidGasLimit {
-        /// Gas required by the incoming transaction
-        incoming_gas: u64,
-    },
-}
-
-impl Default for PreconfPricing {
+impl Default for LidoPricing {
     fn default() -> Self {
         Self::new(DEFAULT_BLOCK_GAS_LIMIT)
     }
 }
 
-impl PreconfPricing {
-    /// Initializes a new PreconfPricing with default parameters.
+impl LidoPricing {
+    /// Initializes a new LidoPricing with default parameters.
     pub fn new(block_gas_limit: u64) -> Self {
         Self { block_gas_limit, base_multiplier: BASE_MULTIPLIER, gas_scalar: GAS_SCALAR }
     }
+}
 
-    /// Calculate the minimum priority fee for a preconfirmation based on
-    /// https://research.lido.fi/t/a-pricing-model-for-inclusion-preconfirmations/9136
-    ///
-    /// # Arguments
-    /// * `incoming_gas` - Gas required by the incoming transaction
-    /// * `preconfirmed_gas` - Total gas already preconfirmed
-    ///
-    /// # Returns
-    /// * `Ok(f64)` - The minimum priority fee in Wei
-    /// * `Err(PricingError)` - If the calculation cannot be performed
-    pub fn calculate_min_priority_fee(
+impl Pricing for LidoPricing {
+    /// Calculate the minimum priority fee for a preconfirmation based on 
+    /// <https://research.lido.fi/t/a-pricing-model-for-inclusion-preconfirmations/9136>
+    fn calculate_min_priority_fee(
         &self,
         incoming_gas: u64,
         preconfirmed_gas: u64,
@@ -121,7 +93,7 @@ mod tests {
 
     #[test]
     fn test_min_priority_fee_zero_preconfirmed() {
-        let pricing = PreconfPricing::default();
+        let pricing = LidoPricing::default();
 
         // Test minimum fee (21k gas ETH transfer, 0 preconfirmed)
         let incoming_gas = 21_000;
@@ -139,7 +111,7 @@ mod tests {
 
     #[test]
     fn test_min_priority_fee_zero_big_preconfirmed() {
-        let pricing = PreconfPricing::default();
+        let pricing = LidoPricing::default();
 
         // Test minimum fee (210k gas ETH transfer, 0 preconfirmed)
         let incoming_gas = 210_000;
@@ -158,7 +130,7 @@ mod tests {
 
     #[test]
     fn test_min_priority_fee_medium_load() {
-        let pricing = PreconfPricing::default();
+        let pricing = LidoPricing::default();
 
         // Test medium load (21k gas, 15M preconfirmed)
         let incoming_gas = 21_000;
@@ -176,7 +148,7 @@ mod tests {
 
     #[test]
     fn test_min_priority_fee_max_load() {
-        let pricing = PreconfPricing::default();
+        let pricing = LidoPricing::default();
 
         // Test last preconfirmed transaction (21k gas, almost 30M preconfirmed)
         let incoming_gas = 21_000;
@@ -197,7 +169,7 @@ mod tests {
 
     #[test]
     fn test_min_priority_fee_zero_preconfirmed_36m() {
-        let pricing = PreconfPricing::new(36_000_000);
+        let pricing = LidoPricing::new(36_000_000);
 
         // Test minimum fee (21k gas ETH transfer, 0 preconfirmed)
         let incoming_gas = 21_000;
@@ -214,7 +186,7 @@ mod tests {
 
     #[test]
     fn test_min_priority_fee_medium_load_36m() {
-        let pricing = PreconfPricing::new(36_000_000);
+        let pricing = LidoPricing::new(36_000_000);
 
         // Test medium load (21k gas, 18M preconfirmed)
         let incoming_gas = 21_000;
@@ -231,7 +203,7 @@ mod tests {
 
     #[test]
     fn test_min_priority_fee_max_load_36m() {
-        let pricing = PreconfPricing::new(36_000_000);
+        let pricing = LidoPricing::new(36_000_000);
 
         // Test last preconfirmed transaction (21k gas, almost 30M preconfirmed)
         let incoming_gas = 21_000;
@@ -252,7 +224,7 @@ mod tests {
 
     #[test]
     fn test_error_exceeds_block_limit() {
-        let pricing = PreconfPricing::default();
+        let pricing = LidoPricing::default();
 
         let incoming_gas = 21_000;
         let preconfirmed_gas = 30_000_001;
@@ -263,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_error_insufficient_gas() {
-        let pricing = PreconfPricing::default();
+        let pricing = LidoPricing::default();
 
         let incoming_gas = 15_000_001;
         let preconfirmed_gas = 15_000_000;
@@ -277,7 +249,7 @@ mod tests {
 
     #[test]
     fn test_error_zero_incoming_gas() {
-        let pricing = PreconfPricing::default();
+        let pricing = LidoPricing::default();
 
         let incoming_gas = 0;
         let preconfirmed_gas = 0;

@@ -13,7 +13,7 @@ pub use execution::{ExecutionState, ValidationError};
 
 /// Module to calculate pricing.
 pub mod pricing;
-pub use pricing::PreconfPricing;
+pub use pricing::LidoPricing;
 
 /// Module to fetch state from the Execution layer.
 pub mod fetcher;
