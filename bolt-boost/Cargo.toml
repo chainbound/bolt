@@ -10,7 +10,7 @@ debug = true
 [dependencies]
 # core
 tokio = { version = "1", features = ["full"] }
-axum = { version = "0.7", features = ["macros"] }
+axum = { version = "0.8", features = ["macros"] }
 axum-extra = "0.10.0"
 futures = "0.3"
 async-trait = "0.1.85"
