@@ -329,6 +329,7 @@ contract BoltEigenLayerMiddlewareV2 is IBoltMiddlewareV1, IServiceManager, Ownab
                 continue;
             }
 
+            // mapping(address operator => mapping(IStrategy strategy => uint256 shares)) public operatorShares;
             uint256 shares = DELEGATION_MANAGER.operatorShares(operator, IStrategy(strategy));
             amount += IStrategy(strategy).sharesToUnderlyingView(shares);
         }

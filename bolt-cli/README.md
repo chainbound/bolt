@@ -340,6 +340,7 @@ Commands:
   deposit     Deposit into a strategy
   register    Register an operator into the bolt AVS
   deregister  Deregister an EigenLayer operator from the bolt AVS
+  update-rpc  Update the operator RPC
   status      Check the status of an operator in the bolt AVS
   help        Print this message or the help of the given subcommand(s)
 
@@ -354,6 +355,7 @@ Usage: bolt operators symbiotic <COMMAND>
 Commands:
   register    Register into the bolt manager contract as a Symbiotic operator
   deregister  Deregister a Symbiotic operator from bolt
+  update-rpc  Update the operator RPC
   status      Check the status of a Symbiotic operator
   help        Print this message or the help of the given subcommand(s)
 
