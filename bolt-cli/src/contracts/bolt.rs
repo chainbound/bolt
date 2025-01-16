@@ -64,7 +64,14 @@ sol! {
         error AlreadyRegistered();
         error NotOperator();
         error NotRegistered();
-        error KeyNotFound();
+        error KeyNotFound(address key);
+        error SaltSpent();
+
+        // From IDelegationManager
+        /// @dev Thrown when an account is not actively delegated.
+        error NotActivelyDelegated();
+        /// @dev Thrown when `operator` is not a registered operator.
+        error OperatorNotRegistered();
     }
 
     #[allow(missing_docs)]

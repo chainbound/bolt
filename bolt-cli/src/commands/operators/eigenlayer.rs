@@ -164,6 +164,9 @@ impl EigenLayerSubcommand {
                             BoltEigenLayerMiddlewareErrors::NotOperator(_) => {
                                 eyre::bail!("Operator not registered in EigenLayer")
                             }
+                            BoltEigenLayerMiddlewareErrors::SaltSpent(_) => {
+                                eyre::bail!("Salt already spent")
+                            }
                             other => unreachable!(
                                 "Unexpected error with selector {:?}",
                                 other.selector()
@@ -251,6 +254,7 @@ impl EigenLayerSubcommand {
                     info!(?address, "EigenLayer operator is registered");
                 } else {
                     warn!(?address, "Operator not registered");
+                    return Ok(());
                 }
 
                 match bolt_manager.updateOperatorRPC(operator_rpc.to_string()).send().await {
@@ -291,6 +295,21 @@ impl EigenLayerSubcommand {
                     info!(?address, "EigenLayer operator is registered");
                 } else {
                     warn!(?address, "Operator not registered");
+                    return Ok(())
+                }
+
+                match bolt_manager.getOperatorData(address).call().await {
+                    Ok(operator_data) => {
+                        info!(?address, operator_data = ?operator_data._0, "Operator data");
+                    }
+                    Err(e) => match try_parse_contract_error::<BoltManagerContractErrors>(e)? {
+                        BoltManagerContractErrors::KeyNotFound(_) => {
+                            warn!(?address, "Operator data not found");
+                        }
+                        other => {
+                            unreachable!("Unexpected error with selector {:?}", other.selector())
+                        }
+                    },
                 }
 
                 // Check if operator has collateral
@@ -348,10 +367,10 @@ mod tests {
         sol_types::SolValue,
     };
     use alloy_node_bindings::WEI_IN_ETHER;
-    use reqwest::Url;
 
     #[tokio::test]
     async fn test_eigenlayer_flow() {
+        let _ = tracing_subscriber::fmt::try_init();
         let s1 = PrivateKeySigner::random();
         let secret_key = s1.to_bytes();
 
@@ -359,7 +378,7 @@ mod tests {
 
         let rpc_url = "https://holesky.drpc.org";
         let anvil = Anvil::default().fork(rpc_url).spawn();
-        let anvil_url = Url::parse(&anvil.endpoint()).expect("valid URL");
+        let anvil_url = anvil.endpoint_url();
         let provider = ProviderBuilder::new()
             .with_recommended_fillers()
             .wallet(wallet)
@@ -406,7 +425,7 @@ mod tests {
             .expect("to get receipt for register as operator");
 
         assert!(receipt.status(), "operator should be registered");
-        println!("Registered operator with address {}", account);
+        // println!("Registered operator with address {}", account);
 
         let is_operator = delegation_manager
             .isOperator(account)
@@ -447,6 +466,29 @@ mod tests {
         register_operator.run().await.expect("to register operator");
 
         // 4. Check operator registration
+        let check_operator_registration = OperatorsCommand {
+            subcommand: OperatorsSubcommand::EigenLayer {
+                subcommand: EigenLayerSubcommand::Status {
+                    rpc_url: anvil_url.clone(),
+                    address: account,
+                },
+            },
+        };
+
+        check_operator_registration.run().await.expect("to check operator registration");
+
+        let update_rpc = OperatorsCommand {
+            subcommand: OperatorsSubcommand::EigenLayer {
+                subcommand: EigenLayerSubcommand::UpdateRpc {
+                    rpc_url: anvil_url.clone(),
+                    operator_private_key: secret_key,
+                    operator_rpc: "https://boooooolt.chainbound.io/rpc".parse().expect("valid url"),
+                },
+            },
+        };
+
+        update_rpc.run().await.expect("to update operator rpc");
+
         let check_operator_registration = OperatorsCommand {
             subcommand: OperatorsSubcommand::EigenLayer {
                 subcommand: EigenLayerSubcommand::Status {
