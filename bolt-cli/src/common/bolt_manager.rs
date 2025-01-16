@@ -84,7 +84,11 @@ sol! {
         function isOperator(address operator) public view returns (bool);
         function getOperatorStake(address operator, address collateral) public view returns (uint256);
 
+        /// @notice Update the RPC associated to msg.sender.
+        function updateOperatorRPC(string calldata rpc) external;
+
         error InvalidQuery();
         error ValidatorDoesNotExist();
+        error OperatorNotRegistered();
     }
 }

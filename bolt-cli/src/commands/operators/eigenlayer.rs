@@ -16,7 +16,10 @@ use tracing::{info, warn};
 
 use crate::{
     cli::{Chain, EigenLayerSubcommand},
-    common::{bolt_manager::BoltManagerContract, request_confirmation, try_parse_contract_error},
+    common::{
+        bolt_manager::BoltManagerContract::{self, BoltManagerContractErrors},
+        request_confirmation, try_parse_contract_error,
+    },
     contracts::{
         bolt::{
             BoltEigenLayerMiddleware::{self, BoltEigenLayerMiddlewareErrors},
@@ -221,6 +224,58 @@ impl EigenLayerSubcommand {
                     }
                 }
 
+                Ok(())
+            }
+
+            Self::UpdateRpc { rpc_url, operator_private_key, operator_rpc } => {
+                let signer = PrivateKeySigner::from_bytes(&operator_private_key)
+                    .wrap_err("valid private key")?;
+                let address = signer.address();
+
+                let provider = ProviderBuilder::new()
+                    .with_recommended_fillers()
+                    .wallet(EthereumWallet::from(signer))
+                    .on_http(rpc_url);
+
+                let chain = Chain::try_from_provider(&provider).await?;
+
+                info!(operator = %address, rpc = %operator_rpc, ?chain, "Updating EigenLayer operator RPC");
+
+                request_confirmation();
+
+                let deployments = deployments_for_chain(chain);
+
+                let bolt_manager =
+                    BoltManagerContract::new(deployments.bolt.manager, provider.clone());
+                if bolt_manager.isOperator(address).call().await?._0 {
+                    info!(?address, "EigenLayer operator is registered");
+                } else {
+                    warn!(?address, "Operator not registered");
+                }
+
+                match bolt_manager.updateOperatorRPC(operator_rpc.to_string()).send().await {
+                    Ok(pending) => {
+                        info!(
+                            hash = ?pending.tx_hash(),
+                            "updateOperatorRPC transaction sent, awaiting receipt..."
+                        );
+
+                        let receipt = pending.get_receipt().await?;
+                        if !receipt.status() {
+                            eyre::bail!("Transaction failed: {:?}", receipt)
+                        }
+
+                        info!("Succesfully updated EigenLayer operator RPC");
+                    }
+                    Err(e) => match try_parse_contract_error::<BoltManagerContractErrors>(e)? {
+                        BoltManagerContractErrors::OperatorNotRegistered(_) => {
+                            eyre::bail!("Operator not registered in bolt")
+                        }
+                        other => {
+                            unreachable!("Unexpected error with selector {:?}", other.selector())
+                        }
+                    },
+                }
                 Ok(())
             }
 

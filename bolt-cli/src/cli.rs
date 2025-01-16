@@ -269,6 +269,19 @@ pub enum EigenLayerSubcommand {
         operator_private_key: B256,
     },
 
+    /// Update the operator RPC.
+    UpdateRpc {
+        /// The URL of the RPC to broadcast the transaction.
+        #[clap(long, env = "RPC_URL")]
+        rpc_url: Url,
+        /// The private key of the operator.
+        #[clap(long, env = "OPERATOR_PRIVATE_KEY")]
+        operator_private_key: B256,
+        /// The URL of the operator RPC.
+        #[clap(long, env = "OPERATOR_RPC")]
+        operator_rpc: Url,
+    },
+
     /// Check the status of an operator in the bolt AVS.
     Status {
         /// The URL of the RPC to broadcast the transaction.
@@ -303,6 +316,19 @@ pub enum SymbioticSubcommand {
         /// The private key of the operator.
         #[clap(long, env = "OPERATOR_PRIVATE_KEY")]
         operator_private_key: B256,
+    },
+
+    /// Update the operator RPC.
+    UpdateRpc {
+        /// The URL of the RPC to broadcast the transaction.
+        #[clap(long, env = "RPC_URL")]
+        rpc_url: Url,
+        /// The private key of the operator.
+        #[clap(long, env = "OPERATOR_PRIVATE_KEY")]
+        operator_private_key: B256,
+        /// The URL of the operator RPC.
+        #[clap(long, env = "OPERATOR_RPC")]
+        operator_rpc: Url,
     },
 
     /// Check the status of a Symbiotic operator.
