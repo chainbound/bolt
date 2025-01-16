@@ -208,6 +208,21 @@ impl SymbioticSubcommand {
                     info!(?address, "Symbiotic operator is registered");
                 } else {
                     warn!(?address, "Operator not registered");
+                    return Ok(())
+                }
+
+                match bolt_manager.getOperatorData(address).call().await {
+                    Ok(operator_data) => {
+                        info!(?address, operator_data = ?operator_data._0, "Operator data");
+                    }
+                    Err(e) => match try_parse_contract_error::<BoltManagerContractErrors>(e)? {
+                        BoltManagerContractErrors::KeyNotFound(_) => {
+                            warn!(?address, "Operator data not found");
+                        }
+                        other => {
+                            unreachable!("Unexpected error with selector {:?}", other.selector())
+                        }
+                    },
                 }
 
                 // Check if operator has collateral
@@ -377,6 +392,31 @@ mod tests {
         };
 
         register_into_bolt.run().await.expect("to register into bolt");
+
+        let check_status = OperatorsCommand {
+            subcommand: OperatorsSubcommand::Symbiotic {
+                subcommand: SymbioticSubcommand::Status {
+                    rpc_url: anvil_url.clone(),
+                    address: account,
+                },
+            },
+        };
+
+        check_status.run().await.expect("to check operator status");
+
+        let update_rpc = OperatorsCommand {
+            subcommand: OperatorsSubcommand::Symbiotic {
+                subcommand: SymbioticSubcommand::UpdateRpc {
+                    rpc_url: anvil_url.clone(),
+                    operator_private_key: secret_key,
+                    operator_rpc: "https://boooooooooooooooolt.chainbound.io"
+                        .parse()
+                        .expect("valid url"),
+                },
+            },
+        };
+
+        update_rpc.run().await.expect("to update operator rpc");
 
         let check_status = OperatorsCommand {
             subcommand: OperatorsSubcommand::Symbiotic {
