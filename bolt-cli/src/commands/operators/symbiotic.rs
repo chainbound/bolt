@@ -155,7 +155,7 @@ impl SymbioticSubcommand {
 
                 let chain = Chain::try_from_provider(&provider).await?;
 
-                info!(operator = %address, rpc = %operator_rpc, ?chain, "Updating EigenLayer operator RPC");
+                info!(operator = %address, rpc = %operator_rpc, ?chain, "Updating Symbiotic operator RPC");
 
                 request_confirmation();
 
@@ -164,9 +164,10 @@ impl SymbioticSubcommand {
                 let bolt_manager =
                     BoltManagerContract::new(deployments.bolt.manager, provider.clone());
                 if bolt_manager.isOperator(address).call().await?._0 {
-                    info!(?address, "EigenLayer operator is registered");
+                    info!(?address, "Symbiotic operator is registered");
                 } else {
                     warn!(?address, "Operator not registered");
+                    return Ok(())
                 }
 
                 match bolt_manager.updateOperatorRPC(operator_rpc.to_string()).send().await {
@@ -181,7 +182,7 @@ impl SymbioticSubcommand {
                             eyre::bail!("Transaction failed: {:?}", receipt)
                         }
 
-                        info!("Succesfully updated EigenLayer operator RPC");
+                        info!("Succesfully updated Symbiotic operator RPC");
                     }
                     Err(e) => match try_parse_contract_error::<BoltManagerContractErrors>(e)? {
                         BoltManagerContractErrors::OperatorNotRegistered(_) => {
