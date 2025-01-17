@@ -2,6 +2,8 @@ services:
   cb_bolt_sidecar:
     image: ghcr.io/chainbound/bolt-sidecar:v0.4.0-alpha
     container_name: cb_bolt_sidecar
+    env_file:
+      - bolt-sidecar.env
     environment:
       CB_MODULE_ID: BOLT_SIDECAR
       CB_CONFIG: /cb-config.toml
@@ -16,9 +18,6 @@ services:
     networks:
       - signer_network
       - monitoring_network
-    depends_on:
-      cb_signer:
-        condition: service_healthy
   cb_pbs:
     healthcheck:
       test: curl -f http://localhost:18551/eth/v1/builder/status
