@@ -7,10 +7,13 @@ chain = "Holesky"
 # Configuration for the PBS module
 [pbs]
 # Docker image to use for the PBS module.
-docker_image = "ghcr.io/chainbound/bolt-boost:v0.3.0-alpha"
+docker_image = "ghcr.io/chainbound/bolt-boost:v0.4.0-alpha"
 # Whether to enable the PBS module to request signatures from the Signer module (not used in the default PBS image)
 # OPTIONAL, DEFAULT: false
 with_signer = false
+# Host to receive BuilderAPI calls from beacon node
+# OPTIONAL, DEFAULT: 127.0.0.1
+host = "0.0.0.0"
 # Bolt: Port to receive BuilderAPI calls from the bolt-sidecar. 
 port = 18551
 # Whether to forward `status` calls to relays or skip and return 200
@@ -74,7 +77,7 @@ id = "BOLT_SIDECAR"
 # Type of the module. Supported values: commit, events
 type = "commit"
 # Docker image of the module
-docker_image = "ghcr.io/chainbound/bolt-sidecar:v0.3.0-alpha"
+docker_image = "ghcr.io/chainbound/bolt-sidecar:v0.4.0-alpha"
 
 [modules.env]
 # The bolt sidecar uses its own env file so we don't need to add stuff here.
