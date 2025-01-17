@@ -28,7 +28,7 @@ services:
     image: ghcr.io/chainbound/bolt-boost:v0.4.0-alpha
     container_name: cb_pbs
     ports:
-      - 18551:18551
+      - 0.0.0.0:18551:18551
     environment:
       CB_CONFIG: /cb-config.toml
       CB_METRICS_PORT: 10000
@@ -66,7 +66,7 @@ services:
     image: prom/prometheus:v3.0.0
     container_name: cb_prometheus
     ports:
-      - 9090:9090
+      - 0.0.0.0:9090:9090
     volumes:
       - ./cb-prometheus.yml:/etc/prometheus/prometheus.yml
       - ./targets.json:/etc/prometheus/targets.json
@@ -77,7 +77,7 @@ services:
     image: grafana/grafana:11.3.1
     container_name: cb_grafana
     ports:
-      - 3000:3000
+      - 0.0.0.0:3000:3000
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
@@ -92,7 +92,7 @@ services:
     image: gcr.io/cadvisor/cadvisor
     container_name: cb_cadvisor
     ports:
-      - 8080:8080
+      - 0.0.0.0:8080:8080
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /sys:/sys:ro
