@@ -3,7 +3,7 @@ services:
     image: ghcr.io/chainbound/bolt-sidecar:v0.4.0-alpha
     container_name: cb_bolt_sidecar
     env_file:
-      - bolt-sidecar.env
+      - ./bolt-sidecar.env
     environment:
       CB_MODULE_ID: BOLT_SIDECAR
       CB_CONFIG: /cb-config.toml

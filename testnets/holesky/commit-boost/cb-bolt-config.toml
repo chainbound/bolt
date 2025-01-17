@@ -85,6 +85,8 @@ id = "BOLT_SIDECAR"
 type = "commit"
 # Docker image of the module
 docker_image = "ghcr.io/chainbound/bolt-sidecar:v0.4.0-alpha"
+# Environment file for the module
+env_file = "./bolt-sidecar.env"
 
 # Configuration for how metrics should be collected and scraped
 # OPTIONAL, skip metrics collection if missing
