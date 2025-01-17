@@ -1,38 +1,73 @@
 services:
   cb_bolt_sidecar:
-    image: ghcr.io/chainbound/bolt-sidecar:v0.3.1-alpha
+    image: ghcr.io/chainbound/bolt-sidecar:v0.4.0-alpha
     container_name: cb_bolt_sidecar
-    env_file:
-      - bolt-sidecar.env
     environment:
-      CB_MODULE_ID: BOLT
-      CB_CONFIG: /cb-bolt-config.toml
-    ports:
-      - 8017:8017
-      - 18550:18550
-    networks:
-      - monitoring_network
-    volumes:
-      - ./delegations.json:/etc/delegations.json:ro
-  cb_pbs:
-    image: ghcr.io/chainbound/bolt-boost:v0.3.0-alpha
-    container_name: cb_pbs
-    ports:
-      - 18551:18551
-    environment:
-      CB_CONFIG: /cb-bolt-config.toml
+      CB_MODULE_ID: BOLT_SIDECAR
+      CB_CONFIG: /cb-config.toml
+      CB_SIGNER_JWT: ${CB_JWT_BOLT_SIDECAR}
+      CB_SIGNER_URL: http://cb_signer:20000
       CB_METRICS_PORT: 10000
       CB_LOGS_DIR: /var/logs/commit-boost
     volumes:
-      - ./cb-bolt-config.toml:/cb-bolt-config.toml:ro
+      - ./cb-bolt-config.toml:/cb-config.toml:ro
+      - ./logs/bolt_sidecar:/var/logs/commit-boost
+      - ./delegations.json:/etc/delegations.json:ro
+    networks:
+      - signer_network
+      - monitoring_network
+    depends_on:
+      cb_signer:
+        condition: service_healthy
+  cb_pbs:
+    healthcheck:
+      test: curl -f http://localhost:18551/eth/v1/builder/status
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    image: ghcr.io/chainbound/bolt-boost:v0.4.0-alpha
+    container_name: cb_pbs
+    ports:
+      - 0.0.0.0:18551:18551
+    environment:
+      CB_CONFIG: /cb-config.toml
+      CB_METRICS_PORT: 10000
+      CB_LOGS_DIR: /var/logs/commit-boost
+      CB_PBS_ENDPOINT: 0.0.0.0:18551
+    volumes:
+      - ./cb-bolt-config.toml:/cb-config.toml:ro
       - ./logs/pbs:/var/logs/commit-boost
     networks:
       - monitoring_network
+  cb_signer:
+    healthcheck:
+      test: curl -f http://localhost:20000/status
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    image: ghcr.io/commit-boost/signer:latest
+    container_name: cb_signer
+    environment:
+      CB_CONFIG: /cb-config.toml
+      CB_JWTS: ${CB_JWTS}
+      CB_SIGNER_PORT: 20000
+      CB_METRICS_PORT: 10000
+      CB_LOGS_DIR: /var/logs/commit-boost
+      CB_SIGNER_LOADER_FILE: /keys.json
+    volumes:
+      - ./cb-bolt-config.toml:/cb-config.toml:ro
+      - ./keys.json:/keys.json:ro
+      - ./logs/signer:/var/logs/commit-boost
+    networks:
+      - signer_network
+      - monitoring_network
   cb_prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.0.0
     container_name: cb_prometheus
     ports:
-      - 9090:9090
+      - 127.0.0.1:9090:9090
     volumes:
       - ./cb-prometheus.yml:/etc/prometheus/prometheus.yml
       - ./targets.json:/etc/prometheus/targets.json
@@ -40,15 +75,13 @@ services:
     networks:
       - monitoring_network
   cb_grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.3.1
     container_name: cb_grafana
     ports:
-      - 3000:3000
+      - 127.0.0.1:3000:3000
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     volumes:
-      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./grafana/datasources:/etc/grafana/provisioning/datasources
       - grafana-data:/var/lib/grafana
     networks:
       - monitoring_network
@@ -60,7 +93,7 @@ services:
     image: gcr.io/cadvisor/cadvisor
     container_name: cb_cadvisor
     ports:
-      - 8080:8080
+      - 127.0.0.1:8080:8080
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /sys:/sys:ro
@@ -74,4 +107,6 @@ volumes:
     driver: local
 networks:
   monitoring_network:
+    driver: bridge
+  signer_network:
     driver: bridge

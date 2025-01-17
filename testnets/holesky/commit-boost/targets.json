@@ -1,10 +1,10 @@
 [
   {
     "targets": [
-      "cb_bolt:10000"
+      "cb_bolt_sidecar:10000"
     ],
     "labels": {
-      "job": "cb_bolt"
+      "job": "cb_bolt_sidecar"
     }
   },
   {

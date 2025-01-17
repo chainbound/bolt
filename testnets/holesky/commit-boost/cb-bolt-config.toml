@@ -35,14 +35,11 @@ skip_sigverify = false
 # Minimum bid in ETH that will be accepted from `get_header`
 # OPTIONAL, DEFAULT: 0.0
 min_bid_eth = 0.0
-# List of URLs of relay monitors to send registrations to
-# OPTIONAL
-relay_monitors = []
 # How late in milliseconds in the slot is "late". This impacts the `get_header` requests, by shortening timeouts for `get_header` calls to
 # relays and make sure a header is returned within this deadline. If the request from the CL comes later in the slot, then fetching headers is skipped
 # to force local building and miniminzing the risk of missed slots. See also the timing games section below
 # OPTIONAL, DEFAULT: 2000
-late_in_slot_time_ms = 1000
+late_in_slot_time_ms = 2000
 
 # The PBS module needs one or more [[relays]] as defined below.
 [[relays]]
@@ -65,6 +62,16 @@ url = "https://0x821f2a65afb70e7f2e820a925a9b4c80a159620582c1766b1b09729fec178b1
 # OPTIONAL
 # headers = { X-MyCustomHeader = "MyCustomValue" }
 
+# NOTE: the signer module is currently not used.
+[signer.local]
+# Docker image to use for the Signer module.
+# OPTIONAL, DEFAULT: ghcr.io/commit-boost/signer:latest
+docker_image = "ghcr.io/commit-boost/signer:latest"
+
+# NOTE: this is unused.
+[signer.local.loader]
+key_path = "./keys.json"
+
 # Commit-Boost can optionally run "modules" which extend the capabilities of the sidecar.
 # Currently, two types of modules are supported:
 #   - "commit": modules which request commitment signatures from the validator keys
@@ -78,9 +85,6 @@ id = "BOLT_SIDECAR"
 type = "commit"
 # Docker image of the module
 docker_image = "ghcr.io/chainbound/bolt-sidecar:v0.4.0-alpha"
-
-[modules.env]
-# The bolt sidecar uses its own env file so we don't need to add stuff here.
 
 # Configuration for how metrics should be collected and scraped
 # OPTIONAL, skip metrics collection if missing
