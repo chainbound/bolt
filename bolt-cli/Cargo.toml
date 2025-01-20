@@ -13,12 +13,12 @@ tokio = { version = "1.43.0", features = ["full"] }
 futures = "0.3.31"
 
 # cli
-clap = { version = "4.5.4", features = ["derive", "env"] }
+clap = { version = "4.5.26", features = ["derive", "env"] }
 serde = { version = "1.0.217", features = ["derive"] }
-serde_json = "1.0.135"
+serde_json = "1.0.137"
 
 # grpc
-rustls = { version = "0.23.20", features = ["ring"] }
+rustls = { version = "0.23.21", features = ["ring"] }
 tonic = { version = "0.12.3", features = ["tls"] }
 prost = "0.13.4"
 
@@ -45,8 +45,8 @@ chrono = "0.4.39"
 inquire = "0.7.5"
 
 [dev-dependencies]
-tempfile = "3.13.0"
-alloy-node-bindings = "0.8.3"
+tempfile = "3.15.0"
+alloy-node-bindings = "0.9.2"
 
 [build-dependencies]
 tonic-build = "0.12.3"
