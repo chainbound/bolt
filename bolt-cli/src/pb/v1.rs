@@ -89,10 +89,9 @@ pub mod lister_client {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
-    use tonic::codegen::*;
-    use tonic::codegen::http::Uri;
+    use tonic::codegen::{http::Uri, *};
     #[derive(Debug, Clone)]
     pub struct ListerClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -136,9 +135,8 @@ pub mod lister_client {
                     <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
                 >,
             >,
-            <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
-            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
+            <T as tonic::codegen::Service<http::Request<tonic::body::BoxBody>>>::Error:
+                Into<StdError> + std::marker::Send + std::marker::Sync,
         {
             ListerClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -176,18 +174,11 @@ pub mod lister_client {
         pub async fn list_accounts(
             &mut self,
             request: impl tonic::IntoRequest<super::ListAccountsRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::ListAccountsResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::ListAccountsResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static("/v1.Lister/ListAccounts");
             let mut req = request.into_request();
@@ -203,19 +194,17 @@ pub mod lister_server {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
     use tonic::codegen::*;
-    /// Generated trait containing gRPC methods that should be implemented for use with ListerServer.
+    /// Generated trait containing gRPC methods that should be implemented for use with
+    /// ListerServer.
     #[async_trait]
     pub trait Lister: std::marker::Send + std::marker::Sync + 'static {
         async fn list_accounts(
             &self,
             request: tonic::Request<super::ListAccountsRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::ListAccountsResponse>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<super::ListAccountsResponse>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct ListerServer<T> {
@@ -238,10 +227,7 @@ pub mod lister_server {
                 max_encoding_message_size: None,
             }
         }
-        pub fn with_interceptor<F>(
-            inner: T,
-            interceptor: F,
-        ) -> InterceptedService<Self, F>
+        pub fn with_interceptor<F>(inner: T, interceptor: F) -> InterceptedService<Self, F>
         where
             F: tonic::service::Interceptor,
         {
@@ -296,23 +282,16 @@ pub mod lister_server {
                 "/v1.Lister/ListAccounts" => {
                     #[allow(non_camel_case_types)]
                     struct ListAccountsSvc<T: Lister>(pub Arc<T>);
-                    impl<
-                        T: Lister,
-                    > tonic::server::UnaryService<super::ListAccountsRequest>
-                    for ListAccountsSvc<T> {
+                    impl<T: Lister> tonic::server::UnaryService<super::ListAccountsRequest> for ListAccountsSvc<T> {
                         type Response = super::ListAccountsResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::ListAccountsRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as Lister>::list_accounts(&inner, request).await
-                            };
+                            let fut =
+                                async move { <T as Lister>::list_accounts(&inner, request).await };
                             Box::pin(fut)
                         }
                     }
@@ -338,23 +317,16 @@ pub mod lister_server {
                     };
                     Box::pin(fut)
                 }
-                _ => {
-                    Box::pin(async move {
-                        let mut response = http::Response::new(empty_body());
-                        let headers = response.headers_mut();
-                        headers
-                            .insert(
-                                tonic::Status::GRPC_STATUS,
-                                (tonic::Code::Unimplemented as i32).into(),
-                            );
-                        headers
-                            .insert(
-                                http::header::CONTENT_TYPE,
-                                tonic::metadata::GRPC_CONTENT_TYPE,
-                            );
-                        Ok(response)
-                    })
-                }
+                _ => Box::pin(async move {
+                    let mut response = http::Response::new(empty_body());
+                    let headers = response.headers_mut();
+                    headers.insert(
+                        tonic::Status::GRPC_STATUS,
+                        (tonic::Code::Unimplemented as i32).into(),
+                    );
+                    headers.insert(http::header::CONTENT_TYPE, tonic::metadata::GRPC_CONTENT_TYPE);
+                    Ok(response)
+                }),
             }
         }
     }
@@ -498,10 +470,9 @@ pub mod signer_client {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
-    use tonic::codegen::*;
-    use tonic::codegen::http::Uri;
+    use tonic::codegen::{http::Uri, *};
     #[derive(Debug, Clone)]
     pub struct SignerClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -545,9 +516,8 @@ pub mod signer_client {
                     <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
                 >,
             >,
-            <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
-            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
+            <T as tonic::codegen::Service<http::Request<tonic::body::BoxBody>>>::Error:
+                Into<StdError> + std::marker::Send + std::marker::Sync,
         {
             SignerClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -586,14 +556,9 @@ pub mod signer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::SignRequest>,
         ) -> std::result::Result<tonic::Response<super::SignResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static("/v1.Signer/Sign");
             let mut req = request.into_request();
@@ -603,18 +568,10 @@ pub mod signer_client {
         pub async fn multisign(
             &mut self,
             request: impl tonic::IntoRequest<super::MultisignRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::MultisignResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::MultisignResponse>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static("/v1.Signer/Multisign");
             let mut req = request.into_request();
@@ -625,66 +582,39 @@ pub mod signer_client {
             &mut self,
             request: impl tonic::IntoRequest<super::SignBeaconAttestationRequest>,
         ) -> std::result::Result<tonic::Response<super::SignResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/v1.Signer/SignBeaconAttestation",
-            );
+            let path = http::uri::PathAndQuery::from_static("/v1.Signer/SignBeaconAttestation");
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(GrpcMethod::new("v1.Signer", "SignBeaconAttestation"));
+            req.extensions_mut().insert(GrpcMethod::new("v1.Signer", "SignBeaconAttestation"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn sign_beacon_attestations(
             &mut self,
             request: impl tonic::IntoRequest<super::SignBeaconAttestationsRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::MultisignResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::MultisignResponse>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/v1.Signer/SignBeaconAttestations",
-            );
+            let path = http::uri::PathAndQuery::from_static("/v1.Signer/SignBeaconAttestations");
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(GrpcMethod::new("v1.Signer", "SignBeaconAttestations"));
+            req.extensions_mut().insert(GrpcMethod::new("v1.Signer", "SignBeaconAttestations"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn sign_beacon_proposal(
             &mut self,
             request: impl tonic::IntoRequest<super::SignBeaconProposalRequest>,
         ) -> std::result::Result<tonic::Response<super::SignResponse>, tonic::Status> {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/v1.Signer/SignBeaconProposal",
-            );
+            let path = http::uri::PathAndQuery::from_static("/v1.Signer/SignBeaconProposal");
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(GrpcMethod::new("v1.Signer", "SignBeaconProposal"));
+            req.extensions_mut().insert(GrpcMethod::new("v1.Signer", "SignBeaconProposal"));
             self.inner.unary(req, path, codec).await
         }
     }
@@ -696,10 +626,11 @@ pub mod signer_server {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
     use tonic::codegen::*;
-    /// Generated trait containing gRPC methods that should be implemented for use with SignerServer.
+    /// Generated trait containing gRPC methods that should be implemented for use with
+    /// SignerServer.
     #[async_trait]
     pub trait Signer: std::marker::Send + std::marker::Sync + 'static {
         async fn sign(
@@ -709,10 +640,7 @@ pub mod signer_server {
         async fn multisign(
             &self,
             request: tonic::Request<super::MultisignRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::MultisignResponse>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<super::MultisignResponse>, tonic::Status>;
         async fn sign_beacon_attestation(
             &self,
             request: tonic::Request<super::SignBeaconAttestationRequest>,
@@ -720,10 +648,7 @@ pub mod signer_server {
         async fn sign_beacon_attestations(
             &self,
             request: tonic::Request<super::SignBeaconAttestationsRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::MultisignResponse>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<super::MultisignResponse>, tonic::Status>;
         async fn sign_beacon_proposal(
             &self,
             request: tonic::Request<super::SignBeaconProposalRequest>,
@@ -750,10 +675,7 @@ pub mod signer_server {
                 max_encoding_message_size: None,
             }
         }
-        pub fn with_interceptor<F>(
-            inner: T,
-            interceptor: F,
-        ) -> InterceptedService<Self, F>
+        pub fn with_interceptor<F>(inner: T, interceptor: F) -> InterceptedService<Self, F>
         where
             F: tonic::service::Interceptor,
         {
@@ -808,21 +730,15 @@ pub mod signer_server {
                 "/v1.Signer/Sign" => {
                     #[allow(non_camel_case_types)]
                     struct SignSvc<T: Signer>(pub Arc<T>);
-                    impl<T: Signer> tonic::server::UnaryService<super::SignRequest>
-                    for SignSvc<T> {
+                    impl<T: Signer> tonic::server::UnaryService<super::SignRequest> for SignSvc<T> {
                         type Response = super::SignResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::SignRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as Signer>::sign(&inner, request).await
-                            };
+                            let fut = async move { <T as Signer>::sign(&inner, request).await };
                             Box::pin(fut)
                         }
                     }
@@ -851,21 +767,16 @@ pub mod signer_server {
                 "/v1.Signer/Multisign" => {
                     #[allow(non_camel_case_types)]
                     struct MultisignSvc<T: Signer>(pub Arc<T>);
-                    impl<T: Signer> tonic::server::UnaryService<super::MultisignRequest>
-                    for MultisignSvc<T> {
+                    impl<T: Signer> tonic::server::UnaryService<super::MultisignRequest> for MultisignSvc<T> {
                         type Response = super::MultisignResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::MultisignRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as Signer>::multisign(&inner, request).await
-                            };
+                            let fut =
+                                async move { <T as Signer>::multisign(&inner, request).await };
                             Box::pin(fut)
                         }
                     }
@@ -894,23 +805,18 @@ pub mod signer_server {
                 "/v1.Signer/SignBeaconAttestation" => {
                     #[allow(non_camel_case_types)]
                     struct SignBeaconAttestationSvc<T: Signer>(pub Arc<T>);
-                    impl<
-                        T: Signer,
-                    > tonic::server::UnaryService<super::SignBeaconAttestationRequest>
-                    for SignBeaconAttestationSvc<T> {
+                    impl<T: Signer> tonic::server::UnaryService<super::SignBeaconAttestationRequest>
+                        for SignBeaconAttestationSvc<T>
+                    {
                         type Response = super::SignResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::SignBeaconAttestationRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as Signer>::sign_beacon_attestation(&inner, request)
-                                    .await
+                                <T as Signer>::sign_beacon_attestation(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -940,23 +846,19 @@ pub mod signer_server {
                 "/v1.Signer/SignBeaconAttestations" => {
                     #[allow(non_camel_case_types)]
                     struct SignBeaconAttestationsSvc<T: Signer>(pub Arc<T>);
-                    impl<
-                        T: Signer,
-                    > tonic::server::UnaryService<super::SignBeaconAttestationsRequest>
-                    for SignBeaconAttestationsSvc<T> {
+                    impl<T: Signer>
+                        tonic::server::UnaryService<super::SignBeaconAttestationsRequest>
+                        for SignBeaconAttestationsSvc<T>
+                    {
                         type Response = super::MultisignResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::SignBeaconAttestationsRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as Signer>::sign_beacon_attestations(&inner, request)
-                                    .await
+                                <T as Signer>::sign_beacon_attestations(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -986,15 +888,11 @@ pub mod signer_server {
                 "/v1.Signer/SignBeaconProposal" => {
                     #[allow(non_camel_case_types)]
                     struct SignBeaconProposalSvc<T: Signer>(pub Arc<T>);
-                    impl<
-                        T: Signer,
-                    > tonic::server::UnaryService<super::SignBeaconProposalRequest>
-                    for SignBeaconProposalSvc<T> {
+                    impl<T: Signer> tonic::server::UnaryService<super::SignBeaconProposalRequest>
+                        for SignBeaconProposalSvc<T>
+                    {
                         type Response = super::SignResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::SignBeaconProposalRequest>,
@@ -1028,23 +926,16 @@ pub mod signer_server {
                     };
                     Box::pin(fut)
                 }
-                _ => {
-                    Box::pin(async move {
-                        let mut response = http::Response::new(empty_body());
-                        let headers = response.headers_mut();
-                        headers
-                            .insert(
-                                tonic::Status::GRPC_STATUS,
-                                (tonic::Code::Unimplemented as i32).into(),
-                            );
-                        headers
-                            .insert(
-                                http::header::CONTENT_TYPE,
-                                tonic::metadata::GRPC_CONTENT_TYPE,
-                            );
-                        Ok(response)
-                    })
-                }
+                _ => Box::pin(async move {
+                    let mut response = http::Response::new(empty_body());
+                    let headers = response.headers_mut();
+                    headers.insert(
+                        tonic::Status::GRPC_STATUS,
+                        (tonic::Code::Unimplemented as i32).into(),
+                    );
+                    headers.insert(http::header::CONTENT_TYPE, tonic::metadata::GRPC_CONTENT_TYPE);
+                    Ok(response)
+                }),
             }
         }
     }
@@ -1117,10 +1008,9 @@ pub mod account_manager_client {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
-    use tonic::codegen::*;
-    use tonic::codegen::http::Uri;
+    use tonic::codegen::{http::Uri, *};
     #[derive(Debug, Clone)]
     pub struct AccountManagerClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -1164,9 +1054,8 @@ pub mod account_manager_client {
                     <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
                 >,
             >,
-            <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
-            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
+            <T as tonic::codegen::Service<http::Request<tonic::body::BoxBody>>>::Error:
+                Into<StdError> + std::marker::Send + std::marker::Sync,
         {
             AccountManagerClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -1204,18 +1093,11 @@ pub mod account_manager_client {
         pub async fn unlock(
             &mut self,
             request: impl tonic::IntoRequest<super::UnlockAccountRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::UnlockAccountResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::UnlockAccountResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static("/v1.AccountManager/Unlock");
             let mut req = request.into_request();
@@ -1225,18 +1107,11 @@ pub mod account_manager_client {
         pub async fn lock(
             &mut self,
             request: impl tonic::IntoRequest<super::LockAccountRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::LockAccountResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::LockAccountResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static("/v1.AccountManager/Lock");
             let mut req = request.into_request();
@@ -1246,25 +1121,14 @@ pub mod account_manager_client {
         pub async fn generate(
             &mut self,
             request: impl tonic::IntoRequest<super::GenerateRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::GenerateResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::GenerateResponse>, tonic::Status> {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/v1.AccountManager/Generate",
-            );
+            let path = http::uri::PathAndQuery::from_static("/v1.AccountManager/Generate");
             let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(GrpcMethod::new("v1.AccountManager", "Generate"));
+            req.extensions_mut().insert(GrpcMethod::new("v1.AccountManager", "Generate"));
             self.inner.unary(req, path, codec).await
         }
     }
@@ -1276,33 +1140,25 @@ pub mod account_manager_server {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
     use tonic::codegen::*;
-    /// Generated trait containing gRPC methods that should be implemented for use with AccountManagerServer.
+    /// Generated trait containing gRPC methods that should be implemented for use with
+    /// AccountManagerServer.
     #[async_trait]
     pub trait AccountManager: std::marker::Send + std::marker::Sync + 'static {
         async fn unlock(
             &self,
             request: tonic::Request<super::UnlockAccountRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::UnlockAccountResponse>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<super::UnlockAccountResponse>, tonic::Status>;
         async fn lock(
             &self,
             request: tonic::Request<super::LockAccountRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::LockAccountResponse>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<super::LockAccountResponse>, tonic::Status>;
         async fn generate(
             &self,
             request: tonic::Request<super::GenerateRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::GenerateResponse>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<super::GenerateResponse>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct AccountManagerServer<T> {
@@ -1325,10 +1181,7 @@ pub mod account_manager_server {
                 max_encoding_message_size: None,
             }
         }
-        pub fn with_interceptor<F>(
-            inner: T,
-            interceptor: F,
-        ) -> InterceptedService<Self, F>
+        pub fn with_interceptor<F>(inner: T, interceptor: F) -> InterceptedService<Self, F>
         where
             F: tonic::service::Interceptor,
         {
@@ -1383,23 +1236,16 @@ pub mod account_manager_server {
                 "/v1.AccountManager/Unlock" => {
                     #[allow(non_camel_case_types)]
                     struct UnlockSvc<T: AccountManager>(pub Arc<T>);
-                    impl<
-                        T: AccountManager,
-                    > tonic::server::UnaryService<super::UnlockAccountRequest>
-                    for UnlockSvc<T> {
+                    impl<T: AccountManager> tonic::server::UnaryService<super::UnlockAccountRequest> for UnlockSvc<T> {
                         type Response = super::UnlockAccountResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::UnlockAccountRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as AccountManager>::unlock(&inner, request).await
-                            };
+                            let fut =
+                                async move { <T as AccountManager>::unlock(&inner, request).await };
                             Box::pin(fut)
                         }
                     }
@@ -1428,23 +1274,16 @@ pub mod account_manager_server {
                 "/v1.AccountManager/Lock" => {
                     #[allow(non_camel_case_types)]
                     struct LockSvc<T: AccountManager>(pub Arc<T>);
-                    impl<
-                        T: AccountManager,
-                    > tonic::server::UnaryService<super::LockAccountRequest>
-                    for LockSvc<T> {
+                    impl<T: AccountManager> tonic::server::UnaryService<super::LockAccountRequest> for LockSvc<T> {
                         type Response = super::LockAccountResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::LockAccountRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as AccountManager>::lock(&inner, request).await
-                            };
+                            let fut =
+                                async move { <T as AccountManager>::lock(&inner, request).await };
                             Box::pin(fut)
                         }
                     }
@@ -1473,15 +1312,9 @@ pub mod account_manager_server {
                 "/v1.AccountManager/Generate" => {
                     #[allow(non_camel_case_types)]
                     struct GenerateSvc<T: AccountManager>(pub Arc<T>);
-                    impl<
-                        T: AccountManager,
-                    > tonic::server::UnaryService<super::GenerateRequest>
-                    for GenerateSvc<T> {
+                    impl<T: AccountManager> tonic::server::UnaryService<super::GenerateRequest> for GenerateSvc<T> {
                         type Response = super::GenerateResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::GenerateRequest>,
@@ -1515,23 +1348,16 @@ pub mod account_manager_server {
                     };
                     Box::pin(fut)
                 }
-                _ => {
-                    Box::pin(async move {
-                        let mut response = http::Response::new(empty_body());
-                        let headers = response.headers_mut();
-                        headers
-                            .insert(
-                                tonic::Status::GRPC_STATUS,
-                                (tonic::Code::Unimplemented as i32).into(),
-                            );
-                        headers
-                            .insert(
-                                http::header::CONTENT_TYPE,
-                                tonic::metadata::GRPC_CONTENT_TYPE,
-                            );
-                        Ok(response)
-                    })
-                }
+                _ => Box::pin(async move {
+                    let mut response = http::Response::new(empty_body());
+                    let headers = response.headers_mut();
+                    headers.insert(
+                        tonic::Status::GRPC_STATUS,
+                        (tonic::Code::Unimplemented as i32).into(),
+                    );
+                    headers.insert(http::header::CONTENT_TYPE, tonic::metadata::GRPC_CONTENT_TYPE);
+                    Ok(response)
+                }),
             }
         }
     }
@@ -1582,10 +1408,9 @@ pub mod wallet_manager_client {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
-    use tonic::codegen::*;
-    use tonic::codegen::http::Uri;
+    use tonic::codegen::{http::Uri, *};
     #[derive(Debug, Clone)]
     pub struct WalletManagerClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -1629,9 +1454,8 @@ pub mod wallet_manager_client {
                     <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
                 >,
             >,
-            <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
-            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
+            <T as tonic::codegen::Service<http::Request<tonic::body::BoxBody>>>::Error:
+                Into<StdError> + std::marker::Send + std::marker::Sync,
         {
             WalletManagerClient::new(InterceptedService::new(inner, interceptor))
         }
@@ -1669,18 +1493,11 @@ pub mod wallet_manager_client {
         pub async fn unlock(
             &mut self,
             request: impl tonic::IntoRequest<super::UnlockWalletRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::UnlockWalletResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::UnlockWalletResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static("/v1.WalletManager/Unlock");
             let mut req = request.into_request();
@@ -1690,18 +1507,11 @@ pub mod wallet_manager_client {
         pub async fn lock(
             &mut self,
             request: impl tonic::IntoRequest<super::LockWalletRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::LockWalletResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
+        ) -> std::result::Result<tonic::Response<super::LockWalletResponse>, tonic::Status>
+        {
+            self.inner.ready().await.map_err(|e| {
+                tonic::Status::unknown(format!("Service was not ready: {}", e.into()))
+            })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static("/v1.WalletManager/Lock");
             let mut req = request.into_request();
@@ -1717,26 +1527,21 @@ pub mod wallet_manager_server {
         dead_code,
         missing_docs,
         clippy::wildcard_imports,
-        clippy::let_unit_value,
+        clippy::let_unit_value
     )]
     use tonic::codegen::*;
-    /// Generated trait containing gRPC methods that should be implemented for use with WalletManagerServer.
+    /// Generated trait containing gRPC methods that should be implemented for use with
+    /// WalletManagerServer.
     #[async_trait]
     pub trait WalletManager: std::marker::Send + std::marker::Sync + 'static {
         async fn unlock(
             &self,
             request: tonic::Request<super::UnlockWalletRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::UnlockWalletResponse>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<super::UnlockWalletResponse>, tonic::Status>;
         async fn lock(
             &self,
             request: tonic::Request<super::LockWalletRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::LockWalletResponse>,
-            tonic::Status,
-        >;
+        ) -> std::result::Result<tonic::Response<super::LockWalletResponse>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct WalletManagerServer<T> {
@@ -1759,10 +1564,7 @@ pub mod wallet_manager_server {
                 max_encoding_message_size: None,
             }
         }
-        pub fn with_interceptor<F>(
-            inner: T,
-            interceptor: F,
-        ) -> InterceptedService<Self, F>
+        pub fn with_interceptor<F>(inner: T, interceptor: F) -> InterceptedService<Self, F>
         where
             F: tonic::service::Interceptor,
         {
@@ -1817,23 +1619,16 @@ pub mod wallet_manager_server {
                 "/v1.WalletManager/Unlock" => {
                     #[allow(non_camel_case_types)]
                     struct UnlockSvc<T: WalletManager>(pub Arc<T>);
-                    impl<
-                        T: WalletManager,
-                    > tonic::server::UnaryService<super::UnlockWalletRequest>
-                    for UnlockSvc<T> {
+                    impl<T: WalletManager> tonic::server::UnaryService<super::UnlockWalletRequest> for UnlockSvc<T> {
                         type Response = super::UnlockWalletResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::UnlockWalletRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as WalletManager>::unlock(&inner, request).await
-                            };
+                            let fut =
+                                async move { <T as WalletManager>::unlock(&inner, request).await };
                             Box::pin(fut)
                         }
                     }
@@ -1862,23 +1657,16 @@ pub mod wallet_manager_server {
                 "/v1.WalletManager/Lock" => {
                     #[allow(non_camel_case_types)]
                     struct LockSvc<T: WalletManager>(pub Arc<T>);
-                    impl<
-                        T: WalletManager,
-                    > tonic::server::UnaryService<super::LockWalletRequest>
-                    for LockSvc<T> {
+                    impl<T: WalletManager> tonic::server::UnaryService<super::LockWalletRequest> for LockSvc<T> {
                         type Response = super::LockWalletResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
+                        type Future = BoxFuture<tonic::Response<Self::Response>, tonic::Status>;
                         fn call(
                             &mut self,
                             request: tonic::Request<super::LockWalletRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as WalletManager>::lock(&inner, request).await
-                            };
+                            let fut =
+                                async move { <T as WalletManager>::lock(&inner, request).await };
                             Box::pin(fut)
                         }
                     }
@@ -1904,23 +1692,16 @@ pub mod wallet_manager_server {
                     };
                     Box::pin(fut)
                 }
-                _ => {
-                    Box::pin(async move {
-                        let mut response = http::Response::new(empty_body());
-                        let headers = response.headers_mut();
-                        headers
-                            .insert(
-                                tonic::Status::GRPC_STATUS,
-                                (tonic::Code::Unimplemented as i32).into(),
-                            );
-                        headers
-                            .insert(
-                                http::header::CONTENT_TYPE,
-                                tonic::metadata::GRPC_CONTENT_TYPE,
-                            );
-                        Ok(response)
-                    })
-                }
+                _ => Box::pin(async move {
+                    let mut response = http::Response::new(empty_body());
+                    let headers = response.headers_mut();
+                    headers.insert(
+                        tonic::Status::GRPC_STATUS,
+                        (tonic::Code::Unimplemented as i32).into(),
+                    );
+                    headers.insert(http::header::CONTENT_TYPE, tonic::metadata::GRPC_CONTENT_TYPE);
+                    Ok(response)
+                }),
             }
         }
     }

@@ -38,7 +38,7 @@ impl EigenLayerSubcommand {
     /// Run the EigenLayer subcommand.
     pub async fn run(self) -> eyre::Result<()> {
         match self {
-            Self::Deposit { rpc_url, strategy, amount, operator_private_key } => {
+            Self::Deposit { rpc_url, strategy, amount, operator_private_key, dry_run } => {
                 let signer = PrivateKeySigner::from_bytes(&operator_private_key)
                     .wrap_err("valid private key")?;
                 let operator = signer.address();
@@ -96,7 +96,7 @@ impl EigenLayerSubcommand {
                 Ok(())
             }
 
-            Self::Register { rpc_url, operator_rpc, salt, operator_private_key } => {
+            Self::Register { rpc_url, operator_rpc, salt, operator_private_key, dry_run } => {
                 let signer = PrivateKeySigner::from_bytes(&operator_private_key)
                     .wrap_err("valid private key")?;
 
@@ -178,7 +178,7 @@ impl EigenLayerSubcommand {
                 Ok(())
             }
 
-            Self::Deregister { rpc_url, operator_private_key } => {
+            Self::Deregister { rpc_url, operator_private_key, dry_run } => {
                 let signer = PrivateKeySigner::from_bytes(&operator_private_key)
                     .wrap_err("valid private key")?;
                 let address = signer.address();
@@ -444,6 +444,7 @@ mod tests {
                     operator_private_key: secret_key,
                     strategy: EigenLayerStrategy::WEth,
                     amount: U256::from(1),
+                    dry_run: true,
                 },
             },
         };
@@ -459,6 +460,7 @@ mod tests {
                     operator_private_key: secret_key,
                     operator_rpc: "https://bolt.chainbound.io/rpc".parse().expect("valid url"),
                     salt: B256::ZERO,
+                    dry_run: true,
                 },
             },
         };
@@ -505,6 +507,7 @@ mod tests {
                 subcommand: EigenLayerSubcommand::Deregister {
                     rpc_url: anvil_url.clone(),
                     operator_private_key: secret_key,
+                    dry_run: true,
                 },
             },
         };

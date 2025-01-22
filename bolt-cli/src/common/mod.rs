@@ -3,6 +3,7 @@ use std::{fs, path::PathBuf, str::FromStr};
 use alloy::{
     contract::Error as ContractError,
     dyn_abi::DynSolType,
+    node_bindings::{Anvil, AnvilInstance},
     primitives::{Bytes, U256},
     sol_types::SolInterface,
     transports::TransportError,
@@ -10,6 +11,7 @@ use alloy::{
 use ethereum_consensus::crypto::PublicKey as BlsPublicKey;
 use eyre::{Context, ContextCompat, Result};
 use inquire::{error::InquireError, Confirm};
+use reqwest::Url;
 use serde::Serialize;
 use tracing::{error, info};
 
@@ -131,12 +133,33 @@ pub fn request_confirmation() {
                 std::process::exit(0);
             }
             InquireError::OperationInterrupted => {
-	       // Triggered a SIGINT via Ctrl-C
-	       std::process::exit(130);     
+                // Triggered a SIGINT via Ctrl-C
+                std::process::exit(130);
             }
             _ => {
                 error!("aborting due to unexpected error: {}", err);
                 std::process::exit(1);
             }
         })
+}
+
+/// Determines the RPC URL to use. If `dry_run` is enabled, it spawns an `Anvil` instance and returns
+/// its endpoint. Otherwise, returns the original `rpc_url`.
+pub(crate) fn handle_dry_run(
+    rpc_url: Url,
+    dry_run: bool,
+) -> eyre::Result<(Url, Option<AnvilInstance>)> {
+    if !dry_run {
+        return Ok((rpc_url, None));
+    }
+
+    let anvil = Anvil::new()
+        .fork(rpc_url)
+        .try_spawn()
+        .map_err(|e| eyre::eyre!("[dry-run] Failed to spawn Anvil: {}", e))?;
+
+    let anvil_url = anvil.endpoint_url();
+    info!("[dry-run] Anvil endpoint URL: {}", anvil_url);
+
+    Ok((anvil_url, Some(anvil)))
 }

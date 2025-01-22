@@ -303,7 +303,8 @@ Commands:
   help      Print this message or the help of the given subcommand(s)
 
 Options:
-  -h, --help  Print help
+  -h, --help      Print help
+  -d, --dry-run   Simulate without making on-chain changes (e.g Opt to using Anvil fork rather than RPC connection)
 ```
 
 </details>
@@ -329,7 +330,8 @@ Commands:
   help        Print this message or the help of the given subcommand(s)
 
 Options:
-  -h, --help  Print help
+  -h, --help      Print help
+  -d, --dry-run   Simulate without making on-chain changes (e.g Opt to using Anvil fork rather than RPC connection)
 
 ❯ bolt operators eigenlayer --help
 Commands to interact with EigenLayer and bolt
@@ -345,7 +347,8 @@ Commands:
   help        Print this message or the help of the given subcommand(s)
 
 Options:
-  -h, --help  Print help
+  -h, --help      Print help
+  -d, --dry-run   Simulate without making on-chain changes (e.g Opt to using Anvil fork rather than RPC connection)
 
 ❯ bolt operators symbiotic --help
 Commands to interact with Symbiotic and bolt
@@ -360,7 +363,8 @@ Commands:
   help        Print this message or the help of the given subcommand(s)
 
 Options:
-  -h, --help  Print help
+  -h, --help      Print help
+  -d, --dry-run   Simulate without making on-chain changes (e.g Opt to using Anvil fork rather than RPC connection)
 ```
 
 </details>

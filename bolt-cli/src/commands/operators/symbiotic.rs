@@ -25,7 +25,7 @@ impl SymbioticSubcommand {
     /// Run the symbiotic subcommand.
     pub async fn run(self) -> eyre::Result<()> {
         match self {
-            Self::Register { operator_rpc, operator_private_key, rpc_url } => {
+            Self::Register { operator_rpc, operator_private_key, rpc_url, dry_run } => {
                 let signer = PrivateKeySigner::from_bytes(&operator_private_key)
                     .wrap_err("valid private key")?;
 
@@ -94,7 +94,7 @@ impl SymbioticSubcommand {
                 Ok(())
             }
 
-            Self::Deregister { rpc_url, operator_private_key } => {
+            Self::Deregister { rpc_url, operator_private_key, dry_run } => {
                 let signer = PrivateKeySigner::from_bytes(&operator_private_key)
                     .wrap_err("valid private key")?;
 
@@ -387,6 +387,7 @@ mod tests {
                     rpc_url: anvil_url.clone(),
                     operator_private_key: secret_key,
                     operator_rpc: "https://bolt.chainbound.io".parse().expect("valid url"),
+                    dry_run: true,
                 },
             },
         };
@@ -434,6 +435,7 @@ mod tests {
                 subcommand: SymbioticSubcommand::Deregister {
                     rpc_url: anvil_url.clone(),
                     operator_private_key: secret_key,
+                    dry_run: true,
                 },
             },
         };

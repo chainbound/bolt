@@ -8,7 +8,9 @@ use tracing::{info, warn};
 
 use crate::{
     cli::{Chain, ValidatorsCommand, ValidatorsSubcommand},
-    common::{hash::compress_bls_pubkey, request_confirmation, try_parse_contract_error},
+    common::{
+        handle_dry_run, hash::compress_bls_pubkey, request_confirmation, try_parse_contract_error,
+    },
     contracts::{
         bolt::BoltValidators::{self, BoltValidatorsErrors},
         deployments_for_chain,
@@ -24,14 +26,18 @@ impl ValidatorsCommand {
                 admin_private_key,
                 authorized_operator,
                 rpc_url,
+                dry_run,
             } => {
                 let signer = PrivateKeySigner::from_bytes(&admin_private_key)
                     .wrap_err("valid private key")?;
 
+                // let rpc = handle_dry_run(rpc_url, dry_run)?;
+                let (rpc, anvil) = handle_dry_run(rpc_url, dry_run)?;
+
                 let provider = ProviderBuilder::new()
                     .with_recommended_fillers()
                     .wallet(EthereumWallet::from(signer))
-                    .on_http(rpc_url);
+                    .on_http(rpc);
 
                 let chain = Chain::try_from_provider(&provider).await?;
 
@@ -54,7 +60,7 @@ impl ValidatorsCommand {
 
                 request_confirmation();
 
-                match bolt_validators
+                let result = match bolt_validators
                     .batchRegisterValidatorsUnsafe(
                         pubkey_hashes,
                         max_committed_gas_limit,
@@ -74,6 +80,7 @@ impl ValidatorsCommand {
                         }
 
                         info!("Successfully registered validators into bolt");
+                        Ok(())
                     }
                     Err(e) => {
                         let decoded = try_parse_contract_error::<BoltValidatorsErrors>(e)?;
@@ -94,9 +101,15 @@ impl ValidatorsCommand {
                             ),
                         }
                     }
+                };
+
+                // drop the Anvil instance to control resource consumption
+                if let Some(anvil_instance) = anvil {
+                    info!("[dry-run] Shutting down Anvil instance.");
+                    drop(anvil_instance);
                 }
 
-                Ok(())
+                result
             }
 
             ValidatorsSubcommand::Status { rpc_url, pubkeys_path, pubkeys } => {
@@ -183,6 +196,7 @@ mod tests {
                 authorized_operator: account,
                 pubkeys_path: "./test_data/pubkeys.json".parse().unwrap(),
                 rpc_url: anvil_url.clone(),
+                dry_run: true,
             },
         };
 
