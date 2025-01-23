@@ -143,9 +143,9 @@ pub fn request_confirmation() {
         })
 }
 
-/// Determines the RPC URL to use. If `dry_run` is enabled, it spawns an `Anvil` instance and returns
-/// its endpoint. Otherwise, returns the original `rpc_url`.
-pub(crate) fn handle_dry_run(
+/// Determines the RPC URL to use. If `dry_run` is enabled, it spawns an `Anvil` instance and
+/// returns its endpoint. Otherwise, returns the original `rpc_url`.
+pub(crate) fn handle_rpc_dry_run(
     rpc_url: Url,
     dry_run: bool,
 ) -> eyre::Result<(Url, Option<AnvilInstance>)> {
@@ -162,4 +162,12 @@ pub(crate) fn handle_dry_run(
     info!("[dry-run] Anvil endpoint URL: {}", anvil_url);
 
     Ok((anvil_url, Some(anvil)))
+}
+
+/// drop provided `AnvilInstance` to control resource consumption
+pub fn shutdown_anvil(anvil: Option<AnvilInstance>) {
+    if let Some(anvil_instance) = anvil {
+        info!("[dry-run] Shutting down Anvil instance.");
+        drop(anvil_instance);
+    }
 }

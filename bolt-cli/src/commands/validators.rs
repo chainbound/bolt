@@ -9,7 +9,8 @@ use tracing::{info, warn};
 use crate::{
     cli::{Chain, ValidatorsCommand, ValidatorsSubcommand},
     common::{
-        handle_dry_run, hash::compress_bls_pubkey, request_confirmation, try_parse_contract_error,
+        handle_rpc_dry_run, hash::compress_bls_pubkey, request_confirmation, shutdown_anvil,
+        try_parse_contract_error,
     },
     contracts::{
         bolt::BoltValidators::{self, BoltValidatorsErrors},
@@ -31,8 +32,7 @@ impl ValidatorsCommand {
                 let signer = PrivateKeySigner::from_bytes(&admin_private_key)
                     .wrap_err("valid private key")?;
 
-                // let rpc = handle_dry_run(rpc_url, dry_run)?;
-                let (rpc, anvil) = handle_dry_run(rpc_url, dry_run)?;
+                let (rpc, anvil) = handle_rpc_dry_run(rpc_url, dry_run)?;
 
                 let provider = ProviderBuilder::new()
                     .with_recommended_fillers()
@@ -103,11 +103,7 @@ impl ValidatorsCommand {
                     }
                 };
 
-                // drop the Anvil instance to control resource consumption
-                if let Some(anvil_instance) = anvil {
-                    info!("[dry-run] Shutting down Anvil instance.");
-                    drop(anvil_instance);
-                }
+                shutdown_anvil(anvil);
 
                 result
             }
@@ -196,7 +192,7 @@ mod tests {
                 authorized_operator: account,
                 pubkeys_path: "./test_data/pubkeys.json".parse().unwrap(),
                 rpc_url: anvil_url.clone(),
-                dry_run: true,
+                dry_run: false,
             },
         };
 

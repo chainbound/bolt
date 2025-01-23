@@ -18,6 +18,8 @@ import {BoltSymbioticMiddlewareV1} from "../../../src/contracts/BoltSymbioticMid
 import {BoltConfig} from "../../../src/lib/BoltConfig.sol";
 
 /// @notice Script to deploy the Bolt contracts.
+/// Run: forge script script/holesky/admin/Deploy.s.sol --rpc-url $RPC_HOLESKY --private-key $NETWORK_PRIVATE_KEY --force -vvvv
+/// Run with Broadcast: forge script script/holesky/admin/Deploy.s.sol --rpc-url $RPC_HOLESKY --private-key $NETWORK_PRIVATE_KEY --broadcast --verify -vvvv 
 contract DeployBolt is Script {
     function run() public {
         // The admin address will be authorized to call the adminOnly functions
@@ -94,7 +96,7 @@ contract DeployBolt is Script {
             Upgrades.deployUUPSProxy("BoltSymbioticMiddlewareV1.sol", initSymbioticMiddleware, opts);
         console.log("BoltSymbioticMiddlewareV1 proxy deployed at", address(symbioticMiddlewareProxy));
 
-        console.log("Core contracts deployed succesfully, whitelisting middleware contracts in BoltManager...");
+        console.log("Core contracts deployed successfully, whitelisting middleware contracts in BoltManager...");
         console.log("EigenLayer middleware:", address(eigenLayerMiddlewareProxy));
         console.log("Symbiotic middleware:", address(symbioticMiddlewareProxy));
         BoltManagerV1(managerProxy).addRestakingProtocol(address(eigenLayerMiddlewareProxy));

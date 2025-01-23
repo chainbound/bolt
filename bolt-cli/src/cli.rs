@@ -304,6 +304,11 @@ pub enum EigenLayerSubcommand {
         /// The URL of the operator RPC.
         #[clap(long, env = "OPERATOR_RPC")]
         operator_rpc: Url,
+
+        /// Run the command in "dry run" mode, run all steps without broadcast.
+        /// Useful for testing and debugging purposes.
+        #[clap(short, long, env = "DRY_RUN", default_value = "false")]
+        dry_run: bool,
     },
 
     /// Check the status of an operator in the bolt AVS.
@@ -363,6 +368,11 @@ pub enum SymbioticSubcommand {
         /// The URL of the operator RPC.
         #[clap(long, env = "OPERATOR_RPC")]
         operator_rpc: Url,
+
+        /// Run the command in "dry run" mode, run all steps without broadcast.
+        /// Useful for testing and debugging purposes.
+        #[clap(short, long, env = "DRY_RUN", default_value = "false")]
+        dry_run: bool,
     },
 
     /// Check the status of a Symbiotic operator.

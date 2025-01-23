@@ -18,7 +18,7 @@ use crate::{
     cli::{Chain, EigenLayerSubcommand},
     common::{
         bolt_manager::BoltManagerContract::{self, BoltManagerContractErrors},
-        request_confirmation, try_parse_contract_error,
+        handle_rpc_dry_run, request_confirmation, shutdown_anvil, try_parse_contract_error,
     },
     contracts::{
         bolt::{
@@ -43,10 +43,12 @@ impl EigenLayerSubcommand {
                     .wrap_err("valid private key")?;
                 let operator = signer.address();
 
+                let (rpc, anvil) = handle_rpc_dry_run(rpc_url, dry_run)?;
+
                 let provider = ProviderBuilder::new()
                     .with_recommended_fillers()
                     .wallet(EthereumWallet::from(signer))
-                    .on_http(rpc_url);
+                    .on_http(rpc);
 
                 let chain = Chain::try_from_provider(&provider).await?;
 
@@ -91,7 +93,9 @@ impl EigenLayerSubcommand {
                     eyre::bail!("Transaction failed: {:?}", receipt)
                 }
 
-                info!("Succesfully deposited collateral into strategy");
+                info!("Successfully deposited collateral into strategy");
+
+                shutdown_anvil(anvil);
 
                 Ok(())
             }
@@ -100,10 +104,12 @@ impl EigenLayerSubcommand {
                 let signer = PrivateKeySigner::from_bytes(&operator_private_key)
                     .wrap_err("valid private key")?;
 
+                let (rpc, anvil) = handle_rpc_dry_run(rpc_url, dry_run)?;
+
                 let provider = ProviderBuilder::new()
                     .with_recommended_fillers()
                     .wallet(EthereumWallet::from(signer.clone()))
-                    .on_http(rpc_url);
+                    .on_http(rpc);
 
                 let chain = Chain::try_from_provider(&provider).await?;
 
@@ -138,7 +144,7 @@ impl EigenLayerSubcommand {
                     Bytes::from(signer.sign_hash_sync(&signature_digest_hash)?.as_bytes());
                 let signature = SignatureWithSaltAndExpiry { signature, expiry, salt };
 
-                match bolt_eigenlayer_middleware
+                let result = match bolt_eigenlayer_middleware
                     .registerOperator(operator_rpc.to_string(), signature)
                     .send()
                     .await
@@ -154,7 +160,9 @@ impl EigenLayerSubcommand {
                             eyre::bail!("Transaction failed: {:?}", receipt)
                         }
 
-                        info!("Succesfully registered EigenLayer operator");
+                        info!("Successfully registered EigenLayer operator");
+
+                        Ok(())
                     }
                     Err(e) => {
                         match try_parse_contract_error::<BoltEigenLayerMiddlewareErrors>(e)? {
@@ -173,9 +181,11 @@ impl EigenLayerSubcommand {
                             ),
                         }
                     }
-                }
+                };
 
-                Ok(())
+                shutdown_anvil(anvil);
+
+                result
             }
 
             Self::Deregister { rpc_url, operator_private_key, dry_run } => {
@@ -183,10 +193,12 @@ impl EigenLayerSubcommand {
                     .wrap_err("valid private key")?;
                 let address = signer.address();
 
+                let (rpc, anvil) = handle_rpc_dry_run(rpc_url, dry_run)?;
+
                 let provider = ProviderBuilder::new()
                     .with_recommended_fillers()
                     .wallet(EthereumWallet::from(signer))
-                    .on_http(rpc_url);
+                    .on_http(rpc);
 
                 let chain = Chain::try_from_provider(&provider).await?;
 
@@ -200,7 +212,7 @@ impl EigenLayerSubcommand {
                 let bolt_eigenlayer_middleware =
                     BoltEigenLayerMiddleware::new(bolt_avs_address, provider);
 
-                match bolt_eigenlayer_middleware.deregisterOperator().send().await {
+                let result = match bolt_eigenlayer_middleware.deregisterOperator().send().await {
                     Ok(pending) => {
                         info!(
                             hash = ?pending.tx_hash(),
@@ -212,7 +224,9 @@ impl EigenLayerSubcommand {
                             eyre::bail!("Transaction failed: {:?}", receipt)
                         }
 
-                        info!("Succesfully deregistered EigenLayer operator");
+                        info!("Successfully deregistered EigenLayer operator");
+
+                        Ok(())
                     }
                     Err(e) => {
                         match try_parse_contract_error::<BoltEigenLayerMiddlewareErrors>(e)? {
@@ -225,20 +239,24 @@ impl EigenLayerSubcommand {
                             ),
                         }
                     }
-                }
+                };
 
-                Ok(())
+                shutdown_anvil(anvil);
+
+                result
             }
 
-            Self::UpdateRpc { rpc_url, operator_private_key, operator_rpc } => {
+            Self::UpdateRpc { rpc_url, operator_private_key, operator_rpc, dry_run } => {
                 let signer = PrivateKeySigner::from_bytes(&operator_private_key)
                     .wrap_err("valid private key")?;
                 let address = signer.address();
 
+                let (rpc, anvil) = handle_rpc_dry_run(rpc_url, dry_run)?;
+
                 let provider = ProviderBuilder::new()
                     .with_recommended_fillers()
                     .wallet(EthereumWallet::from(signer))
-                    .on_http(rpc_url);
+                    .on_http(rpc);
 
                 let chain = Chain::try_from_provider(&provider).await?;
 
@@ -257,7 +275,11 @@ impl EigenLayerSubcommand {
                     return Ok(());
                 }
 
-                match bolt_manager.updateOperatorRPC(operator_rpc.to_string()).send().await {
+                let result = match bolt_manager
+                    .updateOperatorRPC(operator_rpc.to_string())
+                    .send()
+                    .await
+                {
                     Ok(pending) => {
                         info!(
                             hash = ?pending.tx_hash(),
@@ -269,7 +291,9 @@ impl EigenLayerSubcommand {
                             eyre::bail!("Transaction failed: {:?}", receipt)
                         }
 
-                        info!("Succesfully updated EigenLayer operator RPC");
+                        info!("Successfully updated EigenLayer operator RPC");
+
+                        Ok(())
                     }
                     Err(e) => match try_parse_contract_error::<BoltManagerContractErrors>(e)? {
                         BoltManagerContractErrors::OperatorNotRegistered(_) => {
@@ -279,8 +303,11 @@ impl EigenLayerSubcommand {
                             unreachable!("Unexpected error with selector {:?}", other.selector())
                         }
                     },
-                }
-                Ok(())
+                };
+
+                shutdown_anvil(anvil);
+
+                result
             }
 
             Self::Status { rpc_url: rpc, address } => {
@@ -295,7 +322,7 @@ impl EigenLayerSubcommand {
                     info!(?address, "EigenLayer operator is registered");
                 } else {
                     warn!(?address, "Operator not registered");
-                    return Ok(())
+                    return Ok(());
                 }
 
                 match bolt_manager.getOperatorData(address).call().await {
@@ -444,7 +471,7 @@ mod tests {
                     operator_private_key: secret_key,
                     strategy: EigenLayerStrategy::WEth,
                     amount: U256::from(1),
-                    dry_run: true,
+                    dry_run: false,
                 },
             },
         };
@@ -460,7 +487,7 @@ mod tests {
                     operator_private_key: secret_key,
                     operator_rpc: "https://bolt.chainbound.io/rpc".parse().expect("valid url"),
                     salt: B256::ZERO,
-                    dry_run: true,
+                    dry_run: false,
                 },
             },
         };
@@ -485,6 +512,7 @@ mod tests {
                     rpc_url: anvil_url.clone(),
                     operator_private_key: secret_key,
                     operator_rpc: "https://boooooolt.chainbound.io/rpc".parse().expect("valid url"),
+                    dry_run: false,
                 },
             },
         };
@@ -507,7 +535,7 @@ mod tests {
                 subcommand: EigenLayerSubcommand::Deregister {
                     rpc_url: anvil_url.clone(),
                     operator_private_key: secret_key,
-                    dry_run: true,
+                    dry_run: false,
                 },
             },
         };
