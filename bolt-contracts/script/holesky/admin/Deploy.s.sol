@@ -18,8 +18,6 @@ import {BoltSymbioticMiddlewareV1} from "../../../src/contracts/BoltSymbioticMid
 import {BoltConfig} from "../../../src/lib/BoltConfig.sol";
 
 /// @notice Script to deploy the Bolt contracts.
-/// Run: forge script script/holesky/admin/Deploy.s.sol --rpc-url $RPC_HOLESKY --private-key $NETWORK_PRIVATE_KEY --force -vvvv
-/// Run with Broadcast: forge script script/holesky/admin/Deploy.s.sol --rpc-url $RPC_HOLESKY --private-key $NETWORK_PRIVATE_KEY --broadcast --verify -vvvv 
 contract DeployBolt is Script {
     function run() public {
         // The admin address will be authorized to call the adminOnly functions
