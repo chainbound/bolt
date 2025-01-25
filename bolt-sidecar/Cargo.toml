@@ -1,3 +1,21 @@
+[workspace]
+members = ["crates/common",
+"crates/primitives",
+"crates/crypto",
+"crates/telemetry",
+"crates/state",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.4.0-alpha"
+edition = "2021"
+description = "Validator sidecar software for bolt protocol"
+authors = ["Chainbound Developers <dev@chainbound.io>"]
+homepage = "https://github.com/chainbound/bolt"
+repository = "https://github.com/chainbound/bolt/tree/unstable/bolt-sidecar"
+
+
 [package]
 name = "bolt-sidecar"
 version = "0.4.0-alpha"
@@ -6,19 +24,27 @@ description = "Validator sidecar software for bolt protocol"
 authors = ["Chainbound Developers <dev@chainbound.io>"]
 homepage = "https://github.com/chainbound/bolt"
 repository = "https://github.com/chainbound/bolt/tree/unstable/bolt-sidecar"
-default-run = "bolt-sidecar"
+# default-run = "bolt-sidecar"
 
 [profile.release]
 lto = true
 debug = true
 
-[dependencies]
+[workspace.dependencies]
+bolt-common = { path = "./crates/common" }
+bolt-crypto = { path = "./crates/crypto" }
+bolt-primitives = { path = "./crates/primitives" }
+bolt-state = { path = "./crates/state" }
+bolt-telemetry = { path = "./crates/telemetry" }
+
+# external crates
+
 # cli
 clap = { version = "4.5.27", features = ["derive", "env"] }
 
 # web
-axum = { version = "0.8.2", features = ["macros", "ws"] }
-axum-extra = { version = "0.10.0", features = ["typed-header"] }
+# axum = { version = "0.8.2", features = ["macros", "ws"] }
+# axum-extra = { version = "0.10.0", features = ["typed-header"] }
 tower-http = { version = "0.5.2", features = ["timeout"] }
 http-body-util = "0.1.2"
 rustls = "0.23.21"
@@ -89,9 +115,11 @@ tracing = "0.1.40"
 metrics-exporter-prometheus = { version = "0.15.3", features = ["http-listener"] }
 metrics = "0.23"
 
-[dev-dependencies]
+
+[workspace.dev-dependencies]
 alloy-node-bindings = "0.9.2"                                # must match alloy version
 criterion = { version = "0.5", features = ["html_reports"] }
+
 
 [build-dependencies]
 built = { version = "0.7.5", features = ["git2"] }
@@ -102,14 +130,14 @@ keystore-tests = []
 [package.metadata.cargo-machete]
 ignored = ["ethereum_ssz"]
 
-[[bench]]
-name = "score_cache"
-path = "benches/score_cache.rs"
-harness = false
+# [[bench]]
+# name = "score_cache"
+# path = "benches/score_cache.rs"
+# harness = false
 
-[[bin]]
-name = "bolt-sidecar"
-path = "bin/sidecar.rs"
+# [[bin]]
+# name = "bolt-sidecar"
+# path = "bin/sidecar.rs"
 
 [lints.clippy]
 explicit_iter_loop = "warn"
