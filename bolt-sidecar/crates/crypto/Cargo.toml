@@ -11,6 +11,9 @@ repository.workspace = true
 # external crates
 
 alloy.workspace = true
+async-trait.workspace = true
 blst.workspace = true
 ethereum-consensus.workspace = true
+eyre.workspace = true
 secp256k1.workspace = true
+rand.workspace = true
