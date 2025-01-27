@@ -14,7 +14,7 @@ debug = true
 [dependencies]
 # core
 tokio = { version = "1", features = ["full"] }
-axum = { version = "0.7", features = ["macros"] }
+axum = { version = "0.8", features = ["macros"] }
 axum-extra = "0.10.0"
 futures = "0.3"
 async-trait = "0.1.85"
@@ -24,7 +24,7 @@ reqwest = "0.12.12"
 
 # crypto
 ssz_rs = { git = "https://github.com/ralexstokes/ssz-rs", rev = "ec3073e" }
-tree_hash = "0.8"
+tree_hash = "0.9"
 
 # tracing & metrics
 tracing = "0.1.41"
@@ -38,7 +38,7 @@ ethereum_ssz = "0.8.2"
 ethereum_ssz_derive = "0.8.2"
 
 # alloy
-alloy = { version = "0.8.3", features = ["signer-local", "provider-trace-api", "rpc-types-beacon", "rpc-types-engine"] }
+alloy = { version = "0.9.2", features = ["signer-local", "provider-trace-api", "rpc-types-beacon", "rpc-types-engine"] }
 alloy-rlp = "0.3.11"
 
 # commit-boost
