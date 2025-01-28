@@ -8,6 +8,9 @@ use crate::{primitives::AccountState, state::ValidationError};
 /// Calculates the max_basefee `slot_diff` blocks in the future given a current basefee (in wei).
 /// Returns None if an overflow would occur.
 /// Cfr. https://github.com/flashbots/ethers-provider-flashbots-bundle/blob/7ddaf2c9d7662bef400151e0bfc89f5b13e72b4c/src/index.ts#L308
+/// 
+/// # Overflows
+/// For 10 gwei, the max slot diff is 499.
 ///
 /// NOTE: this increase is correct also for the EIP-4844 blob base fee:
 /// See https://eips.ethereum.org/EIPS/eip-4844#base-fee-per-blob-gas-update-rule
@@ -87,14 +90,31 @@ pub fn validate_transaction(
 
 #[cfg(test)]
 mod tests {
+    use alloy::consensus::constants::GWEI_TO_WEI;
+
     use super::*;
 
     #[test]
     fn test_calculate_max_basefee() {
-        let current = 10_000_000_000; // 10 gwei
+        let current = GWEI_TO_WEI as u128 * 10; // 10 gwei
         let slot_diff = 9; // 9 full blocks in the future
 
         let result = calculate_max_basefee(current, slot_diff);
-        assert_eq!(result, Some(28865075793))
+        assert_eq!(result, Some(28865075793));
+
+        let slot_diff = 84;
+
+        let result = calculate_max_basefee(current, slot_diff);
+
+        assert!(result.is_some());
+
+        // Max slot diff is 499
+        let slot_diff = 500;
+
+        let result = calculate_max_basefee(current, slot_diff);
+
+        println!("result: {:?}", result);
+
+        assert!(result.is_none());
     }
 }
