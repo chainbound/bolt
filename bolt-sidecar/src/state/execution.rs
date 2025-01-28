@@ -74,6 +74,9 @@ pub enum ValidationError {
     /// The maximum commitments have been reached for the slot.
     #[error("Already requested a preconfirmation for slot {0}. Slot must be >= {0}")]
     SlotTooLow(u64),
+    /// The slot is too high (> current_slot + 64)
+    #[error("Target slot {0} is too high. Max target slot: {1}")]
+    SlotTooHigh(u64, u64),
     /// The maximum committed gas has been reached for the slot.
     #[error("Max committed gas reached for slot {0}: {1}")]
     MaxCommittedGasReachedForSlot(u64, u64),
@@ -115,6 +118,7 @@ impl ValidationError {
             Self::Pricing(_) => "pricing",
             Self::Eip4844Limit => "eip4844_limit",
             Self::SlotTooLow(_) => "slot_too_low",
+            Self::SlotTooHigh(_, _) => "slot_too_high",
             Self::MaxCommittedGasReachedForSlot(_, _) => "max_committed_gas_reached_for_slot",
             Self::Signature(_) => "signature",
             Self::RecoverSigner => "recover_signer",
@@ -290,6 +294,11 @@ impl<C: StateFetcher> ExecutionState<C> {
 
         // Check if the max_fee_per_gas would cover the maximum possible basefee.
         let slot_diff = target_slot.saturating_sub(self.slot);
+
+        // Verify max slot diff
+        if slot_diff > 64 {
+            return Err(ValidationError::SlotTooHigh(target_slot, self.slot + 64));
+        }
 
         // Calculate the max possible basefee given the slot diff
         let max_basefee = calculate_max_basefee(self.basefee, slot_diff)
