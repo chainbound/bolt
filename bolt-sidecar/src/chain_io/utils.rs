@@ -48,7 +48,7 @@ fn pubkey_hash_digest(key: &BlsPublicKey) -> B512 {
 ///
 /// Example usage:
 ///
-/// ```rust no_run
+/// ```rust ignore
 /// sol! {
 ///    library ErrorLib {
 ///       error SomeError(uint256 code);

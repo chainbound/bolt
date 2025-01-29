@@ -5,7 +5,7 @@ use alloy::{
     },
     eips::eip2718::{Decodable2718, Encodable2718},
     hex,
-    primitives::{Address, U256},
+    primitives::Address,
 };
 use reth_primitives::TransactionSigned;
 use serde::{de, ser::SerializeSeq};
@@ -14,9 +14,6 @@ use std::{borrow::Cow, fmt};
 /// Trait that exposes additional information on transaction types that don't already do it
 /// by themselves (e.g. [`PooledTransaction`]).
 pub trait TransactionExt {
-    /// Returns the value of the transaction.
-    fn value(&self) -> U256;
-
     /// Returns the blob sidecar of the transaction, if any.
     fn blob_sidecar(&self) -> Option<&BlobTransactionSidecar>;
 
@@ -25,16 +22,6 @@ pub trait TransactionExt {
 }
 
 impl TransactionExt for PooledTransaction {
-    fn value(&self) -> U256 {
-        match self {
-            Self::Legacy(transaction) => transaction.tx().value,
-            Self::Eip1559(transaction) => transaction.tx().value,
-            Self::Eip2930(transaction) => transaction.tx().value,
-            Self::Eip4844(transaction) => transaction.tx().tx().value,
-            Self::Eip7702(transaction) => transaction.tx().value,
-        }
-    }
-
     fn blob_sidecar(&self) -> Option<&BlobTransactionSidecar> {
         match self {
             Self::Eip4844(transaction) => Some(&transaction.tx().sidecar),

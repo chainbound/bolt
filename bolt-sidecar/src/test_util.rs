@@ -5,11 +5,7 @@ use alloy::{
     network::{EthereumWallet, TransactionBuilder},
     primitives::{Address, U256},
     rpc::types::TransactionRequest,
-    signers::{
-        k256::{ecdsa::SigningKey as K256SigningKey, SecretKey as K256SecretKey},
-        local::PrivateKeySigner,
-        Signer,
-    },
+    signers::{k256::ecdsa::SigningKey as K256SigningKey, local::PrivateKeySigner, Signer},
 };
 use alloy_node_bindings::{Anvil, AnvilInstance};
 use blst::min_pk::SecretKey;
@@ -106,7 +102,7 @@ pub(crate) async fn get_test_config() -> Option<Opts> {
     Some(opts)
 }
 
-/// Launch a local instance of the Anvil test chain.
+/// Launch a local instance of the Anvil test chain with 1 second block time
 pub(crate) fn launch_anvil() -> AnvilInstance {
     Anvil::new().block_time(1).chain_id(1337).spawn()
 }
@@ -155,10 +151,10 @@ impl SignableECDSA for TestSignableData {
 /// from the given transaction, private key of the sender, and slot.
 pub(crate) async fn create_signed_inclusion_request(
     txs: &[TransactionRequest],
-    sk: &K256SecretKey,
+    sk: &[u8],
     slot: u64,
 ) -> eyre::Result<InclusionRequest> {
-    let sk = K256SigningKey::from_slice(sk.to_bytes().as_slice())?;
+    let sk = K256SigningKey::from_slice(sk)?;
     let signer = PrivateKeySigner::from_signing_key(sk.clone());
     let wallet = EthereumWallet::from(signer.clone());
 

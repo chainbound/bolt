@@ -9,14 +9,16 @@ use thiserror::Error;
 use tracing::{debug, error, trace, warn};
 
 use crate::{
-    builder::BlockTemplate,
+    builder::template::BlockTemplate,
     common::{
         score_cache::ScoreCache,
         transactions::{calculate_max_basefee, max_transaction_cost, validate_transaction},
     },
     config::limits::LimitsOpts,
     primitives::{
-        signature::SignatureError, AccountState, InclusionRequest, SignedConstraints, Slot,
+        diffs::{AccountDiff, BalanceDiff, BalanceDiffApplier},
+        signature::SignatureError,
+        AccountState, InclusionRequest, SignedConstraints, Slot,
     },
     state::pricing,
     telemetry::ApiMetrics,
@@ -144,7 +146,7 @@ pub struct ExecutionState<C> {
     basefee: u128,
     /// The blob basefee at the head block.
     blob_basefee: u128,
-    /// The cached account states. This should never be read directly. These only contain the
+    /// The cached account states. These only contain the
     /// canonical account states at the head block, not the intermediate states.
     ///
     /// INVARIANT: the entries are modified only when receiving a new head.
@@ -229,6 +231,23 @@ impl<C: StateFetcher> ExecutionState<C> {
     /// Returns the current base fee in gwei
     pub fn basefee(&self) -> u128 {
         self.basefee
+    }
+
+    /// Get the canonical account state at the head of the block for the given address from the
+    /// [AccountStateCache]. If not available, it's fetched from the EL client, added to the cache
+    /// and returned.
+    pub async fn get_or_fetch_account_state(
+        &mut self,
+        address: Address,
+    ) -> Result<AccountState, TransportError> {
+        match self.account_states.get(&address) {
+            Some(account) => Ok(*account),
+            None => {
+                let account = self.client.get_account_state(&address, None).await?;
+                self.account_states.insert(address, account);
+                Ok(account)
+            }
+        }
     }
 
     /// Validates the commitment request against state (historical + intermediate).
@@ -337,7 +356,7 @@ impl<C: StateFetcher> ExecutionState<C> {
         for tx in &req.txs {
             let sender = tx.sender().expect("Recovered sender");
 
-            let (nonce_diff, balance_diff, highest_slot_for_account) =
+            let (account_diff, highest_slot_for_account) =
                 compute_diffs(&self.block_templates, sender);
 
             if target_slot < highest_slot_for_account {
@@ -345,26 +364,11 @@ impl<C: StateFetcher> ExecutionState<C> {
                 return Err(ValidationError::SlotTooLow(highest_slot_for_account));
             }
 
-            let account_state = match self.account_states.get(sender).copied() {
-                Some(account) => account,
-                None => {
-                    // Fetch the account state from the client if it does not exist
-                    let account = match self.client.get_account_state(sender, None).await {
-                        Ok(account) => account,
-                        Err(err) => {
-                            return Err(ValidationError::Internal(format!(
-                                "Error fetching account state: {:?}",
-                                err
-                            )))
-                        }
-                    };
+            let account_state = self.get_or_fetch_account_state(*sender).await.map_err(|e| {
+                ValidationError::Internal(format!("Error fetching account state: {:?}", e))
+            })?;
 
-                    self.account_states.insert(*sender, account);
-                    account
-                }
-            };
-
-            debug!(?account_state, ?nonce_diff, ?balance_diff, "Validating transaction");
+            debug!(?account_state, ?account_diff, "Validating transaction");
 
             let sender_nonce_diff = bundle_nonce_diff_map.entry(sender).or_insert(0);
             let sender_balance_diff = bundle_balance_diff_map.entry(sender).or_insert(U256::ZERO);
@@ -374,14 +378,13 @@ impl<C: StateFetcher> ExecutionState<C> {
             let account_state_with_diffs = AccountState {
                 transaction_count: account_state
                     .transaction_count
-                    .saturating_add(nonce_diff)
+                    .saturating_add(account_diff.nonce())
                     .saturating_add(*sender_nonce_diff),
 
-                balance: account_state
-                    .balance
-                    .saturating_sub(balance_diff)
+                balance: account_diff
+                    .balance()
+                    .apply(account_state.balance)
                     .saturating_sub(*sender_balance_diff),
-
                 has_code: account_state.has_code,
             };
 
@@ -522,11 +525,12 @@ impl<C: StateFetcher> ExecutionState<C> {
                 template.retain(address, expected_account_state);
 
                 // Update the account state with the remaining state diff for the next iteration.
-                if let Some((nonce_diff, balance_diff)) = template.get_diff(&address) {
+                if let Some(account_diff) = template.get_diff(&address) {
                     // Nonce will always be increased
-                    expected_account_state.transaction_count += nonce_diff;
-                    // Balance will always be decreased
-                    expected_account_state.balance -= balance_diff;
+                    expected_account_state.transaction_count += account_diff.nonce();
+                    // Re-apply balance diffs
+                    expected_account_state.balance =
+                        expected_account_state.balance.apply_diff(account_diff.balance())
                 }
             }
         }
@@ -581,21 +585,26 @@ pub struct StateUpdate {
 fn compute_diffs(
     block_templates: &HashMap<u64, BlockTemplate>,
     sender: &Address,
-) -> (u64, U256, u64) {
+) -> (AccountDiff, u64) {
     block_templates.iter().fold(
-        (0, U256::ZERO, 0),
-        |(nonce_diff_acc, balance_diff_acc, highest_slot), (slot, block_template)| {
-            let (nonce_diff, balance_diff, current_slot) = block_template
+        (AccountDiff::default(), 0),
+        |(diff_acc, highest_slot), (slot, block_template)| {
+            let (diff, current_slot) = block_template
                 .get_diff(sender)
-                .map(|(nonce, balance)| (nonce, balance, *slot))
-                .unwrap_or((0, U256::ZERO, 0));
+                .map(|diff| (diff, *slot))
+                .unwrap_or((AccountDiff::default(), 0));
             // This might be noisy but it is a critical part in validation logic and
             // hard to debug.
-            trace!(?nonce_diff, ?balance_diff, ?slot, ?sender, "found diffs");
+            trace!(account_diff = ?diff, ?slot, ?sender, "found diffs");
 
             (
-                nonce_diff_acc + nonce_diff,
-                balance_diff_acc.saturating_add(balance_diff),
+                AccountDiff::new(
+                    diff_acc.nonce() + diff.nonce(),
+                    BalanceDiff::new(
+                        diff_acc.balance().increase().saturating_add(diff.balance().increase()),
+                        diff_acc.balance().decrease().saturating_add(diff.balance().decrease()),
+                    ),
+                ),
                 u64::max(highest_slot, current_slot),
             )
         },
@@ -606,7 +615,7 @@ fn compute_diffs(
 mod tests {
     use super::*;
     use crate::{
-        builder::template::StateDiff, config::limits::DEFAULT_MAX_COMMITTED_GAS,
+        config::limits::DEFAULT_MAX_COMMITTED_GAS, primitives::diffs::StateDiff,
         signer::local::LocalSigner,
     };
     use std::{num::NonZero, str::FromStr, time::Duration};
@@ -619,6 +628,7 @@ mod tests {
         providers::{network::TransactionBuilder, Provider, ProviderBuilder},
         signers::local::PrivateKeySigner,
     };
+    use alloy_node_bindings::WEI_IN_ETHER;
     use fetcher::{StateClient, StateFetcher};
     use tracing::info;
 
@@ -629,15 +639,29 @@ mod tests {
         test_util::{create_signed_inclusion_request, default_test_transaction, launch_anvil},
     };
 
+    fn add_constraint(
+        request: InclusionRequest,
+        state: &mut ExecutionState<StateClient>,
+        signer: &LocalSigner,
+        target_slot: u64,
+    ) -> eyre::Result<()> {
+        let message = ConstraintsMessage::build(Default::default(), request.clone());
+        let signature = signer.sign_commit_boost_root(message.digest())?;
+        let signed_constraints = SignedConstraints { message, signature };
+        state.add_constraint(target_slot, signed_constraints);
+
+        Ok(())
+    }
+
     #[test]
     fn test_compute_diff_no_templates() {
         let block_templates = HashMap::new();
         let sender = Address::random();
 
-        let (nonce_diff, balance_diff, highest_slot) = compute_diffs(&block_templates, &sender);
+        let (account_diff, highest_slot) = compute_diffs(&block_templates, &sender);
 
-        assert_eq!(nonce_diff, 0);
-        assert_eq!(balance_diff, U256::ZERO);
+        assert_eq!(account_diff.nonce(), 0);
+        assert_eq!(account_diff.balance().decrease(), U256::ZERO);
         assert_eq!(highest_slot, 0);
     }
 
@@ -648,7 +672,8 @@ mod tests {
         let nonce = 1;
         let balance_diff = U256::from(2);
         let mut diffs = HashMap::new();
-        diffs.insert(sender, (nonce, balance_diff));
+        let account_diff = AccountDiff::new(nonce, BalanceDiff::new(U256::ZERO, balance_diff));
+        diffs.insert(sender, account_diff);
 
         // Insert StateDiff entry
         let state_diff = StateDiff { diffs };
@@ -658,10 +683,10 @@ mod tests {
         let block_template = BlockTemplate { state_diff, signed_constraints_list: vec![] };
         block_templates.insert(10, block_template);
 
-        let (nonce_diff, balance_diff, highest_slot) = compute_diffs(&block_templates, &sender);
+        let (computed_account_diff, highest_slot) = compute_diffs(&block_templates, &sender);
 
-        assert_eq!(nonce_diff, 1);
-        assert_eq!(balance_diff, U256::from(2));
+        assert_eq!(computed_account_diff.nonce(), 1);
+        assert_eq!(computed_account_diff.balance().decrease(), U256::from(2));
         assert_eq!(highest_slot, 10);
     }
 
@@ -683,7 +708,7 @@ mod tests {
 
         let tx = default_test_transaction(*sender, None);
 
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, 10).await?;
+        let mut request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
 
         assert!(state.validate_request(&mut request).await.is_ok());
 
@@ -709,11 +734,11 @@ mod tests {
         // Create a transaction with a nonce that is too high
         let tx = default_test_transaction(*sender, Some(1));
 
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, 10).await?;
+        let mut request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
 
         // Insert a constraint diff for slot 11
         let mut diffs = HashMap::new();
-        diffs.insert(*sender, (1, U256::ZERO));
+        diffs.insert(*sender, AccountDiff::new(1, BalanceDiff::default()));
         state.block_templates.insert(
             11,
             BlockTemplate { state_diff: StateDiff { diffs }, signed_constraints_list: vec![] },
@@ -746,7 +771,7 @@ mod tests {
 
         // Insert a constraint diff for slot 9 to simulate nonce increment
         let mut diffs = HashMap::new();
-        diffs.insert(*sender, (1, U256::ZERO));
+        diffs.insert(*sender, AccountDiff::new(1, BalanceDiff::default()));
         state.block_templates.insert(
             9,
             BlockTemplate { state_diff: StateDiff { diffs }, signed_constraints_list: vec![] },
@@ -755,7 +780,7 @@ mod tests {
         // Create a transaction with a nonce that is too low
         let tx = default_test_transaction(*sender, Some(0));
 
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, 10).await?;
+        let mut request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
 
         assert!(matches!(
             state.validate_request(&mut request).await,
@@ -767,7 +792,7 @@ mod tests {
         // Create a transaction with a nonce that is too high
         let tx = default_test_transaction(*sender, Some(2));
 
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, 10).await?;
+        let mut request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
 
         assert!(matches!(
             state.validate_request(&mut request).await,
@@ -797,7 +822,7 @@ mod tests {
         let tx = default_test_transaction(*sender, None)
             .with_value(uint!(11_000_U256 * Uint::from(ETH_TO_WEI)));
 
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, 10).await?;
+        let mut request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
 
         assert!(matches!(
             state.validate_request(&mut request).await,
@@ -831,7 +856,7 @@ mod tests {
 
         // burn the balance
         let tx = default_test_transaction(*sender, Some(0)).with_value(uint!(balance_to_burn));
-        let request = create_signed_inclusion_request(&[tx], sender_pk, 10).await?;
+        let request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
         let tx_bytes = request.txs.first().unwrap().encoded_2718();
         let _ = client.inner().send_raw_transaction(tx_bytes.into()).await?;
 
@@ -842,7 +867,7 @@ mod tests {
 
         // create a new transaction and request a preconfirmation for it
         let tx = default_test_transaction(*sender, Some(1));
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, 10).await?;
+        let mut request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
 
         let validation = state.validate_request(&mut request).await;
         assert!(validation.is_ok(), "Validation failed: {validation:?}");
@@ -854,7 +879,7 @@ mod tests {
 
         // create a new transaction and request a preconfirmation for it
         let tx = default_test_transaction(*sender, Some(2));
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, 10).await?;
+        let mut request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
 
         // this should fail because the balance is insufficient as we spent
         // all of it on the previous preconfirmation
@@ -864,6 +889,204 @@ mod tests {
             matches!(validation_result, Err(ValidationError::InsufficientBalance)),
             "Expected InsufficientBalance error, got {:?}",
             validation_result
+        );
+
+        Ok(())
+    }
+
+    /// Tests that a balance increase allows the recipient to send a transaction using preconfirmed
+    /// state.
+    #[tokio::test]
+    async fn test_balance_increase() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+        let signer = LocalSigner::random();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+        let target_slot = 10;
+
+        let recipient_sk = PrivateKeySigner::random();
+        let recipient_pk = recipient_sk.address();
+
+        // Create a transfer of 1 ETH to the recipient
+        let tx = default_test_transaction(*sender, Some(0))
+            .with_to(recipient_pk)
+            .with_value(WEI_IN_ETHER);
+        let mut request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
+
+        let validation = state.validate_request(&mut request).await;
+        assert!(validation.is_ok(), "Validation failed: {validation:?}");
+
+        add_constraint(request.clone(), &mut state, &signer, target_slot)?;
+
+        // Now the sender should have enough balance to send a transaction
+        let tx = default_test_transaction(recipient_pk, Some(0))
+            .with_value(WEI_IN_ETHER.div_ceil(U256::from(2)));
+        let mut request =
+            create_signed_inclusion_request(&[tx], recipient_sk.to_bytes().as_slice(), 10).await?;
+
+        let validation_result = state.validate_request(&mut request).await;
+
+        add_constraint(request, &mut state, &signer, target_slot)?;
+
+        assert!(validation_result.is_ok(), "validation failed: {validation_result:?}");
+
+        // The recipient cannot afford a second transfer of 0.5 ETH
+        let tx = default_test_transaction(recipient_pk, Some(1))
+            .with_value(WEI_IN_ETHER.div_ceil(U256::from(2)));
+        let mut request =
+            create_signed_inclusion_request(&[tx], recipient_sk.to_bytes().as_slice(), 10).await?;
+
+        let validation_result = state.validate_request(&mut request).await;
+        assert!(
+            matches!(validation_result, Err(ValidationError::InsufficientBalance)),
+            "Expected InsufficientBalance error, got {:?}",
+            validation_result
+        );
+
+        Ok(())
+    }
+
+    /// Tests that a balance increase is dropped if the preconfirmation is cancelled.
+    #[tokio::test]
+    async fn test_balance_increase_dropped() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+        let signer = LocalSigner::random();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+        let target_slot = slot;
+
+        let recipient_sk = PrivateKeySigner::random();
+        let recipient_pk = recipient_sk.address();
+
+        // Create a transfer of 1 ETH to the recipient
+        let tx = default_test_transaction(*sender, Some(0))
+            .with_to(recipient_pk)
+            .with_value(WEI_IN_ETHER);
+        let mut request =
+            create_signed_inclusion_request(&[tx.clone()], &sender_pk.to_bytes(), 10).await?;
+
+        let validation = state.validate_request(&mut request).await;
+        assert!(validation.is_ok(), "Validation failed: {validation:?}");
+
+        add_constraint(request.clone(), &mut state, &signer, target_slot)?;
+
+        // Send a cancel tx
+        let tx = default_test_transaction(*sender, Some(0))
+            .with_to(*sender)
+            .with_max_priority_fee_per_gas(tx.max_priority_fee_per_gas.unwrap() + 1);
+
+        let _ = client.inner().send_transaction(tx).await?;
+
+        // Wait 1s, update the head to include the cancel tx; the constraint should be dropped
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        state.update_head(None, slot + 1).await?;
+
+        // Now the recipient should not have balance
+        let tx = default_test_transaction(recipient_pk, Some(0)).with_value(U256::from(1));
+        let mut request = create_signed_inclusion_request(
+            &[tx],
+            recipient_sk.to_bytes().as_slice(),
+            target_slot + 1,
+        )
+        .await?;
+
+        let validation_result = state.validate_request(&mut request).await;
+
+        assert!(
+            matches!(validation_result, Err(ValidationError::InsufficientBalance)),
+            "Expected InsufficientBalance error, got {:?}",
+            validation_result
+        );
+
+        Ok(())
+    }
+
+    /// Tests that a chained preconfirmation is dropped if the previous one is cancelled.
+    #[tokio::test]
+    async fn test_chained_preconfs_dropped() -> eyre::Result<()> {
+        let _ = tracing_subscriber::fmt::try_init();
+
+        let anvil = launch_anvil();
+        let client = StateClient::new(anvil.endpoint_url());
+
+        let mut state = ExecutionState::new(client.clone(), LimitsOpts::default()).await?;
+
+        let sender = anvil.addresses().first().unwrap();
+        let sender_pk = anvil.keys().first().unwrap();
+        let signer = LocalSigner::random();
+
+        // initialize the state by updating the head once
+        let slot = client.get_head().await?;
+        state.update_head(None, slot).await?;
+        let target_slot = slot + 2;
+
+        let recipient_sk = PrivateKeySigner::random();
+        let recipient_pk = recipient_sk.address();
+
+        // Create a transfer of 1 ETH to the recipient
+        let tx_1 = default_test_transaction(*sender, Some(0))
+            .with_to(recipient_pk)
+            .with_value(WEI_IN_ETHER);
+        let mut request =
+            create_signed_inclusion_request(&[tx_1.clone()], &sender_pk.to_bytes(), 10).await?;
+
+        let validation = state.validate_request(&mut request).await;
+        assert!(validation.is_ok(), "Validation failed: {validation:?}");
+
+        add_constraint(request.clone(), &mut state, &signer, target_slot)?;
+
+        // Now the sender should have enough balance to send a transaction
+        let tx_2 = default_test_transaction(recipient_pk, Some(0))
+            .with_value(WEI_IN_ETHER.div_ceil(U256::from(2)));
+        let mut request =
+            create_signed_inclusion_request(&[tx_2], recipient_sk.to_bytes().as_slice(), 10)
+                .await?;
+
+        let validation_result = state.validate_request(&mut request).await;
+
+        add_constraint(request, &mut state, &signer, target_slot)?;
+
+        assert!(validation_result.is_ok(), "validation failed: {validation_result:?}");
+
+        // Cancel the first preconfirmation request so that both preconfs are dropped.
+
+        // Send a cancel tx
+        let tx_3 = default_test_transaction(*sender, Some(0))
+            .with_to(*sender)
+            .with_max_priority_fee_per_gas(tx_1.max_priority_fee_per_gas.unwrap() + 1);
+
+        let _ = client.inner().send_transaction(tx_3).await?;
+
+        // Wait 1s, update the head to include the cancel tx; the constraint should be dropped
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        state.update_head(None, slot + 1).await?;
+
+        // Check that both preconfs have been dropped
+
+        let template = state.block_templates.get(&target_slot).unwrap();
+        assert!(
+            template.signed_constraints_list.is_empty(),
+            "block template should be empty, but got: {template:?}"
         );
 
         Ok(())
@@ -893,7 +1116,7 @@ mod tests {
             .with_max_fee_per_gas(basefee - 1)
             .with_max_priority_fee_per_gas(basefee / 2);
 
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, 10).await?;
+        let mut request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
 
         assert!(matches!(
             state.validate_request(&mut request).await,
@@ -925,7 +1148,7 @@ mod tests {
 
         let tx = default_test_transaction(*sender, None).with_gas_limit(6_000_000);
 
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, 10).await?;
+        let mut request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
 
         assert!(matches!(
             state.validate_request(&mut request).await,
@@ -955,7 +1178,7 @@ mod tests {
         let tx = default_test_transaction(*sender, None)
             .with_max_priority_fee_per_gas(GWEI_TO_WEI as u128 / 2);
 
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, 10).await?;
+        let mut request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
 
         assert!(matches!(
             state.validate_request(&mut request).await,
@@ -966,7 +1189,7 @@ mod tests {
         let tx = default_test_transaction(*sender, None)
             .with_max_priority_fee_per_gas(4 * GWEI_TO_WEI as u128);
 
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, 10).await?;
+        let mut request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
 
         assert!(state.validate_request(&mut request).await.is_ok());
 
@@ -998,7 +1221,7 @@ mod tests {
         let tx = default_test_transaction(*sender, None)
             .with_gas_price(max_base_fee + GWEI_TO_WEI as u128 / 2);
 
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, 10).await?;
+        let mut request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
 
         assert!(matches!(
             state.validate_request(&mut request).await,
@@ -1009,7 +1232,7 @@ mod tests {
         let tx = default_test_transaction(*sender, None)
             .with_gas_price(max_base_fee + 4 * GWEI_TO_WEI as u128);
 
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, 10).await?;
+        let mut request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
 
         assert!(state.validate_request(&mut request).await.is_ok());
 
@@ -1041,7 +1264,8 @@ mod tests {
         let tx = default_test_transaction(*sender, None)
             .with_gas_price(max_base_fee + 4 * GWEI_TO_WEI as u128);
 
-        let mut request = create_signed_inclusion_request(&[tx.clone(), tx], sender_pk, 10).await?;
+        let mut request =
+            create_signed_inclusion_request(&[tx.clone(), tx], &sender_pk.to_bytes(), 10).await?;
 
         let response = state.validate_request(&mut request).await;
         println!("{response:?}");
@@ -1076,7 +1300,8 @@ mod tests {
         let signed = tx.clone().build(&signer).await?;
 
         let target_slot = 10;
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, target_slot).await?;
+        let mut request =
+            create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), target_slot).await?;
         let inclusion_request = request.clone();
 
         assert!(state.validate_request(&mut request).await.is_ok());
@@ -1124,7 +1349,8 @@ mod tests {
         let tx = default_test_transaction(*sender, None);
 
         let target_slot = 10;
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, target_slot).await?;
+        let mut request =
+            create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), target_slot).await?;
         let inclusion_request = request.clone();
 
         assert!(state.validate_request(&mut request).await.is_ok());
@@ -1168,7 +1394,8 @@ mod tests {
             .with_gas_limit(limits.max_committed_gas_per_slot.get() - 1);
 
         let target_slot = 10;
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, target_slot).await?;
+        let mut request =
+            create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), target_slot).await?;
         let inclusion_request = request.clone();
 
         let validation = state.validate_request(&mut request).await;
@@ -1186,7 +1413,7 @@ mod tests {
         // This tx will exceed the committed gas limit
         let tx = default_test_transaction(*sender, Some(1));
 
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, 10).await?;
+        let mut request = create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), 10).await?;
 
         assert!(matches!(
             state.validate_request(&mut request).await,
@@ -1216,7 +1443,8 @@ mod tests {
         let tx2 = default_test_transaction(*sender, Some(1));
         let tx3 = default_test_transaction(*sender, Some(2));
 
-        let mut request = create_signed_inclusion_request(&[tx1, tx2, tx3], sender_pk, 10).await?;
+        let mut request =
+            create_signed_inclusion_request(&[tx1, tx2, tx3], &sender_pk.to_bytes(), 10).await?;
 
         assert!(state.validate_request(&mut request).await.is_ok());
 
@@ -1243,7 +1471,8 @@ mod tests {
         let tx2 = default_test_transaction(*sender, Some(1));
         let tx3 = default_test_transaction(*sender, Some(3)); // wrong nonce, should be 2
 
-        let mut request = create_signed_inclusion_request(&[tx1, tx2, tx3], sender_pk, 10).await?;
+        let mut request =
+            create_signed_inclusion_request(&[tx1, tx2, tx3], &sender_pk.to_bytes(), 10).await?;
 
         assert!(matches!(
             state.validate_request(&mut request).await,
@@ -1274,7 +1503,8 @@ mod tests {
         let tx3 = default_test_transaction(*sender, Some(2))
             .with_value(uint!(11_000_U256 * Uint::from(ETH_TO_WEI)));
 
-        let mut request = create_signed_inclusion_request(&[tx1, tx2, tx3], sender_pk, 10).await?;
+        let mut request =
+            create_signed_inclusion_request(&[tx1, tx2, tx3], &sender_pk.to_bytes(), 10).await?;
         let validation_result = state.validate_request(&mut request).await;
 
         assert!(
@@ -1309,7 +1539,8 @@ mod tests {
         let target_slot = 32;
         let tx = default_test_transaction(*sender, None).with_gas_price(ETH_TO_WEI / 1_000_000);
 
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, target_slot).await?;
+        let mut request =
+            create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), target_slot).await?;
         let inclusion_request = request.clone();
 
         let request_validation = state.validate_request(&mut request).await;
@@ -1330,7 +1561,8 @@ mod tests {
 
         // 2. Send an inclusion request at `slot + 1` with `target_slot`.
         let tx = default_test_transaction(*sender, Some(1)).with_gas_price(ETH_TO_WEI / 1_000_000);
-        let mut request = create_signed_inclusion_request(&[tx], sender_pk, target_slot).await?;
+        let mut request =
+            create_signed_inclusion_request(&[tx], &sender_pk.to_bytes(), target_slot).await?;
         let inclusion_request = request.clone();
 
         let request_validation = state.validate_request(&mut request).await;

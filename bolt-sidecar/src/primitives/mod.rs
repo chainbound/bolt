@@ -45,6 +45,9 @@ pub mod signature;
 /// JSON-RPC helper types and functions.
 pub mod jsonrpc;
 
+/// Types and utilties relates to calculating account diffs.
+pub mod diffs;
+
 /// An alias for a Beacon Chain slot number
 pub type Slot = u64;
 

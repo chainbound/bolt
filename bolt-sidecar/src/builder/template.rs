@@ -7,12 +7,14 @@ use ethereum_consensus::{
     deneb::mainnet::{Blob, BlobsBundle},
 };
 use reth_primitives::TransactionSigned;
-use std::collections::HashMap;
 use tracing::warn;
 
 use crate::{
     common::transactions::max_transaction_cost,
-    primitives::{AccountState, FullTransaction, SignedConstraints, TransactionExt},
+    primitives::{
+        diffs::{AccountDiff, BalanceDiff, StateDiff},
+        AccountState, FullTransaction, SignedConstraints, TransactionExt,
+    },
 };
 
 /// A block template that serves as a fallback block, but is also used
@@ -34,7 +36,7 @@ pub struct BlockTemplate {
 
 impl BlockTemplate {
     /// Return the state diff of the block template.
-    pub fn get_diff(&self, address: &Address) -> Option<(u64, U256)> {
+    pub fn get_diff(&self, address: &Address) -> Option<AccountDiff> {
         self.state_diff.get_diff(address)
     }
 
@@ -123,14 +125,46 @@ impl BlockTemplate {
     pub fn add_constraints(&mut self, constraints: SignedConstraints) {
         for constraint in &constraints.message.transactions {
             let max_cost = max_transaction_cost(constraint);
+
+            // Increase the nonce and decrease the balance of the sender
             self.state_diff
                 .diffs
                 .entry(*constraint.sender().expect("recovered sender"))
-                .and_modify(|(nonce, balance)| {
-                    *nonce += 1;
-                    *balance += max_cost;
+                .and_modify(|diff| {
+                    *diff = AccountDiff::new(
+                        diff.nonce().saturating_add(1),
+                        BalanceDiff::new(
+                            diff.balance().increase(),
+                            diff.balance().decrease().saturating_add(max_cost),
+                        ),
+                    )
                 })
-                .or_insert((1, max_cost));
+                .or_insert(AccountDiff::new(1, BalanceDiff::new(U256::ZERO, max_cost)));
+
+            // If there is an ETH transfer and it's not a contract creation, increase the balance
+            // of the recipient so that it can send inclusion requests on this preconfirmed state.
+            let value = constraint.tx.value();
+            if value.is_zero() {
+                continue;
+            }
+            let Some(recipient) = constraint.to() else { continue };
+
+            self.state_diff
+                .diffs
+                .entry(recipient)
+                .and_modify(|diff| {
+                    *diff = AccountDiff::new(
+                        diff.nonce().saturating_add(1),
+                        BalanceDiff::new(
+                            diff.balance().increase().saturating_add(constraint.tx.value()),
+                            diff.balance().decrease(),
+                        ),
+                    )
+                })
+                .or_insert(AccountDiff::new(
+                    0,
+                    BalanceDiff::new(constraint.tx.value(), U256::ZERO),
+                ));
         }
 
         self.signed_constraints_list.push(constraints);
@@ -141,13 +175,38 @@ impl BlockTemplate {
         let constraints = self.signed_constraints_list.remove(index);
 
         for constraint in &constraints.message.transactions {
+            let max_cost = max_transaction_cost(constraint);
+
             self.state_diff
                 .diffs
                 .entry(*constraint.sender().expect("recovered sender"))
-                .and_modify(|(nonce, balance)| {
-                    *nonce = nonce.saturating_sub(1);
-                    *balance -= max_transaction_cost(constraint);
+                .and_modify(|diff| {
+                    *diff = AccountDiff::new(
+                        diff.nonce().saturating_sub(1),
+                        BalanceDiff::new(
+                            diff.balance().increase(),
+                            diff.balance().decrease().saturating_sub(max_cost),
+                        ),
+                    )
                 });
+
+            // If there is an ETH transfer and it's not a contract creation, remove the balance
+            // increase of the recipient.
+            let value = constraint.tx.value();
+            if value.is_zero() {
+                continue;
+            }
+            let Some(recipient) = constraint.to() else { continue };
+
+            self.state_diff.diffs.entry(recipient).and_modify(|diff| {
+                *diff = AccountDiff::new(
+                    diff.nonce().saturating_sub(1),
+                    BalanceDiff::new(
+                        diff.balance().increase().saturating_sub(constraint.tx.value()),
+                        diff.balance().decrease(),
+                    ),
+                )
+            });
         }
     }
 
@@ -194,22 +253,5 @@ impl BlockTemplate {
         for index in indexes.into_iter().rev() {
             self.remove_constraints_at_index(index);
         }
-    }
-}
-
-/// StateDiff tracks the intermediate changes to the state according to the block template.
-#[derive(Debug, Default)]
-pub struct StateDiff {
-    /// Map of diffs per address. Each diff is a tuple of the nonce and balance diff
-    /// that should be applied to the current state.
-    pub(crate) diffs: HashMap<Address, (u64, U256)>,
-}
-
-impl StateDiff {
-    /// Returns a tuple of the nonce and balance diff for the given address.
-    /// The nonce diff should be added to the current nonce, the balance diff should be subtracted
-    /// from the current balance.
-    pub fn get_diff(&self, address: &Address) -> Option<(u64, U256)> {
-        self.diffs.get(address).copied()
     }
 }
