@@ -94,7 +94,7 @@ contract DeployBolt is Script {
             Upgrades.deployUUPSProxy("BoltSymbioticMiddlewareV1.sol", initSymbioticMiddleware, opts);
         console.log("BoltSymbioticMiddlewareV1 proxy deployed at", address(symbioticMiddlewareProxy));
 
-        console.log("Core contracts deployed succesfully, whitelisting middleware contracts in BoltManager...");
+        console.log("Core contracts deployed successfully, whitelisting middleware contracts in BoltManager...");
         console.log("EigenLayer middleware:", address(eigenLayerMiddlewareProxy));
         console.log("Symbiotic middleware:", address(symbioticMiddlewareProxy));
         BoltManagerV1(managerProxy).addRestakingProtocol(address(eigenLayerMiddlewareProxy));
