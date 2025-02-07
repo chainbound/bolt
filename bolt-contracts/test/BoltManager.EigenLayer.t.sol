@@ -106,7 +106,7 @@ contract BoltManagerEigenLayerTest is Test {
 
         // PART 1: External EigenLayer opt-in to BOLT AVS
 
-        // 1. As a staker, I deposit some LSTs into a Stategy via the StrategyManager.depositIntoStrategy function.
+        // 1. As a staker, I deposit some LSTs into a Strategy via the StrategyManager.depositIntoStrategy function.
         // After this, I get back some shares that I can use at a later time for withdrawal
 
         vm.startPrank(staker);
