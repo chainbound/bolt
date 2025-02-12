@@ -287,7 +287,7 @@ First, you need to install the
 3. Register into the Bolt AVS:
 
    - NOTE: The `--operator-rpc` flag MUST be set to a PUBLICLY ACCESSIBLE URL. Since bolt v0.4.0-alpha, the default configuration
-     is firewall delegation, which means that your `--operator-rpc` will be set to our Bolt RPC: `https://rpc-holesky.bolt.chainbound.io/rpc`.
+     is firewall delegation, which means that your `--operator-rpc` will be set to our Bolt RPC: `https://rpc.holesky.boltprotocol.xyz/rpc`.
      Note that the value above is _exactly_ what you should register on-chain for the Bolt RPC.
    - NOTE: if you do not want to use firewall delegation, you should register a public endpoint (e.g. `--operator-rpc http://<public_ip>:<port`). Make sure to open the `<port>` on your firewall. By default, it is set to `8017`, but it can be changed in the
      sidecar configuration file.
@@ -297,7 +297,7 @@ First, you need to install the
 
    ```bash
     bolt operators eigenlayer register \
-        --rpc-url https://rpc-holesky.bolt.chainbound.io/rpc \
+        --rpc-url http://localhost:8545 \
         --operator-private-key <operator_private_key> \
         --operator-rpc <operator_rpc> \
         --salt <SALT>
@@ -373,7 +373,7 @@ Some of the other duties of the firewall include:
 - Pricing inclusion requests correctly (see more below)
 - Communicating prices with consumers (wallets, users)
 
-Currently, we operate a firewall RPC on Holesky at `wss://rpc-holesky.bolt.chainbound.io/api/v1/firewall_stream`.
+Currently, we operate a firewall RPC on Holesky at `wss://rpc.holesky.boltprotocol.xyz/api/v1/firewall_stream`.
 
 Read more about firewall delegation [here](https://x.com/boltprotocol_/status/1879571451621077413).
 

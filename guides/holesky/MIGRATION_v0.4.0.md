@@ -18,7 +18,7 @@ Some of the other duties of the firewall include:
 - Pricing inclusion requests correctly (see more below)
 - Communicating prices with consumers (wallets, users)
 
-Currently, we operate a firewall RPC on Holesky at `wss://rpc-holesky.bolt.chainbound.io/api/v1/firewall_stream`.
+Currently, we operate a firewall RPC on Holesky at `wss://rpc.holesky.boltprotocol.xyz/api/v1/firewall_stream`.
 
 Read more about firewall delegation [here](https://x.com/boltprotocol_/status/1879571451621077413).
 
@@ -76,13 +76,13 @@ configs. **All of the changes outlined below are in `bolt-sidecar.env` (`mev-boo
 
 > [!IMPORTANT]
 > To fully enable firewall delegation, you must modify your
-> on-chain operator RPC and set it to the following RPC: `https://rpc-holesky.bolt.chainbound.io/rpc`.
+> on-chain operator RPC and set it to the following RPC: `https://rpc.holesky.boltprotocol.xyz/rpc`.
 > You can do this by running the following bolt CLI command (required version v0.1.2):
 >
 > ```bash
-> bolt operators eigenlayer update-rpc https://rpc-holesky.bolt.chainbound.io/rpc
+> bolt operators eigenlayer update-rpc https://rpc.holesky.boltprotocol.xyz/rpc
 > # OR
-> bolt operators symbiotic update-rpc https://rpc-holesky.bolt.chainbound.io/rpc
+> bolt operators symbiotic update-rpc https://rpc.holesky.boltprotocol.xyz/rpc
 > ```
 
 ##### Pricing
