@@ -9,3 +9,8 @@ pre-build = [
     # more info at: https://github.com/cross-rs/cross/issues/1565#issuecomment-2483968180
     "apt-get --assume-yes --no-install-recommends install gcc-10 g++-10 && ln -sf /usr/bin/gcc-10 /usr/bin/gcc && ln -sf /usr/bin/g++-10 /usr/bin/g++"
 ]
+
+[build.env]
+volumes = [
+    "GIT_DIR=./../.git"
+]
