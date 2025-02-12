@@ -9,6 +9,10 @@ use crate::{primitives::AccountState, state::ValidationError};
 /// Returns None if an overflow would occur.
 /// Cfr. https://github.com/flashbots/ethers-provider-flashbots-bundle/blob/7ddaf2c9d7662bef400151e0bfc89f5b13e72b4c/src/index.ts#L308
 ///
+/// According to EIP-1559, the base fee can increase by a maximum of 12.5% per block when the network
+/// is congested (i.e., when blocks are full). This means that in the worst case, the base fee will
+/// multiply by 1.125 each block. We need to price this uncertainty when deciding to accept a preconf.
+///
 /// NOTE: this increase is correct also for the EIP-4844 blob base fee:
 /// See https://eips.ethereum.org/EIPS/eip-4844#base-fee-per-blob-gas-update-rule
 pub fn calculate_max_basefee(current: u128, block_diff: u64) -> Option<u128> {
@@ -95,6 +99,63 @@ mod tests {
         let slot_diff = 9; // 9 full blocks in the future
 
         let result = calculate_max_basefee(current, slot_diff);
-        assert_eq!(result, Some(28865075793))
+        assert_eq!(result, Some(28_865_075_793))
+    }
+
+    #[test]
+    fn test_calculate_max_basefee_zero_blocks() {
+        let current = 10_000_000_000;
+        let slot_diff = 0;
+
+        let result = calculate_max_basefee(current, slot_diff);
+        assert_eq!(result, Some(current));
+    }
+
+    #[test]
+    fn test_calculate_max_basefee_one_block() {
+        let current = 10_000_000_000;
+        let slot_diff = 1;
+
+        let result = calculate_max_basefee(current, slot_diff);
+        // 10_000_000_000 * 1.125 + 1 = 11_250_000_001
+        assert_eq!(result, Some(11_250_000_001));
+    }
+
+    #[test]
+    fn test_calculate_max_basefee_zero_current() {
+        let current = 0;
+        let slot_diff = 5;
+
+        let result = calculate_max_basefee(current, slot_diff);
+        // Even with zero current fee, each block will add 1 due to rounding
+        assert_eq!(result, Some(5));
+    }
+
+    #[test]
+    fn test_calculate_max_basefee_overflow() {
+        let current = u128::MAX / 1124; // Just below overflow threshold
+        let slot_diff = 2;
+
+        let result = calculate_max_basefee(current, slot_diff);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_calculate_max_basefee_max_block_diff() {
+        let current = 1_000_000_000; // 1 gwei
+        let slot_diff = 64; // 64 slots is our lookahead window
+
+        let result = calculate_max_basefee(current, slot_diff);
+        assert_eq!(result, Some(1_878_284_778_006));
+    }
+
+    #[test]
+    fn test_calculate_max_basefee_minimum_values() {
+        let current = 1;
+        let slot_diff = 1;
+
+        let result = calculate_max_basefee(current, slot_diff);
+        // 1 * 1.125 + 1 = 2.125 rounded up to 2
+        assert_eq!(result, Some(2));
     }
 }
