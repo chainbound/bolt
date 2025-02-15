@@ -7,8 +7,11 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeab
 import {BLS12381} from "../lib/bls/BLS12381.sol";
 import {BLSSignatureVerifier} from "../lib/bls/BLSSignatureVerifier.sol";
 import {ValidatorsLib} from "../lib/ValidatorsLib.sol";
+import {URCMerkleTree} from "../lib/URCMerkleTree.sol";
 import {IBoltValidatorsV2} from "../interfaces/IBoltValidatorsV2.sol";
 import {IBoltParametersV1} from "../interfaces/IBoltParametersV1.sol";
+import {IBoltManagerV2} from "../interfaces/IBoltManagerV2.sol";
+import {ICredibleCommitmentCurationProvider} from "../interfaces/ICredibleCommitmentCurationProvider.sol";
 
 /// @title Bolt Validators
 /// @notice This contract is responsible for registering validators and managing their configuration
@@ -25,6 +28,8 @@ contract BoltValidatorsV2 is IBoltValidatorsV2, BLSSignatureVerifier, OwnableUpg
 
     /// @notice Bolt Parameters contract.
     IBoltParametersV1 public parameters;
+
+    IBoltManagerV2 public manager;
 
     /// @notice Validators (aka Blockspace providers)
     /// @dev This struct occupies 6 storage slots.
@@ -63,6 +68,14 @@ contract BoltValidatorsV2 is IBoltValidatorsV2, BLSSignatureVerifier, OwnableUpg
         __Ownable_init(_owner);
 
         parameters = IBoltParametersV1(_parameters);
+    }
+
+    function setManager(address _manager) external onlyOwner {
+        if (IBoltManagerV2(_manager).validators() != address(this)) {
+            revert InvalidManager();
+        }
+
+        manager = IBoltManagerV2(_manager);
     }
 
     function _authorizeUpgrade(
@@ -142,6 +155,11 @@ contract BoltValidatorsV2 is IBoltValidatorsV2, BLSSignatureVerifier, OwnableUpg
             revert InvalidBLSSignature();
         }
 
+        ICredibleCommitmentCurationProvider curator = ICredibleCommitmentCurationProvider(manager.getOperatorCurator(authorizedOperator));
+        if (address(curator) != address(0)) {
+            curator.hookOnlyApprovedRegistrationRoot(regRoot);
+        }
+
         _registerValidator(hashPubkey(pubkey), authorizedOperator, maxCommittedGasLimit);
     }
 
@@ -153,7 +171,7 @@ contract BoltValidatorsV2 is IBoltValidatorsV2, BLSSignatureVerifier, OwnableUpg
     /// @param authorizedOperator The address of the authorized operator
     function batchRegisterValidators(
         BLS12381.G1Point[] calldata pubkeys,
-        BLS12381.G2Point calldata signature,
+        BLS12381.G2Point[] calldata signatures,
         uint32 maxCommittedGasLimit,
         address authorizedOperator
     ) public {
@@ -168,8 +186,11 @@ contract BoltValidatorsV2 is IBoltValidatorsV2, BLSSignatureVerifier, OwnableUpg
         // try to register the same validators
         bytes memory message = abi.encodePacked(block.chainid, msg.sender, expectedValidatorSequenceNumbers);
 
-        // Aggregate the pubkeys into a single pubkey to verify the aggregated signature once
-        BLS12381.G1Point memory aggPubkey = _aggregatePubkeys(pubkeys);
+        bytes32 registrationRoot = _merkleizeRegistrations(pubkeys, signatures);
+
+
+        // // Aggregate the pubkeys into a single pubkey to verify the aggregated signature once
+        // BLS12381.G1Point memory aggPubkey = _aggregatePubkeys(pubkeys);
 
         if (!_verifySignature(message, signature, aggPubkey)) {
             revert InvalidBLSSignature();
@@ -182,6 +203,19 @@ contract BoltValidatorsV2 is IBoltValidatorsV2, BLSSignatureVerifier, OwnableUpg
 
         _batchRegisterValidators(pubkeyHashes, authorizedOperator, maxCommittedGasLimit);
     }
+
+    function _merkleizeRegistrations(BLS12381.G1Point[] calldata pubkeys, BLS12381.G2Point[] calldata signatures,) internal returns (bytes32 registrationRoot) {
+        // Create leaves array with padding
+        bytes32[] memory leaves = new bytes32[](pubkeys.length);
+
+        // Create leaf nodes by hashing Registration structs
+        for (uint256 i = 0; i < pubkeys.length; i++) {
+            leaves[i] = keccak256(abi.encode(pubkeys[i], signatures[i]));
+        }
+
+        registrationRoot = URCMerkleTree.generateTree(leaves);
+    }
+
 
     /// @notice Register a batch of Validators and authorize a Collateral Provider and Operator for them
     /// @dev This function allows anyone to register a list of Validators.

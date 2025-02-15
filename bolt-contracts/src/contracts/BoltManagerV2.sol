@@ -6,6 +6,7 @@ import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeab
 import {Time} from "@openzeppelin/contracts/utils/types/Time.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC165} from "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 
 import {OperatorMapWithTimeV2} from "../lib/OperatorMapWithTimeV2.sol";
 import {EnumerableMapV2} from "../lib/EnumerableMapV2.sol";
@@ -215,13 +216,18 @@ contract BoltManagerV2 is IBoltManagerV2, OwnableUpgradeable, UUPSUpgradeable {
     // ========= OPERATOR FUNCTIONS ====== //
 
     /// @notice Registers an operator with Bolt. Only callable by a supported middleware contract.
-    function registerOperator(address operatorAddr, string calldata rpc) external onlyMiddleware {
+    function registerOperator(address operatorAddr, string calldata rpc, address curator) external onlyMiddleware {
         if (operators.contains(operatorAddr)) {
             revert OperatorAlreadyRegistered();
         }
 
+        // check curator support interface (ERC165) and prevent invalid curator
+        if (curator != address(0) && !IERC165(curator).supportsInterface(type(ICredibleCommitmentCurationProvider).interfaceId)) {
+            revert InvalidCurator();
+        }
+
         // Create an already enabled operator
-        EnumerableMapV2.Operator memory operator = EnumerableMapV2.Operator(rpc, msg.sender, Time.timestamp());
+        EnumerableMapV2.Operator memory operator = EnumerableMapV2.Operator(rpc, msg.sender, Time.timestamp(), curator);
 
         operators.set(operatorAddr, operator);
     }

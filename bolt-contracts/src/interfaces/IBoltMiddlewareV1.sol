@@ -10,6 +10,7 @@ interface IBoltMiddlewareV1 {
     error OperatorNotOptedIn();
     error NotOperator();
     error NotAllowed();
+    error ExpiredSignature();
 
     function NAME_HASH() external view returns (bytes32);
 

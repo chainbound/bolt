@@ -6,6 +6,7 @@ interface IBoltManagerV2 {
     error OperatorAlreadyRegistered();
     error OperatorNotRegistered();
     error UnauthorizedMiddleware();
+    error InvalidCurator();
     // TODO: remove in future upgrade (unused)
     error InactiveOperator();
 
@@ -25,6 +26,9 @@ interface IBoltManagerV2 {
         uint256[] amounts;
     }
 
+    // returns the address of the validators contract
+    function validators() external view returns (address);
+
     function registerOperator(address operator, string calldata rpc) external;
 
     function deregisterOperator(
@@ -42,6 +46,10 @@ interface IBoltManagerV2 {
     function isOperator(
         address operator
     ) external view returns (bool);
+
+    function getOperatorCurator(
+        address operator
+    ) external view returns (address);
 
     function getProposerStatus(
         bytes20 pubkeyHash

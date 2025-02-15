@@ -16,6 +16,7 @@ interface IBoltValidatorsV2 {
     error UnsafeRegistrationNotAllowed();
     error UnauthorizedCaller();
     error InvalidPubkey();
+    error InvalidManager();
 
     function getAllValidators() external view returns (ValidatorInfo[] memory);
 

@@ -15,6 +15,8 @@ library EnumerableMapV2 {
         address middleware;
         // Timestamp of registration
         uint256 timestamp;
+        // Optional Curator contract address
+        address curator;
     }
 
     struct OperatorMap {

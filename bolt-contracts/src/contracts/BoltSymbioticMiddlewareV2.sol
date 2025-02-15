@@ -7,7 +7,8 @@ import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
-
+import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+import {EIP712} from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import {IBaseDelegator} from "@symbiotic/interfaces/delegator/IBaseDelegator.sol";
 import {Subnetwork} from "@symbiotic/contracts/libraries/Subnetwork.sol";
 import {IVault} from "@symbiotic/interfaces/vault/IVault.sol";
@@ -29,7 +30,7 @@ import {IBoltManagerV1} from "../interfaces/IBoltManagerV1.sol";
 /// See https://docs.openzeppelin.com/contracts/4.x/upgradeable#storage_gaps
 /// To validate the storage layout, use the Openzeppelin Foundry Upgrades toolkit.
 /// You can also validate manually with forge: forge inspect <contract> storage-layout --pretty
-contract BoltSymbioticMiddlewareV2 is IBoltMiddlewareV1, OwnableUpgradeable, UUPSUpgradeable {
+contract BoltSymbioticMiddlewareV2 is IBoltMiddlewareV1, OwnableUpgradeable, EIP712, UUPSUpgradeable {
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableMap for EnumerableMap.AddressToUintMap;
     using MapWithTimeData for EnumerableMap.AddressToUintMap;
@@ -140,23 +141,17 @@ contract BoltSymbioticMiddlewareV2 is IBoltMiddlewareV1, OwnableUpgradeable, UUP
         NAME_HASH = keccak256("SYMBIOTIC");
     }
 
-    function _authorizeUpgrade(
-        address newImplementation
-    ) internal override onlyOwner {}
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     // ========= VIEW FUNCTIONS =========
 
     /// @notice Get the start timestamp of an epoch.
-    function getEpochStartTs(
-        uint48 epoch
-    ) public view returns (uint48 timestamp) {
+    function getEpochStartTs(uint48 epoch) public view returns (uint48 timestamp) {
         return START_TIMESTAMP + epoch * parameters.EPOCH_DURATION();
     }
 
     /// @notice Get the epoch at a given timestamp.
-    function getEpochAtTs(
-        uint48 timestamp
-    ) public view returns (uint48 epoch) {
+    function getEpochAtTs(uint48 timestamp) public view returns (uint48 epoch) {
         return (timestamp - START_TIMESTAMP) / parameters.EPOCH_DURATION();
     }
 
@@ -174,9 +169,7 @@ contract BoltSymbioticMiddlewareV2 is IBoltMiddlewareV1, OwnableUpgradeable, UUP
 
     /// @notice Allow a vault to signal opt-in to Bolt Protocol.
     /// @param vault The vault address to signal opt-in for.
-    function registerVault(
-        address vault
-    ) public onlyOwner {
+    function registerVault(address vault) public onlyOwner {
         if (vaults.contains(vault)) {
             revert AlreadyRegistered();
         }
@@ -193,9 +186,7 @@ contract BoltSymbioticMiddlewareV2 is IBoltMiddlewareV1, OwnableUpgradeable, UUP
 
     /// @notice Deregister a vault from working in Bolt Protocol.
     /// @param vault The vault address to deregister.
-    function deregisterVault(
-        address vault
-    ) public onlyOwner {
+    function deregisterVault(address vault) public onlyOwner {
         if (!vaults.contains(vault)) {
             revert NotRegistered();
         }
@@ -205,24 +196,50 @@ contract BoltSymbioticMiddlewareV2 is IBoltMiddlewareV1, OwnableUpgradeable, UUP
 
     // ========= SYMBIOTIC MIDDLEWARE LOGIC =========
 
+    function registerOperator(
+        address operator,
+        string calldata rpc,
+        address curator,
+        uint48 deadline,
+        bytes calldata signature
+    ) public {
+        if (deadline < Time.timestamp()) {
+            revert ExpiredSignature();
+        }
+
+        if (
+            !SignatureChecker.isValidSignatureNow(
+                operator,
+                _hashTypedDataV4(keccak256(abi.encode(msg.sender, operator, rpc, curator, deadline))),
+                signature
+            )
+        ) {
+            revert InvalidSignature();
+        }
+
+        _registerOperator(operator, rpc, curator);
+    }
+
     /// @notice Allow an operator to signal opt-in to Bolt Protocol.
     /// msg.sender must be an operator in the Symbiotic network.
-    function registerOperator(
-        string calldata rpc
-    ) public {
-        if (manager.isOperator(msg.sender)) {
+    function registerOperator(string calldata rpc, address curator) public {
+        _registerOperator(msg.sender, rpc, curator);
+    }
+
+    function _registerOperator(address operator, string calldata rpc, address curator) internal {
+        if (manager.isOperator(operator)) {
             revert AlreadyRegistered();
         }
 
-        if (!IRegistry(OPERATOR_REGISTRY).isEntity(msg.sender)) {
+        if (!IRegistry(OPERATOR_REGISTRY).isEntity(operator)) {
             revert NotOperator();
         }
 
-        if (!IOptInService(OPERATOR_NET_OPTIN).isOptedIn(msg.sender, BOLT_SYMBIOTIC_NETWORK)) {
+        if (!IOptInService(OPERATOR_NET_OPTIN).isOptedIn(operator, BOLT_SYMBIOTIC_NETWORK)) {
             revert OperatorNotOptedIn();
         }
 
-        manager.registerOperator(msg.sender, rpc);
+        manager.registerOperator(operator, rpc, curator);
     }
 
     /// @notice Deregister a Symbiotic operator from working in Bolt Protocol.
@@ -268,9 +285,7 @@ contract BoltSymbioticMiddlewareV2 is IBoltMiddlewareV1, OwnableUpgradeable, UUP
     /// @notice Check if a vault is currently enabled to work in Bolt Protocol.
     /// @param vault The vault address to check the enabled status for.
     /// @return True if the vault is enabled, false otherwise.
-    function isVaultEnabled(
-        address vault
-    ) public view returns (bool) {
+    function isVaultEnabled(address vault) public view returns (bool) {
         (uint48 enabledTime, uint48 disabledTime) = vaults.getTimes(vault);
         return enabledTime != 0 && disabledTime == 0;
     }
@@ -280,9 +295,7 @@ contract BoltSymbioticMiddlewareV2 is IBoltMiddlewareV1, OwnableUpgradeable, UUP
     /// @param operator The operator address to get the collaterals and amounts staked for.
     /// @return collaterals The collaterals staked by the operator.
     /// @dev Assumes that the operator is registered and enabled.
-    function getOperatorCollaterals(
-        address operator
-    ) public view returns (address[] memory, uint256[] memory) {
+    function getOperatorCollaterals(address operator) public view returns (address[] memory, uint256[] memory) {
         address[] memory collateralTokens = new address[](vaults.length());
         uint256[] memory amounts = new uint256[](vaults.length());
 
