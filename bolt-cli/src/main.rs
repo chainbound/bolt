@@ -16,14 +16,24 @@ mod pb;
 /// Contracts and interfaces bindings for interacting with the Bolt network.
 mod contracts;
 
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
     let _ = dotenvy::dotenv();
-    let _ = tracing_subscriber::fmt().with_target(false).try_init();
+
+    let opts = cli::Opts::parse();
+    let filtered_layer =
+        EnvFilter::builder().from_env_lossy().add_directive(opts.verbosity.to_string().parse()?);
+
+    let _ = tracing_subscriber::registry()
+        .with(fmt::layer().with_target(false))
+        .with(filtered_layer)
+        .try_init();
 
     if let Err(err) = rustls::crypto::ring::default_provider().install_default() {
         error!("Failed to install default TLS provider: {:?}", err);
     }
 
-    cli::Opts::parse().command.run().await
+    opts.command.run().await
 }

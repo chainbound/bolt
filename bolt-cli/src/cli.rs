@@ -7,7 +7,7 @@ use alloy::{
 };
 use clap::{
     builder::styling::{AnsiColor, Color, Style},
-    Parser, Subcommand, ValueEnum,
+    ArgAction, Parser, Subcommand, ValueEnum,
 };
 use reqwest::Url;
 
@@ -20,6 +20,11 @@ pub struct Opts {
     /// The subcommand to run.
     #[clap(subcommand)]
     pub command: Cmd,
+
+    /// specify log verbosity e.g (-v, -vv, -vvv, etc.)
+    /// errors will be logged regardless of the verbosity level
+    #[clap(short, long, global = true, env = "VERBOSITY", default_value_t=1, action = ArgAction::Count)]
+    pub verbosity: u8,
 }
 
 #[derive(Subcommand, Debug, Clone)]
