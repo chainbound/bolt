@@ -304,6 +304,7 @@ Commands:
 
 Options:
   -h, --help  Print help
+  -d, --dry-run Simulate without making on-chain changes (e.g Opt to using Anvil fork rather than RPC connection)
 ```
 
 </details>
@@ -337,15 +338,17 @@ Commands to interact with EigenLayer and bolt
 Usage: bolt operators eigenlayer <COMMAND>
 
 Commands:
-  deposit     Deposit into a strategy
-  register    Register an operator into the bolt AVS
-  deregister  Deregister an EigenLayer operator from the bolt AVS
-  update-rpc  Update the operator RPC
-  status      Check the status of an operator in the bolt AVS
-  help        Print this message or the help of the given subcommand(s)
+  deposit           Deposit into a strategy
+  register          Register an operator into the bolt AVS
+  deregister        Deregister an EigenLayer operator from the bolt AVS
+  update-rpc        Update the operator RPC
+  status            Check the status of an operator in the bolt AVS
+  list-strategies   List all whitelisted EigenLayer strategies
+  help              Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help  Print help
+  -d, --dry-run Simulate without making on-chain changes (e.g Opt to using Anvil fork rather than RPC connection)
 
 ❯ bolt operators symbiotic --help
 Commands to interact with Symbiotic and bolt
@@ -353,14 +356,16 @@ Commands to interact with Symbiotic and bolt
 Usage: bolt operators symbiotic <COMMAND>
 
 Commands:
-  register    Register into the bolt manager contract as a Symbiotic operator
-  deregister  Deregister a Symbiotic operator from bolt
-  update-rpc  Update the operator RPC
-  status      Check the status of a Symbiotic operator
-  help        Print this message or the help of the given subcommand(s)
+  register      Register into the bolt manager contract as a Symbiotic operator
+  deregister    Deregister a Symbiotic operator from bolt
+  update-rpc    Update the operator RPC
+  status        Check the status of a Symbiotic operator
+  list-vaults   List all whitelisted Symbiotic vaults
+  help          Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help  Print help
+  -d, --dry-run Simulate without making on-chain changes (e.g Opt to using Anvil fork rather than RPC connection)
 ```
 
 </details>
