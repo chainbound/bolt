@@ -392,6 +392,15 @@ Options:
 
 ---
 
+## Logging
+
+```text
+bolt --verbosity
+
+Options:
+-v, --verbosity  Verbosity level of logs. Enter multiple times to increase the verbosity (e.g. -v, -vv, -vvv).
+```
+
 ## Security
 
 The Bolt CLI is designed to be used offline. It does not require any network connections
