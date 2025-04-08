@@ -9,7 +9,7 @@ repository = "https://github.com/chainbound/bolt/tree/unstable/bolt-cli"
 
 [dependencies]
 # async
-tokio = { version = "1.43.0", features = ["full"] }
+tokio = { version = "1.43.1", features = ["full"] }
 futures = "0.3.31"
 
 # cli
