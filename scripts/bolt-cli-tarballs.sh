@@ -37,7 +37,7 @@ fi
         echo "Building for $target ($short_name)"
 
         mkdir -p "dist/$short_name"
-        cross build --$PROFILE --target "$target"
+        cross build --release --target "$target"
         cp "target/$target/$PROFILE/bolt" "dist/$short_name/bolt"
         tar -czf "dist/bolt-cli-$short_name.tar.gz" -C "dist/$short_name" bolt
 
