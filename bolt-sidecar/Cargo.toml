@@ -32,15 +32,15 @@ futures = "0.3"
 
 # crypto
 blst = "0.3.12"
-tree_hash = "0.9"
-tree_hash_derive = "0.9"
-secp256k1 = { version = "0.30.0", features = ["rand"] }
+tree_hash = "0.10"
+tree_hash_derive = "0.10"
+secp256k1 = { version = "0.31.0", features = ["rand"] }
 
 # alloy
-alloy = { version = "0.11.0", features = ["full", "provider-trace-api", "rpc-types-beacon"] }
-alloy-rpc-types-engine = { version = "0.11.0", default-features = false, features = ["jwt"] }
-alloy-transport-http = { version = "0.11.0", default-features = false, features = ["jwt-auth"] }
-alloy-provider = { version = "0.11.0", default-features = false, features = ["engine-api"] }
+alloy = { version = "0.11.1", features = ["full", "provider-trace-api", "rpc-types-beacon"] }
+alloy-rpc-types-engine = { version = "0.11.1", default-features = false, features = ["jwt"] }
+alloy-transport-http = { version = "0.11.1", default-features = false, features = ["jwt-auth"] }
+alloy-provider = { version = "0.11.1", default-features = false, features = ["engine-api"] }
 
 # commit-boost
 cb-common = { git = "https://github.com/Commit-Boost/commit-boost-client", tag = "v0.6.0" }
@@ -55,7 +55,7 @@ lighthouse_eth2_keystore = { package = "eth2_keystore", git = "https://github.co
 lighthouse_bls = { package = "bls", git = "https://github.com/sigp/lighthouse", version = "0.2.0" }
 
 # types
-uuid = { version = "1.12.1", features = ["v7", "serde"] }
+uuid = { version = "1.16.0", features = ["v7", "serde"] }
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.138"
 parking_lot = "0.12.1"
@@ -66,7 +66,7 @@ hex = "0.4.3"
 lazy_static = "1.5.0"
 thiserror = "2.0"
 eyre = "0.6.12"
-rand = "0.8.5"
+rand = "0.9.1"
 dotenvy = "0.15.7"
 regex = "1.10.5"
 jsonwebtoken = "9.3.0"
@@ -78,15 +78,15 @@ tracing-subscriber = { version = "0.3.18", features = ["env-filter", "fmt"] }
 tracing = "0.1.40"
 
 # telemetry
-metrics-exporter-prometheus = { version = "0.16.2", features = ["http-listener"] }
+metrics-exporter-prometheus = { version = "0.17.0", features = ["http-listener"] }
 metrics = "0.24"
 
 [dev-dependencies]
-alloy-node-bindings = "0.9.2"                                # must match alloy version
+alloy-node-bindings = "0.11.1"                                # must match alloy version
 criterion = { version = "0.5", features = ["html_reports"] }
 
 [build-dependencies]
-built = { version = "0.7.5", features = ["git2"] }
+built = { version = "0.8.0", features = ["git2"] }
 
 [features]
 keystore-tests = []
