@@ -145,10 +145,10 @@ pub struct MetadataResponse {
     pub version: String,
 }
 
-/// Implements the commitments-API: <https://chainbound.github.io/bolt-docs/api/rpc>
+/// Implements the commitments-API: <https://docs.boltprotocol.xyz/api/rpc>
 #[async_trait::async_trait]
 pub trait CommitmentsApi {
-    /// Implements: <https://chainbound.github.io/bolt-docs/api/rpc#bolt_requestinclusion>
+    /// Implements: <https://docs.boltprotocol.xyz/api/rpc#bolt_requestinclusion>
     async fn request_inclusion(
         &self,
         inclusion_request: InclusionRequest,
